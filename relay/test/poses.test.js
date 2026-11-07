@@ -17,7 +17,7 @@ const FPS = [30, 60, 144];
 const rx = (a, [x, y, z]) => [x, y * Math.cos(a) - z * Math.sin(a), y * Math.sin(a) + z * Math.cos(a)];
 const rz = (a, [x, y, z]) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a), z];
 const add = (a, b) => a.map((v, i) => v + b[i]);
-// Points along one arm, from the elbow to the hand, as [forward, up, radius], the way
+// Points along one arm, from the elbow to the hand, as [forward, up, radius, side], the way
 // buildPerson nests the groups: spine leans at the pelvis, the shoulder turns x then z, the elbow turns x.
 function armPoints(p, side, height) {
   const s = side === 'L' ? 1 : -1, sz = side === 'L' ? p.sLz : -p.sRz;
@@ -26,28 +26,31 @@ function armPoints(p, side, height) {
     const u = i / 10;
     let v = rx(p['s' + side + 'x'], rz(sz, add([0, -RIG.upperArm, 0], rx(p['e' + side], [0, -RIG.forearm * u, 0]))));
     v = add(rx(p.lean, add(v, [RIG.shoulderX * s, RIG.shoulderY, 0])), [0, RIG.spine + p.py, 0]);
-    out.push([v[2] * height, v[1] * height, (i === 0 || i === 10 ? 0.048 : 0.041) * height]);  // the elbow and hand balls, and the forearm
+    out.push([v[2] * height, v[1] * height, (i === 0 || i === 10 ? 0.048 : 0.041) * height, v[0] * height]);  // the elbow and hand balls, and the forearm
   }
   return out;
 }
-// How deep any part of either arm is in the desk top, in metres. ahead moves the person forward.
-function depth(p, height, ahead) {
+// How deep any part of either arm is in the desk top, in metres. ahead moves the person forward,
+// and swivel turns them with the chair, either way.
+function depth(p, height, ahead, swivel = 0) {
   let worst = 0;
-  for (const side of ['L', 'R']) for (const [z0, y, r] of armPoints(p, side, height)) {
-    const z = z0 + ahead, inY = Math.min(y + r - UNDER, TOP - (y - r)), inZ = z + r - EDGE;
+  for (const side of ['L', 'R']) for (const [z0, y, r, x] of armPoints(p, side, height)) {
+    const z = Math.max(z0 * Math.cos(swivel) + x * Math.sin(swivel), z0 * Math.cos(swivel) - x * Math.sin(swivel)) + ahead, inY = Math.min(y + r - UNDER, TOP - (y - r)), inZ = z + r - EDGE;
     if (inY > 0 && inZ > 0) worst = Math.max(worst, Math.min(inY, inZ));
   }
   return worst;
 }
 // Plays one move like applyPose: the arms take their route while the person is in the chair,
 // or still within 3 cm of it as they get up. ahead(t) is how far in front of the chair they are.
-function play(from, to, height, fps, ahead = () => 0, seated = true) {
+// swivel is the chair's turn at the start, easing back to 0 as applyPose eases it.
+function play(from, to, height, fps, ahead = () => 0, seated = true, swivel = 0) {
   const p = Object.assign({}, from), route = {}, dt = 1 / fps;
   let worst = 0;
   for (let t = 0; t < 3; t += dt) {
-    const off = ahead(t), aim = seated || off < 0.03 ? aimArms(route, p, to, height, off) : to;
+    const off = ahead(t), aim = seated || off < 0.03 ? aimArms(route, p, to, height, off, swivel) : to;
     towards(p, aim, Math.min(1, dt * 7));
-    worst = Math.max(worst, depth(p, height, off));
+    swivel -= swivel * Math.min(1, dt * 3);
+    worst = Math.max(worst, depth(p, height, off, swivel));
   }
   const left = Math.max(...Object.keys(to).map((j) => Math.abs(p[j] - to[j])));
   return { worst, left };
@@ -87,6 +90,21 @@ test('sitting down and getting up keep the hands out of the desk', () => {
     const up = play(POSE.sit, POSE.stand, h, fps, (t) => 0.14 * Math.min(1, t / 0.55), false);
     if (down.worst > 0.001) hits.push(`sitting down, height ${h}, ${fps} fps: ${(down.worst * 1000).toFixed(0)} mm`);
     if (up.worst > 0.001) hits.push(`getting up, height ${h}, ${fps} fps: ${(up.worst * 1000).toFixed(0)} mm`);
+  }
+  assert.deepStrictEqual(hits, []);
+});
+
+test('the swivel fidget keeps the hands clear, in the chair and as the next fidget starts', () => {
+  // The swivel fidget turns the chair up to 0.55 either way with the sit pose (fidgetOf and
+  // FIDGET_POSE in office/office.js). The turn eases back while the next pose begins.
+  const SWIVEL = 0.55, hits = [];
+  for (const h of HEIGHTS) {
+    if (depth(POSE.sit, h, 0, SWIVEL) > 0) hits.push(`sit, turned, height ${h}: ${(depth(POSE.sit, h, 0, SWIVEL) * 1000).toFixed(1)} mm`);
+    const P = seatedPoses(h);
+    for (const fps of FPS) for (const b of Object.keys(P)) {
+      const { worst } = play(POSE.sit, P[b], h, fps, () => 0, true, SWIVEL);
+      if (worst > 0.001) hits.push(`sit to ${b}, turned, height ${h}, ${fps} fps: ${(worst * 1000).toFixed(0)} mm deep`);
+    }
   }
   assert.deepStrictEqual(hits, []);
 });

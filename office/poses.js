@@ -6,7 +6,7 @@
   const POSE = {
     stand:    { py: 0.94, lean: 0.0, hx: 0, hy: 0, sLx: 0.04, sLz: 0.08, eL: -0.14, sRx: 0.04, sRz: 0.08, eR: -0.14, hipL: 0, kL: 0, hipR: 0, kR: 0 },
     pockets:  { py: 0.94, lean: -0.02, hx: -0.04, hy: 0, sLx: 0.12, sLz: 0.2, eL: -0.45, sRx: 0.12, sRz: 0.2, eR: -0.45, hipL: 0, kL: 0, hipR: 0.05, kR: 0.08 },
-    sit:      { py: 0.52, lean: 0.0, hx: 0.05, hy: 0, sLx: 0.29, sLz: -0.25, eL: -1.41, sRx: 0.29, sRz: -0.25, eR: -1.41, hipL: -1.52, kL: 1.48, hipR: -1.52, kR: 1.48 },
+    sit:      { py: 0.52, lean: 0.0, hx: 0.05, hy: 0, sLx: 0.32, sLz: -0.31, eL: -1.41, sRx: 0.32, sRz: -0.31, eR: -1.41, hipL: -1.52, kL: 1.48, hipR: -1.52, kR: 1.48 },
     type:     { py: 0.52, lean: 0.0, hx: 0.16, hy: 0, sLz: -0.15, sRz: -0.15, hipL: -1.52, kL: 1.48, hipR: -1.52, kR: 1.48 },
     leanback: { py: 0.52, lean: -0.2, hx: -0.18, hy: 0, sLx: -2.75, sLz: 0.55, eL: -2.3, sRx: -2.75, sRz: 0.55, eR: -2.3, hipL: -1.45, kL: 1.3, hipR: -1.45, kR: 1.3 },
     stretch:  { py: 0.52, lean: -0.12, hx: -0.25, hy: 0, sLx: -3.05, sLz: 0.18, eL: -0.08, sRx: -3.05, sRz: 0.18, eR: -0.08, hipL: -1.45, kL: 1.2, hipR: -1.45, kR: 1.2 },
@@ -16,7 +16,7 @@
     brew:     { py: 0.94, lean: 0.12, hx: 0.38, hy: 0, sLx: -0.95, sLz: 0.05, eL: -0.5, sRx: -1.0, sRz: 0.05, eR: -0.45, hipL: 0, kL: 0, hipR: 0, kR: 0 },
     point:    { py: 0.94, lean: 0, hx: -0.05, hy: 0, sLx: 0.12, sLz: 0.2, eL: -0.45, sRx: -1.6, sRz: 0.04, eR: -0.12, hipL: 0, kL: 0, hipR: 0, kR: 0 },
     ready:    { py: 0.88, lean: 0.28, hx: -0.15, hy: 0, sLx: -0.45, sLz: 0.12, eL: -0.9, sRx: -0.7, sRz: 0.15, eR: -0.9, hipL: -0.35, kL: 0.45, hipR: -0.35, kR: 0.45 },
-    wave:     { py: 0.52, lean: 0.0, hx: -0.1, hy: 0, sLx: 0.29, sLz: -0.25, eL: -1.41, sRx: -2.9, sRz: 0.35, eR: -0.45, hipL: -1.52, kL: 1.48, hipR: -1.52, kR: 1.48 },
+    wave:     { py: 0.52, lean: 0.0, hx: -0.1, hy: 0, sLx: 0.32, sLz: -0.31, eL: -1.41, sRx: -2.9, sRz: 0.35, eR: -0.45, hipL: -1.52, kL: 1.48, hipR: -1.52, kR: 1.48 },
     behindBack: { py: 0.94, lean: 0.0, hx: -0.04, hy: 0, sLx: 0.42, sLz: 0.1, eL: -0.8, sRx: 0.42, sRz: 0.1, eR: -0.8, hipL: 0, kL: 0, hipR: 0, kR: 0 },
     lookOver: { py: 0.94, lean: 0.34, hx: 0.3, hy: 0, sLx: 0.42, sLz: 0.1, eL: -0.8, sRx: 0.42, sRz: 0.1, eR: -0.8, hipL: -0.06, kL: 0.1, hipR: -0.06, kR: 0.1 },
     fridge:   { py: 0.92, lean: 0.18, hx: 0.25, hy: 0, sLx: -0.9, sLz: 0.25, eL: -0.3, sRx: 0.05, sRz: 0.08, eR: -0.2, hipL: -0.1, kL: 0.15, hipR: -0.1, kR: 0.15 }
@@ -47,8 +47,9 @@
     if (from === to && from !== 'up') return [];
     return [from === 'lap' ? ARM_LIFT : { sx: p[sx], e: FOLD }, to === 'lap' ? ARM_LIFT : { sx: t[sx], e: FOLD }];
   }
-  function aimArms(route, p, t, height, ahead) {
+  function aimArms(route, p, t, height, ahead, swivel = 0) {
     if (ahead > 0.03) { delete route.L; delete route.R; return Object.assign({}, t, ARM_HANG); }
+    if (Math.abs(swivel) > 0.1) { delete route.L; delete route.R; return Object.assign({}, t, { sLx: p.sLx, sLz: p.sLz, eL: p.eL, sRx: p.sRx, sRz: p.sRz, eR: p.eR }); }
     let aim = t;
     for (const side of ['L', 'R']) {
       const sx = 's' + side + 'x', e = 'e' + side;

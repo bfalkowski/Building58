@@ -880,7 +880,7 @@
     if (w.spot !== w.desk) release(w);
     reserve(k, w);
     w.spot = k; w.seated = false; w.pos.copy(SPOTS[k].pos); w.yaw = SPOTS[k].yaw;
-    w.pose = Object.assign({}, POSE.stand); w.target = POSE.stand; w.moving = false;
+    w.pose = Object.assign({}, POSE.stand); w.target = POSE.stand; w.route = {}; w.moving = false;
     w.steps = [act({ dur: rand(8, 20), pose: 'pockets', label: 'Looking around' })]; w.step = null; w.doing = 'Looking around';
     placeFigure(w);
   }
@@ -888,7 +888,7 @@
     if (w.spot !== w.desk) release(w);
     const sp = SPOTS[w.desk];
     w.spot = w.desk; w.seated = true; w.pos.copy(sp.pos); w.yaw = sp.yaw;
-    w.pose = Object.assign({}, POSE.sit); w.target = POSE.sit; w.moving = false;
+    w.pose = Object.assign({}, POSE.sit); w.target = POSE.sit; w.route = {}; w.moving = false;
     w.steps = [act({ dur: Infinity, pose: 'type', work: true })]; w.step = null;
     placeFigure(w);
   }
@@ -1362,7 +1362,7 @@
     const seat = w.seated && SPOTS[w.spot] && SPOTS[w.spot].seat;
     if (seat) aim = Object.assign({}, aim, seatOn(aim, seat, (w.look || {}).height));
     const ahead = w.desk && w.spot === w.desk && !w.moving ? w.pos.distanceTo(SPOTS[w.desk].pos) : Infinity;
-    if (w.seated ? ahead < Infinity : ahead < 0.03) aim = aimArms(w.route, p, aim, w.look.height || 1, ahead);
+    if (w.seated ? ahead < Infinity : ahead < 0.03) aim = aimArms(w.route, p, aim, w.look.height || 1, ahead, w.swivel);
     else if (w.route.L || w.route.R) w.route = {};
     towards(p, aim, k);
     const f = w.fig, tt = worldT;
