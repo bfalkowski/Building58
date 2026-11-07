@@ -517,18 +517,26 @@ test('the default branch is the one the remote names, even when the main folder 
 test('the PM asked from a linked worktree reads that branch and files against it', async (t) => {
   const R = await relay(); t.after(R.stop);
   const wt = branchedRepo(R, 'feature');
-  const r = await R.call('POST', '/tickets/ask', { idea: 'A radio', repo: wt });
+  fs.mkdirSync(path.join(wt, 'inner'));
+  const r = await R.call('POST', '/tickets/ask', { idea: 'A radio', repo: path.join(wt, 'inner') });
   assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   const pm = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === r.body.terminal);
   // Since T-40 it reads that branch in a checkout of its own, not in the folder you gave.
   assert.ok(fs.existsSync(path.join(pm.cwd, 'only-here.txt')), 'it reads that branch');
   assert.strictEqual(gitIn(pm.cwd, 'rev-parse', 'HEAD'), gitIn(wt, 'rev-parse', 'HEAD'));
+  assert.strictEqual(fs.realpathSync(gitIn(pm.cwd, 'rev-parse', '--show-toplevel')), fs.realpathSync(pm.cwd), 'asked from a subfolder, the PM starts at the top of its checkout');
   const filed = (await R.call('POST', '/tickets', { title: 'From the PM' }, await until(() => { try { return agentHeaders(sessionToken(pm.sessionId)); } catch (e) { return null; } }, 'the PM'))).body.ticket;
   assert.strictEqual(filed.base, 'feature');
   assert.strictEqual(filed.repo, R.repo, 'the ticket still belongs to the repo');
   assert.strictEqual(filed.createdBy, 'PM');
   // A plain session in the same folder still files against the default branch.
   assert.strictEqual((await R.call('POST', '/tickets', { title: 'From a worker' }, await sessionIn(R, wt))).body.ticket.base, 'main');
+  gitIn(wt, 'checkout', '-q', '-b', 'fix#12');
+  const later = (await R.call('POST', '/tickets', { title: 'Later from the PM' }, agentHeaders(sessionToken(pm.sessionId)))).body.ticket;
+  assert.strictEqual(later.base, 'feature', 'the branch is read when you ask, so switching the folder later does not change it');
+  const badName = await R.call('POST', '/tickets/ask', { idea: 'A lamp', repo: wt });
+  assert.strictEqual(badName.status, 400, JSON.stringify(badName.body));
+  assert.strictEqual(badName.body.error, 'bad_base');
   gitIn(wt, 'checkout', '-q', '--detach');
   const detached = await R.call('POST', '/tickets/ask', { idea: 'A clock', repo: wt });
   assert.strictEqual(detached.status, 400);
