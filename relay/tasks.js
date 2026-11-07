@@ -276,16 +276,20 @@ async function clean(channel, task, body) {
   if (task.state !== 'done') return [409, { ok: false, error: 'not_done', message: 'Only a finished task can be cleaned up.' }];
   if (terminal.find(channel, task.owner && task.owner.terminal)) return [409, { ok: false, error: 'running', message: 'Stop its worker first.' }];
   if (terminal.runningIn(task.worktree)) return [409, { ok: false, error: 'in_use', message: 'A session is still running in its checkout. Stop it first.' }];
-  const there = fs.existsSync(task.repo) && fs.existsSync(task.worktree);
-  if (there) {
+  const ask = async () => {
+    if (!fs.existsSync(task.repo) || !fs.existsSync(task.worktree)) return null;
     try {
       const ignored = await unagreedIgnored(task.repo, task.worktree, body && body.ignored);
-      if (ignored) return [409, { ok: false, error: 'ignored', ignored, message: 'This checkout holds files git ignores, and Clean up would delete them: ' + ignored.join(', ') }];
+      return ignored && [409, { ok: false, error: 'ignored', ignored, message: 'This checkout holds files git ignores, and Clean up would delete them: ' + ignored.join(', ') }];
     } catch (e) { return [409, { ok: false, error: 'dirty', message: 'Git kept the checkout: ' + e.message }]; }
-  }
+  };
+  const asked = await ask();
+  if (asked) return asked;
   if (beforeClean) {
     try { await beforeClean(channel, task); } catch (e) { return [502, { ok: false, error: 'store', message: 'The ticket store did not answer, so the task stays for now: ' + e.message }]; }
   }
+  const late = await ask();
+  if (late) return late;
   if (fs.existsSync(task.worktree)) {
     try { await git(task.repo, ['worktree', 'remove', task.worktree]); } catch (e) {
       return [409, { ok: false, error: 'dirty', message: 'Git kept the checkout: ' + e.message }];
