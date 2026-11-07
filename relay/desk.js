@@ -44,6 +44,7 @@ function reviewWords(review, autopilot, reviewing) {
   if (autopilot && autopilot.verdict === 'fix') return 'review asks for fixes';
   if (review && review.held) return 'review waits on CI';
   if (review && review.desk) return 'review waits for a desk';
+  if (review && review.retry) return 'review tries again';
   if (review && review.count) return 'reviewed ' + review.count + (review.count === 1 ? ' time' : ' times');
   return 'no review yet';
 }
@@ -63,6 +64,7 @@ function prStep(d, pr) {
   }
   if (d.ci === 'pending' || (d.review && d.review.held)) return ['CI runs on PR ' + n + ', then the review', 'CI'];
   if (d.review && d.review.desk) return ['The review of PR ' + n + ' starts when a desk is free', 'reviewer'];
+  if (d.review && d.review.retry) return ['The review of PR ' + n + ' tries again soon', 'reviewer'];
   if (d.leadMerges) return ['The Lead merges PR ' + n + ' when it is reviewed and green', 'Lead'];
   return ['Waiting on you: review and merge PR ' + n, 'you'];
 }
