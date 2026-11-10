@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Room glossary</title>
+<script src="../../shared/theme.js"></script>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+<nav class="site" aria-label="The manual">
+  <b>Room manual</b>
+  <a href="index.html">Contents</a>
+  <a href="how-it-works.html">How the room works</a>
+  <a href="running.html">Running it</a>
+  <a href="roles.html">Roles and how work moves</a>
+  <a href="relay.html">The relay API and routes</a>
+  <a href="settings.html">Settings</a>
+  <a href="glossary.html" aria-current="page">Glossary</a>
+</nav>
+<header class="page">
+  <h1>Glossary</h1>
+  <p class="lede">The words the room uses. Each means one thing, and the manual uses no other word for it.</p>
+</header>
+<main>
+  <dl class="terms">
+    <dt id="activity">Activity</dt>
+    <dd>The feed on the page of who started and finished what, prompts, turns and permission waits. A huddle report takes its place until you close it.</dd>
+
+    <dt id="add-worker">Add worker</dt>
+    <dd>The panel's button that starts a plain session in a folder, in a <a href="#checkout">checkout</a> of its own unless you tick <span class="ui">Use this folder</span>. See <a href="running.html#worker-copy">Add worker</a>.</dd>
+
+    <dt id="base">Base</dt>
+    <dd>The branch a ticket starts from and its PR goes against, shown on its card. See <a href="running.html#base">Which branch a ticket starts from</a>.</dd>
+
+    <dt id="board">Board</dt>
+    <dd>The panel of tickets, in the columns Triage, Ready, Building, In review, Waiting on you and Done, with Rejected folded under it. Not the <a href="#wall-board">wall board</a>. See <a href="roles.html#life">The life of a ticket</a>.</dd>
+
+    <dt id="brief">Brief</dt>
+    <dd>The first prompt the relay types into a session the room starts: the ticket for a Dev, the review for a reviewer, the idea for the PM, and the Lead's standing instructions. What a role "is told" is in its brief, which is words, not a lock.</dd>
+
+    <dt id="bring-back">Bring back</dt>
+    <dd>Starts a stopped task's worker again, in the same conversation and the same checkout. For sessions that are not a task's worker, see <a href="#resume">Resume</a>.</dd>
+
+    <dt id="channel">Channel</dt>
+    <dd>A name that joins callers to one world page on the relay. The room uses <code>office</code> by default. Each channel is a separate room with its own sessions and tickets.</dd>
+    <dt id="chat-channel">Chat channel</dt>
+    <dd>One list of posts on the chat board: #office, one per started ticket, or a fun one you make. Always "chat channel", so it is not mixed up with a channel. See <a href="roles.html#chat">The chat board</a>.</dd>
+
+    <dt id="checkout">Checkout</dt>
+    <dd>A separate working copy of a repo, which git calls a worktree, in the repo's <code>.worktrees</code> folder. Each task, Add worker session and PR reviewer gets one. See <a href="running.html#checkouts">Copies of the repo</a>.</dd>
+
+    <dt id="clean-up">Clean up</dt>
+    <dd>Removes a checkout once nobody is in it. The branch stays.</dd>
+
+    <dt id="desk">Desk</dt>
+    <dd>One of the nine places a session can have. A session holds its desk until it ends. See <a href="roles.html#assign">How assignment works</a>.</dd>
+
+    <dt id="dev">Dev</dt>
+    <dd>The worker on a task: it builds the ticket in its checkout and opens one PR.</dd>
+
+    <dt id="floor">Floor</dt>
+    <dd>On the page, the list of everyone in the room and what they are doing. For the Lead, what <code>ticket.js floor</code> prints. See <a href="roles.html#lead-floor">What the Lead sees</a>.</dd>
+
+    <dt id="hook">Hook</dt>
+    <dd>A Claude Code event, sent to the relay by <code>relay/office-hook.js</code>. Hooks are how the room knows what a session is doing. See <a href="how-it-works.html#hooks">Hooks and typing</a>.</dd>
+
+    <dt id="huddle">Huddle</dt>
+    <dd>One short report on everyone, from what the relay already knows. Asking idle sessions and telling the Lead are separate, and spend tokens. See <a href="roles.html#huddles">Huddles</a>.</dd>
+
+    <dt id="job">Job</dt>
+    <dd>A command a session started that still runs after its turn ended, such as <code>npm test</code> in the background. A session with one is busy, not idle. See <a href="how-it-works.html#jobs">How the relay sees a job</a>.</dd>
+
+    <dt id="lead">Lead</dt>
+    <dd>The one session you choose with <span class="ui">Make this the Lead</span>. It keeps work moving and does what you let it. Not the same as the person sitting at the Lead's desk. See <a href="roles.html#lead">The Lead</a>.</dd>
+
+    <dt id="manager">Manager</dt>
+    <dd>Two things, kept apart by context. <b>You</b> are the manager of the squad. <b>The manager</b> on the page is the person in a suit who walks through every so often, and changes nothing but where people stand.</dd>
+
+    <dt id="merged-elsewhere">Merged elsewhere</dt>
+    <dd>Marks a Triage or Ready ticket Done with the PR that delivered it outside the room. See <a href="roles.html#merged-elsewhere">Work that merged outside the room</a>.</dd>
+
+    <dt id="coo">COO</dt>
+    <dd>The session <span class="ui">Ask the COO</span> starts, which reports on how the room runs and proposes at most 3 changes. See <a href="roles.html#coo">The COO</a>.</dd>
+
+    <dt id="security">Security officer</dt>
+    <dd>The session <span class="ui">Ask security</span> starts, which reports what access the room's sessions run with, by name only, and proposes at most 3 changes. See <a href="roles.html#security">The security officer</a>.</dd>
+
+    <dt id="pm">PM</dt>
+    <dd>The session <span class="ui">Ask the PM</span> starts, which splits your idea into tickets in Triage.</dd>
+
+    <dt id="quiet">Quiet</dt>
+    <dd>A session in a turn with no hook for the stall time (30 minutes), whose screen still moves. It may be thinking, so it is not stuck. See <a href="how-it-works.html#alive">Is a session alive</a>. A huddle also flags a session as quiet when no hook was heard from it for 15 minutes, whatever its screen does.</dd>
+
+    <dt id="relay">Relay</dt>
+    <dd>The local server that runs every session, hears every hook, keeps the state and serves the page. See <a href="relay.html#what">What the relay is</a>.</dd>
+
+    <dt id="resume">Resume</dt>
+    <dd>The panel's box for a session id: Add worker then starts that old conversation in the folder you give it.</dd>
+
+    <dt id="reviewer">Reviewer</dt>
+    <dd>A session that reads one PR and posts its findings. One started for a PR leaves by itself once it has posted. See <a href="roles.html#reviews">Reviews</a>.</dd>
+
+    <dt id="rung">Rung</dt>
+    <dd>A step on the trust ladder in <code>docs/constitution.md</code> article 5: a move handed from the person to the room, off until a person turns it on. See <a href="how-it-works.html#ladder">The trust ladder</a>.</dd>
+
+    <dt id="safe-to-stop">Safe to stop</dt>
+    <dd>The Floor's verdict that nobody is waiting on a session. See <a href="roles.html#stop-verdict">the verdict</a>. On a desk, <code>Safe to stop</code> also needs it to be one of the two kinds the Lead stops, and comes with a <span class="ui">Stop</span> button. See <a href="how-it-works.html#desks">What each desk says</a>.</dd>
+
+    <dt id="saved-message">Saved message</dt>
+    <dd>Text the relay keeps until a session can safely take it, then types. See <a href="how-it-works.html#saved-messages">Saved messages</a>.</dd>
+
+    <dt id="session">Session</dt>
+    <dd>One running Claude Code conversation. Each one the room sees gets a person on the page.</dd>
+
+    <dt id="session-host">Session host</dt>
+    <dd>The small process that runs every session's <code>claude</code>, so a relay restart leaves them running. The supervisor starts it. See <a href="running.html#session-host">the session host</a>.</dd>
+
+    <dt id="stuck">Stuck</dt>
+    <dd>A session in a turn with no hook and no output for the stall time (30 minutes), or a session the relay typed a message into that did not begin a turn, even after the relay tried once more. The Floor says which, and for how long. See <a href="how-it-works.html#alive">Is a session alive</a> and <a href="how-it-works.html#stuck">A session that does not start</a>.</dd>
+
+    <dt id="supervisor">Supervisor</dt>
+    <dd>The small process that runs the relay and the session host, and starts the relay again after Update. See <a href="running.html#supervisor">the supervisor</a>.</dd>
+
+    <dt id="task">Task</dt>
+    <dd>A ticket being worked: a checkout, a branch and a worker, with its own state in the Tasks panel. A task can have no ticket, from <span class="ui">New task</span>.</dd>
+
+    <dt id="tasks-panel">Tasks panel</dt>
+    <dd>The panel that lists tasks, where you move them between Building, In review, Changes requested, Waiting on you and Done.</dd>
+
+    <dt id="ticket">Ticket</dt>
+    <dd>Work that exists before anyone starts on it, on the Board. Starting it makes a task.</dd>
+
+    <dt id="tired">Tired</dt>
+    <dd>How much of its context window the Lead has used since its last <code>/clear</code> or refresh: fresh, getting tired, or needs a refresh. See <a href="roles.html#lead-tired">How tired the Lead is</a>.</dd>
+
+    <dt id="token">Token</dt>
+    <dd>What a session the room started sends to the relay instead of the key. It reaches only the routes its role allows. See <a href="relay.html#tokens">What a session's token reaches</a>.</dd>
+
+    <dt id="update">Update</dt>
+    <dd>The room bar's button that fetches merged code for the relay's folder, and pulls it in just before it restarts the relay when relay code changed. See <a href="running.html#update">Update, after a merge</a>.</dd>
+
+    <dt id="wall-board">Wall board</dt>
+    <dd>The board on the brick wall in the scene. It lists tasks, not tickets, and a "needs you" note for anyone with a hand up.</dd>
+
+    <dt id="wip-limit">WIP limit</dt>
+    <dd>How many tasks can be building at once: 3, unless you change it in <span class="ui">Settings</span> or set <code>RELAY_WIP_LIMIT</code>. See <a href="roles.html#wip">the limit</a>.</dd>
+
+    <dt id="worker">Worker</dt>
+    <dd>Any session at a desk that is not the Lead. A task's worker is its Dev.</dd>
+  </dl>
+</main>
+<footer>When the room gets a new word, add it here in the same pull request.</footer>
+</body>
+</html>

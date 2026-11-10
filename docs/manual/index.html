@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Room manual</title>
+<script src="../../shared/theme.js"></script>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+<nav class="site" aria-label="The manual">
+  <b>Room manual</b>
+  <a href="index.html" aria-current="page">Contents</a>
+  <a href="how-it-works.html">How the room works</a>
+  <a href="running.html">Running it</a>
+  <a href="roles.html">Roles and how work moves</a>
+  <a href="relay.html">The relay API and routes</a>
+  <a href="settings.html">Settings</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+<header class="page">
+  <h1>The room manual</h1>
+  <p class="lede">How the room behaves, for people and for sessions. Keep a tab open beside the room. Each fact is in one place: if two pages seem to say a thing, one of them links to the other.</p>
+</header>
+<main>
+  <div class="key">
+    <p><b>No ticket starts by itself.</b> A ticket gets a worker only when a person presses <span class="ui">Start</span>, or when a Lead you let start tickets starts one, within the limits you set (see <a href="roles.html#lead-starts">The Lead starts tickets</a>). Nothing moves a ticket past Building on its own either, not even a pull request being opened or merged. The one exception: when the relay tells a Dev about review comments, it moves their task to Changes requested. The one session that starts by itself is an <a href="roles.html#reviews">automatic review</a>, which takes a desk.</p>
+  </div>
+
+  <h2 id="pages">The pages</h2>
+  <table>
+    <thead><tr><th>Page</th><th>What it holds</th></tr></thead>
+    <tbody>
+      <tr><td><a href="how-it-works.html">How the room works</a></td><td>The map of the parts, a ticket's life from idea to running code, hooks and how the relay types into sessions, what you see on the page, the guards and the trust ladder, and where the code is.</td></tr>
+      <tr><td><a href="running.html">Running it</a></td><td>What starting the room does, the Claude Code panel, sessions from your own terminal, copies of the repo and branches, restarts, Update after a merge, keeping tickets in GitHub issues, and the common messages with what to do.</td></tr>
+      <tr><td><a href="roles.html">Roles and how work moves</a></td><td>What you need to do, what is waiting on you, the life of a ticket on the Board, how assignment works, who does what, the Lead and its permissions, reviews, huddles, and the chat board.</td></tr>
+      <tr><td><a href="relay.html">The relay API and routes</a></td><td>The relay's calls, errors, events and webhook, the room's <code>window.run</code> API, the room's own routes and tokens, <code>relay/ticket.js</code>, tunnels, and the limits.</td></tr>
+      <tr><td><a href="settings.html">Settings</a></td><td>Every environment variable, with its default, and the few settings kept in files.</td></tr>
+      <tr><td><a href="glossary.html">Glossary</a></td><td>The words the room uses, one word for one thing.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="elsewhere">What is not here</h2>
+  <ul>
+    <li><b>Rules.</b> What sessions may and may not do, and why, are in <a href="../constitution.md">docs/constitution.md</a> and <a href="../../CLAUDE.md">CLAUDE.md</a>. This manual says what the code does today. Where a rule is only in a brief, it says the session "is told".</li>
+    <li><b>Setup.</b> Installing nothing, the commands to start each world, and lint and test are in <a href="../../README.md">README.md</a> and <a href="../../office/README.md">office/README.md</a>.</li>
+  </ul>
+
+  <h2 id="changing">Changing the manual</h2>
+  <p>When behavior changes, change the page that describes it in the same pull request. Describe only what the code does now. Write plain words: short sentences, one word for one thing, and no em dashes. <code>npm test</code> checks that every link in the manual resolves, to a file and to an id on that page, that no page has an em dash, and that no page loads a library.</p>
+  <p>Each page is plain HTML with hand-drawn SVG, and <code>manual.css</code> gives them one look in light and dark. The relay serves the manual at <a href="./">/docs/manual/</a>, and it also opens as files with no server.</p>
+</main>
+<footer>Sources: the code in <code>relay/</code> and <code>office/</code>.</footer>
+</body>
+</html>

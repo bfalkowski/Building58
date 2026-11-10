@@ -1,0 +1,7 @@
+{
+  "name": "the office",
+  "channel": "office",
+  "port": 8787,
+  "sessions": true,
+  "roster": "roster.js"
+}

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>How work moves</title>
+<script src="../shared/theme.js"></script>
+<script>
+  // Old links to this page's sections land on the same section in the manual.
+  var MOVED = {
+    todo: 'roles.html#todo', life: 'roles.html#life', assign: 'roles.html#assign', who: 'roles.html#who',
+    waiting: 'roles.html#waiting', reviews: 'roles.html#reviews', findings: 'roles.html#findings',
+    huddle: 'roles.html#huddles', coo: 'roles.html#coo', security: 'roles.html#security', messages: 'running.html#messages', merge: 'running.html#update',
+    checkouts: 'running.html#checkouts', holidays: 'how-it-works.html#holidays', back: 'running.html#back', page: 'how-it-works.html#page',
+    'hooks-checkout': 'running.html#hooks-checkout', rollback: 'running.html#rollback', party: 'how-it-works.html#party'
+  };
+  location.replace('../docs/manual/' + (MOVED[location.hash.slice(1)] || 'roles.html'));
+</script>
+<meta http-equiv="refresh" content="0; url=../docs/manual/roles.html">
+<link rel="stylesheet" href="../docs/manual/manual.css">
+</head>
+<body>
+<main>
+  <p>How work moves is now in the room manual: <a href="../docs/manual/roles.html">Roles and how work moves</a>.</p>
+  <p>A relay restart, such as <b>Update</b>'s, leaves every session running in the session host, with its output, and a turn in progress goes on. Stopping the relay ends them, and the next start brings them back with <code>claude --resume</code>. See <a href="../docs/manual/running.html#back">Bringing a session back</a>.</p>
+  <p>When <b>Update</b> restarts the relay onto new code that fails its check, it can go back to the last commit that worked, and say so on the page. See <a href="../docs/manual/running.html#rollback">When the new relay fails</a>.</p>
+  <p>The room decorates itself for the next holiday: New Year's, Easter, the Fourth of July, Halloween, Thanksgiving and Christmas, from 14 days before each until the day after (New Year's from Dec 26 to Jan 1). <b>Decorations</b>, under the scene, turns them off, and this browser keeps that. <b>Holiday</b> previews any of them. See <a href="../docs/manual/how-it-works.html#holidays">Holidays</a>.</p>
+  <p><b>Ask the PM</b> starts the PM in a checkout of its own, at the remote's latest commit of the branch you typed, so it reads the same code and rules a worker would start from. Your folder is not changed, and the checkout goes when the PM ends. With no remote, or one that cannot be reached, it reads your local branch, and the relay's log says why. See <a href="../docs/manual/running.html#pm-checkout">Where the PM reads</a>.</p>
+  <p>With <b>Let the PM set the order</b> on, in Settings under COO and PM, the PM can set the priority and place of tickets in Triage or Ready with <code>ticket.js priority T-5 high</code> and <code>ticket.js order T-5 --before T-4</code>. It is off by default and stays off after a restart until you turn it on. The PM still cannot move or start a ticket, or change its base, and each card says who last set its priority or place. See <a href="../docs/manual/roles.html#pm-order">The PM sets the order</a>.</p>
+  <p>The PM gives each ticket it files a priority: high, normal or low. It orders work by the goal in the constitution: stronger checks first, then fewer decisions for you, then a truer room, then looks. With <b>Let the PM set the order</b> on, it also places its new tickets among the Triage and Ready tickets and may reorder Triage and Ready tickets, but leaves alone any ticket whose priority or place you last set on the Board. It ends with a short list of what it changed and why. With the switch off, it only recommends an order in its reply. The switch is read when you ask the PM, so after you turn it on, ask a new PM.</p>
+  <p>With <b>Let the Lead set priority</b> on, in Settings under The Lead, the Lead can do the same, with the same two commands, for tickets in Triage or Ready. It is off by default, stays off after a restart until you turn it on, and does not let the Lead move or start a ticket. See <a href="../docs/manual/roles.html#lead-order">The Lead sets priority</a>.</p>
+  <p><b>Throw a party</b>, under the scene, puts a party hat on everyone and a cake with lit candles on the coffee table, and the people with no real work gather round it. Anyone working or waiting on you stays at their desk, and no session is touched. It ends after about a minute, or when you press <b>End the party</b>. See <a href="../docs/manual/how-it-works.html#party">Throw a party</a>.</p>
+  <p>Until a ticket starts, <b>Edit</b> on its card changes its title, body and priority, with the limits of filing one. The PM and the Lead can edit too, with <code>ticket.js edit T-5 --title "New title"</code>, and a new priority still needs their switch. When either changes the words of a Ready ticket you approved, your approval goes, and <b>Approve all Ready</b> offers it again. Each edit shows in the ticket's history. See <a href="../docs/manual/roles.html#edit">Editing a ticket</a>.</p>
+  <p>The COO, started by <b>Ask the COO</b>, writes a one-page report on how the room runs, with at most 3 recommendations. It proposes only: it does not change code, file tickets, start, stop or merge work, move the board or change a switch. See <a href="../docs/manual/roles.html#coo">The COO</a>.</p>
+  <p>The security officer, started by <b>Ask security</b>, writes a one-page report on what access the room's sessions run with, by name only, against article 7 of the constitution, with at most 3 recommendations. It proposes only and does not decide. See <a href="../docs/manual/roles.html#security">The security officer</a>.</p>
+  <p>At trust level 5, <b>Autopilot</b>, only the relay starts and merges work. A Lead keeps two rights: stop a session the Floor calls safe to stop, and move a task to Done once its PR has merged. So the level leaves <b>Let the Lead move the board</b> and <b>Let the Lead stop sessions</b> on, and the relay refuses the Lead every other move and every start while Autopilot is on. See <a href="../docs/manual/roles.html#lead-autopilot">The Lead under Autopilot</a>.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+  "name": "building58",
+  "version": "0.6.0",
+  "private": true,
+  "description": "Rooms where Claude Code sessions work as a squad, drawn in 3D, with an HTTP relay.",
+  "scripts": {
+    "relay": "node relay/server.js",
+    "world": "node relay/world.js",
+    "office": "node relay/office.js",
+    "office:demo": "node relay/office.js --demo",
+    "office:hooks": "node relay/office-hook.js --install",
+    "serve": "python3 -m http.server",
+    "test": "node relay/test/run.js",
+    "test:browser": "node relay/test/run.js relay/test/browser",
+    "lint": "eslint .",
+    "hooks": "git config core.hooksPath .githooks",
+    "prepare": "npm run hooks"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/xterm": "5.5.0",
+    "eslint": "9.39.5",
+    "globals": "17.14.0",
+    "playwright-core": "1.64.1",
+    "three": "0.128.0"
+  }
+}

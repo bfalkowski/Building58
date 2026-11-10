@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Board</title>
+<script src="../shared/theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="tokens.css" rel="stylesheet">
+<style>
+  /* The Board in its own tab: the whole tab, with each column scrolling on its own. The Board itself is
+     office/board.css and office/tickets.js, the same as on the office page. This page polls the relay
+     and opens no stream, so the office page keeps the connections it needs. */
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--pane); color: var(--pane-fg); font: 12.5px/1.45 var(--mono); }
+  main { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); }
+  .btn { font: 600 13px/1 var(--sans); cursor: pointer; border-radius: 4px; padding: 8px 12px; border: 1px solid var(--link); background: transparent; color: var(--link); white-space: nowrap; }
+  .btn.primary { background: var(--link); color: var(--link-fg); }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  .help-link, a { color: var(--link); white-space: nowrap; }
+
+  .tasks { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+  .tasks header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .tasks h1 { margin: 0; font: 600 15px/1.3 var(--mono); color: var(--pane-strong); letter-spacing: 0.04em; }
+  .tasks header p { margin: 0; color: var(--pane-dim); flex: 1 1 20em; }
+  .tasks input, .tasks textarea, .tasks select { font: 13px var(--mono); color: var(--pane-strong); background: var(--pane-tint); border: 1px solid var(--pane-line); border-radius: 4px; padding: 6px 8px; box-sizing: border-box; min-width: 0; width: 100%; }
+  .tasks select { width: auto; }
+  .tasks select option { color: var(--fg); background: var(--bg); }
+  .tasks textarea { grid-column: 1 / 3; resize: vertical; }
+  .page-theme { display: inline-flex; align-items: center; gap: 6px; color: var(--pane-dim); }
+  .page-theme .btn { padding: 5px 10px; }
+  .page-theme .btn + .btn { margin-left: -7px; }
+  .page-theme .btn:first-of-type { border-radius: 4px 0 0 4px; }
+  .page-theme .btn:last-of-type { border-radius: 0 4px 4px 0; }
+  .page-theme .btn[aria-pressed="true"] { background: var(--link); color: var(--link-fg); }
+
+  #board-status { margin: 0; padding: 8px 10px; border-radius: 4px; border-left: 3px solid var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); color: var(--pane-strong); }
+  #board-waiting { margin: 0; padding: 8px 10px; border-radius: 4px; border-left: 3px solid var(--wait); background: color-mix(in srgb, var(--wait) 14%, transparent); color: var(--pane-strong); font-weight: 500; }
+  .linkish { all: unset; cursor: pointer; color: var(--link); text-decoration: underline; }
+  .linkish:focus-visible { outline: 2px solid var(--link); }
+
+  .board-tools { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px 16px; align-items: start; }
+  .board-tools > details { min-width: 0; }
+  .board-tools summary { cursor: pointer; color: var(--pane-strong); }
+  #ticket-form { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: 8px; margin: 8px 0 0; align-items: start; }
+  .board-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .board-filter input { flex: 1 1 14em; width: auto; }
+
+  /* The columns take the rest of the tab, and each scrolls on its own. */
+  .tasks > * { flex: none; }  /* only the columns give up height */
+  #ticket-note { margin: 0; }
+  #board-cols { flex: 1 1 auto; min-height: 0; grid-auto-columns: minmax(220px, 1fr); }
+  #board-cols > section { min-height: 0; }
+  #board-cols > section > ol, #board-cols > section > .groups { overflow-y: auto; min-height: 0; flex: 1 1 auto; align-content: start; padding-right: 2px; }
+  #board-rejected { max-height: 30vh; overflow-y: auto; }
+  #board-rejected summary { cursor: pointer; }
+  @media (max-width: 720px) {
+    .board-tools { grid-template-columns: minmax(0, 1fr); }
+    #ticket-form { grid-template-columns: minmax(0, 1fr); }
+    .tasks textarea, .ticket-buttons { grid-column: 1; }
+  }
+</style>
+<link href="board.css" rel="stylesheet">
+</head>
+<body>
+<main>
+  <section class="tasks" id="board" data-full="1" aria-labelledby="board-title">
+    <header>
+      <h1 id="board-title">Board</h1>
+      <p id="board-info">Asking the relay for the tickets.</p>
+      <a class="help-link" href="../docs/manual/roles.html#board-tab" target="_blank" rel="noopener">How work moves</a>
+      <div class="page-theme" role="group" aria-label="Page colours">Page
+        <button class="btn" type="button" data-page-theme="light" aria-pressed="false">Light</button>
+        <button class="btn" type="button" data-page-theme="dark" aria-pressed="false">Dark</button>
+      </div>
+    </header>
+    <p id="board-status" role="alert" hidden></p>
+    <p id="board-waiting" role="status" hidden></p>
+    <div class="board-tools">
+      <details>
+        <summary>Add a ticket, or ask the PM</summary>
+        <form id="ticket-form" autocomplete="off">
+          <input id="ticket-title" type="text" maxlength="80" placeholder="Title, or an idea for the PM to split up" aria-label="Ticket title">
+          <input id="ticket-repo" type="text" spellcheck="false" placeholder="Repo folder, like ~/Documents/repo/my-project" aria-label="Repo folder" required>
+          <select id="ticket-priority" aria-label="Priority"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select>
+          <textarea id="ticket-body" rows="2" maxlength="8000" placeholder="What to do, and how to tell it is finished" aria-label="Ticket details"></textarea>
+          <div class="ticket-buttons"><button class="btn primary" type="submit">Add ticket</button> <button class="btn" id="ticket-pm" type="button">Ask the PM</button></div>
+        </form>
+      </details>
+      <div class="board-filter" role="search">
+        <input id="board-filter-text" type="search" spellcheck="false" placeholder="Filter by id, title or details" aria-label="Filter tickets by text">
+        <select id="board-filter-repo" aria-label="Filter by repo"><option value="">Every repo</option></select>
+        <select id="board-filter-priority" aria-label="Filter by priority"><option value="">Any priority</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select>
+      </div>
+    </div>
+    <p id="ticket-note" role="status"></p>
+    <div id="board-cols"></div>
+    <details id="board-rejected" hidden><summary>Rejected</summary><ol></ol></details>
+  </section>
+</main>
+<script src="ticket-history.js"></script>
+<script src="board-model.js"></script>
+<script src="tickets.js"></script>
+</body>
+</html>

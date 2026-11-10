@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>How the room works</title>
+<script src="../../shared/theme.js"></script>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+<nav class="site" aria-label="The manual">
+  <b>Room manual</b>
+  <a href="index.html">Contents</a>
+  <a href="how-it-works.html" aria-current="page">How the room works</a>
+  <a href="running.html">Running it</a>
+  <a href="roles.html">Roles and how work moves</a>
+  <a href="relay.html">The relay API and routes</a>
+  <a href="settings.html">Settings</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+<header class="page">
+  <h1>How the room works</h1>
+  <p class="lede">A loft in New York, where each developer is one of your Claude Code sessions. This page says how work moves between GitHub, the relay, the browser and the sessions. It describes the code on <code>main</code> as of 2026-11-04. It shows only what is built.</p>
+  <nav class="toc" aria-label="On this page">
+    <a href="#map">The map</a>
+    <a href="#life">A ticket's life</a>
+    <a href="#hooks">Hooks</a>
+    <a href="#typing">Typing into sessions</a>
+    <a href="#page">What you see</a>
+    <a href="#guards">Guards</a>
+    <a href="#ladder">The trust ladder</a>
+    <a href="#two">Two rooms</a>
+    <a href="#code">The code</a>
+  </nav>
+</header>
+
+<main>
+<!-- ============================================================ THE MAP -->
+<h2 id="map">The map</h2>
+<p>Four places, with you at the top. The relay is the hub: it runs every Claude Code session as a child process, hears every hook, serves the page, and is the only part that talks to the page. GitHub is reached through <code>gh</code> and <code>git</code>, with your own login.</p>
+<div class="figure">
+<svg viewBox="0 0 1080 600" role="img" aria-labelledby="map-t map-d">
+  <title id="map-t">The room map</title>
+  <desc id="map-d">You use the browser. The browser talks only to the relay. The relay runs Claude Code sessions and hears their hooks. Sessions and the relay reach GitHub through gh and git.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker>
+  </defs>
+
+  <!-- you -->
+  <rect class="zone-you" x="400" y="14" width="280" height="54" rx="10" stroke-width="1.5"/>
+  <text class="t-lg" x="540" y="38" text-anchor="middle">You, the manager</text>
+  <text class="t-sm t-muted" x="540" y="56" text-anchor="middle">what to build, the quality bar, the rungs</text>
+
+  <!-- browser -->
+  <rect class="zone-page" x="20" y="110" width="300" height="300" rx="12" stroke-width="1.5"/>
+  <text class="t-lg" x="40" y="138">Browser</text>
+  <text class="t-sm t-muted" x="40" y="156">office/index.html, one tab per room</text>
+  <rect class="box" x="40" y="170" width="260" height="44" rx="6"/><text class="t-md" x="52" y="190">The 3D room (three.js)</text><text class="t-sm t-muted" x="52" y="206">people move as hooks arrive</text>
+  <rect class="box" x="40" y="222" width="260" height="44" rx="6"/><text class="t-md" x="52" y="242">Claude Code panel (xterm.js)</text><text class="t-sm t-muted" x="52" y="258">one session on screen, you type in it</text>
+  <rect class="box" x="40" y="274" width="260" height="44" rx="6"/><text class="t-md" x="52" y="294">Board, Tasks, Huddle, Org chart</text><text class="t-sm t-muted" x="52" y="310">read and change the relay's state</text>
+  <rect class="box" x="40" y="326" width="260" height="66" rx="6"/><text class="t-md" x="52" y="346">Review switches</text><text class="t-sm t-muted" x="52" y="362">the relay keeps them and starts</text><text class="t-sm t-muted" x="52" y="377">every review, tab open or not</text>
+
+  <!-- relay -->
+  <rect class="zone-relay" x="390" y="110" width="300" height="400" rx="12" stroke-width="1.5"/>
+  <text class="t-lg" x="410" y="138">Relay</text>
+  <text class="t-sm t-muted" x="410" y="156">relay/server.js on localhost:8787</text>
+  <rect class="box" x="410" y="170" width="260" height="44" rx="6"/><text class="t-md" x="422" y="190">Routes, local only</text><text class="t-sm t-muted" x="422" y="206">/terminals /tickets /tasks /floor /update</text>
+  <rect class="box" x="410" y="222" width="260" height="44" rx="6"/><text class="t-md" x="422" y="242">Sessions: pty-bridge.py</text><text class="t-sm t-muted" x="422" y="258">runs claude, keeps output, types safely</text>
+  <rect class="box" x="410" y="274" width="260" height="44" rx="6"/><text class="t-md" x="422" y="294">Tickets and tasks</text><text class="t-sm t-muted" x="422" y="310">a task = a worktree, a branch, a worker</text>
+  <rect class="box" x="410" y="326" width="260" height="44" rx="6"/><text class="t-md" x="422" y="346">PR watcher (pr-comments.js)</text><text class="t-sm t-muted" x="422" y="362">about once a minute, tells the Dev</text>
+  <rect class="box" x="410" y="378" width="260" height="44" rx="6"/><text class="t-md" x="422" y="398">The Lead, huddles, deliveries</text><text class="t-sm t-muted" x="422" y="414">saved messages wait until it is safe</text>
+  <rect class="box" x="410" y="430" width="260" height="62" rx="6"/><text class="t-md" x="422" y="450">State on disk</text><text class="t-mono" x="422" y="467">~/.office-world/ (RELAY_STATE_DIR)</text><text class="t-sm t-muted" x="422" y="483">tickets, tasks, sessions, lead, notes</text>
+
+  <!-- claude sessions -->
+  <rect class="zone-claude" x="760" y="110" width="300" height="250" rx="12" stroke-width="1.5"/>
+  <text class="t-lg" x="780" y="138">Claude Code sessions</text>
+  <text class="t-sm t-muted" x="780" y="156">one per desk, at most 9 per room</text>
+  <rect class="box" x="780" y="170" width="260" height="36" rx="6"/><text class="t-md" x="792" y="193">Lead · PM · Devs · reviewers</text>
+  <rect class="box" x="780" y="214" width="260" height="44" rx="6"/><text class="t-md" x="792" y="234">Each in its own checkout</text><text class="t-mono" x="792" y="250">.worktrees/&lt;task or review&gt;</text>
+  <rect class="box" x="780" y="266" width="260" height="76" rx="6"/><text class="t-md" x="792" y="286">Hooks: relay/office-hook.js</text><text class="t-sm t-muted" x="792" y="302">every event, trimmed, gives up</text><text class="t-sm t-muted" x="792" y="317">after 1 second, always exits 0</text><text class="t-mono" x="792" y="333">ticket.js: tickets, Lead moves</text>
+
+  <!-- github -->
+  <rect class="zone-gh" x="760" y="400" width="300" height="180" rx="12" stroke-width="1.5"/>
+  <text class="t-lg" x="780" y="428">GitHub</text>
+  <text class="t-sm t-muted" x="780" y="446">your repo, through your gh login</text>
+  <rect class="box" x="780" y="458" width="125" height="50" rx="6"/><text class="t-md" x="792" y="478">Branches</text><text class="t-md" x="792" y="496">and PRs</text>
+  <rect class="box" x="915" y="458" width="125" height="50" rx="6"/><text class="t-md" x="927" y="478">CI: pipeline</text><text class="t-sm t-muted" x="927" y="496">lint + tests</text>
+  <rect class="box" x="780" y="516" width="260" height="48" rx="6"/><text class="t-md" x="792" y="536">Issues as tickets (pilot, off)</text><text class="t-sm t-muted" x="792" y="552">relay/ticket-stores/github.js</text>
+
+  <!-- wires -->
+  <path class="wire wire-you" d="M470 68 L250 110" marker-end="url(#ah)"/>
+  <text class="t-sm" x="300" y="84">opens the page, clicks, types</text>
+  <path class="wire wire-you dash" d="M680 41 L1070 41 L1070 480 L1062 480" marker-end="url(#ah)"/>
+  <text class="t-sm" x="1062" y="34" text-anchor="end">merges PRs (or the Lead does)</text>
+
+  <path class="wire wire-page" d="M320 200 L390 200" marker-end="url(#ah)"/>
+  <text class="t-sm" x="322" y="192">HTTP</text>
+  <path class="wire wire-relay" d="M390 248 L320 248" marker-end="url(#ah)"/>
+  <text class="t-sm" x="324" y="266">streams</text>
+
+  <path class="wire wire-relay" d="M690 238 L780 238" marker-end="url(#ah)"/>
+  <text class="t-sm" x="696" y="230">runs, types</text>
+  <path class="wire wire-claude" d="M780 300 L690 300" marker-end="url(#ah)"/>
+  <text class="t-sm" x="700" y="318">hook events</text>
+
+  <path class="wire wire-claude" d="M910 360 L910 400" marker-end="url(#ah)"/>
+  <text class="t-sm" x="902" y="385" text-anchor="end">push, open PRs, comment</text>
+  <path class="wire wire-relay" d="M690 350 C730 350 740 470 780 480" marker-end="url(#ah)"/>
+  <text class="t-sm" x="696" y="452">gh api</text>
+</svg>
+</div>
+<div class="legend">
+  <span style="--c: var(--you)">You</span>
+  <span style="--c: var(--page)">Browser</span>
+  <span style="--c: var(--relay)">Relay</span>
+  <span style="--c: var(--claude)">Claude Code</span>
+  <span style="--c: var(--gh)">GitHub</span>
+</div>
+
+<div class="grid">
+  <div class="card" style="--c: var(--page)"><h3>The page never runs anything</h3><p>It asks the relay. Even <b>Refresh the Lead</b> is a request: the relay does the typing, because only it knows whether a prompt is safe to type into.</p></div>
+  <div class="card" style="--c: var(--relay)"><h3>The relay drives every session</h3><p>Sessions run in the session host, which the supervisor starts. The supervisor restarts the relay after <b>Update</b>, and the new relay takes each session back, still running. Stop the relay and they stop, and the next start brings each back with <code>claude --resume</code>. See <a href="running.html#back">Bringing a session back</a>.</p></div>
+  <div class="card" style="--c: var(--claude)"><h3>Sessions are plain Claude Code</h3><p>They get a brief typed as their first prompt, a token for <code>ticket.js</code>, and their own checkout. The relay's key is taken out of what they inherit.</p></div>
+  <div class="card" style="--c: var(--gh)"><h3>GitHub is the outside world</h3><p>Code leaves the computer only as branches and PRs. The relay reads PRs, comments and CI with <code>gh</code>, and writes issues only if the GitHub ticket store is on.</p></div>
+</div>
+
+<!-- ============================================================ A TICKET'S LIFE -->
+<h2 id="life">A ticket's life</h2>
+<p>One ticket, from idea to running code. Each step sits in the lane of whoever does it. Dashed steps are the ones a person still does, or that need a switch you turn on. The Board's side of this, column by column, is in <a href="roles.html#life">The life of a ticket</a>.</p>
+<div class="figure">
+<svg viewBox="0 0 1180 560" role="img" aria-labelledby="life-t life-d">
+  <title id="life-t">A ticket's life</title>
+  <desc id="life-d">An idea becomes a ticket in Triage, you approve it, Start makes a task and a Dev session, the Dev opens a PR, an automatic reviewer posts, the relay tells the Dev, the Dev pushes fixes, a follow-up review runs, CI passes, the PR merges, and Update restarts the relay on the new code.</desc>
+  <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+  <!-- lanes -->
+  <g>
+    <rect class="lane" x="0" y="10" width="1180" height="92" rx="6"/><text class="t-md" x="12" y="32" font-weight="700">You</text>
+    <rect class="lane" x="0" y="110" width="1180" height="92" rx="6" opacity=".6"/><text class="t-md" x="12" y="132" font-weight="700">Lead, PM</text>
+    <rect class="lane" x="0" y="210" width="1180" height="92" rx="6"/><text class="t-md" x="12" y="232" font-weight="700">Relay, page</text>
+    <rect class="lane" x="0" y="310" width="1180" height="92" rx="6" opacity=".6"/><text class="t-md" x="12" y="332" font-weight="700">Dev, reviewers</text>
+    <rect class="lane" x="0" y="410" width="1180" height="92" rx="6"/><text class="t-md" x="12" y="432" font-weight="700">GitHub</text>
+  </g>
+  <!-- steps: x, lane centre y -->
+  <g>
+    <rect class="step s-you dash" x="96" y="34" width="118" height="54" rx="8"/><text class="t-md" x="155" y="57" text-anchor="middle">1. An idea</text><text class="t-sm t-muted" x="155" y="74" text-anchor="middle">you ask the PM</text>
+    <rect class="step s-claude" x="96" y="134" width="118" height="54" rx="8"/><text class="t-md" x="155" y="157" text-anchor="middle">2. PM files</text><text class="t-sm t-muted" x="155" y="174" text-anchor="middle">tickets, in Triage</text>
+    <rect class="step s-you dash" x="230" y="34" width="118" height="54" rx="8"/><text class="t-md" x="289" y="57" text-anchor="middle">3. Ready</text><text class="t-sm t-muted" x="289" y="74" text-anchor="middle">you, or the Lead</text>
+    <rect class="step s-you dash" x="364" y="34" width="118" height="54" rx="8"/><text class="t-md" x="423" y="57" text-anchor="middle">4. Start</text><text class="t-sm t-muted" x="423" y="74" text-anchor="middle">you, or the Lead</text>
+    <rect class="step s-relay" x="364" y="234" width="118" height="54" rx="8"/><text class="t-md" x="423" y="253" text-anchor="middle">5. Task</text><text class="t-sm t-muted" x="423" y="269" text-anchor="middle">worktree, branch,</text><text class="t-sm t-muted" x="423" y="283" text-anchor="middle">Dev, brief typed</text>
+    <rect class="step s-claude" x="498" y="334" width="118" height="54" rx="8"/><text class="t-md" x="557" y="353" text-anchor="middle">6. Build</text><text class="t-sm t-muted" x="557" y="369" text-anchor="middle">tests first, push,</text><text class="t-sm t-muted" x="557" y="383" text-anchor="middle">gh pr create</text>
+    <rect class="step s-gh" x="498" y="434" width="118" height="54" rx="8"/><text class="t-md" x="557" y="457" text-anchor="middle">7. PR + CI</text><text class="t-sm t-muted" x="557" y="474" text-anchor="middle">pipeline runs</text>
+    <rect class="step s-relay" x="632" y="234" width="118" height="54" rx="8"/><text class="t-md" x="691" y="253" text-anchor="middle">8. Review starts</text><text class="t-sm t-muted" x="691" y="269" text-anchor="middle">hook gives the PR;</text><text class="t-sm t-muted" x="691" y="283" text-anchor="middle">relay starts one</text>
+    <rect class="step s-claude" x="632" y="334" width="118" height="54" rx="8"/><text class="t-md" x="691" y="353" text-anchor="middle">9. Reviewer</text><text class="t-sm t-muted" x="691" y="369" text-anchor="middle">posts a comment,</text><text class="t-sm t-muted" x="691" y="383" text-anchor="middle">then leaves</text>
+    <rect class="step s-relay" x="766" y="234" width="118" height="54" rx="8"/><text class="t-md" x="825" y="253" text-anchor="middle">10. Dev is told</text><text class="t-sm t-muted" x="825" y="269" text-anchor="middle">PR watcher, links</text><text class="t-sm t-muted" x="825" y="283" text-anchor="middle">only, when idle</text>
+    <rect class="step s-claude" x="766" y="334" width="118" height="54" rx="8"/><text class="t-md" x="825" y="353" text-anchor="middle">11. Fixes</text><text class="t-sm t-muted" x="825" y="369" text-anchor="middle">replies on the PR,</text><text class="t-sm t-muted" x="825" y="383" text-anchor="middle">pushes</text>
+    <rect class="step s-relay dash" x="900" y="234" width="118" height="54" rx="8"/><text class="t-md" x="959" y="253" text-anchor="middle">12. Follow-up</text><text class="t-sm t-muted" x="959" y="269" text-anchor="middle">after the push,</text><text class="t-sm t-muted" x="959" y="283" text-anchor="middle">if ticked, max 3</text>
+    <rect class="step s-you dash" x="900" y="34" width="118" height="54" rx="8"/><text class="t-md" x="959" y="57" text-anchor="middle">13. Merge</text><text class="t-sm t-muted" x="959" y="74" text-anchor="middle">you, or the Lead</text>
+    <rect class="step s-claude" x="900" y="134" width="118" height="54" rx="8"/><text class="t-md" x="959" y="153" text-anchor="middle">Lead checks</text><text class="t-sm t-muted" x="959" y="169" text-anchor="middle">review of the head,</text><text class="t-sm t-muted" x="959" y="183" text-anchor="middle">CI green, clean</text>
+    <rect class="step s-relay" x="1040" y="234" width="126" height="54" rx="8"/><text class="t-md" x="1103" y="253" text-anchor="middle">14. Update</text><text class="t-sm t-muted" x="1103" y="269" text-anchor="middle">pull, restart,</text><text class="t-sm t-muted" x="1103" y="283" text-anchor="middle">sessions run on</text>
+    <rect class="step s-gh" x="1040" y="434" width="126" height="54" rx="8"/><text class="t-md" x="1103" y="457" text-anchor="middle">main</text><text class="t-sm t-muted" x="1103" y="474" text-anchor="middle">merge commit</text>
+  </g>
+  <!-- arrows -->
+  <g class="wire" marker-end="url(#ah2)">
+    <path d="M155 88 L155 134"/>
+    <path d="M214 150 C230 150 230 100 250 88"/>
+    <path d="M348 61 L364 61"/>
+    <path d="M423 88 L423 234"/>
+    <path d="M482 275 C500 290 520 310 540 334"/>
+    <path d="M557 388 L557 434"/>
+    <path d="M616 448 C626 448 624 275 632 268"/>
+    <path d="M691 288 L691 334"/>
+    <path d="M750 360 C770 340 790 300 805 288"/>
+    <path d="M825 288 L825 334"/>
+    <path d="M884 360 C900 330 920 300 940 288"/>
+    <path d="M959 234 L959 188"/>
+    <path d="M959 134 L959 88"/>
+    <path d="M1018 61 C1060 61 1103 200 1103 234"/>
+    <path d="M1103 288 L1103 434"/>
+  </g>
+  <path class="wire dash" d="M900 248 L884 248" marker-end="url(#ah2)"/>
+  <text class="t-sm t-muted" x="900" y="222" text-anchor="middle">findings: back to 10</text>
+  <text class="t-sm t-muted" x="96" y="530">Dashed: done by a person, or behind a switch that starts off. Steps 3, 4 and 13 go to the Lead only because you allowed it.</text>
+</svg>
+</div>
+
+<h3 id="steps">What each step leans on</h3>
+<table>
+  <thead><tr><th>Step</th><th>Who</th><th>What makes it happen</th></tr></thead>
+  <tbody>
+    <tr><td>2. PM files</td><td class="plain">PM session</td><td><code>POST /tickets/ask</code> starts the PM, which files with <code>relay/ticket.js</code>. New tickets land in Triage.</td></tr>
+    <tr><td>3. Ready</td><td class="plain">You, or the Lead</td><td>The Board, or <code>ticket.js move</code> with the Lead's token, only while you allow <b>Let the Lead move the board</b>.</td></tr>
+    <tr><td>4 to 5. Start</td><td class="plain">You, or the Lead</td><td><code>POST /tickets/{id}/start</code>: a git worktree in <code>.worktrees/</code>, a <code>task/…</code> branch, a worker session, and its brief, typed only once the session is ready. At most 3 tasks build at once (<code>RELAY_WIP_LIMIT</code>). The Lead starts only while you allow <b>Let the Lead start tickets</b>, within <a href="roles.html#lead-starts">its limits</a>.</td></tr>
+    <tr><td>6 to 8. PR and first review</td><td class="plain">Dev, relay</td><td>After <code>gh pr create</code>, the hook sends the PR link. The relay records it on the task, and starts a reviewer in its own checkout of the PR head, while <b>Review PRs automatically</b> is ticked. The page need not be open.</td></tr>
+    <tr><td>9. Reviewer leaves</td><td class="plain">Relay</td><td>The hook reports a <code>gh pr comment</code> or <code>gh pr review</code> that worked, and the relay ends that reviewer about 30 seconds after its turn.</td></tr>
+    <tr><td>10. Dev is told</td><td class="plain">Relay</td><td><code>relay/pr-comments.js</code> checks each task's PR about once a minute. News goes to the Dev as links, never as the comment's words, and only when the Dev is idle. The task moves back to Changes requested.</td></tr>
+    <tr><td>12. Follow-up review</td><td class="plain">Relay</td><td>When a reviewed PR's latest commit on GitHub is not the one its last review read, with or without the push's hook, once the Dev's turn ends and no review of that PR is running. At most 3 automatic reviews per PR, counted by the relay. Off until you tick <b>Review again after each push</b>.</td></tr>
+    <tr><td>13. Merge</td><td class="plain">You, or the Lead</td><td>The Lead may merge only under <a href="roles.html#lead-merge">the merge rung</a>: a review of the current head, blocking findings fixed, CI green, GitHub says clean, no decision left that is yours, and never a change to <code>CLAUDE.md</code> or the constitution.</td></tr>
+    <tr><td>14. Update</td><td class="plain">Relay</td><td><code>git fetch</code> for the relay's folder. Page-only changes fast-forward the folder and reload the page. Relay changes wait until no session is in a turn, then the folder fast-forwards and the supervisor restarts the relay, and every session runs on through it. See <a href="running.html#update">Update</a>.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ HOOKS -->
+<h2 id="hooks">Hooks up, typing down</h2>
+<p>Two flows keep the room alive. <b>Up:</b> Claude Code tells the relay what each session is doing, through hooks. <b>Down:</b> the relay types into sessions, but only when it is safe. Silence never counts as idle: only a hook says a turn has ended.</p>
+<div class="figure">
+<svg viewBox="0 0 1080 470" role="img" aria-labelledby="hk-t hk-d">
+  <title id="hk-t">Hooks up, typing down</title>
+  <desc id="hk-d">A Claude Code event runs office-hook.js, which trims it and posts it to the relay. The relay updates the session's state and passes the event to the page, where people move. When the relay types into a session it checks notSafeToType first.</desc>
+  <defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+  <!-- columns -->
+  <rect class="zone-claude" x="20" y="20" width="230" height="430" rx="12" stroke-width="1.5"/><text class="t-lg" x="135" y="46" text-anchor="middle">Claude Code</text>
+  <rect class="zone-claude" x="290" y="20" width="230" height="430" rx="12" stroke-width="1.5" opacity=".75"/><text class="t-lg" x="405" y="46" text-anchor="middle">office-hook.js</text>
+  <rect class="zone-relay" x="560" y="20" width="250" height="430" rx="12" stroke-width="1.5"/><text class="t-lg" x="685" y="46" text-anchor="middle">Relay</text>
+  <rect class="zone-page" x="850" y="20" width="210" height="430" rx="12" stroke-width="1.5"/><text class="t-lg" x="955" y="46" text-anchor="middle">Page</text>
+
+  <!-- up flow -->
+  <text class="t-md" x="34" y="80" font-weight="700">Up: an event</text>
+  <rect class="box" x="34" y="90" width="202" height="62" rx="6"/><text class="t-sm" x="44" y="108">UserPromptSubmit, PreToolUse,</text><text class="t-sm" x="44" y="124">PostToolUse, Notification,</text><text class="t-sm" x="44" y="140">Stop, SessionStart, SessionEnd</text>
+  <rect class="box" x="304" y="90" width="202" height="100" rx="6"/><text class="t-sm" x="314" y="108">trims it: first two words of a</text><text class="t-sm" x="314" y="124">command, short file paths, no</text><text class="t-sm" x="314" y="140">prompts unless you ask; adds</text><text class="t-sm" x="314" y="156">pr_url, posted, pushed</text><text class="t-sm t-muted" x="314" y="176">1 s limit, always exit 0</text>
+  <rect class="box" x="574" y="90" width="222" height="100" rx="6"/><text class="t-sm" x="584" y="108">from this computer only;</text><text class="t-sm" x="584" y="124">sets state: working, waiting,</text><text class="t-sm" x="584" y="140">idle; links the PR to its task;</text><text class="t-sm" x="584" y="156">ends a reviewer that posted;</text><text class="t-sm" x="584" y="172">drives Refresh the Lead</text>
+  <rect class="box" x="864" y="90" width="182" height="100" rx="6"/><text class="t-sm" x="874" y="108">the person sits, types,</text><text class="t-sm" x="874" y="124">raises a hand, or gets</text><text class="t-sm" x="874" y="140">coffee; the monitor shows</text><text class="t-sm" x="874" y="156">the tool line; the page may</text><text class="t-sm" x="874" y="172">start a review</text>
+  <path class="wire wire-claude" d="M236 121 L304 121" marker-end="url(#ah3)"/>
+  <path class="wire wire-claude" d="M506 140 L574 140" marker-end="url(#ah3)"/><text class="t-mono" x="512" y="132">POST</text>
+  <path class="wire wire-relay" d="M796 140 L864 140" marker-end="url(#ah3)"/><text class="t-mono" x="802" y="132">stream</text>
+
+  <!-- down flow -->
+  <text class="t-md" x="34" y="250" font-weight="700">Down: the relay types</text>
+  <rect class="box" x="574" y="262" width="222" height="168" rx="6"/>
+  <text class="t-sm" x="584" y="282" font-weight="700">notSafeToType says no if:</text>
+  <text class="t-sm" x="584" y="300">the session is working or waiting</text>
+  <text class="t-sm" x="584" y="316">a brief is still owed</text>
+  <text class="t-sm" x="584" y="332">you have text in its prompt</text>
+  <text class="t-sm" x="584" y="348">Enter was pressed a moment ago</text>
+  <text class="t-sm" x="584" y="364">the screen has not settled</text>
+  <text class="t-sm" x="584" y="380">a menu or trust question shows</text>
+  <text class="t-sm" x="584" y="396">no hook has ever been heard</text>
+  <text class="t-sm t-muted" x="584" y="418">then it checks again before Enter</text>
+  <rect class="box" x="34" y="290" width="202" height="86" rx="6"/><text class="t-sm" x="44" y="310">briefs, saved messages,</text><text class="t-sm" x="44" y="326">review news for the Dev,</text><text class="t-sm" x="44" y="342">huddle questions, the steps</text><text class="t-sm" x="44" y="358">of Refresh the Lead</text>
+  <path class="wire wire-relay" d="M574 330 L236 330" marker-end="url(#ah3)"/><text class="t-sm" x="300" y="322">typed only when it is safe</text>
+  <rect class="box" x="864" y="290" width="182" height="86" rx="6"/><text class="t-sm" x="874" y="310">your keys in the panel go</text><text class="t-sm" x="874" y="326">to the session as you type;</text><text class="t-sm" x="874" y="342">the relay notes text left in</text><text class="t-sm" x="874" y="358">the prompt</text>
+  <path class="wire wire-page" d="M864 350 L796 350" marker-end="url(#ah3)"/>
+</svg>
+</div>
+<div class="grid">
+  <div class="card" style="--c: var(--claude)"><h3>Where the hooks come from</h3><p>Either installed once in <code>~/.claude/settings.json</code> with <code>npm run office:hooks</code>, pointing at one relay and channel, or, without those, given by the relay to each session it starts with <code>claude --settings</code>. See <a href="running.html#own-terminal">Sessions from your own terminal</a>.</p></div>
+  <div class="card" style="--c: var(--relay)"><h3>Why "safe to type" matters</h3><p>Text and Enter answer whatever is on screen. Typed on a guess, a message could approve a command nobody read, or be joined to what you were typing.</p></div>
+  <div class="card" style="--c: var(--page)"><h3>What the page does on its own</h3><p>Nothing that moves work. The relay starts every automatic review, so they start with the tab closed. The page sends what you press and shows what the relay says.</p></div>
+</div>
+
+<h3 id="hook-sends">What the hook sends</h3>
+<p><code>relay/office-hook.js</code> trims each event before it leaves the machine:</p>
+<table>
+  <thead><tr><th>Field</th><th>What is sent</th></tr></thead>
+  <tbody>
+    <tr><td>Session</td><td>The first 12 characters of the session id, and the name of the project folder.</td></tr>
+    <tr><td>Title</td><td>The session's title, at most 60 characters. Claude Code writes it from your prompts, so it says a little about them. <code>OFFICE_SHOW_TITLES=0</code> keeps it back: set it when you run <code>--install</code>, which saves it into the hook.</td></tr>
+    <tr><td>Skills and subagents</td><td>The skill name, the subagent type and its short description.</td></tr>
+    <tr><td>Files</td><td>The path relative to the project, at most 48 characters.</td></tr>
+    <tr><td>Shell commands</td><td>The first two words of the first command, for example <code>npm test</code> or <code>gh issue</code>. No arguments.</td></tr>
+    <tr><td>Web</td><td>The host name of a fetched URL.</td></tr>
+    <tr><td>Notifications</td><td>The message, such as "Claude needs your permission to use Bash".</td></tr>
+    <tr><td>Pull requests</td><td>After <code>gh pr create</code>, the PR's address and the session's folder. After a <code>gh pr comment</code> or <code>gh pr review</code> that worked, the PR's number and repo, whether it was a comment, a review, an approval or changes requested, and the comment's link. None of the command's other words.</td></tr>
+    <tr><td>Pushes</td><td>After a <code>git push</code> that may have sent commits, only that it ran. A quiet or piped push counts too. A push that sends no commits to a branch does not: see <a href="roles.html#review-again">Review again after each push</a> for which ones.</td></tr>
+    <tr><td>Huddle answers</td><td>Only the one line that starts with the huddle question's marker, from what Claude Code passes when a turn ends. See <a href="roles.html#huddle-ask">Ask N idle</a>.</td></tr>
+    <tr><td>Prompts</td><td>Nothing, unless you set <code>OFFICE_SHOW_PROMPTS=1</code>. Then the first 120 characters, which go on the monitor, and are the label until the session has a title.</td></tr>
+  </tbody>
+</table>
+<p><code>OFFICE_DETAIL=full</code> sends the first line of each shell command and search queries. <code>OFFICE_HOOK_LOG=/some/file</code> also appends every raw event to that file, which is useful to see what Claude Code sends. Raw events can hold whole prompts and file contents.</p>
+
+<h3 id="events-to-work">How events become work</h3>
+<p>Each session gets a person (see <a href="roles.html#seats">which person</a>), and each hook event moves them:</p>
+<table>
+  <thead><tr><th>Hook event</th><th>In the room</th></tr></thead>
+  <tbody>
+    <tr><td><code>SessionStart</code></td><td>A person takes the session and goes to their desk.</td></tr>
+    <tr><td><code>UserPromptSubmit</code></td><td>They start work.</td></tr>
+    <tr><td><code>PreToolUse</code> for <code>Skill</code></td><td>The skill goes on their monitor, and becomes their label until the session has a title.</td></tr>
+    <tr><td><code>PreToolUse</code> for <code>Agent</code> (or <code>Task</code>)</td><td>A line on their monitor.</td></tr>
+    <tr><td><code>PreToolUse</code> for any other tool</td><td>A line on their monitor. A subagent's lines start with <code>↳</code>.</td></tr>
+    <tr><td><code>PostToolUse</code></td><td>Clears a raised hand. After <code>gh pr create</code>, links the PR on the session's task and can start an automatic review. After an automatic reviewer posts to its PR, its session ends once its turn does (see <a href="roles.html#reviewers-leave">Reviewers leave</a>). After a <code>git push</code> to a Dev's PR, can start another review.</td></tr>
+    <tr><td><code>PostToolUseFailure</code></td><td>A red line on their monitor.</td></tr>
+    <tr><td><code>Notification</code></td><td>For a permission prompt or a question dialog (<code>AskUserQuestion</code> sends the same <code>permission_prompt</code>), they raise a hand and the board shows "Waiting on you". While they wait they stay in their chair: on their phone, swivelling, leaning back, looking around, with the hand coming back up every so often.</td></tr>
+    <tr><td><code>Stop</code></td><td>They finish and are ready for a prompt.</td></tr>
+    <tr><td><code>SessionEnd</code></td><td>They finish and are free for another session.</td></tr>
+  </tbody>
+</table>
+<p id="other-computer"><b>Hooks from another computer are ignored.</b> The relay changes no state, title or message for a hook event unless it came from this computer, because that state decides when anything is typed into a session, the Lead's brief included. Hooks run on this computer and post to localhost, so nothing real is lost. The page still shows such an event. A tunnel that rewrites <code>Host</code> to <code>localhost</code> makes every request look local, so use one that passes its own hostname through.</p>
+
+<!-- ============================================================ TYPING -->
+<h2 id="typing">Typing into sessions</h2>
+<p>The relay types briefs, saved messages, review news, huddle questions and the steps of Refresh the Lead. Before each one it asks <code>notSafeToType</code>, drawn in the figure above, and checks again right before Enter.</p>
+<p id="saved-messages"><b>Saved messages</b> (<code>relay/delivery.js</code>, kept in <code>RELAY_DELIVERIES_FILE</code>) are typed only when:</p>
+<ul>
+  <li>hooks say the turn has ended,</li>
+  <li>nothing has printed for a moment,</li>
+  <li>no menu or trust question shows in the last of the output,</li>
+  <li>a <code>❯</code> shows somewhere in the last 16 KB of it,</li>
+  <li>and nobody has left text in the prompt.</li>
+</ul>
+<p>Text of 800 bytes or more, such as a brief, goes in as one paste. Typed as plain keys, Claude Code reads a long text about 1024 bytes at a time and keeps only the last piece. Bytes count, not characters, since a letter outside plain English can take two bytes or more. This holds for every message, a session's first brief included. The Lead's brief names <code>ticket.js</code> by its full path, so it is longer when the checkout's folder path is long, and it still arrives whole, however long that path is.</p>
+<p>A key you press holds typing until Enter, Ctrl+C or Ctrl+U, even if you deleted what you typed, unless a menu was up when you pressed it. The check runs right before typing. Silence never counts as idle. Saved messages survive a relay restart, and reach a session brought back with the same id once a hook has been heard from it. While an <a href="running.html#update-holds">update</a> is under way, nothing is typed.</p>
+<p id="first-brief"><b>A first brief.</b> A task's brief and the Lead's brief are saved messages too. Nothing else is typed into that session before its brief. The Lead's brief counts as in once it is typed, since a Lead with no hooks reaching the relay is still briefed. A task's brief is in only once a hook says a turn began after it was typed: typed alone does not count, so the task says <i>brief not in yet</i> until then, and the brief stays saved until then. If the worker ends first, the brief waits for that session id: a session brought back with the same id gets it again, and <span class="ui">Bring back</span> on a task whose brief is not in starts the worker over and gives it the brief. A relay restart keeps it: a worker that ran on through the restart is watched again from when the brief was typed, and is not typed into twice.</p>
+<p id="first-prompt"><b>A first prompt.</b> A reviewer's, the PM's and the COO's first prompts are first briefs too, and each is in only once a hook says a turn began after it, as for a task's brief. Until then it is saved, both as a saved message and with its session. Three things differ. An update holds it only while the relay restarts, not while the update waits for a quiet moment (see <a href="running.html#update-holds">What holds a restart</a>). If its session is not ready for it within <code>RELAY_READY_LIMIT</code>, counted again from when a relay comes back, or the session ends while the relay runs, the relay gives up on it and writes why in its log. And the relay tries it three more times, not once, before it calls the session stuck (below), since Claude Code can drop the Enter that follows a long paste and leave the prompt in its box. A session that ran on through a relay restart is watched again from when its prompt was typed. A session nobody spoke to comes back after a stop with a new session id and a new desk, and its prompt goes with it, typed again there.</p>
+<p id="stuck"><b>A session that does not start.</b> After a saved message goes in, such as review news, a Lead comment or a chat mention, the relay checks that a hook says a turn began within a minute (<code>RELAY_TOLD_CHECK_MS</code>). If none did, it tries once more (three more times for a <a href="#first-prompt">first prompt</a>), when it is safe to type: Enter if the message still shows since its last Enter, or the prompt cleared with Ctrl+U and the message typed again if it does not. It does not try while a menu or question is on the screen, since Enter would answer it. If no turn begins a minute after its last try, the session is <b>stuck</b>. The relay stops trying and leaves it to you. It never types a message again into a session that began a turn after it.</p>
+<ul>
+  <li>The Floor says <code>stuck: told 27 min ago, did not start</code>, counted from when it was first told, and the next step says why, where the relay can tell from the screen: a menu is open, it is asking whether to trust its folder, someone has text in its prompt, its screen shows no prompt, or the message is still in its prompt, not sent. Otherwise it says the relay cannot tell why. <code>ticket.js floor</code> shows the same, so the Lead sees it.</li>
+  <li>#office, and the ticket's chat channel, say once that it is stuck and why. For a first prompt they say so, and for a reviewer they name its PR: <code>Ravi on T-12 did not start on its first prompt, the review of PR #154, so it is stuck: the note is still in its prompt, not sent. The relay stopped trying after 3 more tries. Open its session and press Enter if the prompt is still in its box, or answer what is on its screen. Stopping it drops the prompt.</code> The Floor's next step says the same. A reviewer, the PM or the COO has no task to <span class="ui">Bring back</span>, and stopping one drops its prompt, so open its session instead.</li>
+  <li>Nothing else is typed into a stuck session. Other messages for it wait.</li>
+</ul>
+<p><b>What to do.</b> Open its session on the Floor. Answer the menu or question, or press Enter if the message is still in its prompt. Once a hook says a turn began, it is not stuck, and the messages that waited go in. If the session does not answer, stop it and press <span class="ui">Bring back</span> on its task: the message is kept for that session id, so the session brought back gets it once it is idle. A reviewer, the PM or the COO stuck on its <a href="#first-prompt">first prompt</a> has no task to bring back, and stopping it drops the prompt, so open its session and press Enter there instead. Stuck is kept only in the relay's memory, so a relay restart forgets it (T-53).</p>
+<p id="alive"><b>Is a session alive.</b> One module, <code>relay/liveness.js</code>, answers this for every session, from all the relay sees of it together: what its hooks last said, when it last printed, and whether its process ended. The Floor, <code>ticket.js floor</code>, Autopilot's stall check and the COO's stall count all ask it, and none of them reads hooks for this on its own. Its answer is one of these:</p>
+<ul>
+  <li><b>working</b>: in a turn, and a hook came within the stall time.</li>
+  <li><b>quiet</b>: in a turn, no hook for the stall time, but it printed something within that time. The Floor says <code>quiet: no hook for 34 min, its screen still moves</code>.</li>
+  <li><b>stuck</b>: in a turn, with no hook and no output for the stall time. The Floor says <code>stuck: no hook and no output for 31 min</code>, counted from the later of its last hook and its last output, and its next step waits on you. A session that <a href="#stuck">did not start</a> on a message is stuck too, as above.</li>
+  <li><b>gone</b>: its process ended, or it was stopped. It leaves the Floor.</li>
+  <li>Out of a turn, it is <b>waiting</b> on you or <b>idle</b>, as its hooks say. A session waiting on you is never stuck, however long: the question is yours.</li>
+  <li><b>job</b>: out of a turn, but a command it started still runs, such as <code>npm test</code> sent to the background. It is busy, not idle: Autopilot does not count its task as stalled, <a href="running.html#update-job">Update waits for it</a>, and it is not safe to stop, since a stop would end the command. The Floor says <code>job: its turn ended 4 min ago, and a command it started still runs</code>, and its desk line says <code>running a job</code>. Once the command ends, it is idle.</li>
+</ul>
+<p id="jobs"><b>How the relay sees a job.</b> Hooks cannot say when a command in the background ends, so the relay reads the process tree instead. Every 5 seconds the <a href="running.html#session-host">session host</a> runs <code>ps</code> once and looks at the children of each session's <code>claude</code> process. A child is a job when it is a shell run with <code>-c</code> that sources Claude Code's shell snapshot (<code>~/.claude/shell-snapshots/</code>), which is how the Bash tool runs every command, or any shell run with <code>-c</code> that has run for a minute. Every other child is a helper and does not count: <code>caffeinate</code>, which Claude Code starts while it works, MCP servers, and hook and status line commands, which end within seconds. The host tells the relay only when a session's jobs change. A session host started before this change does not look, so its sessions are never <b>job</b> until you stop the relay and start it again once.</p>
+<p>The stall time is <span class="ui">A session is stuck after</span> in Settings, under Work (30 minutes, <code>RELAY_STALL_MS</code>). Only a hook counts as progress. Claude Code's spinner and its timer keep printing while it thinks and while a long command runs, so output says only that the process is alive and drawing. Output never makes a session working. It only keeps a session whose hooks went silent from being called stuck. A quiet session may be thinking, running a long command, or sending hooks that no longer reach the relay, and the relay cannot tell which, so nothing acts on quiet by itself. A quiet session whose output stops too becomes stuck once the stall time has passed since its last output. After a relay restart, the stall time counts again from when the new relay took the session back.</p>
+
+<!-- ============================================================ THE PAGE -->
+<h2 id="page">What you see on the page</h2>
+<p>While a session works, its developer types at their desk with its tool calls on their monitor (<code>edit src/cart.ts</code>, <code>$ npm test</code>). When it needs your permission, they raise a hand and the tab title counts them. When its turn ends, they stretch and go back to the coffee machine, the couch, the window, the bar table or the ping pong table until you give it the next prompt. So the room replaces your terminal tabs. What each sight means for you is in <a href="roles.html#waiting">How to tell what is waiting on you</a>.</p>
+<ul>
+  <li><b>Floor:</b> everyone in the room, in the order needs you, working, ready for a prompt, free. Each row says what the person is on, with the ticket first: a Dev shows <code>T-17 · Review comments reach the Dev</code> and a reviewer shows <code>reviewing T-17 · Review comments reach the Dev</code>, followed by the PR if there is room. A reviewer shows <code>Review PR #7</code> until a task has recorded that PR, and for good if no task ever does. The PM's row starts <code>PM:</code>. A session with no ticket, such as Add worker, shows its own title. Click the number to open that ticket on the Board. Click anywhere else on the row to show their session and follow them with the camera. Click again to stop following. Under that, each session the room started has its <a href="#desks">desk lines</a>.</li>
+  <li><b>Scene:</b> each name tag shows what that person is working on, and so do the Org chart and their monitor: the Floor's words without the PR, cut to 60 characters. A note on the wall board starts with its ticket's number. Clicking a person or their tag does the same as the Floor list. The first three people are always there. The rest come in for a session and leave when it ends.</li>
+  <li id="move-view"><b>Moving the view:</b> drag to turn the scene, and scroll or pinch to zoom. The pad at the bottom right of the scene does the same, in the room and any world that attaches it, for anyone who finds dragging hard. The side arrows take the camera around to the left or right, the up and down arrows raise and lower it, <span class="ui">+</span> and <span class="ui">&minus;</span> zoom, and the house goes back to the first view. Hold a button to keep going. With a pad button or the scene in focus, the arrow keys, <kbd>+</kbd> and <kbd>-</kbd> do a step, and <kbd>Home</kbd> or <kbd>0</kbd> goes back. The pad keeps each world's own limits on how far the camera turns and zooms. In the room it stops the opening glide and following a person, as a drag does. Without WebGL there is no scene, so there is no pad.</li>
+  <li><b>Activity:</b> who started and finished what, prompts, turns and permission waits.</li>
+  <li><b>Chat:</b> under the Board, the chat channels and their posts. See <a href="roles.html#chat">The chat board</a>.</li>
+  <li><b>Tasks:</b> each task's state, worker, branch and PR. Click a task to see its worker.</li>
+  <li><b>The manager:</b> every 6 to 15 minutes, someone in a suit comes through the door by the clock, looks around, and stands behind a few people. Anyone without real work hurries to a desk and types until the manager has gone. Sessions that are working or waiting carry on as they were, and the Floor list and tags keep telling the truth. So a person who looks busy may not be.</li>
+  <li id="holidays"><b>Holidays:</b> the room decorates itself for the next holiday, from this browser's date, with no network call. A holiday's decorations go up 14 days before it and stay until the day after it. New Year's runs from Dec 26 to Jan 1, so it follows Christmas, and Christmas ends on Dec 25. On other days there are none. Easter is worked out for each year (the Gregorian computus) and Thanksgiving is the fourth Thursday of November.
+    <ul>
+      <li>New Year's: streamers on the walls, a <i>Happy New Year</i> banner with the coming year above the windows, and confetti that falls for ten minutes from midnight on Jan 1.</li>
+      <li>Easter: pastel eggs on the window sills, the counter and in a basket by the board, and two bunnies.</li>
+      <li>The Fourth of July: red, white and blue bunting on the walls, and small flags.</li>
+      <li>Halloween: jack-o'-lanterns that glow, cobwebs and two bats.</li>
+      <li>Thanksgiving: a cornucopia on the counter, pumpkins, and autumn leaves on the desks.</li>
+      <li>Christmas: a tree with lights and a star in the corner by the bike, wrapped presents, and string lights on the walls.</li>
+    </ul>
+    The decorations hang high on the back and window walls, sit on the sills, the counter and two corners by the back wall, and lie flat on the desks between the seats. They never cover a name tag, a person, a monitor or the board. Everyone, the manager too, walks around the ones on the floor, and someone already walking when they go up or come down finds a new way. <span class="ui">Decorations</span> turns them off or on, and this browser keeps the choice. <span class="ui">Holiday</span> shows any holiday now, so you can check one without changing the clock. Picking New Year's drops the confetti for half a minute, also while New Year's is up already. The preview lasts until the page closes, and shows even with Decorations off. <code>?holiday=halloween</code> in the address does the same as picking it, and <code>?holiday=off</code> turns them off for that page only. Under reduced motion nothing moves: the bats hang still, the lights stay lit and the confetti lies on the floor.</li>
+  <li><b>Light:</b> the scene's light, from the clock (day, evening or night), or pick one. <code>?time=night</code> in the address does the same. It changes only the 3D room, never the page's colours.</li>
+  <li id="page-colours"><b>Page Light and Dark:</b> the switch under <span class="ui">All worlds</span>, top right, sets the colours of everything around the scene: the Floor, Activity, the Claude Code panel's header, the Board, Chat, Tasks, forms and buttons. Until you press one, the page follows your computer's setting. Your choice is kept in this browser. It carries to the All worlds page, each world's page, this manual and <code>office/help.html</code> when the relay serves them from the same address as the room, and tabs that are open follow it. A manual opened from disk or from another port follows your computer. If the browser blocks storage, the choice lasts until the page closes. Three things stay as they are in both modes: the scene and its name tags, which sit on the 3D room; the terminal, which stays dark so Claude Code's colours read and a running session is never redrawn; and the Org chart, a cream sheet. The page switch and the scene's Light do not change each other.</li>
+  <li><b>Org chart:</b> you at the top and everyone in the room under you, live, with a badge photo. Click someone to follow them and open their session if it runs here. The chart holds still while the pointer is over it. <span class="ui">Reorg</span> rearranges them by job, by project or by what they are doing, and someone has a word to say about it. The next arrangement is remembered in this browser. <span class="ui">Open headcount</span> takes you to <span class="ui">Add worker</span>. The star goes to whoever has finished the most turns since the page opened or the last reset, and <span class="ui">Finish all</span> does not count.</li>
+  <li><b>Finish all:</b> tidies the picture by ending everyone's current work in the scene. It does not stop any session, free a desk or lower a raised hand.</li>
+  <li id="party"><b>Throw a party:</b> everyone in the room, the manager too, puts on a party hat in one of six colours, and a cake with five lit candles stands on the coffee table in the lounge. Everyone with no real work walks over and sits on the couch or stands round the table. Someone who is working or waiting on you stays at their desk, in a hat. The party is only a view: no session is stopped, paused or sent text, and the name tags, the Floor list and the boards show the real state the whole time. After a minute of room time, or when you press <span class="ui">End the party</span>, the candles go out, the hats come off a moment later, and the guests go back to their desks. Someone who finishes work during the party joins it, and someone who gets work leaves for their desk. The manager does not walk in on a party. If the manager is in when it starts, people put hats on but stay at their desks until the manager leaves. A huddle still works during a party. Ping pong stops when one starts, and nobody starts a game on their own during one, though the <code>idle</code> action can still send two people to the table. Someone already on the couch or in the armchair stays there for the party. Under reduced motion the hats and the cake show, but nobody moves and the candles do not flicker.</li>
+  <li><b>Radio:</b> six original 1940s-style records in turn, out of tune on purpose and warped like an old pressing.</li>
+</ul>
+<p id="desks"><b>What each desk says.</b> Under the name, each Floor row for a session the room started says:</p>
+<ul>
+  <li id="status-icon">For a Dev with a task, a status icon with a short label beside it, so it reads without knowing the icons. It says where the Dev's PR stands, and the first of these that holds wins: &#x2705; <code>merged</code> or <code>done</code>, &#x270b; <code>waiting on you</code> (its task is in Waiting on you), &#x1f528; <code>building</code> (no PR yet), &#x1f50d; <code>being reviewed by</code> the reviewer's name (or <code>being reviewed</code> before the page has named them), &#x274c; <code>CI failed</code>, &#x23f3; <code>CI running</code>, &#x1f527; <code>fix requested</code> (its task is in Changes requested, or the latest verdict says fix), &#x1f44d; <code>review says merge</code>, and otherwise &#x1f552; <code>waiting for a review</code>. A verdict counts only while CI is on the commit it read, so after a push the icon says <code>waiting for a review</code> again. The icon changes at the page's next look, as the relay learns of each step. The Lead, the PM, a reviewer and a session you added have none.</li>
+  <li id="reviewer-pairs">Who reviews whom. A reviewer's row sits right under the row of the Dev whose PR it reviews, indented with a line on its left, and says <code>reviewing PR #31 for</code> the Dev's name. That Dev's row says <code>reviewed by</code> and the reviewer's name, or each name when more than one reviews it. A reviewer whose PR has no Dev on the Floor stays a row of its own and says <code>reviewing PR #31</code>. The relay pairs them by PR (<code>pairReviewers</code> in <code>relay/desk.js</code>) and sends the pair with each desk in <code>GET /floor</code>.</li>
+  <li>What it is doing now: <code>working</code>, <code>idle 12 min</code>, <code>waiting on you</code> with the reason, such as a permission prompt, <code>quiet: no hook for 34 min, output still moving</code>, <code>running a job: a command it started still runs</code>, <code>stuck: no hook or output for 31 min</code>, or <code>stuck: told 5 min ago, did not start</code> for a session that did not start on a message the relay typed (<a href="#stuck">A session that does not start</a>). See <a href="#alive">Is a session alive</a>. A stuck desk's next step waits on you and says why.</li>
+  <li>Its ticket's column on the Board, such as <code>In review</code>. A reviewer shows the column of the ticket whose PR it reviews. The ticket's number above it opens its card on the Board.</li>
+  <li>Its PR, as a link to GitHub, with the CI state the relay last heard (<code>CI green</code>, <code>CI running</code>, <code>CI failed</code>, <code>no CI</code>) and the review state (<code>no review yet</code>, <code>review running</code>, <code>review says merge</code>, <code>review asks for fixes</code>, <code>review waits on CI</code>, <code>review waits for a desk</code>, <code>automatic reviews used up</code>, <code>automatic review could not start</code>, or for a reviewer <code>review posted</code>).</li>
+  <li>One line for the next step and who owns it, such as <code>Next: Autopilot merges when CI is green</code>, <code>Next: The reviewer reviews PR #31 (reviewer)</code>, <code>Next: Waiting on you: constitution change</code> or <code>Next: Done, safe to stop</code>. A step that starts <code>Waiting on you</code> is in amber. A review that waits on CI, the first one or one after a push, says <code>review waits on CI</code>. A Done Dev that cannot be stopped says why, such as <code>Done, not safe to stop yet: it is working</code>. A task in Waiting on you gives the reason Autopilot handed it over, or the note on the move that put it there.</li>
+  <li><code>Safe to stop</code> with the reason and a <span class="ui">Stop</span> button, only when both the <a href="roles.html#stop-verdict">stop verdict</a> and the <a href="roles.html#lead-stops">two kinds the Lead stops</a> allow it: an automatic reviewer that has posted, or a Dev whose PR merged or whose task is Done with all its work pushed. The Lead, the PM, a session you added and a Dev still at work never show it.</li>
+</ul>
+<p>When any desk is safe to stop, <span class="ui">Stop all safe</span> appears in the bar at the top of the Floor with how many. It and each <span class="ui">Stop</span> send <a href="relay.html#routes"><code>POST /floor/stop</code></a>, and the relay asks the same verdict again at that moment, so a desk that started working since the page drew it is not stopped. You stop them, so <span class="ui">Let the Lead stop sessions</span> and the Lead's hourly limit do not apply. A stopped Dev keeps its checkout and branch, its task's history says you stopped it from the Floor, and <span class="ui">Bring back</span> returns it. The page asks <code>GET /floor</code> every 3 seconds. The relay builds each desk (<code>relay/desk.js</code>) from what it already keeps: tasks, the pipeline it polls, automatic reviews and Autopilot's last look. Drawing a desk asks GitHub nothing, so the CI and review words are as old as the relay's last poll.</p>
+<p id="labels"><b>Where a label comes from.</b> A worker on a ticket shows <code>T-17 · its title</code>, and a reviewer of that ticket's PR shows <code>reviewing T-17 · its title</code>. The relay works this out (<code>workOf</code> in <code>relay/tasks.js</code>) and sends it as <code>work</code> with each session in <code>GET /terminals</code>, so a reload loses nothing. A worker on a task with no ticket shows the task's title for as long as the task lasts. Otherwise it is the session's title: the one Claude Code writes soon after the first prompt, or your own if you run <code>/rename building worker labels</code> in that session. It appears on their name tag, the Floor list, the board and their monitor at their next event. Claude Code does not document where it keeps titles, so if that changes, the label falls back to the skill or the project folder.</p>
+<p>The room looks like a loft in New York: exposed brick, steel factory windows with water towers outside, cast iron columns, ductwork, Edison bulbs, a coffee bar and a couch. People are built from spheres, cylinders and boxes on a rig of joints (pelvis, spine, neck, shoulders, elbows, hips, knees), posed by joint angles in <code>POSE</code>. They walk on a 15 cm grid with A*, and each plan is a list of steps: stand, walk, face, sit, act.</p>
+
+<!-- ============================================================ GUARDS AND RUNGS -->
+<h2 id="guards">Guards at each boundary</h2>
+<p>What stops the room from doing what it should not.</p>
+<table>
+  <thead><tr><th>Boundary</th><th>Guard</th><th>Enforced by</th></tr></thead>
+  <tbody>
+    <tr><td>Browser to relay</td><td class="plain">The terminal, Board, Tasks, checkouts and Update answer only the room page on this computer: loopback, a <code>localhost</code> Host, the relay's own Origin, and the key.</td><td class="plain">Code (<code>localOnly</code>)</td></tr>
+    <tr><td>Session to relay</td><td class="plain">A session's token lists and files tickets. The Lead's also reads the Floor. A Lead you allowed can also move the board, stop sessions and start tickets, each within its limits. Nothing else. See <a href="relay.html#tokens">tokens</a>.</td><td class="plain">Code, with tests</td></tr>
+    <tr><td>Hook to relay</td><td class="plain">Events from another computer change no state. The hook sends trimmed fields, and prompts only if you turn that on.</td><td class="plain">Code</td></tr>
+    <tr><td>Relay to session</td><td class="plain">Typing waits for <code>notSafeToType</code>. Worker and huddle text reaches the Lead quoted as untrusted.</td><td class="plain">Code, and the brief</td></tr>
+    <tr><td>Session to GitHub</td><td class="plain">Sessions run with your <code>gh</code> login. Briefs say never merge (except the Lead's merge rung). Nothing stops <code>gh pr merge</code> but the brief.</td><td class="plain">The brief only</td></tr>
+    <tr><td>Commits</td><td class="plain">The pre-commit secret check, which stops a commit that adds a key or password. CI runs the same check on the lines and files a pull request adds since its base, so a commit made with <code>--no-verify</code>, or on a computer without the hook, still fails the <code>pipeline</code> check. Taking the secret out in a later commit makes the check pass, but the key stays in the branch's history, so replace it. A separate <code>Secret scan</code> check, on each pull request, in the weekly run and on a run you start by hand, reads every line of every tracked file in the checkout the same way, skipping binary files, so a secret already on main is found too. It also fails on a tracked <code>.env</code>, <code>.env.local</code>, <code>.envrc</code> or <code>.envrc.local</code>, but not on a <code>.example</code>, <code>.sample</code> or <code>.template</code> copy such as <code>.envrc.example</code>. GitHub does not require it unless you add it to branch protection. <code>secret-check: allow</code> on a line marks a false alarm in all of these, and none of them prints the value it found. CI also runs lint, the tests, and the browser tests of the room page, and GitHub requires the <code>pipeline</code> check on main.</td><td class="plain">Checks</td></tr>
+    <tr><td>Notes and memory</td><td class="plain">The Lead's handoff notes and the PM notes grant nothing. A line that reads like a permission is confirmed with you.</td><td class="plain">The brief only</td></tr>
+  </tbody>
+</table>
+
+<h2 id="ladder">The trust ladder</h2>
+<p>How much the room is trusted to do alone. The rungs come from article 5 of <a href="../constitution.md">docs/constitution.md</a>: each is off until you turn it on.</p>
+<table>
+  <thead><tr><th>Step toward running alone</th><th>State</th><th>Ticket</th></tr></thead>
+  <tbody>
+    <tr><td>First review of every new PR</td><td class="plain"><span class="pill on">on</span></td><td class="plain">built</td></tr>
+    <tr><td>Review findings reach the Dev</td><td class="plain"><span class="pill on">on</span></td><td class="plain">T-17</td></tr>
+    <tr><td>Follow-up review after each push, by the relay</td><td class="plain"><span class="pill off">switch, starts off</span></td><td class="plain">T-54</td></tr>
+    <tr><td>The Lead moves the board</td><td class="plain"><span class="pill off">your switch</span></td><td class="plain">built</td></tr>
+    <tr><td>The Lead merges a reviewed, green PR</td><td class="plain"><span class="pill on">on, by your word</span></td><td class="plain">T-48; a switch is T-50</td></tr>
+    <tr><td>The Lead knows the Floor, and who can be stopped</td><td class="plain"><span class="pill on">on</span></td><td class="plain">T-62</td></tr>
+    <tr><td>The Lead stops posted reviewers and Devs whose work merged</td><td class="plain"><span class="pill off">switch, starts off</span></td><td class="plain">T-55, T-92, <code>RELAY_LEAD_STOPS</code></td></tr>
+    <tr><td>Update goes back to the last good commit when the new relay fails</td><td class="plain"><span class="pill off">switch, starts off</span></td><td class="plain">T-80, <code>RELAY_ROLLBACK</code></td></tr>
+    <tr><td>The Lead starts tickets, a few at a time</td><td class="plain"><span class="pill off">your switch, with limits</span></td><td class="plain">T-37</td></tr>
+  </tbody>
+</table>
+<p>Rungs that are not built yet are in article 5 and on the Board, not here.</p>
+
+<!-- ============================================================ TWO OFFICES -->
+<h2 id="two">Two rooms</h2>
+<p>A second room in a second tab, for a new project, with its tickets as GitHub issues. Run a second relay with its own port and its own <a href="settings.html#files">state folder</a> (<code>RELAY_STATE_DIR</code>), and, for issues, its own <a href="settings.html#tickets">ticket store</a>. <a href="running.html#second-office">A second room</a> has the command.</p>
+<div class="figure">
+<svg viewBox="0 0 1080 430" role="img" aria-labelledby="two-t two-d">
+  <title id="two-t">Two rooms side by side</title>
+  <desc id="two-d">Two browser tabs, each talking to its own relay on its own port. Each relay runs its own sessions in its own repo. The first keeps tickets on this computer, the second as GitHub issues in the new repo. Each session's hooks report to the relay that started it, through the address and token that relay gave the session.</desc>
+  <defs><marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+  <!-- office A -->
+  <rect class="zone-page" x="20" y="20" width="220" height="80" rx="10" stroke-width="1.5"/><text class="t-md" x="130" y="50" text-anchor="middle" font-weight="700">Tab 1</text><text class="t-mono" x="130" y="72" text-anchor="middle">localhost:8787/office/</text>
+  <rect class="zone-relay" x="20" y="140" width="220" height="110" rx="10" stroke-width="1.5"/><text class="t-md" x="130" y="168" text-anchor="middle" font-weight="700">Relay A, port 8787</text><text class="t-sm" x="130" y="188" text-anchor="middle">main checkout of 3d</text><text class="t-sm" x="130" y="206" text-anchor="middle">tickets on this computer</text><text class="t-mono" x="130" y="228" text-anchor="middle">~/.office-world/</text>
+  <rect class="zone-claude" x="20" y="290" width="220" height="70" rx="10" stroke-width="1.5"/><text class="t-md" x="130" y="318" text-anchor="middle" font-weight="700">Sessions A</text><text class="t-sm" x="130" y="338" text-anchor="middle">work in 3d</text>
+  <path class="wire wire-page" d="M130 100 L130 140" marker-end="url(#ah4)"/>
+  <path class="wire wire-relay" d="M110 250 L110 290" marker-end="url(#ah4)"/>
+  <path class="wire wire-claude" d="M150 290 L150 250" marker-end="url(#ah4)"/><text class="t-sm" x="158" y="276">hooks to 8787</text>
+
+  <!-- office B -->
+  <rect class="zone-page" x="840" y="20" width="220" height="80" rx="10" stroke-width="1.5"/><text class="t-md" x="950" y="50" text-anchor="middle" font-weight="700">Tab 2</text><text class="t-mono" x="950" y="72" text-anchor="middle">localhost:8788/office/</text>
+  <rect class="zone-relay" x="840" y="140" width="220" height="110" rx="10" stroke-width="1.5"/><text class="t-md" x="950" y="168" text-anchor="middle" font-weight="700">Relay B, port 8788</text><text class="t-sm" x="950" y="188" text-anchor="middle">its own checkout of 3d</text><text class="t-sm" x="950" y="206" text-anchor="middle">its own state files</text><text class="t-sm" x="950" y="228" text-anchor="middle">GitHub ticket store</text>
+  <rect class="zone-claude" x="840" y="290" width="220" height="70" rx="10" stroke-width="1.5"/><text class="t-md" x="950" y="318" text-anchor="middle" font-weight="700">Sessions B</text><text class="t-sm" x="950" y="338" text-anchor="middle">work in the new repo</text>
+  <path class="wire wire-page" d="M950 100 L950 140" marker-end="url(#ah4)"/>
+  <path class="wire wire-relay" d="M930 250 L930 290" marker-end="url(#ah4)"/>
+  <path class="wire wire-claude" d="M970 290 L970 250" marker-end="url(#ah4)"/><text class="t-sm" x="978" y="276">hooks to 8788</text>
+
+  <!-- github -->
+  <rect class="zone-gh" x="380" y="250" width="320" height="150" rx="12" stroke-width="1.5"/>
+  <text class="t-lg" x="540" y="278" text-anchor="middle">GitHub</text>
+  <rect class="box" x="398" y="292" width="138" height="90" rx="6"/><text class="t-md" x="467" y="314" text-anchor="middle">your repo</text><text class="t-sm t-muted" x="467" y="334" text-anchor="middle">the room's code</text><text class="t-sm t-muted" x="467" y="350" text-anchor="middle">PRs from A</text>
+  <rect class="box" x="544" y="292" width="138" height="90" rx="6"/><text class="t-md" x="613" y="314" text-anchor="middle">the new repo</text><text class="t-sm t-muted" x="613" y="334" text-anchor="middle">PRs from B</text><text class="t-sm t-muted" x="613" y="350" text-anchor="middle">issues = B's tickets</text><text class="t-sm t-muted" x="613" y="366" text-anchor="middle">needs CLAUDE.md, CI</text>
+  <path class="wire wire-claude" d="M240 330 C320 330 360 340 398 336" marker-end="url(#ah4)"/>
+  <path class="wire wire-claude" d="M840 330 C760 330 720 340 682 336" marker-end="url(#ah4)"/>
+  <path class="wire wire-relay dash" d="M840 200 C700 200 640 230 620 292" marker-end="url(#ah4)"/><text class="t-sm" x="832" y="226" text-anchor="end">issues, through gh api</text>
+
+  <!-- the catch -->
+  <rect class="box" x="300" y="40" width="480" height="150" rx="10" stroke-width="1.5"/>
+  <text class="t-md" x="320" y="66" font-weight="700">Where hooks go</text>
+  <text class="t-sm" x="320" y="88">Each relay gives the sessions it starts OFFICE_HOOK_URL, its own</text>
+  <text class="t-sm" x="320" y="104">address, and the session's token. The hook sends there first, so</text>
+  <text class="t-sm" x="320" y="120">sessions of relay B report to B even when the global hooks in</text>
+  <text class="t-sm" x="320" y="136">~/.claude/settings.json were added for relay A.</text>
+  <text class="t-sm" x="320" y="158">A session from your own terminal has no OFFICE_HOOK_URL, and</text>
+  <text class="t-sm" x="320" y="174">reports where the hooks' OFFICE_RELAY_URL says.</text>
+</svg>
+</div>
+<div class="grid">
+  <div class="card" style="--c: var(--relay)"><h3>Why a second relay, not a second channel</h3><p>A channel is a separate room on the same relay, but the ticket store is set once per relay. Turning on GitHub issues for one channel would turn it on for all of them.</p></div>
+  <div class="card" style="--c: var(--gh)"><h3>Why a new repo</h3><p>Tasks work in their ticket's repo, so the new room's branches and PRs never touch <code>3d</code>. The relay's own code stays in <code>3d</code>.</p></div>
+  <div class="card" style="--c: var(--warn)"><h3>Costs</h3><p>Up to 18 sessions on one computer, and the relay writing the new repo's issues through your <code>gh</code> login.</p></div>
+</div>
+
+<!-- ============================================================ THE CODE -->
+<h2 id="code">The code</h2>
+<p>Where each part lives. It uses three.js r128 from cdnjs and its OrbitControls from jsDelivr (<code>three@0.128.0</code>), and xterm.js for the panel.</p>
+<table>
+  <thead><tr><th>Path</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><code>index.html</code></td><td>A page that links to the room.</td></tr>
+    <tr><td><code>shared/nav.js</code></td><td>The pad for <a href="#move-view">moving the view</a> in each world. Each world attaches it to its camera controls.</td></tr>
+    <tr><td><code>shared/relay.js</code></td><td>Connects a world page to the relay when it is opened with <code>?channel=</code>. Uses only <code>window.run</code>.</td></tr>
+    <tr><td><code>docs/manual/</code></td><td>This manual.</td></tr>
+    <tr><td><code>office/index.html</code></td><td>The page and its styles.</td></tr>
+    <tr><td><code>office/help.html</code></td><td>Points to this manual, for old links.</td></tr>
+    <tr><td><code>office/roster.js</code></td><td>The people and their looks. Edit this one. See <a href="settings.html#in-files">Settings kept in files</a>.</td></tr>
+    <tr><td><code>office/office.js</code></td><td>The room, the people, how they walk and sit, their plans, the hook mapping and <code>window.run</code>.</td></tr>
+    <tr><td><code>office/seats.js</code></td><td>What a session's job does to its title.</td></tr>
+    <tr><td><code>office/poses.js</code></td><td>The people's poses, and the way an arm moves at a desk so a hand never passes through it.</td></tr>
+    <tr><td><code>office/holidays.js</code></td><td>Which holiday the room decorates for, from the date. <code>office/office.js</code> builds the decorations.</td></tr>
+    <tr><td><code>office/panel.js</code></td><td>The floor board, the activity feed and the controls. Uses only <code>window.run</code>.</td></tr>
+    <tr><td><code>office/update.js</code></td><td>The Update button in the room bar, talking to <code>relay/update.js</code>.</td></tr>
+    <tr><td><code>office/officers.js</code></td><td>The <span class="ui">Ask the COO</span>, <span class="ui">COO report</span>, <span class="ui">Ask security</span> and <span class="ui">Security report</span> buttons, and the report on the Floor. The relay's side is <code>relay/coo.js</code> and <code>relay/security.js</code>.</td></tr>
+    <tr><td><code>office/chat.js</code></td><td>The chat board on the page, talking to <code>relay/chat.js</code>.</td></tr>
+    <tr><td><code>office/desks.js</code></td><td>Asks the relay what each desk says, for <code>office/panel.js</code> to draw, and sends each <span class="ui">Stop</span> and <span class="ui">Stop all safe</span>.</td></tr>
+    <tr><td><code>office/huddle.js</code></td><td>The Huddle buttons and the report on the Floor. The relay's side is <code>relay/huddles.js</code>, and <code>relay/delivery.js</code> saves messages until a session can safely take them.</td></tr>
+    <tr><td><code>office/orgchart.js</code></td><td>The org chart. Uses <code>window.run</code>, the <code>office:pick</code> event and the Add worker folder field.</td></tr>
+    <tr><td><code>office/radio-songs.js</code></td><td>The radio's six records, as notes.</td></tr>
+    <tr><td><code>office/radio.js</code></td><td>The radio's instruments, its worn speaker and its buttons.</td></tr>
+    <tr><td><code>office/demo-session.js</code></td><td>The pretend sessions, as hook events. Used by the page and by <code>relay/office.js</code>.</td></tr>
+    <tr><td><code>office/tickets.js</code></td><td>The Board, talking to <code>relay/tickets.js</code>, on the room page and in its own tab.</td></tr>
+    <tr><td><code>office/board-model.js</code></td><td>The Board's columns, filter and Done list. To give a new task state a column, add it there.</td></tr>
+    <tr><td><code>office/board.html</code></td><td>The Board in its own tab. See <a href="roles.html#board-tab">The Board in its own tab</a>.</td></tr>
+    <tr><td><code>office/board.css</code>, <code>office/tokens.css</code></td><td>The Board's styles, and the page's Light and Dark colours, shared by both pages.</td></tr>
+    <tr><td><code>office/ticket-history.js</code></td><td>Draws who has a ticket now and who worked on it, for the Board or any other view of a ticket.</td></tr>
+    <tr><td><code>office/fold.js</code></td><td>Folds the room page's Board, Chat and Tasks to their title, and keeps the ones you opened.</td></tr>
+    <tr><td><code>office/tasks.js</code></td><td>The Tasks panel, talking to <code>relay/tasks.js</code>.</td></tr>
+    <tr><td><code>office/reviews.js</code></td><td>Which review Get a review and the automatic reviews start, their briefs, and when a push brings another review.</td></tr>
+    <tr><td><code>office/terminal.js</code></td><td>The Claude Code panel: xterm.js, talking to <code>relay/terminal.js</code>, one session on screen at a time. Its Get a review starts a review by hand. It also fills the room bar: the Settings button, its chips and the office-wide notes.</td></tr>
+    <tr><td><code>relay/server.js</code></td><td>The relay. It also serves the pages. See <a href="relay.html">The relay API</a>.</td></tr>
+    <tr><td><code>relay/supervisor.js</code></td><td>Starts the session host and the relay, and starts the relay again after an update.</td></tr>
+    <tr><td><code>relay/session-host.js</code>, <code>relay/host-link.js</code></td><td>The session host, which runs the sessions' processes so a relay restart leaves them running, and the relay's side of its socket.</td></tr>
+    <tr><td><code>relay/office.js</code></td><td>Behind <code>npm run office</code>: starts the relay if needed, opens the page, and with <code>--demo</code> plays pretend sessions.</td></tr>
+    <tr><td><code>relay/office-hook.js</code></td><td>The Claude Code hook that sends session events to the room.</td></tr>
+    <tr><td><code>relay/terminal.js</code>, <code>relay/pty-bridge.py</code></td><td>Start <code>claude</code> in a pseudo-terminal in the session host for the panel, on this computer only.</td></tr>
+    <tr><td><code>relay/sessions.js</code></td><td>Brings back, when the relay starts, every session that was running when it stopped.</td></tr>
+    <tr><td><code>relay/seats.js</code></td><td>Which person each session is: the <a href="roles.html#seats">seating rules</a> as one function.</td></tr>
+    <tr><td><code>relay/update.js</code></td><td>Update: fetches, waits for a quiet moment, then fast-forwards the folder and restarts the relay, which the supervisor starts again.</td></tr>
+    <tr><td><code>relay/tickets.js</code></td><td>The rules about tickets. Starting one makes a task.</td></tr>
+    <tr><td><code>relay/ticket-history.js</code></td><td>Each ticket's <a href="roles.html#ticket-history">history</a> and who has it now, and the name the relay gave each session.</td></tr>
+    <tr><td><code>relay/ticket-stores/</code></td><td>Where tickets are kept: <code>local.js</code> by default, or <code>github.js</code>.</td></tr>
+    <tr><td><code>relay/ticket.js</code></td><td>The command sessions use to list and file tickets and to read and post on the chat board, and the Lead to read the floor and how tired it is, move tasks and tickets, start tickets and stop sessions.</td></tr>
+    <tr><td><code>relay/tasks.js</code></td><td>Keeps the tasks on disk and gives each a checkout and a worker.</td></tr>
+    <tr><td><code>relay/checkouts.js</code></td><td>Gives Add worker and automatic PR reviews their own checkouts, and takes them away.</td></tr>
+    <tr><td><code>relay/reviews.js</code></td><td>Starts the automatic reviews: the first one, and a follow-up after each push. Keeps their switches and each PR's count.</td></tr>
+    <tr><td><code>relay/pr-comments.js</code></td><td>Watches each task's PR and tells the Dev about new comments.</td></tr>
+    <tr><td><code>relay/floor.js</code>, <code>relay/stop-verdict.js</code>, <code>relay/desk.js</code></td><td>What the Floor says about each session, whether each can be stopped, what each desk says, and the stops by the Lead and from the Floor.</td></tr>
+    <tr><td><code>relay/pm-notes.js</code></td><td>Where each repo's PM notes are, and what the PM's brief says about them.</td></tr>
+    <tr><td><code>relay/lead-brief.js</code>, <code>relay/lead-refresh.js</code></td><td>The Lead's brief, and the steps of Refresh the Lead: handoff notes, <code>/clear</code>, and the notes read back. The relay runs them.</td></tr>
+    <tr><td><code>relay/lead-tired.js</code>, <code>relay/status-line.js</code></td><td><a href="roles.html#lead-tired">How tired the Lead is</a>: the levels, and the status line of each session the room starts, which prints the level and tells the relay.</td></tr>
+    <tr><td><code>relay/coo.js</code></td><td>The <a href="roles.html#coo">COO</a>: the measures it reads, its session, and its saved reports.</td></tr>
+    <tr><td><code>relay/security.js</code></td><td>The <a href="roles.html#security">security officer</a>: its session, its saved reports, and the check that a report holds no key.</td></tr>
+    <tr><td><code>relay/access.js</code></td><td>What access the sessions run with, by name only: the security officer's measures.</td></tr>
+    <tr><td><code>relay/session-env.js</code></td><td>The environment each session gets, and the same as names only.</td></tr>
+    <tr><td><code>relay/huddles.js</code>, <code>relay/delivery.js</code></td><td>Huddles, and messages saved until a session can safely take them.</td></tr>
+    <tr><td><code>relay/chat.js</code>, <code>relay/chat-summary.js</code></td><td>The <a href="roles.html#chat">chat board</a>: chat channels, posts, the relay's news, the one note a mention types in, and the summary a ticket's chat channel leaves on its ticket.</td></tr>
+    <tr><td><code>relay/test/</code></td><td>The tests that <code>npm test</code> runs, including the checks on this manual.</td></tr>
+    <tr><td><code>relay/test/browser/</code></td><td>The tests that <code>npm run test:browser</code> runs: the room page in a headless Chromium, against a real relay with a fake <code>claude</code>.</td></tr>
+  </tbody>
+</table>
+</main>
+
+<footer>
+  Sources: <code>docs/constitution.md</code> and the code in <code>relay/</code> and <code>office/</code>. When the behavior changes, change this page in the same pull request.
+</footer>
+</body>
+</html>

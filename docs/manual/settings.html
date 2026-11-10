@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Room settings</title>
+<script src="../../shared/theme.js"></script>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+<nav class="site" aria-label="The manual">
+  <b>Room manual</b>
+  <a href="index.html">Contents</a>
+  <a href="how-it-works.html">How the room works</a>
+  <a href="running.html">Running it</a>
+  <a href="roles.html">Roles and how work moves</a>
+  <a href="relay.html">The relay API and routes</a>
+  <a href="settings.html" aria-current="page">Settings</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+<header class="page">
+  <h1>Settings</h1>
+  <p class="lede">Every environment variable the relay, its scripts and the hook read, with its default. Set them when you start the relay, for example <code>RELAY_WIP_LIMIT=4 npm run office</code>.</p>
+  <p id="runtime">The limits and timings are also in <span class="ui">Settings</span> on the room page, under <span class="ui">Limits and timings</span> (<code>relay/config.js</code>, <code>GET</code> and <code>POST /settings</code>): <code>RELAY_WIP_LIMIT</code>, <code>RELAY_READY_LIMIT</code>, <code>RELAY_LEAD_CHECK_MS</code>, <code>RELAY_LEAD_STOPS</code>, <code>RELAY_LEAD_STOP_LIMIT</code>, <code>RELAY_REVIEW_POLL_SECONDS</code>, <code>RELAY_PIPELINE_POLL_SECONDS</code>, <code>RELAY_PIPELINE_NO_CHECKS_MS</code>, <code>RELAY_REVIEW_RETRY_MS</code>, <code>RELAY_REVIEW_GRACE_MS</code>, the <code>RELAY_AUTOPILOT_*</code> limits and timings, <code>RELAY_CHAT_KEEP</code>, <code>RELAY_CHAT_POLL_SECONDS</code>, <code>RELAY_MAIN_POLL_SECONDS</code>, <code>RELAY_CHAT_RETRY_MS</code>, <code>RELAY_HUDDLE_*</code>, <code>RELAY_STALL_MS</code>, <code>RELAY_PR_WATCH_SECONDS</code>, <code>RELAY_PR_WATCH_WAIT_MS</code>, <code>RELAY_COO_GRACE_MS</code>, <code>RELAY_SECURITY_GRACE_MS</code> and <code>RELAY_PM_TALK_MINUTES</code>. Three have no variable and are set only there: automatic reviews per PR (3), and Autopilot's review rounds (2) and merges a day (10). Each is read when it is used, so a change applies at once, with no restart. A value set on the page wins over its variable, and stays through a restart, in <code>~/.office-world/settings.json</code> (<code>RELAY_SETTINGS_FILE</code>). <span class="ui">Reset</span> goes back to the variable, or the default. The page shows the timings in seconds or minutes, where the variable may be in milliseconds.</p>
+  <p>The rest are read only at startup, and a running relay keeps the ones it started with: the port and the key, which the page needs to connect; where state is kept; whether the terminal is on and which <code>claude</code> runs, which a page must not be able to change; the ticket store; the webhook; and the supervisor's own variables.</p>
+  <nav class="toc" aria-label="On this page">
+    <a href="#relay">The relay</a>
+    <a href="#office">Room sessions</a>
+    <a href="#lead">The Lead</a>
+    <a href="#reviews">Reviews and huddles</a>
+    <a href="#tickets">Tickets</a>
+    <a href="#files">Files on disk</a>
+    <a href="#webhook">Webhook</a>
+    <a href="#scripts">Scripts</a>
+    <a href="#hook">The hook</a>
+    <a href="#models">Models and skills</a>
+    <a href="#sessions">Given to sessions</a>
+    <a href="#in-files">Kept in files</a>
+  </nav>
+</header>
+<main>
+  <h2 id="relay">The relay</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>RELAY_KEY</code></td><td class="plain">random, printed at start</td><td>The key every call to <code>/channels/...</code> must send. The relay takes it out of its own environment when it starts, so nothing it runs is given it.</td></tr>
+      <tr><td><code>PORT</code></td><td class="plain"><code>8787</code>, or the world's <code>port</code></td><td>Port to listen on. With <code>RELAY_WORLD</code>, the default is the <code>port</code> in that world's <code>world.json</code>.</td></tr>
+      <tr><td><code>RELAY_WORLD</code></td><td class="plain">none: every world</td><td>A world's folder. The relay serves that world alone, and loads the room's parts only if its <code>world.json</code> says <code>"sessions": true</code>. <code>npm run world -- &lt;folder&gt;</code> sets it, and <code>npm run office</code> sets it to <code>office</code>. See <a href="relay.html#one-relay">One relay per world</a>.</td></tr>
+      <tr><td><code>HOST</code></td><td class="plain"><code>127.0.0.1</code></td><td>Address to listen on. A tunnel connects locally, so this can stay as it is.</td></tr>
+      <tr><td><code>RELAY_ROOT</code></td><td class="plain">the repo folder</td><td>Where the page files are served from. See <a href="relay.html#static">what the relay serves</a>. Files under <code>relay/</code> are never served.</td></tr>
+      <tr><td><code>RELAY_TERMINAL</code></td><td class="plain">off</td><td><code>1</code> turns on the Claude Code panel, the Board, Tasks, checkouts and Update. <code>npm run office</code> sets it on a relay it starts, but not on one already running. It only answers the room page on this computer. See <a href="running.html#local-only">the local-only rule</a>.</td></tr>
+      <tr><td><code>RELAY_UPDATE_DIR</code></td><td class="plain">the relay's folder</td><td>Where <a href="running.html#update">Update</a> pulls, and where a rollback checks out the last good commit.</td></tr>
+      <tr><td><code>RELAY_ROLLBACK</code></td><td class="plain">off</td><td><code>1</code> checks each relay the supervisor starts, and goes back to the last commit that passed when the relay fails after an Update. Read once, when the supervisor starts. See <a href="running.html#rollback">When the new relay fails</a>.</td></tr>
+      <tr><td><code>RELAY_ROLLBACK_SECONDS</code></td><td class="plain"><code>60</code></td><td>How long a new relay has to pass that check. At least 5.</td></tr>
+      <tr><td><code>RELAY_RESUME</code></td><td class="plain"><code>1</code></td><td><code>0</code> starts the relay with nobody: it brings back no session from the last run, and ends any still running in the session host. See <a href="running.html#back">Bringing a session back</a>.</td></tr>
+      <tr><td><code>RELAY_WORKER</code>, <code>RELAY_SUPERVISED</code>, <code>RELAY_KEY_RANDOM</code></td><td class="plain">set by the supervisor</td><td>Tell the relay it runs under <code>relay/supervisor.js</code>, and whether the key was made up. Not for you to set. Sessions do not get them.</td></tr>
+      <tr><td><code>RELAY_HOST_SOCKET</code></td><td class="plain">set by the supervisor</td><td>The socket of the <a href="running.html#session-host">session host</a>, which runs the sessions. Not for you to set. Sessions do not get it.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="office">Room sessions and tasks</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>CLAUDE_CMD</code></td><td class="plain"><code>claude</code></td><td>The command the Claude Code panel runs.</td></tr>
+      <tr><td><code>RELAY_OUT_BATCH_MS</code></td><td class="plain"><code>16</code></td><td>How long the relay holds a session's newest output before it sends it to the pages watching. A page that opens the session gets what is held in its replay, once. A value below 1, or one that is not a number, means 16. Tests make it longer.</td></tr>
+      <tr><td><code>RELAY_TYPE_SETTLE_MS</code></td><td class="plain"><code>300</code></td><td>How long a message the relay types sits in the session's prompt before it presses Enter. If the session gets busy in that time, or the message is changed or taken back, the relay clears the prompt with Ctrl+U and does not press Enter. A value below 1, or one that is not a number, means 300. Tests make it longer.</td></tr>
+      <tr><td><code>RELAY_WIP_LIMIT</code></td><td class="plain"><code>3</code></td><td>How many tasks can be building at once. A task the relay moved back to Changes requested for a review does not count until its next move. See <a href="roles.html#wip">the limit</a>.</td></tr>
+      <tr><td><code>RELAY_LEAD_CHECK_MS</code></td><td class="plain"><code>300000</code> (5 minutes)</td><td>How often, in milliseconds, the relay types <a href="roles.html#lead-check">the Lead's regular check</a> into the Lead, while at least one task is building, in review, has changes requested or is waiting on you. It waits until the Lead is idle, and a check that comes due while one still waits is dropped. 0 turns it off. In Settings it is <span class="ui">Lead check every</span>, in minutes, under Work.</td></tr>
+      <tr><td><code>RELAY_STALL_MS</code></td><td class="plain"><code>1800000</code> (30 minutes)</td><td>How long, in milliseconds, a session in a turn can send no hook and print nothing before it is stuck. With no hook but output still moving, it is quiet instead. The Floor, Autopilot and the COO's stall count all use it. See <a href="how-it-works.html#alive">Is a session alive</a>.</td></tr>
+      <tr><td><code>RELAY_READY_LIMIT</code></td><td class="plain"><code>600000</code> (10 minutes)</td><td>How long, in milliseconds, a reviewer's, the PM's or the COO's first prompt waits for its session to be ready before it gives up, counted from when it was saved, and again from when a relay comes back. Once typed, it does not give up for this: it is in once a turn begins, or the session is stuck. A task's brief and the Lead's brief do not give up.</td></tr>
+      <tr><td><code>RELAY_SSH_CMD</code></td><td class="plain"><code>ssh</code></td><td>The <code>ssh</code> whose <code>ssh -G</code> says which host an SSH alias in a remote stands for. See <a href="roles.html#auto-review">Automatic review</a>.</td></tr>
+      <tr><td><code>GH_CMD</code></td><td class="plain"><code>gh</code></td><td>The <code>gh</code> that huddles, review checks and the chat board run.</td></tr>
+      <tr><td><code>RELAY_CHAT_KEEP</code></td><td class="plain"><code>200</code></td><td>How many posts each chat channel keeps. Older ones are dropped. See <a href="roles.html#chat">The chat board</a>.</td></tr>
+      <tr><td><code>RELAY_CHAT_POLL_SECONDS</code></td><td class="plain"><code>60</code></td><td>How often the chat board asks <code>gh</code> about each task's PR, for a failing pipeline, a merge or a close. <code>0</code> turns it off.</td></tr>
+      <tr><td><code>RELAY_MAIN_POLL_SECONDS</code></td><td class="plain"><code>60</code></td><td>How often the relay runs <code>git ls-remote --symref origin HEAD</code> in its own folder, the one <a href="running.html#update">Update</a> pulls into, to say in #office when origin's default branch moved. <code>0</code> turns it off. See <a href="roles.html#chat">The chat board</a>.</td></tr>
+      <tr><td><code>RELAY_CHAT_RETRY_MS</code></td><td class="plain"><code>30000</code></td><td>How often the relay tries again to delete a ticket's chat channel whose summary could not be kept.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="lead">The Lead</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>RELAY_LEAD_STOPS</code></td><td class="plain">off</td><td><code>1</code> lets a Lead you let move the board stop a session the Floor calls safe to stop, if it is an automatic reviewer that has posted or a Dev whose PR merged or whose task is Done. It is also <span class="ui">Let the Lead stop sessions</span> in Settings. A value set there wins over this variable and stays through a restart, so to take the rung back, turn the switch off in Settings. See <a href="roles.html#lead-stops">What the Lead stops</a>.</td></tr>
+      <tr><td><code>RELAY_LEAD_STOP_LIMIT</code></td><td class="plain"><code>6</code></td><td>While the Lead may stop sessions, how many it may stop in an hour, on each channel.</td></tr>
+      <tr><td><code>RELAY_PM_TALK_MINUTES</code></td><td class="plain"><code>30</code></td><td>For how long after you last typed to the PM the Floor calls it not safe to stop.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="reviews">Reviews and huddles</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>RELAY_REVIEW_GRACE_MS</code></td><td class="plain"><code>30000</code></td><td>How long an automatic reviewer that has posted waits before its session ends. See <a href="roles.html#reviewers-leave">Reviewers leave</a>.</td></tr>
+      <tr><td><code>RELAY_AUTOPILOT_TICK_MS</code></td><td class="plain"><code>20000</code></td><td>How often Autopilot looks at each task's PR and at Ready. See <a href="roles.html#autopilot">Autopilot</a>.</td></tr>
+      <tr><td><code>RELAY_AUTOPILOT_AT_ONCE</code></td><td class="plain"><code>1</code></td><td>How many tasks Autopilot keeps open at once. See <a href="roles.html#autopilot">Autopilot</a>.</td></tr>
+      <tr><td><code>RELAY_AUTOPILOT_STALL_MS</code></td><td class="plain"><code>1800000</code></td><td>How long a task of Autopilot's is stuck before it goes to Waiting on you: at a session at a question, a reviewer that has not started, or nothing that could move it. See <a href="roles.html#autopilot-stuck">A stuck session</a>.</td></tr>
+      <tr><td><code>RELAY_REVIEW_RETRY_MS</code></td><td class="plain"><code>60000</code></td><td>How long an automatic review that could not start waits before it tries again, with 3 tries in all, the first one included. A first review that only lacks a desk waits for a free desk instead. See <a href="roles.html#auto-review">Automatic review</a> and <a href="roles.html#review-again">Review again after each push</a>.</td></tr>
+      <tr><td><code>RELAY_REVIEW_POLL_SECONDS</code></td><td class="plain"><code>60</code></td><td>How often the relay checks task PRs for new comments. <code>0</code> turns it off. See <a href="roles.html#findings">How findings get back to the Dev</a>.</td></tr>
+      <tr><td><code>RELAY_PIPELINE_POLL_SECONDS</code></td><td class="plain"><code>15</code></td><td>How often the relay asks GitHub for the checks on each open PR. Automatic reviews wait until they pass. <code>0</code> turns it off, and reviews start without waiting. See <a href="roles.html#pipeline">A clean pipeline before review</a>.</td></tr>
+      <tr><td><code>RELAY_PIPELINE_NO_CHECKS_MS</code></td><td class="plain"><code>120000</code></td><td>How long a PR with no checks waits for them to appear before its review starts with no pipeline. See <a href="roles.html#pipeline">A clean pipeline before review</a>.</td></tr>
+      <tr><td><code>RELAY_TOLD_CHECK_MS</code></td><td class="plain"><code>60000</code></td><td>How long after a saved message goes in the relay waits for a turn to begin, before it tries once more (three more times for a first prompt), and again before it calls the session stuck. Past this and 3 seconds after an Enter that no hook answered, the Lead's stop verdict says the prompt did not go in. See <a href="how-it-works.html#stuck">A session that does not start</a>.</td></tr>
+      <tr><td><code>RELAY_HUDDLE_ANSWER_SECONDS</code></td><td class="plain"><code>180</code></td><td>How long a huddle waits for answers.</td></tr>
+      <tr><td><code>RELAY_HUDDLE_QUIET_MINUTES</code></td><td class="plain"><code>15</code></td><td>How long with no hook event before a huddle flags a session as quiet.</td></tr>
+      <tr><td><code>RELAY_COO_GRACE_MS</code></td><td class="plain"><code>10000</code></td><td>How long after the turn that saved its report the COO's session ends.</td></tr>
+      <tr><td><code>RELAY_SECURITY_GRACE_MS</code></td><td class="plain"><code>10000</code></td><td>How long after the turn that saved its report the security officer's session ends.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="tickets">Tickets</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>RELAY_TICKET_STORE</code></td><td class="plain"><code>local</code></td><td>Where tickets are kept: <code>local</code>, or the path to your own store module. See <a href="running.html#github-issues">Keeping tickets in GitHub issues</a>.</td></tr>
+      <tr><td><code>RELAY_TICKET_REPO</code></td><td class="plain">none</td><td>The GitHub store: the repo that keeps each channel's tickets, as <code>owner/repo</code> or <code>office=owner/repo,demo=owner/other</code>.</td></tr>
+      <tr><td><code>RELAY_TICKET_CACHE_MS</code></td><td class="plain"><code>10000</code></td><td>The GitHub store: how long a fetched list is used before it is fetched again.</td></tr>
+      <tr><td><code>RELAY_TICKET_FOLDER</code></td><td class="plain">the repo folder that holds the relay</td><td>The GitHub store: where a ticket filed on GitHub, or one whose note does not check, is worked on.</td></tr>
+      <tr><td><code>RELAY_TICKET_KEY_FILE</code></td><td class="plain"><code>github-store.key</code> in the state folder</td><td>The GitHub store: the key that signs each ticket's hidden note.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="files">Files on disk</h2>
+  <p>The relay keeps its state in one folder, the state folder. <code>RELAY_STATE_DIR</code> sets it, and each file's own variable below still wins over it. The Lead's handoff notes, the GitHub store's key and the settings from the page are there too. A second room on the same computer needs only its own port and its own state folder (see <a href="running.html#second-office">A second room</a>).</p>
+  <p>One relay owns each of the tasks, checkouts, sessions, reviews, deliveries and Lead files at a time: a second one using it keeps that state in memory only, and says so.</p>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>RELAY_STATE_DIR</code></td><td class="plain"><code>~/.office-world</code></td><td>The state folder: where every file below is kept unless its own variable names another place. Read once, when the relay starts. The supervisor reads it too, for <code>RELAY_GOOD_FILE</code>.</td></tr>
+      <tr><td><code>RELAY_TICKETS_FILE</code></td><td class="plain"><code>tickets.json</code> in the state folder</td><td>Where the local store keeps tickets.</td></tr>
+      <tr><td><code>RELAY_TASKS_FILE</code></td><td class="plain"><code>tasks.json</code> in the state folder</td><td>Where tasks are kept, with what the PR watcher has seen.</td></tr>
+      <tr><td><code>RELAY_TICKET_HISTORY_FILE</code></td><td class="plain"><code>ticket-history.json</code> in the state folder</td><td>Each ticket's history: who filed, approved and started it, its Devs and reviewers with their sessions, its moves and its edits. Also the name the relay gave each session. See <a href="roles.html#ticket-history">Who has a ticket</a>.</td></tr>
+      <tr><td><code>RELAY_COO_FILE</code></td><td class="plain"><code>coo.json</code> in the state folder</td><td>Where the COO's measures (raised hands, stalls, crashes, sessions that did not start on what they were told, sessions you stopped, updates that waited on a session or failed) and the last 20 reports are kept.</td></tr>
+      <tr><td><code>RELAY_SECURITY_FILE</code></td><td class="plain"><code>security.json</code> in the state folder</td><td>Where the security officer's last 20 reports are kept, each with the measures it was written from.</td></tr>
+      <tr><td><code>RELAY_CHECKOUTS_FILE</code></td><td class="plain"><code>checkouts.json</code> in the state folder</td><td>Where workers' and reviewers' checkouts are kept.</td></tr>
+      <tr><td><code>RELAY_GOOD_FILE</code></td><td class="plain"><code>good-commit.json</code> in the state folder</td><td>The last commit whose relay passed its check, and the last rollback. See <a href="running.html#rollback">When the new relay fails</a>.</td></tr>
+      <tr><td><code>RELAY_NAMES_FILE</code></td><td class="plain"><code>names.json</code> in the state folder</td><td>When this room last gave or gave up each name in the roster's pool, so the least recently used name comes next (<a href="roles.html#seats">Which person gets it</a>).</td></tr>
+      <tr><td><code>RELAY_SESSIONS_FILE</code></td><td class="plain"><code>sessions.json</code> in the state folder</td><td>The sessions running now, which the next relay takes back from the session host, or brings back after a stop.</td></tr>
+      <tr><td><code>RELAY_SETTINGS_FILE</code></td><td class="plain"><code>settings.json</code> in the state folder</td><td>The values set in <span class="ui">Settings</span> under <span class="ui">Limits and timings</span>. See <a href="#runtime">above</a>.</td></tr>
+      <tr><td><code>RELAY_AUTOPILOT_FILE</code></td><td class="plain"><code>autopilot.json</code> in the state folder</td><td>The <span class="ui">Autopilot</span> switch and its ticket list, each PR's verdicts, the day's merges, and its last notes. See <a href="roles.html#autopilot">Autopilot</a>.</td></tr>
+      <tr><td><code>RELAY_PR_WATCH_FILE</code></td><td class="plain"><code>pr-watch.json</code> in the state folder</td><td>What <a href="roles.html#pr-watch">the PR watch</a> last decided for each open task PR, since when, and each action it took for the PR's head, so a restart does not repeat one. The switch itself is in the settings file.</td></tr>
+      <tr><td><code>RELAY_REVIEWS_FILE</code></td><td class="plain"><code>reviews.json</code> in the state folder</td><td><span class="ui">Review PRs automatically</span> and <span class="ui">Review again after each push</span>, and for each PR its count of automatic reviews, the commit its last review read and when it started, a follow-up waiting to start, and the last commit a follow-up was queued for. See <a href="roles.html#auto-review">Automatic review</a>.</td></tr>
+      <tr><td><code>RELAY_DELIVERIES_FILE</code></td><td class="plain"><code>deliveries.json</code> in the state folder</td><td>Messages saved until a session can safely take them.</td></tr>
+      <tr><td><code>RELAY_CHAT_FILE</code></td><td class="plain"><code>chat.json</code> in the state folder</td><td>Where the chat board keeps its chat channels and posts.</td></tr>
+      <tr><td><code>RELAY_LEAD_FILE</code></td><td class="plain"><code>lead.json</code> in the state folder</td><td>Where the Lead's session is saved, whether you let it move the board, and the number you let it start tickets up to (<code>starts</code>, 0 when off) with the starts left (<code>startsLeft</code>). A session you make the Lead overwrites it once it has a conversation, and starts without those permissions.</td></tr>
+    </tbody>
+  </table>
+  <p>Hooks that could not reach the relay wait in <code>hook-queue.jsonl</code> in the state folder, which has no setting of its own (<a href="running.html#hook-queue">While the relay is down</a>). The Lead's handoff notes are in <code>lead-notes/notes.md</code> in the state folder, which has no setting of its own. The relay names that path to the Lead when it refreshes it. The PM's notes are in <code>pm-notes/</code> in the state folder, one file per repo (see <a href="roles.html#pm-notes">The PM notes</a>), and the relay names the file in each PM's brief.</p>
+
+  <h2 id="webhook">Webhook</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>RELAY_WEBHOOK_URL</code></td><td class="plain">none</td><td>If set, events are posted here. See <a href="relay.html#webhook">Webhook</a>.</td></tr>
+      <tr><td><code>RELAY_WEBHOOK_AUTH</code></td><td class="plain">none</td><td>Sent as the <code>Authorization</code> header on webhook posts.</td></tr>
+      <tr><td><code>RELAY_WEBHOOK_TYPES</code></td><td class="plain"><code>result, run.started, run.live, run.off, thing.added, dale.said, dale.moved, phone.rang</code></td><td>Which event types the webhook gets.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="scripts">Scripts</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>RELAY_URL</code></td><td class="plain"><code>http://localhost:8787</code></td><td><code>npm run office</code> and <code>office:demo</code>: the relay to use. The default is the port in the room's <code>world.json</code>.</td></tr>
+      <tr><td><code>CHANNEL</code></td><td class="plain"><code>office</code></td><td>The channel to open.</td></tr>
+      <tr><td><code>DEMO_SPEED</code></td><td class="plain"><code>1</code></td><td><code>npm run office:demo</code>: <code>2</code> plays it twice as fast.</td></tr>
+      <tr><td><code>OPEN_CMD</code></td><td class="plain">the system's</td><td><code>npm run office</code>, <code>office:demo</code> and <code>evening</code>: the command that opens a link.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="hook">The hook</h2>
+  <p><code>npm run office:hooks</code> saves these into the hook it installs, so set them when you run it. A session the room started reports to the relay that started it whatever these say: the hook sends to <code>OFFICE_HOOK_URL</code> with the session's own <code>OFFICE_TICKET_TOKEN</code> when it has both (see <a href="#sessions">Given to sessions</a>). Only a session you start by hand uses these.</p>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>OFFICE_RELAY_KEY</code></td><td class="plain"><code>RELAY_KEY</code></td><td>The relay key.</td></tr>
+      <tr><td><code>OFFICE_RELAY_URL</code></td><td class="plain"><code>http://localhost:8787</code></td><td>The relay's address.</td></tr>
+      <tr><td><code>OFFICE_CHANNEL</code></td><td class="plain"><code>office</code></td><td>The channel. <code>--channel &lt;name&gt;</code> after <code>--install</code> or <code>--settings</code> sets it too, and wins over this. Inside a session the room started, this holds that page's channel, so <code>--install</code> and <code>--settings</code> leave it out and use <code>office</code>, unless you set it to another value or pass <code>--channel</code>. See <a href="running.html#own-terminal">Sessions from your own terminal</a>.</td></tr>
+      <tr><td><code>OFFICE_SHOW_TITLES</code></td><td class="plain">on</td><td><code>0</code> keeps the session's title back.</td></tr>
+      <tr><td><code>OFFICE_SHOW_PROMPTS</code></td><td class="plain">off</td><td><code>1</code> sends the first 120 characters of each prompt.</td></tr>
+      <tr><td><code>OFFICE_DETAIL</code></td><td class="plain">trimmed</td><td><code>full</code> sends the first line of each shell command and search queries.</td></tr>
+      <tr><td><code>OFFICE_HOOK_LOG</code></td><td class="plain">none</td><td>A file to append every raw event to.</td></tr>
+    </tbody>
+  </table>
+  <p>What each of these changes is in <a href="how-it-works.html#hook-sends">What the hook sends</a>.</p>
+
+  <h2 id="models">Models and skills for each role</h2>
+  <p>In <span class="ui">Settings</span>, under <span class="ui">Models and skills</span>, each role has a model and a list of skills: the Lead, Devs, reviewers, the PM, the COO and the security officer. They have no variables, and are kept with the other page values in <code>~/.office-world/settings.json</code>. <span class="ui">Reset</span> goes back to the default. The code is in <code>relay/skills.js</code>.</p>
+  <table>
+    <thead><tr><th>Setting</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Model</span></td><td class="plain">empty</td><td>The model a new session for that role starts on: the relay adds <code>--model</code> and the value to its <code>claude</code> command. Empty adds nothing, so the session runs on your own default. The box suggests <code>opus</code>, <code>sonnet</code> and <code>haiku</code>, and takes a full model id too. A value is letters, digits, dots, dashes and brackets, up to 64, and cannot start with a dash; the relay refuses anything else. Only a new session gets it. A session brought back with <code>--resume</code> keeps the model it had, so a <code>/model</code> switch you made by hand stays through a restart.</td></tr>
+      <tr><td><span class="ui">Skills</span></td><td class="plain">See below</td><td>Skills the role's brief names, by their plugin name, split by commas or spaces, up to 12. The brief gets one paragraph: use these skills where they fit, carry on without one that cannot be called or read, and the repo's rules win where a skill and <code>CLAUDE.md</code> or the constitution differ. It names only the skills installed on this computer. A skill a session can call is named for the Skill tool. A skill only a person can run (its <code>SKILL.md</code> has <code>disable-model-invocation: true</code>, as most pstack skills do) is named with the full path of its <code>SKILL.md</code>, and the session is told to read that file and follow it where it fits. The path goes only into the brief, never into <code>#office</code> or Settings. Empty: no paragraph. Next to each list, Settings says which skills are not found, and which are read from their file.</td></tr>
+    </tbody>
+  </table>
+  <p>Which role a session starts as: a task's worker is a Dev, a session for a PR review is a reviewer, and <span class="ui">Ask the PM</span> and the COO's report start the PM and the COO. The Lead's model applies only when the relay itself starts the Lead as a new session: after a stop, it brings back the Lead, and the Lead had no conversation yet (it was made the Lead and its brief had not gone in, or it was between <code>/clear</code> and its next prompt). A session you make the Lead is already running, so it keeps the model it started on. <span class="ui">Bring back</span> resumes the Lead's conversation, so it keeps its model too. A plain session, with no role, never gets <code>--model</code>.</p>
+  <p>The default skills: the Lead <code>pstack:recall</code>; Devs <code>mattpocock-skills:tdd</code>, <code>mattpocock-skills:diagnosing-bugs</code>, <code>mattpocock-skills:codebase-design</code>, <code>pstack:blast-radius</code>, <code>pstack:principle-prove-it-works</code> and <code>mattpocock-skills:pr</code>; reviewers <code>mattpocock-skills:code-review</code> and <code>pstack:blast-radius</code>; the PM <code>pstack:sharpen</code> and <code>mattpocock-skills:writing-for-agents</code>; the COO <code>pstack:principle-explain-the-number</code>. The Dev's brief says what three of them are for: <code>tdd</code> for new behavior or a bug a test can catch, <code>diagnosing-bugs</code> for a bug, and <code>codebase-design</code> for a change of structure.</p>
+  <p>What is installed comes from Claude Code's own files, which the relay reads and never writes: <code>~/.claude/plugins/installed_plugins.json</code> for each plugin and its folder, and <code>enabledPlugins</code> in <code>~/.claude/settings.json</code>, where a plugin set to <code>false</code> does not count. A plugin's skills are the folders under its <code>skills</code> folder that hold a <code>SKILL.md</code>. <code>CLAUDE_CONFIG_DIR</code> moves <code>~/.claude</code>, as it does for Claude Code. The relay reads them again only when one of those two files changes. When a skill on any list is not installed, <code>#office</code> on the chat board says which, and the commands that install its plugin, such as <code>/plugin install mattpocock-skills@claude-plugins-official</code>. It says it once after the relay starts, when a session with a role starts, and again only when the missing list changes. Sessions carry on without the missing skills.</p>
+
+  <h2 id="sessions">Given to sessions</h2>
+  <p>Sessions the room starts get <code>OFFICE_TERMINAL_ID</code>, <code>OFFICE_TICKET_TOKEN</code> and <code>OFFICE_TICKET_URL</code>, which <a href="relay.html#ticket-js"><code>relay/ticket.js</code></a> reads. They also get <code>OFFICE_CHANNEL</code>, set to the channel of the page that started them, the same value in <code>OFFICE_PANEL_CHANNEL</code>, which tells <code>office-hook.js --install</code> the panel set it, and <code>OFFICE_HOOK_URL</code>, the address of that relay's channel (<code>http://127.0.0.1:&lt;port&gt;/channels/&lt;channel&gt;/commands</code>). With <code>OFFICE_HOOK_URL</code> and the token, the hook reports to the relay that started the session, even when the hooks in <code>~/.claude/settings.json</code> name another relay, key or channel. The token sends only hooks about its own session, and the relay seats them at that session's desk. <code>RELAY_KEY</code>, <code>OFFICE_RELAY_KEY</code>, <code>RELAY_TERMINAL</code> and the supervisor's variables are taken out of what they inherit.</p>
+
+  <h2 id="in-files">Settings kept in files</h2>
+  <ul>
+    <li><b><code>office/roster.js</code></b> says who works here and how they look. The first <code>startWith</code> people (three) are always in the room, and the rest come in for a session and leave when it ends. The people's <code>skills</code> are only used by the <code>work</code> action (see <a href="relay.html#office-api">the room's API</a>). The manager's visits are set there too, as <code>manager.everyMinutes</code>. Take it out and the manager only comes when sent. The relay reads the file too, named by <code>roster</code> in <code>office/world.json</code>, to pick the desk each session sits at and the name it shows (<a href="roles.html#seats">Which person gets it</a>). Its <code>names</code> are the pool of names, one list for each desk <code>kind</code>: keep each name one word, and apart from the desks' own names. It reads it when it starts, so restart the relay after you add, remove or rename someone.</li>
+    <li><b><code>office/radio.js</code></b>: <code>SOUR</code>, <code>WOW</code> and <code>FLUTTER</code> at the top set how far out of tune the radio is.</li>
+    <li><b>In the browser.</b> The Org chart's next arrangement, and who had which session, for a day. The review switches are the relay's, in <code>RELAY_REVIEWS_FILE</code>.</li>
+    <li><b>In the address.</b> <code>channel</code>, <code>key</code>, <code>relay</code> and <code>time</code>. See <a href="relay.html#page-params">The page</a>.</li>
+  </ul>
+</main>
+<footer>Sources: <code>process.env</code> in <code>relay/</code>, <code>office/roster.js</code> and <code>office/radio.js</code>. When a setting changes, change this page in the same pull request.</footer>
+</body>
+</html>

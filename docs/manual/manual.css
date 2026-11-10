@@ -1,0 +1,143 @@
+/* The manual's one look, shared by every page. It loads nothing from elsewhere. */
+:root {
+  --bg: #f6f4ef; --panel: #ffffff; --ink: #1d2126; --muted: #5d6670; --line: #c9ccd1; --soft: #eceae4;
+  --gh: #6e40c9; --gh-bg: #f1ebfc;
+  --relay: #0b7a75; --relay-bg: #e3f4f2;
+  --claude: #c2562a; --claude-bg: #fbece4;
+  --page: #2861b8; --page-bg: #e6eefb;
+  --you: #8a6a00; --you-bg: #fbf3d6;
+  --ok: #2f7d32; --warn: #b26a00; --off: #8a8f96; --err: #b3261e;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171b; --panel: #1c2026; --ink: #e6e8eb; --muted: #9aa3ad; --line: #3a414a; --soft: #232830;
+    --gh: #b597f5; --gh-bg: #2a2340;
+    --relay: #5fd0c8; --relay-bg: #15302e;
+    --claude: #f0956a; --claude-bg: #3a241a;
+    --page: #84aef0; --page-bg: #1a2740;
+    --you: #e6c25a; --you-bg: #352c12;
+    --ok: #7fcf83; --warn: #f0b45e; --off: #7d858f; --err: #f08c7e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171b; --panel: #1c2026; --ink: #e6e8eb; --muted: #9aa3ad; --line: #3a414a; --soft: #232830;
+  --gh: #b597f5; --gh-bg: #2a2340;
+  --relay: #5fd0c8; --relay-bg: #15302e;
+  --claude: #f0956a; --claude-bg: #3a241a;
+  --page: #84aef0; --page-bg: #1a2740;
+  --you: #e6c25a; --you-bg: #352c12;
+  --ok: #7fcf83; --warn: #f0b45e; --off: #7d858f; --err: #f08c7e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); }
+.site, header.page, main, footer { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* the bar of pages at the top of each one */
+.site { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-top: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.site b { font-weight: 700; margin-right: 6px; }
+.site a { color: var(--muted); text-decoration: none; }
+.site a:hover { color: var(--ink); text-decoration: underline; }
+.site a[aria-current="page"] { color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--relay); }
+
+header.page { padding-top: 24px; }
+h1 { font-size: 28px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+h2 { font-size: 21px; line-height: 1.25; margin: 40px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); scroll-margin-top: 8px; }
+h3 { font-size: 17px; margin: 24px 0 6px; scroll-margin-top: 8px; }
+h4 { font-size: 15px; margin: 18px 0 4px; }
+p, ul, ol { margin: 8px 0; max-width: 80ch; }
+li { margin: 4px 0; }
+a { color: var(--page); }
+code { font: 0.88em var(--mono); background: var(--soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { font: 13.5px/1.5 var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; max-width: 100%; }
+pre code { background: none; padding: 0; overflow-wrap: normal; }
+.lede { color: var(--muted); margin: 0 0 8px; max-width: 72ch; }
+.ui { font-weight: 600; }
+.say { font: 14px/1.45 var(--mono); }
+
+/* the list of sections at the top of a page */
+nav.toc { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 14px 0 0; font-size: 14px; }
+
+.key { margin: 18px 0; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 6px; max-width: 80ch; }
+.key p { margin: 0; }
+.key p + p { margin-top: 6px; }
+
+.todo { list-style: none; padding: 0; counter-reset: todo; display: grid; gap: 8px; }
+.todo li { counter-increment: todo; margin: 0; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 4px; }
+.todo li::before { content: counter(todo); font: 600 14px/1.9 var(--mono); color: var(--muted); }
+
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.5; background: var(--panel); border: 1px solid var(--line); margin: 12px 0; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--soft); font-weight: 600; }
+td:first-child { font-weight: 600; }
+td.say, td.plain { font-weight: 400; }
+tr:last-child td { border-bottom: 0; }
+
+/* figures: hand-drawn SVG that scrolls inside its box on a narrow screen, never the page */
+.figure { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 720px; height: auto; }
+.figure.small svg { min-width: 0; max-width: 760px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 2px 0; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 14px 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--c, var(--line)); border-radius: 8px; padding: 10px 12px; }
+.card h3 { margin-top: 0; font-size: 16px; }
+.card p, .card ul { font-size: 14.5px; margin: 4px 0; }
+.card ul { padding-left: 18px; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.on { color: var(--ok); } .off { color: var(--off); }
+
+/* the Board's columns, in a row */
+.flow { list-style: none; margin: 12px 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; max-width: none; }
+.flow li { margin: 0; padding: 6px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--off); min-width: 0; font-size: 14px; }
+.flow b { display: block; }
+.flow small { display: block; color: var(--muted); font-size: 12.5px; }
+.flow .building { border-left-color: var(--ok); }
+.flow .review { border-left-color: var(--page); }
+.flow .waiting { border-left-color: var(--warn); }
+
+dl.terms dt { font-weight: 700; margin-top: 16px; scroll-margin-top: 8px; }
+dl.terms dd { margin: 2px 0 0 0; max-width: 80ch; }
+
+footer { color: var(--muted); font-size: 13px; padding-top: 32px; padding-bottom: 32px; }
+
+/* SVG text and shapes use the tokens, so both themes work */
+svg text { font-family: var(--sans); fill: var(--ink); }
+svg .t-muted { fill: var(--muted); }
+svg .t-sm { font-size: 11.5px; }
+svg .t-md { font-size: 13px; }
+svg .t-lg { font-size: 15px; font-weight: 700; }
+svg .t-mono { font-family: var(--mono); font-size: 11px; }
+svg .zone-gh { fill: var(--gh-bg); stroke: var(--gh); }
+svg .zone-relay { fill: var(--relay-bg); stroke: var(--relay); }
+svg .zone-claude { fill: var(--claude-bg); stroke: var(--claude); }
+svg .zone-page { fill: var(--page-bg); stroke: var(--page); }
+svg .zone-you { fill: var(--you-bg); stroke: var(--you); }
+svg .box { fill: var(--panel); stroke: var(--line); }
+svg .wire { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+svg .wire-gh { stroke: var(--gh); } svg .wire-relay { stroke: var(--relay); } svg .wire-claude { stroke: var(--claude); } svg .wire-page { stroke: var(--page); } svg .wire-you { stroke: var(--you); }
+svg .dash { stroke-dasharray: 5 4; }
+svg .lane { fill: var(--soft); }
+svg .step { fill: var(--panel); stroke-width: 1.5; }
+svg .s-gh { stroke: var(--gh); } svg .s-relay { stroke: var(--relay); } svg .s-claude { stroke: var(--claude); } svg .s-page { stroke: var(--page); } svg .s-you { stroke: var(--you); } svg .s-off { stroke: var(--off); }
+
+@media (max-width: 720px) {
+  h1 { font-size: 24px; }
+  .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* on a phone each table row becomes a small block: its first cell as a heading, the rest below */
+  table, tbody, tr, td { display: block; width: 100%; }
+  thead, tr:has(> th) { display: none; }
+  table { border: 0; background: none; }
+  tr { padding: 10px 12px; margin: 0 0 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  td { padding: 2px 0; border: 0; }
+  td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-weight: 400; }
+}
+@media print {
+  .site, nav.toc { display: none; }
+  .figure { overflow: visible; }
+}

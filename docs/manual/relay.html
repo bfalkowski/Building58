@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>The relay API</title>
+<script src="../../shared/theme.js"></script>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+<nav class="site" aria-label="The manual">
+  <b>Room manual</b>
+  <a href="index.html">Contents</a>
+  <a href="how-it-works.html">How the room works</a>
+  <a href="running.html">Running it</a>
+  <a href="roles.html">Roles and how work moves</a>
+  <a href="relay.html" aria-current="page">The relay API and routes</a>
+  <a href="settings.html">Settings</a>
+  <a href="glossary.html">Glossary</a>
+</nav>
+<header class="page">
+  <h1>The relay API and routes</h1>
+  <p class="lede">The relay is a small server between callers and the world pages, such as the room. This page has its calls, its errors, its events, the room's API, the room's routes, and the scripts that drive it.</p>
+  <nav class="toc" aria-label="On this page">
+    <a href="#what">What the relay is</a>
+    <a href="#page-params">The page</a>
+    <a href="#calls">Calls</a>
+    <a href="#command">Send a command</a>
+    <a href="#events">Events</a>
+    <a href="#webhook">Webhook</a>
+    <a href="#office-api">The room's API</a>
+    <a href="#routes">The room's routes</a>
+    <a href="#ticket-js">ticket.js</a>
+    <a href="#tunnel">Through a tunnel</a>
+    <a href="#limits">Limits</a>
+  </nav>
+</header>
+<main>
+  <h2 id="what">What the relay is</h2>
+  <p>Each world runs in a browser page, and nothing outside the browser can call into a page directly. The relay (<code>relay/server.js</code>, Node 18 or later, no dependencies) sits in the middle. Callers such as curl, a script or an agent send commands to the relay over HTTP. The relay passes each command to the page, waits for the result and sends it back. The page also sends every event to the relay, where callers can read them or have them posted to a webhook. <code>shared/relay.js</code> connects a world page to the relay when it is opened with <code>?channel=</code>, and uses only <code>window.run</code>.</p>
+  <div class="figure small">
+  <svg viewBox="0 0 760 210" role="img" aria-labelledby="rl-t rl-d">
+    <title id="rl-t">A command through the relay</title>
+    <desc id="rl-d">A caller posts a command to the relay, which streams it to the page. The page runs it with window.run and returns the result to the relay, which returns it to the caller. The page also sends events, which callers read from /events or get by webhook.</desc>
+    <defs><marker id="ah-rl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+    <rect class="zone-you" x="10" y="20" width="170" height="170" rx="10" stroke-width="1.5"/>
+    <text class="t-lg" x="95" y="46" text-anchor="middle">Caller</text>
+    <text class="t-sm t-muted" x="95" y="64" text-anchor="middle">curl, a script, a hook</text>
+    <rect class="zone-relay" x="295" y="20" width="170" height="170" rx="10" stroke-width="1.5"/>
+    <text class="t-lg" x="380" y="46" text-anchor="middle">Relay</text>
+    <text class="t-sm t-muted" x="380" y="64" text-anchor="middle">relay/server.js</text>
+    <rect class="zone-page" x="580" y="20" width="170" height="170" rx="10" stroke-width="1.5"/>
+    <text class="t-lg" x="665" y="46" text-anchor="middle">Page</text>
+    <text class="t-sm t-muted" x="665" y="64" text-anchor="middle">window.run</text>
+    <path class="wire wire-you" d="M180 92 L295 92" marker-end="url(#ah-rl)"/><text class="t-mono" x="186" y="86">POST /commands</text>
+    <path class="wire wire-relay" d="M465 92 L580 92" marker-end="url(#ah-rl)"/><text class="t-mono" x="471" y="86">stream</text>
+    <path class="wire wire-page" d="M580 126 L465 126" marker-end="url(#ah-rl)"/><text class="t-mono" x="574" y="144" text-anchor="end">result</text>
+    <path class="wire wire-relay" d="M295 126 L180 126" marker-end="url(#ah-rl)"/><text class="t-mono" x="289" y="144" text-anchor="end">result</text>
+    <path class="wire wire-page dash" d="M580 170 L180 170" marker-end="url(#ah-rl)"/><text class="t-mono" x="380" y="164" text-anchor="middle">events: GET /events or the webhook</text>
+  </svg>
+  </div>
+  <p id="static">The relay also serves the page, so the world and the relay share one address. That avoids the browser's cross-origin and local-network blocks, and once the relay is behind a tunnel the same URL works for any caller and any browser. It serves files from the repo folder (<code>RELAY_ROOT</code>): the room at <code>/office/</code>, any other world at its folder's name, this manual at <code>/docs/manual/</code>, and the root links to the room. It does not serve dot folders such as <code>.git</code>, or any folder named <code>relay</code> or <code>node_modules</code>, in any case, so <code>/RELAY/server.js</code> gets <code>404</code> too. It refuses any path with a character that is not ASCII, since macOS reads some of them as plain letters. A path with a malformed escape, such as <code>/%E0%A4%A</code>, gets <code>404</code>. An unknown route under <code>/channels/</code> gets <code>404</code> with <code>not_found</code>, and a channel name with a malformed escape, such as <code>/channels/%E0%A4%A/tickets</code>, gets <code>400</code> with the relay key with <code>bad_channel</code>.</p>
+  <p id="worlds"><b>Worlds.</b> The relay does not know any world by name. A world is a folder in <code>RELAY_ROOT</code> with a <code>world.json</code>: <code>name</code> and <code>channel</code> make its link, <code>port</code> is where its own relay listens, and <code>"sessions": true</code> says its page runs Claude Code sessions, the Board and Autopilot. For example, <code>{ "name": "the office", "channel": "office", "port": 8787, "sessions": true }</code>. A folder with no <code>world.json</code>, or one that is not valid JSON, is not a world, but with no <code>RELAY_WORLD</code> its files are still served. A world's own scripts live in its folder. A world can live in a repo of its own and be linked into <code>RELAY_ROOT</code> as a folder link: the relay serves it like any other folder. The rule is in <code>CLAUDE.md</code> and article 13 of the constitution, and <code>relay/test/worlds-apart.test.js</code> fails if code in <code>relay/</code>, <code>office/</code> or <code>shared/</code> names another world.</p>
+  <p id="one-relay"><b>One relay per world.</b> <code>RELAY_KEY=a-key npm run world -- &lt;folder&gt;</code> (<code>relay/world.js</code>) starts a relay for that world alone, on the <code>port</code> in its <code>world.json</code>. It sets <code>RELAY_WORLD</code>, which you can also set yourself, and <code>PORT</code> to the world's port unless you set it. <code>RELAY_WORLD</code> is one folder name: a trailing slash, as tab completion gives, is dropped, and anything else, such as <code>a/b</code> or <code>/</code>, stops the relay with the reason. Give each world its own key. The <a href="running.html#rollback">rollback check</a> is for the room's relay: it looks for the room page and its sessions, so leave <code>RELAY_ROLLBACK</code> off for another world. Such a relay:</p>
+  <ul>
+    <li>prints one link, its world's, and sends its root (<code>/</code>) to its world's folder;</li>
+    <li>serves only its world's folder, <code>shared/</code>, <code>docs/</code> and the files at the top of the repo, such as <code>README.md</code>. Another world's folder gets <code>404</code>, so a link into another world works only on that world's relay;</li>
+    <li>for a world without <code>"sessions": true</code>, never loads the room's parts: no sessions, tasks, tickets, Board, chat board, reviews or Autopilot, no polls to GitHub, and no files in the <a href="settings.html#files">state folder</a>. Their routes get <code>404</code>. Commands, results and events work as for any world;</li>
+    <li>keeps running when another world's relay restarts or stops, and its key opens nothing in another world.</li>
+  </ul>
+  <p><code>npm run office</code> starts the room's relay this way, with <code>RELAY_WORLD=office</code>. <code>npm run relay</code>, with no <code>RELAY_WORLD</code>, still serves every world from one relay with the room's parts, on port 8787. <code>/health</code> says which world a relay serves, as <code>world</code>, or <code>null</code> for every world.</p>
+
+  <h2 id="page-params">The page</h2>
+  <p>The page connects to a relay only when its address has a channel:</p>
+  <table>
+    <thead><tr><th>Parameter</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>channel</code></td><td>The channel to join: 1 to 64 letters, numbers, dashes or underscores.</td></tr>
+      <tr><td><code>key</code></td><td>The relay key.</td></tr>
+      <tr><td><code>relay</code></td><td>The relay's address, if it is not the server the page came from.</td></tr>
+      <tr><td>others</td><td>A world can read parameters of its own, such as the room's below.</td></tr>
+      <tr><td><code>time</code></td><td>The room only: <code>day</code>, <code>evening</code> or <code>night</code>, the same as picking the light.</td></tr>
+      <tr><td><code>holiday</code></td><td>The room only: a holiday to show now (<code>newyear</code>, <code>easter</code>, <code>july4</code>, <code>halloween</code>, <code>thanksgiving</code> or <code>christmas</code>), the same as picking it under <span class="ui">Holiday</span>, or <code>off</code> for no decorations on that page. See <a href="how-it-works.html#holidays">Holidays</a>.</td></tr>
+    </tbody>
+  </table>
+  <p>The world only runs while its page is on screen. Each page tells the relay when its tab is hidden or shown, and the relay log says so. If more than one page joins the same channel, commands go to the newest page that is on screen, or to the newest page if none is. A command sent to a hidden page waits and then times out, and the reply says that the tab is hidden (<code>pageHidden: true</code>). It is simplest to use a different channel for each page.</p>
+
+  <h2 id="calls">Calls</h2>
+  <p>All calls to <code>/channels/...</code> need the key, as <code>Authorization: Bearer &lt;key&gt;</code> or <code>?key=&lt;key&gt;</code>. Bodies are JSON.</p>
+  <table>
+    <thead><tr><th>Call</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /channels/{channel}/commands</code></td><td>Send a command and, by default, wait for its result.</td></tr>
+      <tr><td><code>GET /channels/{channel}/commands/{id}</code></td><td>Get the result of a command sent with <code>wait: false</code>.</td></tr>
+      <tr><td><code>GET /channels/{channel}/events</code></td><td>Read events the page has sent.</td></tr>
+      <tr><td><code>GET /channels/{channel}</code></td><td>How many pages are connected (<code>pagesConnected</code>) and on screen (<code>pagesVisible</code>), and other counts.</td></tr>
+      <tr><td><code>POST /channels/{channel}/pages/{page}</code></td><td>Used by the page: <code>{"visible": false}</code> when its tab is hidden, <code>true</code> when it is shown.</td></tr>
+      <tr><td><code>GET /health</code></td><td>The relay is up, and which channels have pages. No key needed. With the key, from this computer, it also has <code>restore</code>: whether bringing back the saved sessions is done, and which could not come back, for the <a href="running.html#rollback">rollback check</a>.</td></tr>
+    </tbody>
+  </table>
+  <p>For example, with the room open on channel <code>office</code>, on its own relay (<code>npm run office</code>, port 8787):</p>
+  <pre><code>curl -s -X POST http://localhost:8787/channels/office/commands \
+  -H "Authorization: Bearer pick-a-long-random-key" \
+  -d '{"action": "say", "who": "marcus", "text": "Hello", "source": "curl"}'</code></pre>
+
+  <h3 id="command">Send a command</h3>
+  <p><code>POST /channels/{channel}/commands</code>. The body is a command, the same as <code>run.do()</code> takes (see the world's own API, such as <a href="#office-api">the room's API</a>), plus fields for the relay:</p>
+  <table>
+    <thead><tr><th>Field</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>action</code></td><td class="plain">required</td><td>One of the world's actions. The room's are <a href="#office-api">below</a>.</td></tr>
+      <tr><td><code>source</code></td><td class="plain"><code>"relay"</code></td><td>Your name, shown on every event the command causes. For a script, something like <code>"script:standup"</code>.</td></tr>
+      <tr><td><code>at</code></td><td class="plain">none</td><td>Run the command at this many seconds into the run.</td></tr>
+      <tr><td><code>wait</code></td><td class="plain"><code>true</code></td><td>Wait for the result. With <code>false</code>, the reply is <code>202</code> with an <code>id</code> to poll.</td></tr>
+      <tr><td><code>timeout</code></td><td class="plain"><code>30</code></td><td>Seconds to wait, from 1 to 120.</td></tr>
+    </tbody>
+  </table>
+  <pre><code>{ "action": "say", "who": "marcus", "text": "Hello", "source": "script:standup" }</code></pre>
+  <p>The reply is the world's result with the command's <code>id</code>, <code>channel</code> and <code>action</code> added:</p>
+  <pre><code>{ "id": "ba29db55-d4bf-40e1-a99b-9ba42c0652b6", "channel": "office", "action": "say",
+  "ok": true, "who": "marcus" }</code></pre>
+  <p>When the world refuses a command, the reply is still <code>200</code>, with <code>ok: false</code>, an <code>error</code> and a <code>message</code> (each world lists its own errors):</p>
+  <pre><code>{ "id": "30b74e34-...", "channel": "office", "action": "dance",
+  "ok": false, "error": "unknown_action", "message": "Unknown action \"dance\". Actions: ready, state, roster, ..." }</code></pre>
+  <p id="statuses">So a caller checks <code>ok</code> to see whether the world did it, and the HTTP status to see whether the relay could deliver it:</p>
+  <table>
+    <thead><tr><th>Status</th><th><code>error</code></th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>200</code></td><td class="plain"></td><td>The world answered. Check <code>ok</code>.</td></tr>
+      <tr><td><code>202</code></td><td class="plain"></td><td>Accepted with <code>wait: false</code>. Poll <code>/commands/{id}</code>.</td></tr>
+      <tr><td><code>400</code></td><td class="plain"><code>bad_command</code>, <code>bad_request</code>, <code>bad_channel</code></td><td>No <code>action</code>, the body is not JSON, or a bad channel name.</td></tr>
+      <tr><td><code>401</code></td><td class="plain"><code>unauthorized</code></td><td>Missing or wrong key.</td></tr>
+      <tr><td><code>403</code></td><td class="plain"><code>local_only</code>, and others such as <code>not_allowed</code> or <code>lead_only</code></td><td>A room route asked from anywhere but the room page on this computer, or a token asking for what it cannot do. See <a href="#routes">the room's routes</a>.</td></tr>
+      <tr><td><code>409</code></td><td class="plain">such as <code>wip_limit</code>, <code>lead_limit</code>, <code>bad_move</code></td><td>A room route refused a move or a start, and the <code>message</code> says why.</td></tr>
+      <tr><td><code>404</code></td><td class="plain"><code>not_found</code>, <code>unknown_command</code></td><td>No such route or command id.</td></tr>
+      <tr><td><code>413</code></td><td class="plain"><code>bad_request</code></td><td>The body is over 256 KB.</td></tr>
+      <tr><td><code>503</code></td><td class="plain"><code>no_page</code></td><td>No page is connected to the channel.</td></tr>
+      <tr><td><code>504</code></td><td class="plain"><code>timeout</code></td><td>The page did not answer in time. The command may still finish; poll its <code>id</code>. <code>pageHidden: true</code> means the page's tab is hidden, so its world is paused.</td></tr>
+    </tbody>
+  </table>
+  <p id="timing">Some commands take time in the world, such as <code>wait</code>, which takes as long as you ask. Set the caller's own HTTP timeout above the longest command you send.</p>
+
+  <h3 id="poll">Poll a command</h3>
+  <p><code>GET /channels/{channel}/commands/{id}</code> returns <code>{ "status": "pending" }</code> or <code>{ "status": "done", ...the same reply as above }</code>. The last 500 commands per channel are kept.</p>
+
+  <h3 id="events">Read events</h3>
+  <p><code>GET /channels/{channel}/events?since=0&amp;types=result,worker.assigned&amp;limit=200</code></p>
+  <pre><code>{ "ok": true, "channel": "office", "lastEventSeq": 42,
+  "events": [ { "rseq": 41, "type": "worker.assigned", "who": "marcus", "label": "T-17", "source": "relay", ... } ] }</code></pre>
+  <p><code>rseq</code> is the relay's own sequence number for the channel. Pass the last one you saw as <code>since</code> to get only newer events. Every event also keeps its fields from the page. The last 2,000 events per channel are kept. The relay keeps them in memory, so a restart clears them.</p>
+
+  <h3 id="webhook">Webhook</h3>
+  <p>With <code>RELAY_WEBHOOK_URL</code> set, the relay posts batches of events as they arrive:</p>
+  <pre><code>{ "channel": "office", "events": [ { "type": "worker.assigned", "who": "marcus", ... }, { "type": "result", "action": "say", ... } ] }</code></pre>
+  <p><code>RELAY_WEBHOOK_AUTH</code> is sent as the <code>Authorization</code> header, and <code>RELAY_WEBHOOK_TYPES</code> picks which event types are sent. A failed post is logged and not retried.</p>
+
+  <h2 id="office-api">The room's API</h2>
+  <p>The room has <code>window.run</code>, the same contract as every world, so <code>shared/relay.js</code> and the relay work unchanged. Every action can be sent through the relay as <code>{"action": ...}</code>. The Claude Code hook sends <code>{"action": "hook", "event": {...}, "wait": false}</code> (see <a href="how-it-works.html#hooks">hooks</a>).</p>
+  <table>
+    <thead><tr><th>Action</th><th>Parameters</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>hook</code></td><td class="plain"><code>event</code>: a hook payload</td><td>What the Claude Code hook sends. See <a href="how-it-works.html#events-to-work">How events become work</a>.</td></tr>
+      <tr><td><code>work</code></td><td class="plain"><code>who</code> or <code>skill</code>, <code>label</code></td><td>Sends someone to work, from outside a session. With <code>skill</code>, a free person with that skill in the roster.</td></tr>
+      <tr><td><code>activity</code></td><td class="plain"><code>who</code> or <code>skill</code>, <code>text</code>, <code>kind</code></td><td>A line on their monitor. <code>kind</code>: <code>edit</code>, <code>read</code>, <code>bash</code>, <code>web</code>, <code>tool</code> or <code>fail</code>.</td></tr>
+      <tr><td><code>done</code></td><td class="plain"><code>who</code>, <code>skill</code> or <code>all: true</code></td><td>Finishes work.</td></tr>
+      <tr><td><code>sessions</code></td><td class="plain"><code>list</code></td><td>The sessions the relay runs. The panel sends this so each has a person.</td></tr>
+      <tr><td><code>tasks</code></td><td class="plain"><code>list</code></td><td>The tasks for the wall board. The Tasks panel sends this.</td></tr>
+      <tr><td><code>waiting</code></td><td class="plain"><code>message</code></td><td>The lead raises a hand. Send no message to clear it.</td></tr>
+      <tr><td><code>idle</code></td><td class="plain"><code>who</code>, <code>do</code></td><td>Sends someone who is not working to <code>coffee</code>, <code>couch</code>, <code>window</code>, <code>chat</code>, <code>board</code>, <code>desk</code>, <code>fridge</code> or <code>pingpong</code>.</td></tr>
+      <tr><td><code>say</code></td><td class="plain"><code>who</code>, <code>text</code></td><td>A speech bubble.</td></tr>
+      <tr><td><code>manager</code></td><td class="plain">none</td><td>Sends the manager through now.</td></tr>
+      <tr><td><code>party</code></td><td class="plain"><code>on</code>: <code>true</code> or <code>false</code> (anything else is refused), or left out to toggle; <code>seconds</code>: 5 to 600, 60 if left out</td><td>Throws a party for that long, or ends the one going on. See <a href="how-it-works.html#party">Throw a party</a>. <code>run.state().party</code> says whether one is on, how many seconds are left and who is at it.</td></tr>
+      <tr><td><code>reset</code></td><td class="plain">none</td><td>Ends all work and clears the board.</td></tr>
+      <tr><td><code>state</code>, <code>roster</code>, <code>ready</code></td><td class="plain">none</td><td>A snapshot, the people, and a wait until the room is built.</td></tr>
+      <tr><td><code>speed</code></td><td class="plain"><code>value</code>: 0 to 8</td><td>How fast people move. Work state does not depend on it.</td></tr>
+      <tr><td><code>wait</code></td><td class="plain"><code>seconds</code></td><td>Waits.</td></tr>
+    </tbody>
+  </table>
+  <p id="office-events">Events: <code>office.started</code>, <code>office.live</code>, <code>time</code>, <code>worker.assigned</code>, <code>worker.finished</code>, <code>worker.doing</code>, <code>lead.waiting</code>, <code>lead.unblocked</code>, <code>manager.arrived</code>, <code>manager.left</code>, <code>party.started</code>, <code>party.ending</code> (the candles go out), <code>party.ended</code>, <code>hook</code>, and <code>action</code> and <code>result</code> for everything except <code>hook</code>.</p>
+  <p id="console">In the browser console, <code>run.view('desks')</code> moves the camera (<code>home</code>, <code>desks</code>, <code>lead</code>, <code>coffee</code>, <code>lounge</code>, <code>board</code>), <code>run.focus('marcus')</code> follows someone, <code>run.time('night')</code> changes the light, and <code>run.holiday('christmas')</code> shows a holiday's decorations (<code>'auto'</code> goes back to the date, <code>'off'</code> and <code>'on'</code> set the switch this browser keeps). <code>run.state().holiday</code> says what is up and which holiday is next.</p>
+
+  <h2 id="routes">The room's routes</h2>
+  <p>These are under <code>/channels/{channel}</code> and answer only the room page on this computer (see <a href="running.html#local-only">the local-only rule</a>), while <code>RELAY_TERMINAL=1</code>. They take the relay key, or a session's token as described <a href="#tokens">below</a>.</p>
+  <table>
+    <thead><tr><th>Route</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET</code>, <code>POST /tickets</code></td><td>List or file tickets. The list comes in <a href="roles.html#order">Board order</a>: open tickets high, normal, low, in work order (<code>rank</code>) within each, then done and rejected ones, the latest changed first. It also has <code>kinds</code> (the kinds a ticket can have, see <a href="roles.html#kind">Kind</a>), <code>wipLimit</code>, <code>leadStarts</code> (the number you let the Lead start tickets up to, or 0) and <code>leadStartsLeft</code>. A ticket has <code>approvedBy</code> (<code>you</code> or <code>Lead</code>) once it is put in Ready. The room page gets the same list as a <code>tickets</code> event on its <code>GET /stream</code> when it opens the stream with <code>board=1</code>, with <code>people</code>, who sits on each ticket, and without the time each pipeline was checked. The stream's <code>hello</code> says whether it will (<code>tickets</code>). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer.</td></tr>
+      <tr><td><code>GET /tickets/{id}</code></td><td>One ticket.</td></tr>
+      <tr><td><code>POST /tickets/approve-ready</code></td><td>Marks the Ready tickets that no person approved as approved by you, as <span class="ui">Approve all Ready</span> does: those in <code>ids</code>, or every one with no <code>ids</code>. It skips a ticket that is starting. Answers with the ids in <code>approved</code>. No session's token reaches it.</td></tr>
+      <tr><td><code>POST /tickets/{id}/move</code></td><td><code>{"to": ...}</code>: move a ticket that has no task, as Approve, Reject, Back to Triage and Merged elsewhere do (with <code>pr</code> for <code>done</code>).</td></tr>
+      <tr><td><code>POST /tickets/{id}/start</code></td><td>Start a Ready ticket: a task, a checkout and a worker. A Lead's token is held to <a href="roles.html#lead-starts">its limits</a>.</td></tr>
+      <tr><td><code>POST /tickets/{id}/priority</code></td><td><code>{"priority": ...}</code>: <code>high</code>, <code>normal</code> or <code>low</code> for a Triage or Ready ticket. It goes last in its new priority. A priority it already has changes nothing, and the answer has <code>unchanged</code>. The person's key, or the token of a PM or Lead you let set the order (<a href="roles.html#pm-order">The PM sets the order</a>, <a href="roles.html#lead-order">The Lead sets priority</a>). Any other session's token gets 403.</td></tr>
+      <tr><td><code>POST /tickets/{id}/order</code></td><td><code>{"before": id}</code> or <code>{"after": id}</code>: a Triage or Ready ticket goes next to another Triage or Ready ticket with the same priority. Usually only the moved ticket is written. When there is no room between two ranks, the Triage and Ready tickets of that priority are numbered again. If the store fails partway, the ranks already written are put back and the answer is 502. Those tickets keep a new <code>updatedAt</code>. The person's key, or the token of a PM or Lead you let set the order. Any other session's token gets 403.</td></tr>
+      <tr><td><code>POST /tickets/{id}/kind</code></td><td><code>{"kind": ...}</code>: a Triage or Ready ticket's <a href="roles.html#kind">kind</a>. A new word adds a kind, and <code>""</code> takes it away. Refused while it is starting, and once it has started.</td></tr>
+      <tr><td><code>POST /tickets/{id}/base</code></td><td><code>{"base": ...}</code>: a Triage or Ready ticket starts from another local branch. Refused while it is starting, or when another open ticket has that title on that branch.</td></tr>
+      <tr><td><code>POST /tickets/{id}/edit</code></td><td><code>{"title", "body", "priority"}</code>, any of them: changes a Triage or Ready ticket's words, with the limits of filing one (a title of 1 to 80 characters, a body of up to 8000, <code>high</code>, <code>normal</code> or <code>low</code>). Only the fields that differ are written, and the answer has <code>unchanged</code> when none do. Refused while it is starting or once it has started, is done or is rejected (409, or 403 for a session's token), and when another open ticket in the repo has the new title on its branch (409). For the PM and the Lead, a ticket you rejected counts too, as in filing. The answer's <code>edited</code> lists the fields that changed. A new priority puts it last in that priority, as <code>/priority</code> does. See <a href="roles.html#edit">Editing a ticket</a>.</td></tr>
+      <tr><td><code>POST /tickets/ask</code></td><td><code>{"idea", "repo"}</code>: starts the PM.</td></tr>
+      <tr><td><code>GET</code>, <code>POST /tasks</code></td><td>List or start tasks.</td></tr>
+      <tr><td><code>GET /tasks/{id}</code></td><td>One task.</td></tr>
+      <tr><td><code>POST /tasks/{id}/move</code></td><td><code>{"to": ...}</code>: <code>building</code>, <code>in_review</code>, <code>changes_requested</code>, <code>waiting_on_you</code> or <code>done</code>.</td></tr>
+      <tr><td><code>POST /tasks/{id}/resume</code>, <code>/clean</code></td><td>Bring back its worker, or remove its checkout.</td></tr>
+      <tr><td><code>GET</code>, <code>POST /checkouts</code></td><td>List checkouts, or start a session in a new one. A review of a PR can send <code>unlessAt</code>, the commit its last review read. While the PR is still at that commit, nobody starts and the answer says <code>unchanged</code>.</td></tr>
+      <tr><td><code>POST /checkouts/{id}/clean</code></td><td>Remove one.</td></tr>
+      <tr><td><code>GET</code>, <code>POST /reviews</code></td><td>The automatic reviews (see <a href="roles.html#auto-review">Automatic review</a>). <code>auto</code> and <code>again</code> are the two switches, and a POST with either one, <code>true</code> or <code>false</code>, sets it. The answer also has <code>max</code>, each PR with its <code>count</code>, <code>head</code>, <code>pending</code> and <code>waits</code>, and <code>news</code>, what the relay said about the reviews it started, which the page shows once.</td></tr>
+      <tr><td><code>GET</code>, <code>POST /terminals</code></td><td>List or start sessions. The list also has <code>finished</code>: the latest automatic reviewers that posted and left. Each session has its <code>seat</code>, the id of the person the relay gave it, and <code>who</code>, that person's name (see <a href="roles.html#seats">Which person gets it</a>), its <code>work</code> label (see <a href="how-it-works.html#labels">labels</a>), and its <code>starts</code>, <code>startsLeft</code>, <code>lastStart</code>, <code>refresh</code>, <code>refreshNote</code> and <code>tired</code> (how full its context is, or <code>null</code>: see <a href="roles.html#lead-tired">How tired the Lead is</a>), and the list has the <code>wipLimit</code>.</td></tr>
+      <tr><td><code>POST /terminals/lead</code></td><td>Make a plain session the Lead (<code>terminal</code>), which saves it and gives it the Lead's brief. Answer the offer to bring it back (<code>asked: true</code>; <code>POST /terminals</code> with <code>resume</code> and <code>lead: true</code> is what Bring back sends). With <code>board: true</code> or <code>false</code>, give or take away its permission to move the board. With <code>starts</code> and <code>total</code>, give it permission to start tickets while fewer than <code>starts</code> tasks are building (1 to one under the WIP limit), <code>total</code> in all (1 to 20), or take it away (<code>starts: 0</code>). With <code>refresh: true</code> or <code>false</code>, start or stop <a href="roles.html#lead-refresh">Refresh the Lead</a>. With <code>"lead": true</code>, as <span class="ui">Settings</span> sends, a grant goes only to the session that is the Lead now, and is refused with <code>not_lead</code> otherwise, so a page that has not seen another session made the Lead does not make the old one the Lead again.</td></tr>
+      <tr><td><code>POST /terminals/failed</code></td><td><code>{"sessionId"}</code>: forget a session that could not come back after a restart.</td></tr>
+      <tr><td><code>GET /terminals/{id}/stream</code></td><td>A session's output.</td></tr>
+      <tr><td><code>POST /terminals/{id}/input</code>, <code>/resize</code>, <code>/stop</code></td><td>Type into, resize or stop a session.</td></tr>
+      <tr><td><code>POST /terminals/context</code></td><td>Only with a session's own token, as its status line (<code>relay/status-line.js</code>) sends it: <code>{"session_id", "percent", "size"}</code>, how much of its context window that conversation has used. A <code>session_id</code> that is not the session's conversation now is refused with <code>409</code>, and the relay key with <code>403</code>. See <a href="roles.html#lead-tired">How tired the Lead is</a>.</td></tr>
+      <tr><td><code>GET /floor</code></td><td>What the Lead sees of the Floor, and each session's <code>desk</code>: <code>ticket</code>, <code>title</code>, <code>column</code>, <code>pr</code>, <code>ciWords</code>, <code>review</code>, <code>doing</code>, <code>next</code> (<code>text</code> and <code>owner</code>) and <code>stop</code> (<code>safe</code> and <code>reason</code>). The Lead's row also has <code>tired</code>, and every other row has <code>null</code> there. A Dev's row has <code>waitsOn</code> while <a href="roles.html#pr-watch">the PR watch</a> is on and its task has an open PR: <code>owner</code>, <code>minutes</code>, <code>why</code>, <code>late</code> and <code>words</code>. Every other row has <code>null</code> there. See <a href="roles.html#lead-floor">What the Lead sees</a> and <a href="how-it-works.html#desks">What each desk says</a>.</td></tr>
+      <tr><td><code>GET /pr-watch</code></td><td>Only with the relay key. Whether <a href="roles.html#pr-watch">the PR watch</a> is on, how often it looks (<code>every</code>, seconds), <code>waitMinutes</code>, and one entry for each task with an open PR: <code>pr</code>, <code>task</code>, <code>ticket</code>, the <code>head</code> it last read, and while it is on, who it waits on (<code>owner</code>), <code>minutes</code>, <code>why</code>, <code>late</code> and <code>words</code>.</td></tr>
+      <tr><td><code>POST /floor/stop</code></td><td>With a session's token, <code>{"who"}</code>: the Lead stops one session. Only the token of a Lead you let move the board, and only while <span class="ui">Let the Lead stop sessions</span> is on (or <code>RELAY_LEAD_STOPS=1</code>). See <a href="roles.html#lead-stops">What the Lead stops</a>. With the relay key, as the page sends it, <code>{"who": terminal id}</code> or <code>{"all": true}</code>: you stop one desk, or every desk, that its desk calls safe to stop at that moment. One that is not safe is refused with <code>not_safe</code> and the reason. See <a href="how-it-works.html#desks">What each desk says</a>.</td></tr>
+      <tr><td><code>GET /update</code></td><td>The relay's folder, and the update under way, if any, with who it waits for. <code>rollback</code> says which commit failed its check, why, and which commit runs, while the relay runs the commit it went back to.</td></tr>
+      <tr><td><code>POST /update</code></td><td>Fetches for the relay's folder and pulls when the plan says, as <a href="running.html#update">Update</a> does. <code>{"cancel": true}</code> calls off a restart that is waiting.</td></tr>
+      <tr><td><code>GET /huddle</code></td><td>The last report, who can be asked, and whether a huddle is open. Calls neither <code>gh</code> nor <code>git</code>.</td></tr>
+      <tr><td><code>GET /coo</code></td><td>The last <a href="roles.html#coo">COO report</a>'s text, and the COO's session if one is running.</td></tr>
+      <tr><td><code>GET /coo/measures</code></td><td>The measures, worked out now, with the load and headline the last report saw. See <a href="roles.html#coo-measures">What the relay measures</a>.</td></tr>
+      <tr><td><code>POST /coo/ask</code></td><td>Starts the COO with its brief. 409 while one is running.</td></tr>
+      <tr><td><code>POST /coo/report</code></td><td><code>{"text"}</code>: saves a report of up to 20000 characters, with the measures.</td></tr>
+      <tr><td><code>GET /security</code></td><td>The last <a href="roles.html#security">security report</a>'s text, and the security officer's session if one is running.</td></tr>
+      <tr><td><code>GET /security/measures</code></td><td>What access the sessions run with, worked out now, by name only, with the gaps the last report saw. See <a href="roles.html#security-measures">What the relay reports on access</a>.</td></tr>
+      <tr><td><code>POST /security/ask</code></td><td>Starts the security officer with its brief. 409 while one is running.</td></tr>
+      <tr><td><code>POST /security/report</code></td><td><code>{"text"}</code>: saves a report of up to 20000 characters, with the measures. 400 with <code>holds_a_secret</code> when a line looks like it holds a key, and which line, never the value.</td></tr>
+      <tr><td><code>POST /huddle</code></td><td><code>{"ask", "lead", "names"}</code>: runs a <a href="roles.html#huddles">huddle</a>. <code>ask</code> sends idle sessions the question. <code>lead: false</code> keeps the report from the Lead.</td></tr>
+      <tr><td><code>GET /chat</code></td><td>The <a href="roles.html#chat">chat channels</a>: <code>name</code>, <code>kind</code> (<code>office</code>, <code>ticket</code> or <code>fun</code>), <code>about</code>, and how many posts each keeps now.</td></tr>
+      <tr><td><code>POST /chat</code></td><td><code>{"name"}</code>: the person makes a fun chat channel. 1 to 24 lower-case letters, digits or dashes. Names like <code>t-5</code> are kept for tickets. Up to 10.</td></tr>
+      <tr><td><code>GET /chat/{name}</code></td><td>Its posts, oldest first. <code>?since=N</code> gives only posts after number <code>N</code>, and <code>?limit=N</code> the newest <code>N</code>. Each post has <code>from</code>, <code>by</code> (<code>relay</code>, <code>person</code> or <code>session</code>), <code>text</code>, and <code>mention</code> or <code>note</code>.</td></tr>
+      <tr><td><code>POST /chat/{name}</code></td><td><code>{"text"}</code>: a post, up to 500 characters. A session cannot post in <code>#office</code>, and posts at most once every 5 seconds in each ticket's chat channel and once a minute in each fun one.</td></tr>
+      <tr><td><code>POST /chat/{name}/delete</code></td><td>The person deletes a chat channel. A ticket's leaves a short summary on the ticket first, with the local store only. If that fails, the answer is 502, the chat channel stays, and the message says what deletes it later. While the relay is deleting it already, the answer is 409.</td></tr>
+    </tbody>
+  </table>
+  <h3 id="tokens">What a session's token reaches</h3>
+  <p>Each session the room starts gets <code>OFFICE_TICKET_TOKEN</code>, sent as <code>X-Office-Token</code>. Tokens reach nothing but this:</p>
+  <ul>
+    <li>Any session's token can <code>GET</code> and <code>POST</code> <code>/tickets</code>, except the COO's, which can only <code>GET</code> it.</li>
+    <li>Any session's token can <code>POST</code> <code>/commands</code>, but only <code>{"action": "hook"}</code> with an event about its own session: the hook sends that way to <code>OFFICE_HOOK_URL</code>. The relay sets the event's <code>terminal</code> to that session's desk. A <code>SessionStart</code> may carry a new session id, after <code>/clear</code>. Anything else gets 403.</li>
+    <li>Any session's token can <code>POST</code> <code>/terminals/context</code>, but only for the conversation its session is in now: its status line says how full its context is (<a href="roles.html#lead-tired">How tired the Lead is</a>).</li>
+    <li>Any session's token but the COO's and the security officer's can <code>GET</code> <code>/chat</code> and <code>/chat/{name}</code>, and <code>POST</code> <code>/chat/{name}</code>. A post that mentions a session is typed into it, and those two only propose. Their tokens can list tickets but not file them.</li>
+    <li>A reviewer's token can also <code>POST</code> <code>/autopilot/verdict</code>, for the PR it reviews. No token reaches <code>/autopilot</code> itself.</li>
+    <li>The Lead's token can also <code>GET</code> <code>/floor</code>.</li>
+    <li>The token of a session you made the Lead and let move the board can also <code>POST</code> <code>/tasks/{id}/move</code> and <code>/tickets/{id}/move</code>, and <code>GET</code> <code>/tasks</code>, which then shows only each task's id, state, title, branch and PR. With <code>RELAY_LEAD_STOPS=1</code> it can also <code>POST</code> <code>/floor/stop</code>. While Autopilot is on, a move is refused with <code>403</code> and <code>autopilot</code> unless it takes a task, or a ticket with no task, to Done once the relay has seen its PR merge. See <a href="roles.html#lead-autopilot">The Lead under Autopilot</a>.</li>
+    <li>The COO's token can also <code>GET</code> <code>/coo/measures</code> and <code>POST</code> <code>/coo/report</code>.</li>
+    <li>The security officer's token can also <code>GET</code> <code>/security/measures</code> and <code>POST</code> <code>/security/report</code>.</li>
+    <li>The token of a session you made the Lead and let start tickets can also <code>POST</code> <code>/tickets/{id}/start</code>, within the limits in <a href="roles.html#lead-starts">The Lead starts tickets</a>, and never while Autopilot is on.</li>
+  </ul>
+    <li>The PM's token can also <code>POST</code> <code>/tickets/{id}/priority</code> and <code>/tickets/{id}/order</code>, but only while <span class="ui">Let the PM set the order</span> is on, only for a ticket in Triage or Ready, and only for the PM that started last on the channel. Otherwise it gets 403. The relay checks the switch again when the request's turn comes, so a request that was waiting when you turned the switch off is refused too. A ticket set this way has <code>orderedBy</code> <code>PM</code>, and one you set has <code>you</code>, with <code>orderedWhat</code> <code>priority</code> or <code>place</code>.</li>
+    <li>The PM's and the Lead's tokens can also <code>POST</code> <code>/tickets/{id}/edit</code>, for a ticket in Triage or Ready. A new priority in it needs the same switch as <code>/priority</code>, or the whole edit gets 403. A ticket that is starting, started, done or rejected gets 403. A new title or body on a Ready ticket you approved takes your approval back, and the answer has <code>approvalTaken</code>.</li>
+    <li>The Lead's token can also <code>POST</code> <code>/tickets/{id}/priority</code> and <code>/tickets/{id}/order</code>, but only while <span class="ui">Let the Lead set priority</span> is on, only for a ticket in Triage or Ready, and only while the session is still the Lead. It does not need <span class="ui">Let the Lead move the board</span>. Otherwise it gets 403. The relay checks the switch again when the request's turn comes. A ticket set this way has <code>orderedBy</code> <code>Lead</code>.</li>
+  </ul>
+  <p>Other routes answer a token with 401. <code>/tickets/{id}/priority</code> and <code>/tickets/{id}/order</code> answer every other token with 403, and so does <code>/tickets/{id}/edit</code> for every token but the PM's and the Lead's. The PM's token gets 403 on <code>/tickets/{id}/move</code>, <code>/start</code>, <code>/base</code> and <code>/kind</code>.</p>
+
+  <h2 id="ticket-js">The ticket.js command</h2>
+  <p><code>relay/ticket.js</code> is the command sessions use to list and file tickets and to read and post on the chat board, the Lead to read the Floor, move tasks and tickets, start tickets and stop sessions, and the COO to read the measures and save its report. It reads <code>OFFICE_TICKET_URL</code> and <code>OFFICE_TICKET_TOKEN</code>, so it works only in a session the room started. Anywhere else it says <code>This only works in a session the office started.</code></p>
+  <table>
+    <thead><tr><th>Command</th><th>Who</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>create "Title" --body "What to do" --priority high --kind bug --blocked-by T-1,T-2</code></td><td class="plain">Any session</td><td>Files a ticket, which waits in Triage. <code>--kind</code> is one of the kinds <code>kinds</code> prints (see <a href="roles.html#kind">Kind</a>). <code>--blocked-by</code> takes the ids that <code>list</code> and <code>create</code> print: <code>T-1</code> on the local store, <code>12</code> on GitHub issues.</td></tr>
+      <tr><td><code>kinds</code></td><td class="plain">Any session</td><td>Prints the kinds a ticket can have, one to a line.</td></tr>
+      <tr><td><code>create "Title" --body - &lt;&lt;'EOF'</code>, <code>create "Title" --body-file body.md</code></td><td class="plain">Any session</td><td>The same, with the body read from stdin or from a file, as written. Inside the shell's double quotes, backticks and <code>$( )</code> run as commands and a quote ends the body, so a body with any of them, or with line breaks, goes in a quoted heredoc or a file. <code>--body-file -</code> also reads stdin. Give the body only once. The PM's and workers' briefs file this way.</td></tr>
+      <tr><td><code>list</code></td><td class="plain">Any session</td><td>Lists the tickets in <a href="roles.html#order">Board order</a>, each with its id, status, priority and title, then its kind if it has one.</td></tr>
+      <tr><td><code>chat</code>, <code>chat T-1</code></td><td class="plain">Any session</td><td>Without a name, lists the chat channels and prints the newest 30 posts in #office. With one, prints that chat channel's newest 30 posts, each with who sent it as the relay knows it. See <a href="roles.html#chat-typing">A post types nothing into a session</a>.</td></tr>
+      <tr><td><code>post T-1 "text"</code></td><td class="plain">Any session</td><td>Posts in a chat channel, but not in <code>#office</code>.</td></tr>
+      <tr><td><code>verdict merge</code>, <code>verdict fix</code></td><td class="plain">A reviewer</td><td>Gives the review's verdict for the commit its checkout is at, before it posts. See <a href="roles.html#autopilot">Autopilot</a>.</td></tr>
+      <tr><td><code>floor</code></td><td class="plain">The Lead</td><td>Prints the Floor, one line per session. See <a href="roles.html#lead-floor">What the Lead sees</a>.</td></tr>
+      <tr><td><code>move T-1 ready</code></td><td class="plain">A Lead you let move the board</td><td><code>ready</code> or <code>rejected</code> from Triage, <code>rejected</code> from Ready, <code>triage</code> from Rejected.</td></tr>
+      <tr><td><code>move T-1 done https://github.com/owner/repo/pull/12</code></td><td class="plain">A Lead you let move the board</td><td>From Triage or Ready, for work that merged without a task. It refuses a PR that is already another task's, now or before, or another ticket's, and says whose. It also refuses a PR that <code>gh pr view</code> says has not merged, one in a repo that is not a GitHub remote of the ticket's repo, and one <code>gh</code> cannot read.</td></tr>
+      <tr><td><code>tasks</code></td><td class="plain">A Lead you let move the board</td><td>Every task's id, including those with no ticket.</td></tr>
+      <tr><td><code>task 63e175 in_review</code></td><td class="plain">A Lead you let move the board</td><td><code>building</code>, <code>in_review</code>, <code>changes_requested</code>, <code>waiting_on_you</code> or <code>done</code>. While Autopilot is on, only <code>done</code>, once its PR has merged (<a href="roles.html#lead-autopilot">The Lead under Autopilot</a>).</td></tr>
+      <tr><td><code>start T-1</code></td><td class="plain">A Lead you let start tickets</td><td>From Ready, one at a time, in Board order, while few enough are building.</td></tr>
+      <tr><td><code>priority T-5 high</code></td><td class="plain">A PM or Lead you let set the order</td><td><code>high</code>, <code>normal</code> or <code>low</code> for a Triage or Ready ticket. It goes last in that priority. See <a href="roles.html#pm-order">The PM sets the order</a> and <a href="roles.html#lead-order">The Lead sets priority</a>.</td></tr>
+      <tr><td><code>order T-5 --before T-4</code></td><td class="plain">A PM or Lead you let set the order</td><td>Puts a Triage or Ready ticket just above (<code>--before</code>) or below (<code>--after</code>) another one with the same priority.</td></tr>
+      <tr><td><code>edit T-5 --title "New title" --priority high --body - &lt;&lt;'EOF'</code></td><td class="plain">The PM or the Lead</td><td>Changes a Triage or Ready ticket's title, body or priority, any of them. The body comes as in <code>create</code>: <code>--body</code>, <code>--body -</code> for stdin or <code>--body-file</code>. A new priority needs the switch <code>priority</code> needs. A new title or body on a Ready ticket the person approved takes the approval back, and the command says so. See <a href="roles.html#edit">Editing a ticket</a>.</td></tr>
+      <tr><td><code>measures</code></td><td class="plain">The COO</td><td>Prints the measures as JSON. See <a href="roles.html#coo-measures">What the relay measures</a>.</td></tr>
+      <tr><td><code>report &lt; report.md</code></td><td class="plain">The COO</td><td>Saves the report piped in. The Floor shows it.</td></tr>
+      <tr><td><code>access</code></td><td class="plain">The security officer</td><td>Prints what access the sessions run with as JSON, by name only. See <a href="roles.html#security-measures">What the relay reports on access</a>.</td></tr>
+      <tr><td><code>access-report &lt; report.md</code></td><td class="plain">The security officer</td><td>Saves the report piped in, unless it holds a key. The Floor shows it.</td></tr>
+      <tr><td><code>stop Theo</code></td><td class="plain">A Lead you let move the board, with <span class="ui">Let the Lead stop sessions</span> on</td><td>Stops a session the Floor calls safe to stop, by the name the Floor shows or a task id such as <code>63e175</code>, if it is one of the <a href="roles.html#lead-stops">two kinds the Lead stops</a>. It prints who it stopped, with the session id.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="tunnel">Reaching it through a tunnel</h2>
+  <p>A caller on another computer or in the cloud cannot reach <code>localhost</code>, so put a tunnel in front of the world's own relay (see <a href="#one-relay">One relay per world</a>). Then the tunnel reaches that world alone, with its key, and not the room. For example, for a world on its relay at 8788, with Cloudflare's quick tunnel:</p>
+  <pre><code>cloudflared tunnel --url http://localhost:8788</code></pre>
+  <p>It prints an <code>https://...trycloudflare.com</code> address. Use that address as the caller's base URL, and open the world at the same address with <code>/&lt;folder&gt;/?channel=&lt;channel&gt;&amp;key=...</code>. A quick tunnel gets a new address each time it starts. Check your company's rules before opening a tunnel from a work machine. The relay can keep listening on <code>127.0.0.1</code>, since a tunnel connects locally. The room's own routes stay closed through a tunnel, and a tunnel that rewrites <code>Host</code> to <code>localhost</code> makes every request look local, so use one that passes its own hostname through (see <a href="how-it-works.html#other-computer">hooks from another computer</a>).</p>
+
+  <h2 id="limits">Limits</h2>
+  <ul>
+    <li>Commands go only to a page that is open and visible.</li>
+    <li>Everything but the room's files in its <a href="settings.html#files">state folder</a> (tasks, tickets, sessions and the rest) is in memory. Restarting the relay clears channels, results and events.</li>
+    <li>One key for everything. Anyone with the key can drive any channel.</li>
+    <li>The relay has no rate limits. Keep it behind a tunnel you control, and stop it when you are done.</li>
+  </ul>
+</main>
+<footer>Sources: <code>relay/server.js</code>, <code>shared/relay.js</code>, <code>office/office.js</code>, and <code>relay/ticket.js</code>. When the behavior changes, change this page in the same pull request.</footer>
+</body>
+</html>

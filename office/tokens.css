@@ -1,0 +1,34 @@
+/* The office page's colours, shared by office/index.html and office/board.html. */
+/* One set of colours for the page, Light or Dark (shared/theme.js sets data-theme, or the computer's
+   setting decides). Panels use the --pane tokens, so a new panel picks up both modes. The scene and its
+   HUD (--stage, --hud) and the terminal (--term) stay dark in both: they draw on the dark 3D office and
+   on Claude Code's own colours. The org chart is a cream sheet in both. */
+:root {
+  --bg: #ffffff; --fg: #2c2c2c; --muted: #666666; --line: #e0e0e0; --accent: #1d3f72; --accent-fg: #ffffff;
+  --pane: #f2f4f7; --pane-edge: #d9dee4; --pane-fg: #27323c; --pane-dim: #56616b; --pane-strong: #11181f; --pane-line: #d3d9df;
+  --pane-tint: rgba(29, 63, 114, 0.05); --pane-hover: rgba(29, 63, 114, 0.08); --pane-press: rgba(29, 63, 114, 0.14);
+  --link: #1d4f9a; --link-fg: #ffffff; --ok: #0b7a75;
+  --work: #2f7d32; --wait: #8a5a00; --idle: #8a9198; --err: #b3261e; --c-mix: 45%;
+  --stage: #0c0f14; --hud: #cfe9f7; --hud-dim: #7f97a5; --hud-line: rgba(127, 216, 255, 0.22); --panel: rgba(8, 12, 16, 0.88); --term: #0c0f14;
+  --sans: "Source Sans 3", "Source Sans Pro", system-ui, sans-serif;
+  --mono: "Roboto Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141619; --fg: #e6e6e6; --muted: #a0a4aa; --line: #2c3036; --accent: #8fb0e3; --accent-fg: #0d1626;
+    --pane: #0c0f14; --pane-edge: transparent; --pane-fg: #cfe9f7; --pane-dim: #7f97a5; --pane-strong: #ffffff; --pane-line: rgba(127, 216, 255, 0.22);
+    --pane-tint: rgba(127, 216, 255, 0.06); --pane-hover: rgba(127, 216, 255, 0.07); --pane-press: rgba(127, 216, 255, 0.12);
+    --link: #8fb0e3; --link-fg: #0d1626; --ok: #7fd8d0;
+    --work: #8fd19e; --wait: #f0c25e; --idle: #5d6b75; --err: #f08c7e; --c-mix: 100%;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141619; --fg: #e6e6e6; --muted: #a0a4aa; --line: #2c3036; --accent: #8fb0e3; --accent-fg: #0d1626;
+  --pane: #0c0f14; --pane-edge: transparent; --pane-fg: #cfe9f7; --pane-dim: #7f97a5; --pane-strong: #ffffff; --pane-line: rgba(127, 216, 255, 0.22);
+  --pane-tint: rgba(127, 216, 255, 0.06); --pane-hover: rgba(127, 216, 255, 0.07); --pane-press: rgba(127, 216, 255, 0.12);
+  --link: #8fb0e3; --link-fg: #0d1626; --ok: #7fd8d0;
+  --work: #8fd19e; --wait: #f0c25e; --idle: #5d6b75; --err: #f08c7e; --c-mix: 100%;
+  color-scheme: dark;
+}

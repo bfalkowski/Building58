@@ -1,0 +1,135 @@
+name: CI
+
+# Pull requests only. A merge to main is the pull request's last commit, which already passed, so a
+# run on main tested nothing new and cost minutes. Node 18, the oldest Node we support, runs once a
+# week and on demand (Actions, CI, Run workflow), not on every push. GitHub emails the repo's owner when
+# a scheduled run fails.
+on:
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its run that is still going, which tested an old commit.
+# A scheduled or by-hand run is never cancelled.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Every line of every tracked file, not just what a pull request adds, so a secret already on main is
+  # found too. It is its own job so the checks list shows Secret scan apart from the tests, as in
+  # edd-platform. That costs one more rounded-up arm64 minute a run: it needs only a checkout and the
+  # runner's own Node, no npm ci. Branch protection does not require it unless you add it there; the
+  # required pipeline check still runs the scan of what the pull request adds.
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - run: node .githooks/check-secrets.js --all
+
+  # What the change touches, so the jobs after it skip what it cannot break. A change to docs only
+  # (docs/, design/ and Markdown files) needs only the manual's checks: its links, its anchors and no em
+  # dashes. A run with no pull request, weekly or by hand, runs everything.
+  changes:
+    name: What changed
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    outputs:
+      docs: ${{ steps.look.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: look
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then exit 0; fi
+          files=$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo unknown)
+          echo "$files"
+          if [ -n "$files" ] && [ "$files" != unknown ] && ! echo "$files" | grep -qvE '^(docs/|design/)|\.md$'; then echo "Docs only."; echo "docs=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+
+  # Lint and npm test. The weekly and by-hand runs also use Node 18, the oldest Node we support.
+  # The browser tests run beside this job, not after it, so a pull request waits for the slowest
+  # job, not for all of them in a row. Each job is an arm64 runner, which costs less a minute than
+  # x64 Linux, and GitHub rounds each job up to a minute.
+  tests:
+    name: ${{ matrix.node == 'lts/*' && 'lint and npm test' || format('lint and npm test (node {0})', matrix.node) }}
+    needs: changes
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ github.event_name == 'pull_request' && fromJSON('["lts/*"]') || fromJSON('["18", "lts/*"]') }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # The pre-commit secret check, on what the pull request adds since its base. The hook runs only
+      # where it is turned on, and --no-verify skips it, so this is the check that holds. A docs-only
+      # change runs it too. A scheduled or by-hand run has no pull request, so it is skipped.
+      - name: no secrets in what the pull request adds
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: node .githooks/check-secrets.js --diff "$BASE" HEAD
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: the manual's checks
+        if: needs.changes.outputs.docs == 'true'
+        run: node relay/test/run.js relay/test/manual.test.js
+      - name: npm test
+        if: needs.changes.outputs.docs != 'true'
+        run: npm test
+
+  # The office page in a real browser (relay/test/browser/), on the current LTS only. The tests serve
+  # three.js and xterm from node_modules, so a slow CDN cannot fail them.
+  browser:
+    name: the office page in a browser
+    needs: changes
+    if: needs.changes.outputs.docs != 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npx playwright-core install --with-deps --only-shell chromium
+      - run: npm run test:browser
+      # A failed browser test leaves its screenshot and the page's console here (relay/test/browser/page.js).
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: browser-test-failures-office
+          path: test-results/browser/
+          if-no-files-found: ignore
+
+  # The check branch protection requires. It passes when every job above passed or was skipped
+  # because the change cannot reach it, and fails when any of them failed or was cancelled.
+  pipeline:
+    name: pipeline
+    needs: [changes, tests, browser]
+    if: always()
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for r in $RESULTS; do case "$r" in success|skipped) ;; *) echo "A job did not pass: $r"; exit 1 ;; esac; done
