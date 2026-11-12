@@ -73,7 +73,9 @@
     const t = current, running = !!(t && t.running);
     stopBtn.hidden = !running; if (typeof reviewBtn !== 'undefined') reviewBtn.hidden = !running;
     const w = t && workerOf(t.id);
-    title.textContent = w ? 'Claude Code · ' + w.name : 'Claude Code';
+    const named = window.OfficeSeats.titleBeside(w && w.session && w.session.customTitle);  // the title you gave it with /rename
+    title.textContent = w ? 'Claude Code · ' + w.name + named.text : 'Claude Code';
+    title.title = named.full ? w.name + ' · ' + named.full : '';
     if (running && Date.now() >= heldUntil) say('Running in ' + home(t.cwd) + ' · session ' + short(t.sessionId), 'on');
   }
   function b64(s) { const bin = atob(s); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }

@@ -49,6 +49,8 @@
   .tag b { font-weight: 500; }
   .tag span { color: var(--hud-dim); max-width: 30ch; overflow: hidden; text-overflow: ellipsis; }
   .tag span:empty { display: none; }
+  .tag em { font-style: normal; }
+  .tag em:empty { display: none; }
   .tag[data-state="work"] { border-color: var(--c); }
   .tag[data-state="work"] i { background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent); animation: pulse 1.6s ease-in-out infinite; }
   .tag[data-state="work"] span { color: var(--c); }
@@ -95,6 +97,7 @@
   #people [data-state="working"] i { background: var(--c); animation: pulse 1.6s ease-in-out infinite; }
   #people [data-state="waiting"] i { background: var(--wait); animation: pulse 0.8s ease-in-out infinite; }
   #people .who { color: var(--pane-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #people .who em { font-style: normal; }
   #people .who small { color: var(--pane-dim); font-size: 11.5px; margin-left: 6px; }
   #people time { color: var(--pane-dim); font-variant-numeric: tabular-nums; }
   #people .doing { grid-column: 2 / 4; color: var(--pane-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

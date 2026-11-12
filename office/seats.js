@@ -12,6 +12,14 @@
     if (t.work && t.work.label && !lead) setTitle(S, t.work.label);
     else if (t.title && (t.task || !S.title)) setTitle(S, t.title);
   }
-  const api = { noteWork };
+  // The title you gave a session with /rename, as it shows after its person's name: " · my title", cut
+  // to 30 characters with an ellipsis so a name tag stays readable. full is the whole title, for a tooltip.
+  const SHOWN = 30;
+  function titleBeside(title) {
+    const full = String(title || '').replace(/\s+/g, ' ').trim(), chars = Array.from(full);
+    if (!full) return { text: '', full: '' };
+    return { text: ' · ' + (chars.length > SHOWN ? chars.slice(0, SHOWN - 1).join('').trimEnd() + '…' : full), full };
+  }
+  const api = { noteWork, titleBeside };
   if (typeof module !== 'undefined') module.exports = api; else window.OfficeSeats = api;
 })();

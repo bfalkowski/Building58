@@ -28,7 +28,7 @@
     if (rows[w.id]) return rows[w.id];
     const li = document.createElement('li');
     // The person's button lies behind the text, since the ticket's number is a button of its own and one cannot hold the other.
-    li.innerHTML = '<button type="button" class="person" aria-pressed="false"></button><i></i><span class="who"><b></b><small><span></span><button type="button" class="ticket" hidden></button><span></span></small></span><time></time><span class="doing"></span>' +
+    li.innerHTML = '<button type="button" class="person" aria-pressed="false"></button><i></i><span class="who"><b></b><em></em><small><span></span><button type="button" class="ticket" hidden></button><span></span></small></span><time></time><span class="doing"></span>' +
       '<span class="desk" hidden><span class="desk-tired" hidden><span aria-hidden="true"></span><span></span></span><span class="desk-status" hidden><span aria-hidden="true"></span><span></span></span><span class="desk-pair" hidden></span><span class="desk-now"></span><a class="desk-pr" target="_blank" rel="noopener" hidden></a><span class="desk-state"></span><span class="desk-next"></span><span class="desk-stop" hidden><span></span><button type="button" class="btn">Stop</button></span></span>';
     li.style.setProperty('--c', w.color);
     const b = li.querySelector('.person'), link = li.querySelector('.ticket'), [before, after] = li.querySelectorAll('small > span');
@@ -36,7 +36,7 @@
     b.addEventListener('click', () => window.dispatchEvent(new CustomEvent('office:pick', { detail: { who: w.id } })));
     li.querySelector('b').textContent = w.name;
     const q = (sel) => li.querySelector(sel);
-    const r = { id: w.id, li, btn: b, name: li.querySelector('b'), link, before, after, time: q('time'), doing: q('.doing'), desk: q('.desk'), status: q('.desk-status'), statusIcon: q('.desk-status > span'), statusLabel: q('.desk-status > span + span'), pair: q('.desk-pair'), now: q('.desk-now'), pr: q('.desk-pr'), state: q('.desk-state'), next: q('.desk-next'), stop: q('.desk-stop'), stopWhy: q('.desk-stop > span'), stopBtn: q('.desk-stop button'), tired: q('.desk-tired'), tiredIcon: q('.desk-tired > span'), tiredLabel: q('.desk-tired > span + span') };
+    const r = { id: w.id, li, btn: b, name: li.querySelector('b'), named: li.querySelector('.who > em'), link, before, after, time: q('time'), doing: q('.doing'), desk: q('.desk'), status: q('.desk-status'), statusIcon: q('.desk-status > span'), statusLabel: q('.desk-status > span + span'), pair: q('.desk-pair'), now: q('.desk-now'), pr: q('.desk-pr'), state: q('.desk-state'), next: q('.desk-next'), stop: q('.desk-stop'), stopWhy: q('.desk-stop > span'), stopBtn: q('.desk-stop button'), tired: q('.desk-tired'), tiredIcon: q('.desk-tired > span'), tiredLabel: q('.desk-tired > span + span') };
     r.stopBtn.addEventListener('click', () => { if (r.terminal) window.dispatchEvent(new CustomEvent('office:stop-desk', { detail: r.terminal })); });
     rows[w.id] = r; return r;
   }
@@ -45,7 +45,8 @@
   function fillWork(r, w) {
     // A PR past its automatic reviews (relay/reviews.js) says so, since its next review is the person's.
     const work = w.session && w.session.work, elsewhere = (w.session && !w.session.terminal ? ' · other terminal' : '') + (work && work.reviewWaits ? ' · PR waits on your review' : '');
-    const text = !w.session ? 'free' : (work && work.label) || w.session.title || w.session.project || w.session.id;
+    const label = !w.session ? 'free' : (work && work.label) || w.session.title || w.session.project || w.session.id;
+    const text = w.session && w.session.customTitle && label === w.session.customTitle ? w.session.project || w.session.id : label;  // it is beside the name already
     const at = work && work.ticket ? text.indexOf(work.ticket) : -1;
     const ticketed = at >= 0;
     put(r.before, ticketed ? text.slice(0, at) : text + elsewhere);
@@ -126,13 +127,16 @@
       r.li.dataset.under = under ? '1' : '';
       r.li.dataset.lead = isLead(w) ? '1' : '';
       put(r.name, w.name);  // the name the relay gave the session at this desk, or the desk's own
+      const named = window.OfficeSeats.titleBeside(w.session && w.session.customTitle), titled = w.name + (named.full ? ' · ' + named.full : '');
+      put(r.named, named.text);
+      if (r.named.title !== named.full) r.named.title = named.full;
       const said = fillWork(r, w), ticketed = w.session && w.session.work && w.session.work.ticket;
       r.time.textContent = w.task ? fmt(w.task.seconds) : '';
       const doing = w.status === 'waiting' ? w.doing : w.task ? (ticketed ? w.task.last || 'Working' : w.task.label + (w.task.last ? '  ' + w.task.last : '')) : w.session ? (ticketed ? 'Ready for a prompt' : 'Ready for a prompt · ' + (w.session.title || w.doing)) : w.doing;
       put(r.doing, doing);
       const desk = fillDesk(r, w, under);
-      r.btn.title = w.name + (w.session ? ', session ' + w.session.id : '') + (w.recent.length ? '. Recent: ' + w.recent.map((h) => h.label + ' (' + fmt(h.seconds) + ')').join(', ') : '');
-      r.btn.setAttribute('aria-label', w.name + ': ' + said + '. ' + doing + '.' + desk);
+      r.btn.title = titled + (w.session ? ', session ' + w.session.id : '') + (w.recent.length ? '. Recent: ' + w.recent.map((h) => h.label + ' (' + fmt(h.seconds) + ')').join(', ') : '');
+      r.btn.setAttribute('aria-label', titled + ': ' + said + '. ' + doing + '.' + desk);
     });
     const waiting = s.waitingOnYou.length;
     const text = s.busy + ' of ' + s.people + ' busy' + (waiting ? ', ' + waiting + ' waiting on you' : '');

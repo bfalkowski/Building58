@@ -178,7 +178,7 @@
       <tr><td><code>OFFICE_RELAY_KEY</code></td><td class="plain"><code>RELAY_KEY</code></td><td>The relay key.</td></tr>
       <tr><td><code>OFFICE_RELAY_URL</code></td><td class="plain"><code>http://localhost:8787</code></td><td>The relay's address.</td></tr>
       <tr><td><code>OFFICE_CHANNEL</code></td><td class="plain"><code>office</code></td><td>The channel. <code>--channel &lt;name&gt;</code> after <code>--install</code> or <code>--settings</code> sets it too, and wins over this. Inside a session the room started, this holds that page's channel, so <code>--install</code> and <code>--settings</code> leave it out and use <code>office</code>, unless you set it to another value or pass <code>--channel</code>. See <a href="running.html#own-terminal">Sessions from your own terminal</a>.</td></tr>
-      <tr><td><code>OFFICE_SHOW_TITLES</code></td><td class="plain">on</td><td><code>0</code> keeps the session's title back.</td></tr>
+      <tr><td><code>OFFICE_SHOW_TITLES</code></td><td class="plain">on</td><td><code>0</code> keeps the session's title back, and the title you gave it with <code>/rename</code>, so no title shows beside a name.</td></tr>
       <tr><td><code>OFFICE_SHOW_PROMPTS</code></td><td class="plain">off</td><td><code>1</code> sends the first 120 characters of each prompt.</td></tr>
       <tr><td><code>OFFICE_DETAIL</code></td><td class="plain">trimmed</td><td><code>full</code> sends the first line of each shell command and search queries.</td></tr>
       <tr><td><code>OFFICE_HOOK_LOG</code></td><td class="plain">none</td><td>A file to append every raw event to.</td></tr>
