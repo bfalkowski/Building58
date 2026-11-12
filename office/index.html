@@ -104,6 +104,8 @@
   #people .desk { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 0 8px; color: var(--pane-dim); font-size: 11.5px; }
   #people .desk[hidden], #people .desk [hidden] { display: none; }
   #people .desk-next { flex-basis: 100%; color: var(--pane-fg); }
+  /* The Lead's row stays at the top of the list while the rest scrolls under it (office/panel.js). */
+  #people li[data-lead="1"] { position: sticky; top: -4px; z-index: 2; background: var(--pane); border-bottom: 1px solid var(--pane-line); }
   /* A reviewer sits under the Dev whose PR it reviews, indented, with a line back to that Dev (office/panel.js). */
   #people li[data-under="1"] { margin-left: 22px; border-left: 2px solid var(--pane-dim); padding-left: 10px; }
   #people .desk-pair { flex-basis: 100%; color: var(--pane-strong); }
