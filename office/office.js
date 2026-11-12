@@ -511,13 +511,17 @@
   block(arm, leather, [0, 0.24, 0], [0.82, 0.3, 0.8]); block(arm, leather, [0, 0.62, -0.32], [0.82, 0.5, 0.18]);
   block(arm, leather, [-0.36, 0.48, 0.02], [0.12, 0.3, 0.78]); block(arm, leather, [0.36, 0.48, 0.02], [0.12, 0.3, 0.78]);
   solid(3.44, 4.26, 2.8, 3.6);
-  const lampG = new THREE.Group(); lampG.position.set(6.7, 0, 0.45); scene.add(lampG);
+  // The arc lamp stands at the couch's right end, and its shade hangs over the arm, high, so it lights
+  // the couch without hiding the head of someone sitting there.
+  const LAMP = { x: 6.72, z: 0.5 }, REACH = { x: -0.3, z: 0.44 };
+  const lampG = new THREE.Group(); lampG.position.set(LAMP.x, 0, LAMP.z); scene.add(lampG);
   block(lampG, std(0xe8e4dc, { roughness: 0.3 }), [0, 0.05, 0], [0.28, 0.1, 0.28]);
-  const arcPts = []; for (let i = 0; i <= 14; i++) { const a = (i / 14) * Math.PI * 0.62; arcPts.push([-Math.sin(a) * 1.2, 0.1 + Math.sin(a + 0.35) * 1.45 + i * 0.03, Math.sin(a) * 0.55]); }
+  const arcPts = []; for (let i = 0; i <= 14; i++) { const a = (i / 14) * Math.PI * 0.62; arcPts.push([Math.sin(a) * REACH.x, 0.1 + Math.sin(a + 0.35) * 1.62 + i * 0.03, Math.sin(a) * REACH.z]); }
   for (let i = 0; i < arcPts.length - 1; i++) rod(lampG, metal(0xbfbfbf, 0.25), arcPts[i], arcPts[i + 1], 0.012);
-  cyl(lampG, metal(0xbfbfbf, 0.25), [arcPts[14][0], arcPts[14][1] - 0.1, arcPts[14][2]], 0.22, 0.16, 0.06);
-  lampLight(6.7 + arcPts[14][0], 1.35, 0.45 + arcPts[14][2], 5);
-  solidC(6.7, 0.45, 0.25);
+  const shade = arcPts[14];
+  cyl(lampG, metal(0xbfbfbf, 0.25), [shade[0], shade[1] - 0.1, shade[2]], 0.22, 0.16, 0.06);
+  lampLight(LAMP.x + shade[0], shade[1] - 0.25, LAMP.z + shade[2], 5);
+  solidC(LAMP.x, LAMP.z, 0.25);
 
   // a ping pong table
   const ppC = makeCanvas(548, 305); (function () { const x = ppC.getContext('2d'); x.fillStyle = '#1f4f7a'; x.fillRect(0, 0, 548, 305); x.strokeStyle = '#f2f2f2'; x.lineWidth = 6; x.strokeRect(3, 3, 542, 299); x.lineWidth = 2; x.beginPath(); x.moveTo(0, 152.5); x.lineTo(548, 152.5); x.stroke(); })();
@@ -2180,7 +2184,7 @@
   // The baked look, with ?look=baked (office/look.js). It needs to know what moves, so it never bakes it.
   if (window.OfficeLook && renderer) {
     window.OfficeLook.attach({
-      scene, sun, hemi, amb, fill, part: () => part,
+      scene, camera, renderer, sun, hemi, amb, fill, part: () => part,
       movers: () => [...people.map((w) => w.fig.root), boss.fig.root, ...Object.values(DESKS).flatMap((d) => [d.chair, d.mug]), ...tablePaddles, ppBall]
     });
   }
@@ -2218,7 +2222,7 @@
     tickScreens();
     tickTags();
     tickDecor(real, nowMs);
-    renderer.render(scene, camera);
+    if (!(window.OfficeLook && window.OfficeLook.render(renderer))) renderer.render(scene, camera);  // the baked look's effects draw it
     if (!built) { built = true; emit('office.live', {}); readyWaiters.splice(0).forEach((r) => r(snapshot())); }
   }
   // While the page is not drawn (a hidden tab, a hidden side panel, a covered window) the
