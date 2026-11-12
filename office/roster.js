@@ -12,7 +12,7 @@
 // after you add, remove or rename someone.
 (function () {
   const roster = {
-    company: 'Building 58',
+    company: 'Building58',
     neon: '#ff5fa2',
     startWith: 3,
 
@@ -66,5 +66,13 @@
     ]
   };
   // The page reads it as window.OFFICE_ROSTER. The relay reads it too, named in world.json, to seat its sessions.
-  if (typeof module !== 'undefined') module.exports = roster; else window.OFFICE_ROSTER = roster;
+  if (typeof module !== 'undefined') module.exports = roster;
+  else {
+    // ?name=Room%20B in the page's address shows that name instead of `company`, on the sign on the
+    // back wall and in the page title, so two rooms side by side can be told apart. Only this page
+    // sees it: the relay keeps `company`.
+    const name = String(new URLSearchParams(location.search).get('name') || '').trim().slice(0, 40);
+    if (name) roster.company = name;
+    window.OFFICE_ROSTER = roster;
+  }
 })();
