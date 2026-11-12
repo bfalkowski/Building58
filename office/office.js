@@ -296,8 +296,12 @@
     x.clearRect(0, 0, 1024, 256);
     x.font = 'italic 600 150px "Source Sans 3", "Source Sans Pro", system-ui, sans-serif';
     x.textAlign = 'center'; x.textBaseline = 'middle';
-    for (const [blur, alpha] of [[44, 0.55], [22, 0.75], [8, 1]]) { x.shadowColor = col; x.shadowBlur = blur; x.fillStyle = col; x.globalAlpha = alpha; x.fillText(ROSTER.company || 'Studio', 512, 130); }
-    x.shadowBlur = 0; x.globalAlpha = 1; x.fillStyle = '#fff4fa'; x.lineWidth = 3; x.strokeStyle = '#fff'; x.fillText(ROSTER.company || 'Studio', 512, 130);
+    // A long name (?name=, office/roster.js) is drawn narrower so it still fits on the sign.
+    const sign = ROSTER.company || 'Building58', fit = Math.min(1, 940 / x.measureText(sign).width);
+    x.setTransform(fit, 0, 0, 1, 512 * (1 - fit), 0);
+    for (const [blur, alpha] of [[44, 0.55], [22, 0.75], [8, 1]]) { x.shadowColor = col; x.shadowBlur = blur; x.fillStyle = col; x.globalAlpha = alpha; x.fillText(sign, 512, 130); }
+    x.shadowBlur = 0; x.globalAlpha = 1; x.fillStyle = '#fff4fa'; x.lineWidth = 3; x.strokeStyle = '#fff'; x.fillText(sign, 512, 130);
+    x.setTransform(1, 0, 0, 1, 0, 0);
     neonTex.needsUpdate = true;
   }
   const neon = mesh(new THREE.PlaneGeometry(2.8, 0.7), new THREE.MeshBasicMaterial({ map: neonTex, transparent: true, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }), scene, false);
