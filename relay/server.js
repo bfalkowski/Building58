@@ -67,6 +67,9 @@ if (office) {
     try { office.terminal.setRoster(require(path.join(ROOT, w.dir, w.roster))); } catch (e) { console.error('Could not read the roster ' + path.join(w.dir, w.roster) + ', so sessions have no names: ' + e.message); }
   }
 }
+// The channel of the world that runs the sessions, which gets the relay's own Lead when it starts
+// (relay/sessions.js, startLead).
+const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
 // In the order they answer routes.
 const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch'].map((k) => office[k]) : [];
 
@@ -449,6 +452,7 @@ server.listen(PORT, HOST, async () => {
       try { await terminal.connectHost(log); } catch (e) { console.error(e.message); process.exit(1); }
     }
     sessions.restoreAll({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
+    sessions.startLead(LEAD_CHANNEL, { port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     reviews.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     autopilot.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.prWatch.begin({ log });

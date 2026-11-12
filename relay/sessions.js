@@ -13,6 +13,8 @@
 // A reviewer's, the PM's or the COO's first prompt that no turn began on before the restart goes in after it
 // (relay/delivery.js, promptOnce).
 //
+// Then the room's channel gets a Lead, if none came back (startLead).
+//
 // A task's worker comes back the way Bring back brings it (relay/tasks.js), so a task whose brief
 // never went in starts over with it. A worker or reviewer in its own checkout keeps the checkout's
 // clean-up for when it ends (relay/checkouts.js).
@@ -87,4 +89,13 @@ function restoreAll(ctx) {
   restored.done = true;
 }
 
-module.exports = { restoreAll, restored };
+// Runs once, after restoreAll: the channel the room's sessions run on gets a running Lead, unless one
+// came back (relay/terminal.js, startLead). A new one starts in the folder the relay runs in, which the
+// panel also offers first. RELAY_RESUME=0 starts the relay with nobody, so no Lead either, and
+// RELAY_LEAD=0 turns off only this.
+function startLead(channel, ctx) {
+  if (!terminal.ENABLED || !channel || process.env.RELAY_RESUME === '0' || process.env.RELAY_LEAD === '0') return;
+  try { terminal.startLead(channel, process.cwd(), ctx); } catch (e) { ctx.log('Could not start a Lead on ' + channel + ': ' + e.message); }
+}
+
+module.exports = { restoreAll, restored, startLead };

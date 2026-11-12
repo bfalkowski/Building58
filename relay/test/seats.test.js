@@ -220,9 +220,9 @@ test('the relay seats its sessions, and the Floor uses the same names', async (t
   assert.deepStrictEqual([a.seat, b.seat], ['priya', 'marcus'], 'the first free desks, past the Lead\'s desk');
   assert.deepStrictEqual([kindOf(a.who), kindOf(b.who)], ['woman', 'man'], 'names from the pool that fit the desks: ' + a.who + ', ' + b.who);
   assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: b.id })).status, 200);
-  assert.deepStrictEqual(sorted((await terminals(R)).map((x) => [x.id, x.seat, x.who])), sorted([[a.id, 'priya', a.who], [b.id, 'lead', 'Lead']]), 'the Lead takes its desk at once');
+  assert.deepStrictEqual(sorted((await terminals(R)).map((x) => [x.id, x.seat, x.who])), sorted([[a.id, 'priya', a.who], [b.id, 'lead', roster.lead.name]]), 'the Lead takes its desk at once, and its name');
   const floor = (await R.call('GET', '/floor')).body.sessions;
-  assert.deepStrictEqual(sorted(floor.map((r) => [r.terminal, r.name])), sorted([[a.id, a.who], [b.id, 'Lead']]));
+  assert.deepStrictEqual(sorted(floor.map((r) => [r.terminal, r.name])), sorted([[a.id, a.who], [b.id, roster.lead.name]]));
   assert.strictEqual((await R.call('POST', '/terminals/names', { names: { [a.id]: 'Lead' } })).status, 404, 'a page cannot rename anyone');
   await R.call('POST', '/terminals/' + a.id + '/stop', {});
   await until(async () => (await terminals(R)).length === 1, 'a to stop');
@@ -272,7 +272,7 @@ test('after a restart the Lead is at the Lead\'s desk, and everyone else keeps t
   assert.deepStrictEqual(seatsOf(list), { [ids[0]]: 'priya', [ids[1]]: 'lead', [ids[2]]: 'theo' });
   const whoOf = (l) => Object.fromEntries(l.map((x) => [x.sessionId, x.who]));
   const now = whoOf(list);
-  assert.deepStrictEqual([now[ids[1]], now[ids[2]]], ['Lead', 'Hugo'], 'the Lead is Lead, and the one that kept its desk keeps its name');
+  assert.deepStrictEqual([now[ids[1]], now[ids[2]]], [roster.lead.name, 'Hugo'], 'the Lead has the Lead desk\'s name, and the one that kept its desk keeps its name');
   assert.strictEqual(kindOf(now[ids[0]]), 'woman', 'the one that left the Lead\'s desk for Priya\'s takes a name that fits it');
   // The seats are saved with the sessions, so the next restart starts from them.
   await until(() => {
