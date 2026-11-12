@@ -110,10 +110,13 @@ function cors() {
   };
 }
 function problem(res, status, error, message, extra) { send(res, status, Object.assign({ ok: false, error, message }, extra || {})); }
-function authorized(req, url) {
+// The key a request sent, as a header or ?key=, or '' when it sent none.
+function givenKey(req, url) {
   const h = req.headers.authorization || '';
-  const given = h.startsWith('Bearer ') ? h.slice(7) : (url.searchParams.get('key') || '');
-  const a = Buffer.from(given), b = Buffer.from(KEY);
+  return h.startsWith('Bearer ') ? h.slice(7) : (url.searchParams.get('key') || '');
+}
+function authorized(req, url) {
+  const a = Buffer.from(givenKey(req, url)), b = Buffer.from(KEY);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 function readJson(req) {
@@ -285,7 +288,7 @@ async function handle(req, res) {
   // The PM never moves, starts or rebases a ticket, even while it may set the order (article 5).
   if (!authorized(req, url) && agent && agent.role === 'pm' && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(move|start|base|kind)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'The PM does not move or start a ticket, or change its base or kind. It edits the title and body of tickets in Triage or Ready, and with Let the PM set the order on, their priority and place.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && m[2] === '/floor') { problem(res, 401, 'unauthorized', 'Only the Lead can read the floor.'); return; }
-  if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>.'); return; }
+  if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : (givenKey(req, url) ? 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>.')); return; }
   let name = '';
   try { name = decodeURIComponent(m[1]); } catch { /* a malformed escape names no channel, so it fails the test below */ }
   const rest = m[2] || '';

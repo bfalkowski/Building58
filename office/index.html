@@ -422,6 +422,7 @@
     </div>
     <span id="cc-update-note" role="status" hidden></span>
     <div id="office-notes">
+      <p class="cc-ask" id="key-warn" role="alert" hidden><span>This page's key is not the relay's key, so nothing on this page reaches the relay. Open the room with the key the relay was started with (<code>RELAY_KEY</code>): the link <code>npm run office</code> printed has it, after <code>key=</code>. <a class="help-link" href="../docs/manual/running.html#wrong-key" target="_blank" rel="noopener">What this means</a></span></p>
       <p class="cc-ask" id="cc-hooks-warn" role="status" hidden><span>The room hooks in ~/.claude/settings.json run <code id="cc-hooks-from"></code>, not this relay's copy, so sessions run old hook code and newer features fail without a message. To fix it, run: <code id="cc-hooks-fix"></code> <a class="help-link" href="../docs/manual/running.html#hooks-checkout" target="_blank" rel="noopener">What this means</a></span></p>
     </div>
   </div>

@@ -776,7 +776,7 @@
   // on load: seat the running sessions and reconnect to the one this tab was showing
   sync().then((r) => {
     if (r.status === 403) { off(r.message + ' Open the room at http://localhost.'); return; }
-    if (r.status === 401) { off('The relay key in the address is wrong.'); return; }
+    if (r.status === 401) { off('This page\'s key is not the relay\'s key, so nothing on this page reaches the relay. See the note under the room bar.'); $('key-warn').hidden = false; return; }
     if (!r.ok) { off(r.message || 'The relay did not answer.'); return; }
     if (!r.enabled) { off(r.message); return; }
     note.hidden = true;

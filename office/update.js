@@ -62,7 +62,7 @@
   offBtn.addEventListener('click', async () => { await api({ cancel: true }); });
 
   api().then((r) => {
-    if (!r || r.status === 404 || r.status === 403) { btn.hidden = true; return; }  // the terminal is off, or this is not the room's own page
+    if (!r || r.status === 404 || r.status === 403 || r.status === 401) { btn.hidden = true; return; }  // the terminal is off, this is not the room's own page, or its key is wrong (the note under the bar says so)
     btn.title = 'git fetch, then git merge --ff-only just before any restart, in ' + r.dir + ', on ' + r.branch;
     run = r.run;
     // Autopilot pulls after a merge with nobody pressing Update, so the bar looks for an update now and then.
