@@ -5,10 +5,10 @@ squad: a Lead, Devs, reviewers and a PM, with you as the manager. Each developer
 Claude Code sessions. Everything a room shows comes from real state: sessions, tickets, tasks and
 pull requests.
 
-[![The room's demo. Three pretend Claude Code sessions each take a desk and show the skill they run. They raise a hand when they need your OK, and get coffee when they are done.](docs/media/room-demo.gif)](docs/media/room-demo.mp4)
+![The room's demo. Three pretend Claude Code sessions each take a desk and show the skill they run. They raise a hand when they need your OK, and get coffee when they are done.](docs/media/room-demo.gif)
 
 The room's demo, with the baked look (`?look=baked`). The sessions run three times as fast as in
-`npm run office:demo`. Click the picture for the video.
+`npm run office:demo`. The same minute at full size: [room-demo.mp4](docs/media/room-demo.mp4) (3 MB).
 
 A room is a world: a browser page with the API `window.run`. Other worlds can live in repos of
 their own and be linked in. The relay passes commands from outside callers (curl, a
