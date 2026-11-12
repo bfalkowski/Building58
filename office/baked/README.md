@@ -23,7 +23,9 @@ python3 office/baked/bake.py /tmp/bake office/baked
 
 The first opens the room at evening, picks the parts `office/look.js` bakes, and writes them with
 their textures to `/tmp/bake`. The second bakes in Blender with Cycles on the CPU and writes
-`room.glb`, `light.png`, `ao.png` and `bake.json` here. It took about ten minutes on two CPU cores at
-the default size, 2048. `--size 1024 --samples 32` is faster and blurrier.
+`room.glb`, `light-evening.png`, `light-day.png`, `light-night.png`, `ao.png` and `bake.json` here. Each
+time of day's light, and how bright its sun, sky and lamps are, is in `TIMES` at the top of `bake.py`.
+It took about twenty minutes on two CPU cores at the default size, 2048. `--size 1024 --samples 32` is
+faster and blurrier, and `--times evening` bakes one time only.
 
-Then open `/office/?look=baked` and compare it with `?time=evening`.
+Then open `/office/?look=baked&time=day` (and `evening`, `night`) and compare each with the live look.

@@ -1,11 +1,13 @@
-// The baked look: ?look=baked in the address. Blender bakes the evening light that bounces around
-// the loft into two textures, office/baked/light.png and office/baked/ao.png, for the parts of the
-// room that never move. The page swaps those parts for a copy that carries the textures, and the
+// The baked look: ?look=baked in the address. Blender bakes the light that bounces around the loft,
+// for each time of day, into textures (office/baked/light-evening.png, light-day.png, light-night.png),
+// and how hidden each point is from open air into office/baked/ao.png, for the parts of the room that
+// never move. The look follows the room's Light: day, evening or night. The page swaps those parts for a copy that carries the textures, and the
 // sun, the lamps, the people and everything that moves stay lit live. office/baked/README.md says
 // how to bake again.
 // The baked look also draws through a few effects, unless the address has fx=off: bloom, so the
-// bulbs, the neon and the windows glow; a warm haze that grows with distance; and a colour grade with
-// a vignette. They are three.js r128's own add-ons, from the CDN at that exact version.
+// bulbs, the neon and the windows glow; a haze that grows with distance; and a colour grade with a
+// vignette, each set for the time of day. They are three.js r128's own add-ons, from the CDN at that
+// exact version.
 // Also loaded with require by the tests, so the rules for what is baked are checked without a browser.
 (function (root) {
   'use strict';
@@ -15,10 +17,15 @@
   const ADDONS = ['shaders/CopyShader.js', 'shaders/LuminosityHighPassShader.js', 'postprocessing/EffectComposer.js',
     'postprocessing/RenderPass.js', 'postprocessing/ShaderPass.js', 'postprocessing/UnrealBloomPass.js']
     .map((f) => 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/' + f);
-  // The effects' settings. The haze colour and density are for the evening; the grade warms, adds a
-  // little contrast and darkens the corners, then turns the picture from linear light into sRGB.
-  const FX = { bloom: { strength: 0.7, radius: 0.55, threshold: 0.72 }, haze: { colour: 0x6b4430, density: 0.022 },
-    grade: { warmth: 0.06, contrast: 1.16, saturation: 1.05, vignette: 0.6 } };
+  // The effects' settings for each time of day. Bloom is strongest at night, when the bulbs, the neon
+  // and the city's windows are the light. The haze is amber in the evening, pale at day and blue at
+  // night. The grade warms (or cools, below 0), adds a little contrast and darkens the corners, then
+  // turns the picture from linear light into sRGB.
+  const FX = {
+    evening: { bloom: { strength: 0.7, radius: 0.55, threshold: 0.72 }, haze: { colour: 0x6b4430, density: 0.022 }, grade: { warmth: 0.06, contrast: 1.16, saturation: 1.05, vignette: 0.6 } },
+    day: { bloom: { strength: 0.3, radius: 0.5, threshold: 0.85 }, haze: { colour: 0xb7c3cc, density: 0.011 }, grade: { warmth: 0.02, contrast: 1.08, saturation: 1.04, vignette: 0.35 } },
+    night: { bloom: { strength: 0.95, radius: 0.6, threshold: 0.62 }, haze: { colour: 0x121a2b, density: 0.024 }, grade: { warmth: -0.04, contrast: 1.14, saturation: 0.98, vignette: 0.7 } }
+  };
 
   function param(search, name) {
     try { return new URLSearchParams(search || '').get(name); } catch (e) { return null; }
@@ -61,9 +68,10 @@
   }
 
   // ---------- in the page ----------
-  const state = { look: 'live', baked: false, status: 'off', hidden: 0, missing: 0, fx: 'off', error: null };
+  const state = { look: 'live', baked: false, time: null, status: 'off', hidden: 0, missing: 0, fx: 'off', error: null };
   let ctx = null, room = null, parts = [], meta = null, wantBaked = false, loading = null;
-  let fxWanted = false, fxLoading = null, composer = null, liveFog = null;
+  let fxWanted = false, fxLoading = null, composer = null, liveFog = null, bloomPass = null, gradePass = null;
+  const lightMaps = {};  // each time's light texture, fetched the first time that time shows
   const view = { w: 0, h: 0 };
 
   function loadScript(src) {
@@ -85,11 +93,10 @@
   async function load() {
     if (!THREE.GLTFLoader) await loadScript(LOADER);
     meta = await (await fetch(BASE + 'bake.json')).json();
-    const [gltf, light, ao] = await Promise.all([
+    const [gltf, ao] = await Promise.all([
       new Promise((resolve, reject) => new THREE.GLTFLoader().load(BASE + 'room.glb', resolve, undefined, reject)),
-      loadTexture(BASE + 'light.png'), loadTexture(BASE + 'ao.png')
+      loadTexture(BASE + 'ao.png')
     ]);
-    light.flipY = false; light.encoding = THREE.sRGBEncoding;
     ao.flipY = false;
     // The live materials, by the name the bake gave them, so the copy keeps their textures and colours.
     const keys = new Set(meta.keys), byName = {};
@@ -101,7 +108,6 @@
       if (!o.isMesh) return;
       const live = byName[o.material.name];
       const mat = live ? live.clone() : o.material;
-      mat.lightMap = light; mat.lightMapIntensity = meta.lightMapIntensity;
       mat.aoMap = ao; mat.aoMapIntensity = meta.aoMapIntensity;
       o.material = mat; o.castShadow = true; o.receiveShadow = true;
     });
@@ -109,27 +115,42 @@
     ctx.scene.add(room);
   }
 
-  function lights(on) {
-    const { sun, hemi, amb, fill } = ctx;
-    if (!on) return;  // applyPart has just set the live values
-    const s = meta.sun;
-    sun.position.set(sun.target.position.x + s.from[0], sun.target.position.y + s.from[1], sun.target.position.z + s.from[2]);
-    sun.color.set(s.color); sun.intensity = s.intensity;
-    hemi.intensity *= meta.ambientScale; amb.intensity *= meta.ambientScale; fill.intensity *= meta.ambientScale;
+  async function lightMap(time) {
+    if (!lightMaps[time]) {
+      lightMaps[time] = loadTexture(BASE + meta.times[time].light).then((t) => { t.flipY = false; t.encoding = THREE.sRGBEncoding; return t; });
+    }
+    return lightMaps[time];
   }
 
-  function show(on) {
+  // The page's sun for this time, where the bake had it, and less of the page's fill light, which
+  // the bake's bounced light stands in for. applyPart has just set the live values.
+  function lights(time) {
+    const { sun, hemi, amb, fill } = ctx, t = meta.times[time], s = t.sun;
+    sun.position.set(sun.target.position.x + s.from[0], sun.target.position.y + s.from[1], sun.target.position.z + s.from[2]);
+    sun.color.set(s.color); sun.intensity = s.intensity;
+    hemi.intensity *= t.ambientScale; amb.intensity *= t.ambientScale; fill.intensity *= t.ambientScale;
+  }
+
+  // Show the bake for a time of day, or the live room with null.
+  async function show(time) {
     if (!room) return;
+    const on = !!(time && meta.times[time]);
+    if (on) {
+      const map = await lightMap(time), k = meta.times[time].lightMapIntensity;
+      if (ctx.part() !== time) return;  // the Light changed while the texture came
+      room.traverse((o) => { if (o.isMesh) { o.material.lightMap = map; o.material.lightMapIntensity = k; } });
+      lights(time);
+    }
     parts.forEach((m) => { m.visible = !on; });
     room.visible = on;
-    lights(on);
-    haze(on && fxWanted);
-    state.baked = on; state.hidden = on ? parts.length : 0;
+    haze(on && fxWanted ? time : null);
+    tune(on ? time : null);
+    state.baked = on; state.time = on ? time : null; state.hidden = on ? parts.length : 0;
     state.status = on ? 'baked' : 'live';
     state.fx = on && fxWanted ? (composer ? 'on' : 'loading') : 'off';
     if (on && fxWanted && !composer && !fxLoading) {
-      fxLoading = loadFx().then(() => { state.fx = state.baked ? 'on' : 'off'; }).catch((e) => {
-        fxWanted = false; state.fx = 'off'; haze(false); state.error = String(e && e.message || e);
+      fxLoading = loadFx().then(() => { tune(state.time); state.fx = state.baked ? 'on' : 'off'; }).catch((e) => {
+        fxWanted = false; state.fx = 'off'; haze(null); state.error = String(e && e.message || e);
         console.warn('The baked look\'s effects could not load, so it draws without them:', state.error);
       });
     }
@@ -138,14 +159,22 @@
   // ---------- the effects ----------
   // The haze, and the background colour in linear light: the effects turn the whole picture into sRGB
   // at the end, the background too, so without this the dark void around the loft would turn grey.
-  function haze(on) {
+  // The grid in the void goes while the haze is on: the haze would turn its far lines into a pale band.
+  function haze(time) {
     const scene = ctx.scene;
-    if (on) {
-      if (!liveFog) liveFog = { fog: scene.fog, background: scene.background };
-      scene.fog = new THREE.FogExp2(FX.haze.colour, FX.haze.density);
+    if (time) {
+      if (!liveFog) {
+        const grids = [];
+        scene.traverse((o) => { if (o.type === 'GridHelper' && o.visible) grids.push(o); });
+        liveFog = { fog: scene.fog, background: scene.background, grids };
+      }
+      liveFog.grids.forEach((g) => { g.visible = false; });
+      scene.fog = new THREE.FogExp2(FX[time].haze.colour, FX[time].haze.density);
       if (liveFog.background && liveFog.background.isColor) scene.background = liveFog.background.clone().convertSRGBToLinear();
     } else if (liveFog) {
-      scene.fog = liveFog.fog; scene.background = liveFog.background; liveFog = null;
+      scene.fog = liveFog.fog; scene.background = liveFog.background;
+      liveFog.grids.forEach((g) => { g.visible = true; });
+      liveFog = null;
     }
   }
   // Grade, vignette and sRGB in one pass, last, so the picture reaches the screen once.
@@ -174,12 +203,19 @@
       ? new THREE.WebGLMultisampleRenderTarget(w, h, { format: THREE.RGBAFormat }) : undefined;
     const c = new THREE.EffectComposer(r, target);
     c.addPass(new THREE.RenderPass(ctx.scene, ctx.camera));
-    c.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(w, h), FX.bloom.strength, FX.bloom.radius, FX.bloom.threshold));
-    const grade = new THREE.ShaderPass(GRADE);
-    for (const k of ['warmth', 'contrast', 'saturation', 'vignette']) grade.uniforms[k].value = FX.grade[k];
-    c.addPass(grade);
+    bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(w, h), 0, 0, 1);
+    c.addPass(bloomPass);
+    gradePass = new THREE.ShaderPass(GRADE);
+    c.addPass(gradePass);
     composer = c;
     view.w = view.h = 0;  // the next frame sets the composer's size
+  }
+  // Set the bloom and the grade for a time of day.
+  function tune(time) {
+    if (!bloomPass || !time || !FX[time]) return;
+    const f = FX[time];
+    bloomPass.strength = f.bloom.strength; bloomPass.radius = f.bloom.radius; bloomPass.threshold = f.bloom.threshold;
+    for (const k of ['warmth', 'contrast', 'saturation', 'vignette']) gradePass.uniforms[k].value = f.grade[k];
   }
   // The room's frame calls this. It draws through the effects and says so, or draws nothing and says no.
   function render(renderer) {
@@ -193,21 +229,21 @@
     return true;
   }
 
-  // The room calls part() after each change of Light. The bake is of the evening, so another Light
-  // shows the room lit live, and evening brings the baked look back.
+  // The room calls part() after each change of Light, and the look follows it. A time with no bake
+  // shows the room lit live.
   function part(name) {
     if (!wantBaked) return;
     if (!room) {
       if (!loading) {
         state.status = 'loading';
-        loading = load().then(() => show(ctx.part() === 'evening')).catch((e) => {
+        loading = load().then(() => show(ctx.part())).catch((e) => {
           state.status = 'live'; state.error = String(e && e.message || e);
           console.warn('The baked look could not load, so the room is lit live:', state.error);
         });
       }
       return;
     }
-    show(name === 'evening');
+    show(name).catch((e) => { state.error = String(e && e.message || e); console.warn('The baked look could not change time:', state.error); });
   }
 
   function attach(c) {

@@ -111,8 +111,7 @@
     night:   { sky: ['#060a17', '#1a2442'], haze: '#22304f', hemi: [0x9fb2d8, 0x3a3028, 0.45], sun: [0x9fb6ff, 0.35], fill: 0.22, amb: 0.18, lamps: 1.9, exposure: 1.12, lit: 0.72, bldg: ['#1b2235', '#141a2a', '#0c111d'] }
   };
   function partNow() {
-    // The baked look (office/look.js) is a bake of the evening, so it starts there.
-    const forced = window.OfficeLook && window.OfficeLook.wanted(location.search) === 'baked' && !params.get('time') ? 'evening' : params.get('time');
+    const forced = params.get('time');
     if (PARTS[forced]) return forced;
     const h = new Date().getHours();
     return h >= 7 && h < 17 ? 'day' : h >= 17 && h < 20 ? 'evening' : 'night';

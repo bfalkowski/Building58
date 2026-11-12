@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Step 1 of a bake (office/baked/README.md): open the room at evening in headless Chrome, pick the parts
+// Step 1 of a bake (office/baked/README.md): open the room in headless Chrome, pick the parts
 // office/look.js would bake, and write them, with their textures, to a GLB for Blender, plus the list of
 // their keys and the room's lights. Nothing leaves this computer: three.js comes from node_modules.
 // Usage: node office/baked/export.js <out folder> [chrome path]
@@ -20,11 +20,6 @@ const LOCAL = {
 };
 const ORIGIN = 'http://room.local';
 const TYPES = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
-
-// The evening sun of the bake, as the page's sun sees it: where it shines from, from its target.
-// 12 degrees up, through the windows on the left wall, turned 18 degrees toward the back wall.
-const ELEV = 12 * Math.PI / 180, TURN = -18 * Math.PI / 180;
-const SUN = { from: [-Math.cos(TURN) * Math.cos(ELEV) * 15, Math.sin(ELEV) * 15, Math.sin(TURN) * Math.cos(ELEV) * 15], color: '#ffb27a', intensity: 3.0 };
 
 (async () => {
   const out = path.resolve(process.argv[2] || 'bake-work');
@@ -77,7 +72,7 @@ const SUN = { from: [-Math.cos(TURN) * Math.cos(ELEV) * 15, Math.sin(ELEV) * 15,
     return { b64: btoa(s), keys, lights, found: parts.length, materials: names.size };
   });
   fs.writeFileSync(path.join(out, 'static.glb'), Buffer.from(info.b64, 'base64'));
-  const exported = { part: 'evening', sun: SUN, lights: info.lights, keys: info.keys };
+  const exported = { lights: info.lights, keys: info.keys };
   fs.writeFileSync(path.join(out, 'export.json'), JSON.stringify(exported, null, 1));
   console.log(`parts found ${info.found}, exported ${info.keys.length}, materials ${info.materials}, lamps ${info.lights.length}`);
   await browser.close();
