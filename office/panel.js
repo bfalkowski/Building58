@@ -106,14 +106,15 @@
     run.focus(selected);
     Object.values(rows).forEach((r) => r.btn.setAttribute('aria-pressed', String(r.id === selected)));
   });
-  // needs you, then working, then ready for a prompt, then free
+  // The Lead first, pinned to the top while the list scrolls. Then needs you, then working, then ready for a prompt, then free.
   const rank = (w) => ({ waiting: 0, working: 1 })[w.status] ?? (w.session ? 2 : 3);
   function render() {
     const s = run.state();
     Object.values(rows).forEach((r) => { if (!s.workers.some((w) => w.id === r.id && w.present)) r.li.remove(); });
-    const sorted = s.workers.filter((w) => w.present).sort((a, b) => rank(a) - rank(b) || (b.task ? b.task.seconds : 0) - (a.task ? a.task.seconds : 0));
-    // Each reviewer goes right under the Dev whose PR it reviews, when that Dev is on the list too.
     const termOf = (w) => (w.session && w.session.terminal) || null;
+    const isLead = (w) => !!(termOf(w) && desks[termOf(w)] && desks[termOf(w)].lead);
+    const sorted = s.workers.filter((w) => w.present).sort((a, b) => isLead(b) - isLead(a) || rank(a) - rank(b) || (b.task ? b.task.seconds : 0) - (a.task ? a.task.seconds : 0));
+    // Each reviewer goes right under the Dev whose PR it reviews, when that Dev is on the list too.
     const here = new Set(sorted.map(termOf).filter(Boolean));
     const devOf = (w) => { const d = termOf(w) && desks[termOf(w)], dev = d && d.reviewing && d.reviewing.dev; return dev && dev.terminal !== termOf(w) && here.has(dev.terminal) ? dev.terminal : null; };
     const people = [];
@@ -123,6 +124,7 @@
       if (list.children[i] !== r.li) list.insertBefore(r.li, list.children[i] || null);
       r.li.dataset.state = w.status;
       r.li.dataset.under = under ? '1' : '';
+      r.li.dataset.lead = isLead(w) ? '1' : '';
       put(r.name, w.name);  // the name the relay gave the session at this desk, or the desk's own
       const said = fillWork(r, w), ticketed = w.session && w.session.work && w.session.work.ticket;
       r.time.textContent = w.task ? fmt(w.task.seconds) : '';
