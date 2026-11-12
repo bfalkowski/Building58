@@ -3,18 +3,29 @@
 // room that never move. The page swaps those parts for a copy that carries the textures, and the
 // sun, the lamps, the people and everything that moves stay lit live. office/baked/README.md says
 // how to bake again.
+// The baked look also draws through a few effects, unless the address has fx=off: bloom, so the
+// bulbs, the neon and the windows glow; a warm haze that grows with distance; and a colour grade with
+// a vignette. They are three.js r128's own add-ons, from the CDN at that exact version.
 // Also loaded with require by the tests, so the rules for what is baked are checked without a browser.
 (function (root) {
   'use strict';
   const BASE = 'baked/';
   const LOADER = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
   const MIN_SIZE = 0.3;  // metres across. Anything smaller stays lit live: it is cheap and some of it moves.
+  const ADDONS = ['shaders/CopyShader.js', 'shaders/LuminosityHighPassShader.js', 'postprocessing/EffectComposer.js',
+    'postprocessing/RenderPass.js', 'postprocessing/ShaderPass.js', 'postprocessing/UnrealBloomPass.js']
+    .map((f) => 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/' + f);
+  // The effects' settings. The haze colour and density are for the evening; the grade warms, adds a
+  // little contrast and darkens the corners, then turns the picture from linear light into sRGB.
+  const FX = { bloom: { strength: 0.7, radius: 0.55, threshold: 0.72 }, haze: { colour: 0x6b4430, density: 0.022 },
+    grade: { warmth: 0.06, contrast: 1.16, saturation: 1.05, vignette: 0.6 } };
 
-  function wanted(search) {
-    let q = null;
-    try { q = new URLSearchParams(search || '').get('look'); } catch (e) { q = null; }
-    return q === 'baked' ? 'baked' : 'live';
+  function param(search, name) {
+    try { return new URLSearchParams(search || '').get(name); } catch (e) { return null; }
   }
+  function wanted(search) { return param(search, 'look') === 'baked' ? 'baked' : 'live'; }
+  // The effects come with the baked look, unless fx=off.
+  function wantFx(search) { return wanted(search) === 'baked' && param(search, 'fx') !== 'off'; }
 
   // A mesh's key: where it is, how it is turned and sized, how many points it has, and its colours.
   // The room is built the same way on every load, so a part that never moves has the same key each time.
@@ -50,8 +61,10 @@
   }
 
   // ---------- in the page ----------
-  const state = { look: 'live', baked: false, status: 'off', hidden: 0, missing: 0, error: null };
+  const state = { look: 'live', baked: false, status: 'off', hidden: 0, missing: 0, fx: 'off', error: null };
   let ctx = null, room = null, parts = [], meta = null, wantBaked = false, loading = null;
+  let fxWanted = false, fxLoading = null, composer = null, liveFog = null;
+  const view = { w: 0, h: 0 };
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -110,8 +123,74 @@
     parts.forEach((m) => { m.visible = !on; });
     room.visible = on;
     lights(on);
+    haze(on && fxWanted);
     state.baked = on; state.hidden = on ? parts.length : 0;
     state.status = on ? 'baked' : 'live';
+    state.fx = on && fxWanted ? (composer ? 'on' : 'loading') : 'off';
+    if (on && fxWanted && !composer && !fxLoading) {
+      fxLoading = loadFx().then(() => { state.fx = state.baked ? 'on' : 'off'; }).catch((e) => {
+        fxWanted = false; state.fx = 'off'; haze(false); state.error = String(e && e.message || e);
+        console.warn('The baked look\'s effects could not load, so it draws without them:', state.error);
+      });
+    }
+  }
+
+  // ---------- the effects ----------
+  // The haze, and the background colour in linear light: the effects turn the whole picture into sRGB
+  // at the end, the background too, so without this the dark void around the loft would turn grey.
+  function haze(on) {
+    const scene = ctx.scene;
+    if (on) {
+      if (!liveFog) liveFog = { fog: scene.fog, background: scene.background };
+      scene.fog = new THREE.FogExp2(FX.haze.colour, FX.haze.density);
+      if (liveFog.background && liveFog.background.isColor) scene.background = liveFog.background.clone().convertSRGBToLinear();
+    } else if (liveFog) {
+      scene.fog = liveFog.fog; scene.background = liveFog.background; liveFog = null;
+    }
+  }
+  // Grade, vignette and sRGB in one pass, last, so the picture reaches the screen once.
+  const GRADE = {
+    uniforms: { tDiffuse: { value: null }, warmth: { value: 0 }, contrast: { value: 1 }, saturation: { value: 1 }, vignette: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: [
+      'uniform sampler2D tDiffuse; uniform float warmth, contrast, saturation, vignette; varying vec2 vUv;',
+      'vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }',
+      'void main() {',
+      '  vec3 c = texture2D(tDiffuse, vUv).rgb;',
+      '  c *= vec3(1.0 + warmth, 1.0, 1.0 - warmth);',
+      '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+      '  c = max(mix(vec3(l), c, saturation), 0.0);',
+      '  c = max((c - 0.18) * contrast + 0.18, 0.0);',
+      '  vec2 d = vUv - 0.5; c *= clamp(1.0 - vignette * dot(d, d) * 2.0, 0.0, 1.0);',
+      '  gl_FragColor = vec4(toSRGB(clamp(c, 0.0, 1.0)), 1.0);',
+      '}'
+    ].join('\n')
+  };
+  async function loadFx() {
+    for (const src of ADDONS) await loadScript(src);
+    const r = ctx.renderer, w = Math.max(1, view.w), h = Math.max(1, view.h);
+    // The scene is drawn into a target first, so it keeps its edges smooth only with multisampling.
+    const target = r.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget
+      ? new THREE.WebGLMultisampleRenderTarget(w, h, { format: THREE.RGBAFormat }) : undefined;
+    const c = new THREE.EffectComposer(r, target);
+    c.addPass(new THREE.RenderPass(ctx.scene, ctx.camera));
+    c.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(w, h), FX.bloom.strength, FX.bloom.radius, FX.bloom.threshold));
+    const grade = new THREE.ShaderPass(GRADE);
+    for (const k of ['warmth', 'contrast', 'saturation', 'vignette']) grade.uniforms[k].value = FX.grade[k];
+    c.addPass(grade);
+    composer = c;
+    view.w = view.h = 0;  // the next frame sets the composer's size
+  }
+  // The room's frame calls this. It draws through the effects and says so, or draws nothing and says no.
+  function render(renderer) {
+    if (!composer || !state.baked || !fxWanted) return false;
+    const v = renderer.getSize(new THREE.Vector2());
+    if (v.x !== view.w || v.y !== view.h) {
+      view.w = v.x; view.h = v.y;
+      composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(v.x, v.y);
+    }
+    composer.render();
+    return true;
   }
 
   // The room calls part() after each change of Light. The bake is of the evening, so another Light
@@ -134,11 +213,13 @@
   function attach(c) {
     ctx = c;
     wantBaked = wanted(location.search) === 'baked';
+    fxWanted = wantFx(location.search);
     state.look = wantBaked ? 'baked' : 'live';
+    if (c.renderer) { const v = c.renderer.getSize(new THREE.Vector2()); view.w = v.x; view.h = v.y; }
     if (wantBaked) part(c.part());
   }
 
-  const api = { wanted, meshKey, materialName, bakeable, MIN_SIZE, state, attach, part, liveParts: () => liveParts() };
+  const api = { wanted, wantFx, meshKey, materialName, bakeable, MIN_SIZE, FX, ADDONS, state, attach, part, render, liveParts: () => liveParts() };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfficeLook = api;
 })(typeof window !== 'undefined' ? window : this);
