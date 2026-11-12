@@ -131,7 +131,7 @@
       <tr><td><code>200</code></td><td class="plain"></td><td>The world answered. Check <code>ok</code>.</td></tr>
       <tr><td><code>202</code></td><td class="plain"></td><td>Accepted with <code>wait: false</code>. Poll <code>/commands/{id}</code>.</td></tr>
       <tr><td><code>400</code></td><td class="plain"><code>bad_command</code>, <code>bad_request</code>, <code>bad_channel</code></td><td>No <code>action</code>, the body is not JSON, or a bad channel name.</td></tr>
-      <tr><td><code>401</code></td><td class="plain"><code>unauthorized</code></td><td>Missing or wrong key.</td></tr>
+      <tr><td><code>401</code></td><td class="plain"><code>unauthorized</code></td><td>Missing or wrong key. The message says which.</td></tr>
       <tr><td><code>403</code></td><td class="plain"><code>local_only</code>, and others such as <code>not_allowed</code> or <code>lead_only</code></td><td>A room route asked from anywhere but the room page on this computer, or a token asking for what it cannot do. See <a href="#routes">the room's routes</a>.</td></tr>
       <tr><td><code>409</code></td><td class="plain">such as <code>wip_limit</code>, <code>lead_limit</code>, <code>bad_move</code></td><td>A room route refused a move or a start, and the <code>message</code> says why.</td></tr>
       <tr><td><code>404</code></td><td class="plain"><code>not_found</code>, <code>unknown_command</code></td><td>No such route or command id.</td></tr>
