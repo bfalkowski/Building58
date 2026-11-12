@@ -131,6 +131,14 @@
   #stop-note[data-bad="1"] { color: var(--err); }
   .feed-scroll { flex: 1; min-height: 104px; overflow-y: auto; }
   .huddle-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 12px; border-bottom: 1px solid var(--pane-line); color: var(--pane-dim); }
+  /* Two things in the bar: the huddle, under its label, and Stop all safe apart on the right. */
+  .huddle-group { display: grid; gap: 4px; padding: 5px 8px; border: 1px solid var(--pane-line); border-radius: 6px; }
+  .huddle-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+  .huddle-label { font: 600 12px/1 var(--sans); color: var(--pane-strong); }
+  .huddle-label::after { content: ":"; }
+  .huddle-what { margin: 0; font: 12px/1.4 var(--sans); }
+  .stop-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-left: auto; }
+  .stop-group:not(:has(:not([hidden]))) { display: none; }
   .huddle-bar .btn, #huddle-report .btn { font: 600 12px/1 var(--sans); padding: 5px 8px; border-color: var(--link); color: var(--link); }
   #huddle-report { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   #huddle-report h3 { align-items: center; }
@@ -340,6 +348,21 @@
   #org-you-stats { font: 11.5px/1.5 var(--mono); color: var(--soft); }
   #org-you-stats[data-waiting="true"] { color: var(--needs); font-weight: 500; }
   #org-next { justify-self: start; margin-top: 4px; font-size: 13px; padding: 6px 10px; }
+  /* The officers: one fixed row under you, in every arrangement. A card holds buttons, so it is not a button itself. */
+  .org-officers { box-sizing: border-box; position: relative; width: 1000px; max-width: 100%; margin-bottom: var(--drop); }
+  .org-officers::after { content: ""; position: absolute; left: 50%; top: 100%; height: var(--drop); border-left: 2px solid var(--rule); }
+  .org-officers:has(+ #org-groups:empty)::after { display: none; }
+  #org-officers-in:empty { display: none; }
+  .org-officer-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); padding-top: var(--gap); }
+  .org-officer { box-sizing: border-box; display: grid; grid-template-columns: 38px minmax(0, 1fr); align-content: start; gap: 6px 8px; padding: 7px 8px; background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--c, var(--rule)); border-radius: 4px; }
+  .org-officer[data-in="false"] { background: transparent; border-style: dashed; border-left-style: solid; }
+  .org-officer[data-state="waiting"] { background: #fdeec2; border-color: var(--needs); border-left-color: var(--needs); }
+  .org-officer .org-text > span { white-space: normal; }
+  .org-what { grid-column: 1 / -1; font: 12.5px/1.4 var(--sans); color: var(--ink); }
+  .org-officer-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+  .org-officer-actions:not(:has(.btn:not([hidden]))) { display: none; }
+  #org .org-officer-actions .btn { font: 600 12px/1 var(--sans); padding: 5px 8px; background: var(--card); }
+  @media (max-width: 1100px) { .org-officers { width: 520px; } .org-officer-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   #org-groups { display: flex; align-items: flex-start; }
   .org-group { position: relative; width: 224px; padding: var(--drop) 7px 0; }
   .org-group::before { content: ""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--rule); }
@@ -380,6 +403,8 @@
   @media (max-width: 640px) {
     .org-tree { width: 100%; align-items: stretch; }
     .org-you { width: 100%; }
+    .org-officers { width: 100%; }
+    .org-officer-cards { grid-template-columns: minmax(0, 1fr); }
     #org-groups { flex-direction: column; gap: 14px; }
     .org-group { width: 100%; padding: 0; }
     .org-group::before, .org-group::after { display: none; }
@@ -442,15 +467,19 @@
           <div class="meta"><span id="busy">0 busy</span><span id="relay-status" hidden></span></div>
         </header>
         <div class="huddle-bar" id="huddle-bar" hidden>
-          <button class="btn" id="huddle-free" type="button">Huddle · free</button>
-          <button class="btn" id="huddle-ask" type="button" disabled>Ask idle · nobody idle</button>
-          <label id="huddle-lead-label" hidden><input id="huddle-lead" type="checkbox" checked> Tell the Lead · one Lead turn</label>
-          <button class="btn" id="coo-ask" type="button" title="A COO session writes a one-page report on how the room runs, with at most 3 recommendations. It proposes only, and spends one session of tokens.">Ask the COO</button>
-          <button class="btn" id="coo-last" type="button" hidden>COO report</button>
-          <button class="btn" id="security-ask" type="button" title="A security session writes a one-page report on what access the room's sessions run with, by name only, against article 7, with at most 3 recommendations. It proposes only, and spends one session of tokens.">Ask security</button>
-          <button class="btn" id="security-last" type="button" hidden>Security report</button>
-          <button class="btn" id="stop-safe" type="button" hidden title="Stops every desk that says Safe to stop. The relay checks each one again first.">Stop all safe</button>
-          <span id="stop-note" role="status" hidden></span>
+          <div class="huddle-group" role="group" aria-labelledby="huddle-label" aria-describedby="huddle-what">
+            <div class="huddle-row">
+              <span class="huddle-label" id="huddle-label">Huddle</span>
+              <button class="btn" id="huddle-free" type="button" title="Reads what the relay, git and gh already know. Asks no session.">Status report</button>
+              <button class="btn" id="huddle-ask" type="button" disabled>Ask idle workers too (nobody is idle)</button>
+              <a class="help-link" href="../docs/manual/roles.html#huddles" target="_blank" rel="noopener" title="Huddles in the manual" aria-label="Huddles in the manual">?</a>
+            </div>
+            <p class="huddle-what" id="huddle-what">One short report on everyone, with what needs you first. Asking idle workers adds a one-line answer from each.</p>
+          </div>
+          <div class="stop-group">
+            <button class="btn" id="stop-safe" type="button" hidden title="Stops every desk that says Safe to stop. The relay checks each one again first.">Stop all safe</button>
+            <span id="stop-note" role="status" hidden></span>
+          </div>
         </div>
         <ol id="people" aria-label="People, busy first"></ol>
         <section id="huddle-report" aria-labelledby="huddle-title" hidden>
@@ -622,6 +651,7 @@
       <section aria-labelledby="set-reviews-title"><h3 id="set-reviews-title">Reviews</h3><div id="set-reviews"></div></section>
       <section aria-labelledby="set-ap-title"><h3 id="set-ap-title">Autopilot</h3><div id="set-autopilot"></div></section>
       <section aria-labelledby="set-lead-title"><h3 id="set-lead-title">The Lead</h3><p class="set-what" id="set-lead-who"></p><div id="set-lead" hidden></div><div id="set-lead-stops"></div></section>
+      <section aria-labelledby="set-huddle-title"><h3 id="set-huddle-title">Huddle</h3><p class="set-what">A huddle is one short report on everyone in the room, which you start with the Huddle buttons at the top of the Floor. <a class="help-link" href="../docs/manual/roles.html#huddles" target="_blank" rel="noopener">Huddles in the manual</a></p><div class="set-row" id="huddle-lead-label"><div><label><input id="huddle-lead" type="checkbox" checked> Send each status report to the Lead (one Lead turn each)</label></div><p class="set-what">On: each Status report from the Floor is also typed into the Lead's session, so the Lead knows where everyone is. Each one spends one Lead turn. With no Lead running, nobody is told. Off: nothing is sent and nothing is spent. This browser keeps your choice.</p></div></section>
       <section aria-labelledby="set-limits-title"><h3 id="set-limits-title">Limits and timings</h3><p class="set-what">The relay reads each value when it uses it, so a change applies immediately. No restart is necessary. A value that you set here replaces the environment variable for that setting. Reset removes your value: the relay then uses the variable, or the default. The relay keeps your values in settings.json in its state folder: ~/.office-world, unless the relay started with RELAY_STATE_DIR.</p><div id="set-limits"></div></section>
     </div>
   </dialog>
@@ -645,10 +675,39 @@
           <span id="org-you-stats"></span>
           <button class="btn primary" id="org-next" type="button" hidden></button>
         </div>
+        <section class="org-officers" aria-labelledby="org-officers-title">
+          <h3><span id="org-officers-title">Officers</span><small id="org-officers-in"></small></h3>
+          <div class="org-officer-cards">
+            <div class="org-officer" id="org-officer-lead" role="group" aria-labelledby="org-officer-lead-role org-officer-lead-name" aria-describedby="org-officer-lead-what">
+              <span class="org-photo-slot"></span>
+              <span class="org-text"><span class="org-name" id="org-officer-lead-name"></span><span class="org-role" id="org-officer-lead-role">The Lead</span><span class="org-status"></span></span>
+              <span class="org-what" id="org-officer-lead-what">Keeps tickets moving and tells you what needs you.</span>
+              <span class="org-officer-actions"><button class="btn org-go" type="button"></button></span>
+            </div>
+            <div class="org-officer" id="org-officer-pm" role="group" aria-labelledby="org-officer-pm-role org-officer-pm-name" aria-describedby="org-officer-pm-what">
+              <span class="org-photo-slot"></span>
+              <span class="org-text"><span class="org-name" id="org-officer-pm-name"></span><span class="org-role" id="org-officer-pm-role">The PM</span><span class="org-status"></span></span>
+              <span class="org-what" id="org-officer-pm-what">Turns an idea into tickets on the Board. Type the idea, then ask.</span>
+              <span class="org-officer-actions"><button class="btn" id="org-pm-ask" type="button" title="Starts the PM on an idea from the Board's ticket form. The PM splits it into tickets that wait in Triage.">Ask the PM</button><button class="btn org-go" type="button" hidden></button></span>
+            </div>
+            <div class="org-officer" id="org-officer-coo" role="group" aria-labelledby="org-officer-coo-role org-officer-coo-name" aria-describedby="org-officer-coo-what">
+              <span class="org-photo-slot"></span>
+              <span class="org-text"><span class="org-name" id="org-officer-coo-name"></span><span class="org-role" id="org-officer-coo-role">The COO</span><span class="org-status"></span></span>
+              <span class="org-what" id="org-officer-coo-what">Reads how the room runs and writes a one-page report with up to 3 ideas. Proposes only. Costs one session.</span>
+              <span class="org-officer-actions"><button class="btn" id="coo-ask" type="button" hidden title="A COO session writes a one-page report on how the room runs, with at most 3 recommendations. It proposes only, and spends one session of tokens.">Ask the COO</button><button class="btn" id="coo-last" type="button" hidden>COO report</button><button class="btn org-go" type="button" hidden></button></span>
+            </div>
+            <div class="org-officer" id="org-officer-security" role="group" aria-labelledby="org-officer-security-role org-officer-security-name" aria-describedby="org-officer-security-what">
+              <span class="org-photo-slot"></span>
+              <span class="org-text"><span class="org-name" id="org-officer-security-name"></span><span class="org-role" id="org-officer-security-role">Security</span><span class="org-status"></span></span>
+              <span class="org-what" id="org-officer-security-what">Checks what access the sessions run with and writes a one-page report with up to 3 ideas. Proposes only. Costs one session.</span>
+              <span class="org-officer-actions"><button class="btn" id="security-ask" type="button" hidden title="A security session writes a one-page report on what access the room's sessions run with, by name only, against article 7, with at most 3 recommendations. It proposes only, and spends one session of tokens.">Ask security</button><button class="btn" id="security-last" type="button" hidden>Security report</button><button class="btn org-go" type="button" hidden></button></span>
+            </div>
+          </div>
+        </section>
         <div id="org-groups"></div>
       </div>
     </div>
-    <p class="org-fine">Click someone to follow them and open their session, if it runs here. Prepared by HR, which is also you.</p>
+    <p class="org-fine">Click someone to follow them and open their session, if it runs here. The officers keep their own row, in every arrangement. Prepared by HR, which is also you.</p>
   </dialog>
 </main>
 

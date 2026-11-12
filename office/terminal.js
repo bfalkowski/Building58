@@ -181,8 +181,8 @@
     line.append(...controls); row.append(line, p); $(into).append(row);
     return { row, what: p };
   }
-  const summary = { reviews: '', autopilot: '', lead: '' }, summaryOn = { reviews: false, autopilot: false, lead: false };
-  const CHIPS = [['autopilot', 'set-ap-title', 'Autopilot'], ['lead', 'set-lead-title', 'The Lead'], ['reviews', 'set-reviews-title', 'Reviews']];
+  const summary = { reviews: '', autopilot: '', lead: '', huddle: '' }, summaryOn = { reviews: false, autopilot: false, lead: false, huddle: false };
+  const CHIPS = [['autopilot', 'set-ap-title', 'Autopilot'], ['lead', 'set-lead-title', 'The Lead'], ['reviews', 'set-reviews-title', 'Reviews'], ['huddle', 'set-huddle-title', 'Huddle']];
   const chips = CHIPS.map(([k, at, name]) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'ob-chip'; b.dataset.chip = k; b.hidden = true; b.title = 'Opens Settings at ' + name;
@@ -190,6 +190,13 @@
     b.addEventListener('click', () => openSettings(at));
     $('ob-chips').append(b);
     return b;
+  });
+  // The Huddle switch is this browser's (office/huddle.js). Its chip shows once huddle.js has read it, after the relay answered.
+  const huddleBox = $('huddle-lead');
+  huddleBox.addEventListener('change', () => {
+    summary.huddle = huddleBox.checked ? 'Huddle: tells the Lead' : 'Huddle: Floor only';
+    summaryOn.huddle = false;  // telling the Lead does nothing without you, so the chip is never outlined
+    drawSummary();
   });
   function drawSummary() {
     chips.forEach((b) => { const k = b.dataset.chip; b.textContent = summary[k]; b.hidden = !summary[k]; b.dataset.on = summaryOn[k] ? '1' : ''; });

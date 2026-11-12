@@ -1,10 +1,11 @@
 // The Huddle buttons on the Floor: one short report on everyone. The relay builds it (relay/huddles.js).
-// The free report reads what is already known. Asking sends idle sessions a question, which spends
-// tokens, so it is a separate button that says so.
+// Status report reads what is already known and asks nobody. Asking sends idle workers a question,
+// which spends tokens, so it is a separate button that says so. Whether each report also goes to the
+// Lead is a switch in Settings, under Huddle, kept in this browser.
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  const bar = $('huddle-bar'), freeBtn = $('huddle-free'), askBtn = $('huddle-ask'), leadBox = $('huddle-lead'), leadLabel = $('huddle-lead-label');
+  const bar = $('huddle-bar'), freeBtn = $('huddle-free'), askBtn = $('huddle-ask'), leadBox = $('huddle-lead');
   const section = $('huddle-report'), headline = $('huddle-headline'), note = $('huddle-note'), rows = $('huddle-rows'), floor = section.closest('.floor');
   const params = new URLSearchParams(location.search);
   const channel = params.get('channel'), key = params.get('key') || '';
@@ -46,12 +47,12 @@
     if (!s || !s.ok) return;
     last = s;
     const lead = !!s.lead && leadBox.checked;
-    leadLabel.hidden = !s.lead;
-    freeBtn.textContent = lead ? 'Huddle · free, plus one Lead turn' : 'Huddle · free';
+    freeBtn.textContent = lead ? 'Status report (tells the Lead: one Lead turn)' : 'Status report';
+    freeBtn.title = 'Reads what the relay, git and gh already know. Asks no session.' + (lead ? ' It is also typed into the Lead\'s session, which spends one Lead turn. Turn that off in Settings, under Huddle.' : '');
     freeBtn.disabled = pressing || s.open;
     askBtn.disabled = pressing || s.open || !s.askable;
-    const turns = s.askable + (lead ? 1 : 0);
-    askBtn.textContent = s.open ? 'Asking' : s.askable ? 'Ask ' + s.askable + ' idle · spends ' + turns + (turns === 1 ? ' turn' : ' turns') + ' of tokens' + (lead ? ', one the Lead\'s' : '') : 'Ask idle · nobody idle';
+    askBtn.textContent = s.open ? 'Asking idle workers' : s.askable ? 'Ask idle workers too (' + s.askable + ', one turn each' + (lead ? ', plus one Lead turn' : '') + ')' : 'Ask idle workers too (nobody is idle)';
+    askBtn.title = s.open ? 'A report is running. Wait for it to finish.' : s.askable ? 'Types a one-line question into each worker that has finished a turn (Devs, reviewers and other sessions, never the Lead), and puts each answer in the report. Each answer is a turn of tokens.' : 'No worker has finished a turn, so there is nobody to ask. The Lead is never asked.';
     const report = s.report;
     if (!report) return;
     const waiting = !report.finished && s.open ? 'Waiting for ' + s.waitingFor + ' of ' + report.asked + ' to answer, for up to ' + report.answerSeconds + ' seconds. Working sessions are left alone.' : '';
@@ -86,6 +87,7 @@
   api().then((s) => {
     if (!s.ok) return;
     bar.hidden = false;
+    leadBox.dispatchEvent(new Event('change'));  // so the Settings chip says what the switch is
     closedId = s.report ? s.report.id : null;  // an old report does not jump open on a reload
     draw(s);
     setInterval(() => api().then(draw), 2000);
