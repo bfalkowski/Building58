@@ -13,7 +13,7 @@ module.exports = [
     }
   },
   {
-    files: ['relay/**/*.js', '.githooks/**/*.js', 'eslint.config.js'],
+    files: ['relay/**/*.js', '.githooks/**/*.js', 'office/baked/**/*.js', 'eslint.config.js'],
     languageOptions: { sourceType: 'commonjs', globals: globals.node }
   },
   {
@@ -29,7 +29,7 @@ module.exports = [
   },
   {
     // Also loaded with require: by relay/office.js, relay/server.js (the roster), and by the tests.
-    files: ['office/demo-session.js', 'office/seats.js', 'office/roster.js', 'office/poses.js', 'office/holidays.js', 'office/reviews.js', 'office/board-model.js'],
+    files: ['office/demo-session.js', 'office/look.js', 'office/seats.js', 'office/roster.js', 'office/poses.js', 'office/holidays.js', 'office/reviews.js', 'office/board-model.js'],
     languageOptions: { globals: { module: 'writable' } }
   }
 ];
