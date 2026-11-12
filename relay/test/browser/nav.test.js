@@ -18,7 +18,7 @@ test.describe('the pad, with WebGL, in software', () => {
       await p.page.goto('http://127.0.0.1:' + o.R.port + path);
       await p.page.locator('.navpad button[data-dir="home"]').waitFor();
       const angles = () => p.page.evaluate(() => window.NavPad.pads[0].angles());
-      assert.strictEqual(await p.page.locator('.navpad button').count(), 7);
+      assert.strictEqual(await p.page.locator('.navpad button[data-dir]').count(), 7, 'seven buttons move the view');
       // stop any opening glide, so only the pad moves the camera from here
       await p.page.click('.navpad button[data-dir="home"]');
       const home = await angles();
@@ -48,6 +48,40 @@ test.describe('the pad, with WebGL, in software', () => {
       assert.deepStrictEqual(p.errors, []);
     }, SOFTWARE);
   }
+});
+
+test.describe('hiding the pad, with WebGL, in software', () => {
+  let o;
+  test.before(async () => { o = await office({ webgl: true }); });
+  test.after(() => o && o.stop());
+
+  pageTest('the pad hides and shows, this browser keeps the choice, and the keys still work', () => o, async (p) => {
+    const page = p.page, url = 'http://127.0.0.1:' + o.R.port + '/office/';
+    const toggle = page.locator('.navpad button[data-pad="toggle"]'), home = page.locator('.navpad button[data-dir="home"]');
+    await page.goto(url);
+    await home.waitFor();
+    assert.strictEqual(await toggle.getAttribute('aria-label'), 'Hide the pad');
+    await toggle.click();
+    assert.ok(!(await home.isVisible()), 'hidden, the move buttons go');
+    assert.ok(await toggle.isVisible(), 'and one button stays');
+    assert.strictEqual(await toggle.getAttribute('aria-label'), 'Show the pad');
+
+    const theta = () => page.evaluate(() => window.NavPad.pads[0].angles().theta);
+    const before = await theta();
+    await page.focus('#world');
+    await page.keyboard.press('ArrowLeft');
+    assert.ok(await theta() < before - 0.05, 'with the pad hidden, the arrow keys still turn the scene');
+
+    await page.reload();
+    await toggle.waitFor();
+    assert.ok(!(await home.isVisible()), 'after a reload the pad is still hidden');
+    await toggle.click();
+    assert.ok(await home.isVisible(), 'the button shows it again');
+    await page.reload();
+    await home.waitFor();
+    assert.strictEqual(await toggle.getAttribute('aria-label'), 'Hide the pad', 'and that is kept too');
+    assert.deepStrictEqual(p.errors, []);
+  }, SOFTWARE);
 });
 
 test.describe('the pad, with no WebGL', () => {
