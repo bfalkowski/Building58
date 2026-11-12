@@ -2176,7 +2176,7 @@
   // The baked look, with ?look=baked (office/look.js). It needs to know what moves, so it never bakes it.
   if (window.OfficeLook && renderer) {
     window.OfficeLook.attach({
-      scene, sun, hemi, amb, fill, part: () => part,
+      scene, camera, renderer, sun, hemi, amb, fill, part: () => part,
       movers: () => [...people.map((w) => w.fig.root), boss.fig.root, ...Object.values(DESKS).flatMap((d) => [d.chair, d.mug]), ...tablePaddles, ppBall]
     });
   }
@@ -2214,7 +2214,7 @@
     tickScreens();
     tickTags();
     tickDecor(real, nowMs);
-    renderer.render(scene, camera);
+    if (!(window.OfficeLook && window.OfficeLook.render(renderer))) renderer.render(scene, camera);  // the baked look's effects draw it
     if (!built) { built = true; emit('office.live', {}); readyWaiters.splice(0).forEach((r) => r(snapshot())); }
   }
   // While the page is not drawn (a hidden tab, a hidden side panel, a covered window) the

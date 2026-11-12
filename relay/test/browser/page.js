@@ -24,6 +24,12 @@ const LOCAL = {
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js': 'three/build/three.min.js',
   'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js': 'three/examples/js/controls/OrbitControls.js',
   'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js': 'three/examples/js/loaders/GLTFLoader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js': 'three/examples/js/shaders/CopyShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js': 'three/examples/js/shaders/LuminosityHighPassShader.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js': 'three/examples/js/postprocessing/EffectComposer.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js': 'three/examples/js/postprocessing/RenderPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js': 'three/examples/js/postprocessing/ShaderPass.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js': 'three/examples/js/postprocessing/UnrealBloomPass.js',
   'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js': '@xterm/xterm/lib/xterm.js',
   'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css': '@xterm/xterm/css/xterm.css',
   'https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js': '@xterm/addon-fit/lib/addon-fit.js'

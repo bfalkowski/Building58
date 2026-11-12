@@ -82,7 +82,7 @@
       <tr><td>others</td><td>A world can read parameters of its own, such as the room's below.</td></tr>
       <tr><td><code>time</code></td><td>The room only: <code>day</code>, <code>evening</code> or <code>night</code>, the same as picking the light.</td></tr>
       <tr><td><code>holiday</code></td><td>The room only: a holiday to show now (<code>newyear</code>, <code>easter</code>, <code>july4</code>, <code>halloween</code>, <code>thanksgiving</code> or <code>christmas</code>), the same as picking it under <span class="ui">Holiday</span>, or <code>off</code> for no decorations on that page. See <a href="how-it-works.html#holidays">Holidays</a>.</td></tr>
-      <tr><td><code>look</code></td><td>The room only: <code>baked</code> for the evening light baked in Blender. See <a href="how-it-works.html#baked-look">The baked look</a>.</td></tr>
+      <tr><td><code>look</code></td><td>The room only: <code>baked</code> for the evening light baked in Blender, with <code>fx=off</code> to leave out its effects. See <a href="how-it-works.html#baked-look">The baked look</a>.</td></tr>
     </tbody>
   </table>
   <p>The world only runs while its page is on screen. Each page tells the relay when its tab is hidden or shown, and the relay log says so. If more than one page joins the same channel, commands go to the newest page that is on screen, or to the newest page if none is. A command sent to a hidden page waits and then times out, and the reply says that the tab is hidden (<code>pageHidden: true</code>). It is simplest to use a different channel for each page.</p>

@@ -23,12 +23,26 @@ pageTest('?look=baked bakes the evening, and another Light gives the live look b
   assert.strictEqual(await page.evaluate(() => window.run.state().time), 'evening', 'the bake is of the evening, so the page starts there');
   assert.strictEqual(s.missing, 0, 'every part in the bake was found in the room');
   assert.ok(s.hidden > 300, 'the still parts are swapped for the baked copy');
+  await page.waitForFunction(() => window.OfficeLook.state.fx !== 'loading');
+  assert.strictEqual((await look(p)).fx, 'on', 'the effects draw the baked look');
+  assert.strictEqual(await page.evaluate(() => window.THREE.EffectComposer !== undefined), true);
 
   await page.evaluate(() => window.run.time('day'));
   s = await look(p);
-  assert.deepStrictEqual([s.status, s.hidden], ['live', 0], 'day is lit live');
+  assert.deepStrictEqual([s.status, s.hidden, s.fx], ['live', 0, 'off'], 'day is lit live, with no effects');
   await page.evaluate(() => window.run.time('evening'));
-  assert.strictEqual((await look(p)).status, 'baked', 'evening brings the baked look back');
+  assert.deepStrictEqual([(await look(p)).status, (await look(p)).fx], ['baked', 'on'], 'evening brings the baked look back, with its effects');
+  assert.deepStrictEqual(p.errors, []);
+}, SOFTWARE);
+
+pageTest('fx=off keeps the baked look and leaves out its effects', () => o, async (p) => {
+  const page = p.page;
+  await page.goto(o.address + '&look=baked&fx=off');
+  await page.locator('#relay-status[data-state="on"]').waitFor();
+  await page.evaluate(() => window.run.ready());
+  await page.waitForFunction(() => window.OfficeLook.state.status === 'baked');
+  assert.strictEqual((await look(p)).fx, 'off');
+  assert.strictEqual(await page.evaluate(() => window.THREE.EffectComposer === undefined), true, 'the effects are not fetched');
   assert.deepStrictEqual(p.errors, []);
 }, SOFTWARE);
 

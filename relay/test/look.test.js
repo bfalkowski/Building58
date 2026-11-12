@@ -24,6 +24,14 @@ test('?look=baked asks for the baked look, and anything else is the live look', 
   assert.strictEqual(look.wanted('?look=photo'), 'live');
 });
 
+test('the effects come with the baked look, and fx=off turns them off', () => {
+  assert.strictEqual(look.wantFx('?look=baked'), true);
+  assert.strictEqual(look.wantFx('?look=baked&fx=off'), false);
+  assert.strictEqual(look.wantFx('?fx=on'), false, 'not without the baked look');
+  assert.strictEqual(look.wantFx(''), false);
+  for (const src of look.ADDONS) assert.match(src, /^https:\/\/cdn\.jsdelivr\.net\/npm\/three@0\.128\.0\/examples\/js\//, 'the same three.js as the page, at its exact version');
+});
+
 test('a part has the same key on every load, and a part that moved has a new one', () => {
   const a = part(1), b = part(1);
   assert.strictEqual(look.meshKey(a), look.meshKey(b));
