@@ -53,12 +53,18 @@ test('only big, lit, solid parts that do not move are baked', () => {
   assert.ok(!look.bakeable(part(1, null, hidden), none), 'what is not shown now is not baked');
 });
 
-test('the bake in office/baked/ has one key per part and names each material after a part in it', () => {
+test('the bake in office/baked/ has one key per part, a light for each time of day, and names each material after a part in it', () => {
   const bake = JSON.parse(fs.readFileSync(path.join(BAKED, 'bake.json'), 'utf8'));
-  assert.strictEqual(bake.part, 'evening');
+  assert.deepStrictEqual(Object.keys(bake.times).sort(), ['day', 'evening', 'night']);
+  for (const [time, t] of Object.entries(bake.times)) {
+    assert.ok(t.lightMapIntensity > 0 && t.ambientScale > 0, time);
+    assert.strictEqual(t.sun.from.length, 3, time + ': where the sun shines from');
+    assert.ok(fs.statSync(path.join(BAKED, t.light)).size > 1000, time + ': ' + t.light);
+    assert.ok(look.FX[time], time + ': the effects have settings for it');
+  }
   assert.ok(bake.keys.length > 300, 'the room has hundreds of baked parts');
   assert.strictEqual(new Set(bake.keys).size, bake.keys.length, 'no two parts share a key');
-  assert.ok(bake.lightMapIntensity > 0 && bake.aoMapIntensity > 0 && bake.ambientScale > 0);
+  assert.ok(bake.aoMapIntensity > 0);
   // room.glb: a GLB's first chunk is its JSON.
   const glb = fs.readFileSync(path.join(BAKED, 'room.glb'));
   const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString('utf8'));
@@ -66,5 +72,5 @@ test('the bake in office/baked/ has one key per part and names each material aft
   const keys = new Set(bake.keys);
   for (const m of json.materials) assert.ok(keys.has(m.name.split('#')[0]), 'material ' + m.name + ' is named after a baked part');
   for (const prim of json.meshes.flatMap((m) => m.primitives)) assert.ok('TEXCOORD_1' in prim.attributes, 'every part has the bake\'s UVs');
-  for (const f of ['light.png', 'ao.png']) assert.ok(fs.statSync(path.join(BAKED, f)).size > 1000, f);
+  assert.ok(fs.statSync(path.join(BAKED, 'ao.png')).size > 1000, 'ao.png');
 });

@@ -1,18 +1,50 @@
 {
  "about": "Written by office/baked/bake.py. See office/baked/README.md.",
- "part": "evening",
- "sun": {
-  "from": [
-   -13.95410474364534,
-   3.11867536226639,
-   -4.5339634745074004
-  ],
-  "color": "#ffb27a",
-  "intensity": 3
- },
- "lightMapIntensity": 1.0,
  "aoMapIntensity": 1.0,
- "ambientScale": 0.2,
+ "times": {
+  "evening": {
+   "light": "light-evening.png",
+   "lightMapIntensity": 1.0,
+   "ambientScale": 0.2,
+   "sun": {
+    "color": "#ffb27a",
+    "intensity": 3.0,
+    "from": [
+     -13.9541,
+     3.1187,
+     -4.534
+    ]
+   }
+  },
+  "day": {
+   "light": "light-day.png",
+   "lightMapIntensity": 1.0,
+   "ambientScale": 0.35,
+   "sun": {
+    "color": "#fff4e2",
+    "intensity": 2.4,
+    "from": [
+     -11.2396,
+     9.6418,
+     2.389
+    ]
+   }
+  },
+  "night": {
+   "light": "light-night.png",
+   "lightMapIntensity": 1.0,
+   "ambientScale": 0.3,
+   "sun": {
+    "color": "#9fb6ff",
+    "intensity": 0.45,
+    "from": [
+     -12.1677,
+     8.6036,
+     1.7101
+    ]
+   }
+  }
+ },
  "keys": [
   "0,-16,0,1460,0,0,0,30,0,0,0,1060|24|030202",
   "0,0,0,100,0,0,0,0,-100,0,100,0|4|ffffff",
