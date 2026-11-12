@@ -111,7 +111,8 @@
     night:   { sky: ['#060a17', '#1a2442'], haze: '#22304f', hemi: [0x9fb2d8, 0x3a3028, 0.45], sun: [0x9fb6ff, 0.35], fill: 0.22, amb: 0.18, lamps: 1.9, exposure: 1.12, lit: 0.72, bldg: ['#1b2235', '#141a2a', '#0c111d'] }
   };
   function partNow() {
-    const forced = params.get('time');
+    // The baked look (office/look.js) is a bake of the evening, so it starts there.
+    const forced = window.OfficeLook && window.OfficeLook.wanted(location.search) === 'baked' && !params.get('time') ? 'evening' : params.get('time');
     if (PARTS[forced]) return forced;
     const h = new Date().getHours();
     return h >= 7 && h < 17 ? 'day' : h >= 17 && h < 20 ? 'evening' : 'night';
@@ -2164,7 +2165,14 @@
     drawSkyline();
   }
   applyPart();
-  function setTime(p) { part = PARTS[p] ? p : partNow(); applyPart(); emit('time', { time: part }); return part; }
+  function setTime(p) { part = PARTS[p] ? p : partNow(); applyPart(); if (window.OfficeLook) window.OfficeLook.part(part); emit('time', { time: part }); return part; }
+  // The baked look, with ?look=baked (office/look.js). It needs to know what moves, so it never bakes it.
+  if (window.OfficeLook && renderer) {
+    window.OfficeLook.attach({
+      scene, sun, hemi, amb, fill, part: () => part,
+      movers: () => [...people.map((w) => w.fig.root), boss.fig.root, ...Object.values(DESKS).flatMap((d) => [d.chair, d.mug]), ...tablePaddles, ppBall]
+    });
+  }
 
   let last = performance.now(), introT = 0, built = false;
   const camGoal = new THREE.Vector3();
