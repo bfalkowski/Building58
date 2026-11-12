@@ -114,7 +114,7 @@ test('Ask security: a session with its brief, whose report is saved and shown, a
   assert.strictEqual((await R.call('POST', '/security/ask', {})).status, 409, 'one at a time');
   const officer = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === asked.body.terminal);
   assert.strictEqual(officer.role, 'security');
-  assert.strictEqual(officer.work.role, 'security', 'so the org chart puts it in Leadership');
+  assert.strictEqual(officer.work.role, 'security', 'so the org chart shows it on the security card of its Officers row');
 
   const screen = await until(async () => { const s = await R.screen(officer.id); return s.includes('GOT[') && s; }, 'the brief');
   const brief = screen.match(/GOT\[(You are the security officer[^\]\r\n]*)\]/)[1];

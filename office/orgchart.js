@@ -1,5 +1,6 @@
-// The org chart behind the "Org chart" button: you at the top as the manager, everyone in the
-// room under you, live. Clicking someone follows them and opens their session if it runs here,
+// The org chart behind the "Org chart" button: you at the top as the manager, then the officers'
+// row (the Lead, the PM, the COO and security, each in or out, with their buttons), then everyone
+// else in the room, live. Clicking someone follows them and opens their session if it runs here,
 // and Reorg rearranges the same people another way. Uses window.run and the office:pick event,
 // and sends you to the Add worker folder field.
 (function () {
@@ -12,8 +13,11 @@
   const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const fmt = (s) => s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
   const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
-  // The COO and the security officer sit in Leadership while their session runs, at whichever desk it took.
-  const isCoo = (w) => !!(w.session && w.session.work && ['coo', 'security'].includes(w.session.work.role));
+  // An officer is in while a session runs in that role, at whichever desk it took. The Lead's desk with
+  // no session is the Lead's too: Paul waits there. Officers sit only in their own row, never in a group.
+  const OFFICERS = ['lead', 'pm', 'coo', 'security'];
+  const roleOf = (w) => (w.session && w.session.work && w.session.work.role) || null;
+  const officerOf = (w) => OFFICERS.includes(roleOf(w)) ? roleOf(w) : w.lead && !w.session ? 'lead' : null;
   const stateOf = (w) => w.status === 'idle' ? (w.session ? 'ready' : 'free') : w.status;
 
   // ---------- the three ways to arrange people ----------
@@ -21,9 +25,8 @@
   const BENCH = 'The bench';
   const LAYOUTS = [
     { says: 'by job', groups: (people) => [
-      ['Leadership', people.filter((w) => w.lead || isCoo(w))],
-      ['Specialists', people.filter((w) => !w.lead && !isCoo(w) && !w.floater)],
-      ['Hot desks', people.filter((w) => w.floater && !isCoo(w))]
+      ['Specialists', people.filter((w) => !w.floater)],
+      ['Hot desks', people.filter((w) => w.floater)]
     ] },
     { says: 'by project', groups: (people) => {
       const name = (w) => w.session ? w.session.project || 'Unnamed project' : w.status === 'idle' ? BENCH : 'No project';
@@ -149,6 +152,63 @@
     return best;
   }
 
+  // ---------- the officers' row ----------
+  const ROLE_WORDS = { lead: 'the Lead', pm: 'the PM', coo: 'the COO', security: 'security' };
+  const OUT_PHOTO = { skin: '#cfc6b4', shirt: '#b9af9b', hair: '#b9af9b', eyes: false };
+  const officerCards = OFFICERS.map((role) => {
+    const el = $('org-officer-' + role);
+    const go = el.querySelector('.org-go');
+    const card = { role, el, go, slot: el.querySelector('.org-photo-slot'), name: el.querySelector('.org-name'), status: el.querySelector('.org-status'), photoKey: null, who: null };
+    go.addEventListener('click', () => { if (card.who) openSession(card.who); });
+    return card;
+  });
+  function fillOfficer(card, here) {
+    const lead = card.role === 'lead';
+    // The Lead is whoever runs as the Lead; with none, Paul at the Lead's desk, who is in the room but out of a session.
+    const ins = here.filter((w) => roleOf(w) === card.role);
+    const w = ins[0] || (lead ? here.find((x) => x.lead && !x.session) : null) || null;
+    const isIn = ins.length > 0, state = isIn ? stateOf(w) : 'free';
+    card.who = w ? w.id : null;
+    card.el.dataset.in = String(isIn);
+    card.el.dataset.state = state;
+    card.el.style.setProperty('--c', isIn ? w.color : 'var(--rule)');
+    const name = ins.length ? ins.map((x) => x.name).join(', ') : lead ? (w ? w.name : (R.lead && R.lead.name) || 'The Lead') : 'Nobody';
+    if (card.name.textContent !== name) card.name.textContent = name;
+    const doing = state === 'waiting' ? 'needs your OK' : state === 'working' ? 'working · ' + fmt(w.task.seconds) : 'ready for a prompt';
+    const status = isIn ? 'In now · ' + doing : lead ? 'Out · no Lead session' : 'Out · not running';
+    if (card.status.textContent !== status) card.status.textContent = status;
+    const key = isIn || (lead && w) ? w.id : 'out';
+    if (card.photoKey !== key) {
+      card.photoKey = key;
+      card.slot.replaceChildren(key === 'out' ? photo(OUT_PHOTO, '#efe8d6') : photo(looks[w.id] || {}, 'color-mix(in srgb, ' + w.color + ' 35%, #fffdf6)'));
+    }
+    // Go to: follows them and opens their session. The Lead's card always has it while Paul is in the room.
+    card.go.hidden = !(isIn || (lead && w));
+    card.go.textContent = w ? 'Go to ' + w.name : '';
+    card.go.setAttribute('aria-label', w ? 'Go to ' + w.name + ', ' + ROLE_WORDS[card.role] + ', and open their session' : '');
+    return isIn;
+  }
+  // Ask the PM: the PM needs an idea, which it reads from the Board's ticket form. With one typed there,
+  // this does what the form's own Ask the PM does. With none, it takes you to the title box and says so.
+  const pmAsk = $('org-pm-ask');
+  pmAsk.addEventListener('click', () => {
+    close();
+    const title = $('ticket-title'), body = $('ticket-body');
+    if (window.officeFold) window.officeFold.open('board');  // a folded Board hides the form, and its note
+    if ((title.value + body.value).trim()) { $('ticket-pm').click(); return; }
+    title.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    title.focus({ preventScroll: true });
+    const note = $('ticket-note');
+    note.textContent = 'Type your idea for the PM in the title box, then press Ask the PM.'; note.dataset.bad = '';
+  });
+  function drawOfficers(people) {
+    const n = officerCards.filter((c) => fillOfficer(c, people)).length;
+    $('org-officers-in').textContent = n + ' of ' + officerCards.length + ' in';
+    const board = $('board');
+    pmAsk.hidden = !board || board.hidden;
+    pmAsk.disabled = $('ticket-pm').disabled;
+  }
+
   // ---------- drawing ----------
   function fillCard(w, s, star) {
     const c = cardFor(w), state = stateOf(w);
@@ -181,14 +241,16 @@
     const s = run.state();
     const people = s.workers.filter((w) => w.present);
     const star = employeeOfTheMonth(people);
-    people.forEach((w) => fillCard(w, s, w.id === star));
+    drawOfficers(people);
+    const staff = people.filter((w) => !officerOf(w));
+    staff.forEach((w) => fillCard(w, s, w.id === star));
     const waiting = s.waitingOnYou;
     youStats.textContent = plural(people.length, 'direct report') + ' · ' + s.busy + ' busy · ' + (waiting.length ? waiting.length + ' waiting on you' : 'nobody waiting on you');
     youStats.dataset.waiting = String(waiting.length > 0);
     $('org-clock').textContent = 'Effective ' + s.clock;
     if (!force && scroller.matches(':hover')) return;
     const open = s.workers.length - people.length;
-    const wanted = LAYOUTS[reorgs % LAYOUTS.length].groups(people)
+    const wanted = LAYOUTS[reorgs % LAYOUTS.length].groups(staff)
       .filter(([, members]) => members.length)
       .map(([title, members]) => {
         const col = columnFor(LAYOUTS[reorgs % LAYOUTS.length].says + '/' + title, title);
