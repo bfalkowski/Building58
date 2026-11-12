@@ -538,8 +538,9 @@
   spot('fridge', 6.45, -3.75, Math.PI, { label: 'At the fridge' });
   spot('shelf', 5.3, -3.85, Math.PI, { label: 'Getting a snack' });
   spot('bar-w', 4.42, -2.25, Math.PI / 2, { group: 'bar' }); spot('bar-e', 5.58, -2.25, -Math.PI / 2, { group: 'bar' }); spot('bar-s', 5.0, -1.65, Math.PI, { group: 'bar' });
-  [4.6, 5.25, 5.9].forEach((x, i) => spot('couch-' + i, x, 0.98, 0, { sit: 'couch', approach: new THREE.Vector3(x, 0, 1.62) }));
-  spot('armchair', 3.92, 3.2, Math.PI / 2, { sit: 'couch', approach: new THREE.Vector3(4.55, 0, 3.2) });
+  // seat: the height of the cushion's top, which the pose sits on (seatOn in office/poses.js)
+  [4.6, 5.25, 5.9].forEach((x, i) => spot('couch-' + i, x, 0.98, 0, { sit: 'couch', seat: 0.47, approach: new THREE.Vector3(x, 0, 1.62) }));
+  spot('armchair', 3.92, 3.2, Math.PI / 2, { sit: 'couch', seat: 0.39, approach: new THREE.Vector3(4.55, 0, 3.2) });
   spot('win-0', -6.3, -3.0, -Math.PI / 2, { label: 'At the window' }); spot('win-1', -6.3, 2.4, -Math.PI / 2, { label: 'At the window' }); spot('win-2', -6.3, 3.5, -Math.PI / 2, { label: 'At the window' });
   spot('board-0', -1.35, -3.75, Math.PI, { label: 'At the board' }); spot('board-1', -0.35, -3.75, Math.PI, { label: 'At the board' });
   spot('pp-w', -2.42, 3.4, Math.PI / 2); spot('pp-e', 1.22, 3.4, -Math.PI / 2);
@@ -611,7 +612,7 @@
 
   // ---------- people ----------
   // Poses and the arm routes at a desk are in office/poses.js.
-  const { POSE, RIG, typePoseFor, aimArms, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE } = window.OfficePoses;
+  const { POSE, RIG, typePoseFor, aimArms, seatOn, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE } = window.OfficePoses;
 
   function buildPerson(look) {
     const L = Object.assign({ skin: '#d6a27c', hair: '#2a1d17', hairStyle: 'short', shirt: '#556677', pants: '#333a44', shoes: '#222222', height: 1 }, look || {});
@@ -1237,6 +1238,8 @@
     }
     if (w.paddle.visible) armR = ARM_PADDLE;
     let aim = armR ? Object.assign({}, t, armR) : t;
+    const seat = w.seated && SPOTS[w.spot] && SPOTS[w.spot].seat;
+    if (seat) aim = Object.assign({}, aim, seatOn(aim, seat, (w.look || {}).height));  // on the couch or the armchair, not in it
     const ahead = w.desk && w.spot === w.desk && !w.moving ? w.pos.distanceTo(SPOTS[w.desk].pos) : Infinity;
     if (w.seated ? ahead < Infinity : ahead < 0.03) aim = aimArms(w.route, p, aim, w.look.height || 1, ahead);  // in the chair, or sitting down
     else if (w.route.L || w.route.R) w.route = {};
