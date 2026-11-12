@@ -210,7 +210,6 @@
   .task-main small { font-size: 11.5px; color: var(--pane-dim); overflow: hidden; text-overflow: ellipsis; }
   .task-empty { color: var(--pane-dim); border-left: 0 !important; padding-left: 0 !important; }
   @media (max-width: 640px) { .tasks form { grid-template-columns: minmax(0, 1fr); } .tasks textarea, .ticket-buttons { grid-column: 1; } }
-  .toolbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
   .group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .btn { font: 600 15px/1 var(--sans); cursor: pointer; border-radius: 4px; padding: 9px 14px; border: 1px solid var(--accent); background: transparent; color: var(--accent); }
   .btn.primary { background: var(--accent); color: var(--accent-fg); }
@@ -218,6 +217,20 @@
   .btn:disabled { opacity: 0.45; cursor: default; }
   .btn:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   label.pick { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+  /* The controls under the scene: one panel like the Floor's, in three labelled groups. A switch shows a dot, filled when it is on. */
+  .toolbar { display: flex; flex-wrap: wrap; align-items: stretch; border-radius: 8px; background: var(--pane); color: var(--pane-fg); box-shadow: inset 0 0 0 1px var(--pane-edge); }
+  .toolbar .group { flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 14px 12px; border-left: 1px solid var(--pane-line); }
+  .toolbar .group:first-child { border-left: 0; }
+  .toolbar h2 { margin: 0; font: 500 12px/1.3 var(--mono); color: var(--pane-dim); letter-spacing: 0.04em; }
+  .toolbar .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .toolbar .btn { font: 600 13px/1 var(--sans); padding: 8px 12px; border-color: var(--link); color: var(--link); white-space: nowrap; }
+  .toolbar .btn.primary { background: var(--link); color: var(--link-fg); }
+  .toolbar .btn[aria-pressed]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; border: 1.5px solid currentColor; vertical-align: 0; box-sizing: border-box; }
+  .toolbar .btn[aria-pressed="true"] { background: color-mix(in srgb, var(--link) 14%, transparent); }
+  .toolbar .btn[aria-pressed="true"]::before { background: currentColor; }
+  .toolbar label.pick { gap: 6px; font: 600 13px/1 var(--sans); color: var(--pane-strong); }
+  .toolbar select { font: 13px var(--sans); padding: 6px 6px; color: var(--pane-strong); background: var(--pane-tint); border: 1px solid var(--pane-line); }
+  .toolbar #radio-now { font-size: 13px; }
   select { font: 15px var(--sans); padding: 7px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
   details { border-top: 1px solid var(--line); padding-top: 12px; }
   summary { cursor: pointer; font-weight: 600; }
@@ -540,30 +553,28 @@
     <ol id="task-rows" aria-label="Tasks"></ol>
   </section>
 
-  <div class="toolbar">
-    <div class="group">
-      <button class="btn primary" id="demo" type="button">Run a demo</button>
-    </div>
-    <div class="group">
-      <button class="btn" id="finish" type="button">Finish all</button>
-    </div>
-    <div class="group">
-      <button class="btn" id="org-btn" type="button" aria-haspopup="dialog">Org chart</button>
-    </div>
-    <div class="group">
-      <button class="btn" id="tags-btn" type="button" aria-pressed="true">Name tags</button>
-      <label class="pick" for="time">Light
+  <div class="toolbar" aria-label="Room controls">
+    <section class="group" aria-labelledby="tb-people">
+      <h2 id="tb-people">People</h2>
+      <div class="row">
+        <button class="btn primary" id="demo" type="button">Run a demo</button>
+        <button class="btn" id="finish" type="button">Finish all</button>
+        <button class="btn" id="party-btn" type="button" aria-pressed="false">Throw a party</button>
+        <button class="btn" id="org-btn" type="button" aria-haspopup="dialog">Org chart</button>
+      </div>
+    </section>
+    <section class="group" aria-labelledby="tb-scene">
+      <h2 id="tb-scene">Scene</h2>
+      <div class="row">
+        <label class="pick" for="time">Light
         <select id="time">
           <option value="">From the clock</option>
           <option value="day">Day</option>
           <option value="evening">Evening</option>
           <option value="night">Night</option>
         </select>
-      </label>
-    </div>
-    <div class="group">
-      <button class="btn" id="decor-btn" type="button" aria-pressed="true">Decorations</button>
-      <label class="pick" for="holiday">Holiday
+        </label>
+        <label class="pick" for="holiday">Holiday
         <select id="holiday">
           <option value="">From the date</option>
           <option value="newyear">New Year's</option>
@@ -573,16 +584,19 @@
           <option value="thanksgiving">Thanksgiving</option>
           <option value="christmas">Christmas</option>
         </select>
-      </label>
-    </div>
-    <div class="group">
-      <button class="btn" id="party-btn" type="button" aria-pressed="false">Throw a party</button>
-    </div>
-    <div class="group">
-      <button class="btn" id="radio-btn" type="button" aria-pressed="false">Radio</button>
-      <button class="btn" id="radio-next" type="button" hidden>Next song</button>
-      <span id="radio-now" aria-live="polite" hidden></span>
-    </div>
+        </label>
+        <button class="btn" id="decor-btn" type="button" aria-pressed="true">Decorations</button>
+        <button class="btn" id="tags-btn" type="button" aria-pressed="true">Name tags</button>
+      </div>
+    </section>
+    <section class="group" aria-labelledby="tb-sound">
+      <h2 id="tb-sound">Sound</h2>
+      <div class="row">
+        <button class="btn" id="radio-btn" type="button" aria-pressed="false">Radio</button>
+        <button class="btn" id="radio-next" type="button" hidden>Next song</button>
+        <span id="radio-now" aria-live="polite" hidden></span>
+      </div>
+    </section>
   </div>
 
   <details>
