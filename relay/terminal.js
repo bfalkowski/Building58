@@ -144,8 +144,10 @@ const isPooled = (n) => Object.values(pool).some((list) => list.includes(n));
 let describeWork = null;
 const onWork = (fn) => { describeWork = fn; };
 const workOfTerm = (t) => (describeWork ? describeWork(t.channel, t) : null);
+// The title you gave a session with /rename (relay/office-hook.js), as plain text, or null.
+const customTitleOf = (v) => (typeof v === 'string' && v.replace(/\s+/g, ' ').trim().slice(0, 60)) || null;
 function info(t) {
-  return { id: t.id, who: t.who || null, seat: t.seat || null, cwd: t.cwd, from: t.from, project: hook.projectOf(t.cwd), sessionId: t.sessionId, title: t.title, task: t.task, role: t.role, pr: t.pr, work: describeWork ? describeWork(t.channel, t) : null, talked: t.talked, lead: !!t.lead, owesBrief: !!t.owesBrief, briefHeld: !!(t.owesBrief && briefHeld(t)), hooksSilent: !!(t.spoke && !t.hooked), board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, lastStart: t.lastStart || null, startedAt: t.startedAt, running: !t.exited, exitCode: t.exitCode, hooks: t.hooks, state: t.state, message: t.message, lastActAt: t.lastActAt, replay: t.outSize, refresh: t.refresh ? t.refresh.phase : null, refreshNote: t.refreshNote || null, tired: leadTired.tiredOf(t) };
+  return { id: t.id, who: t.who || null, seat: t.seat || null, cwd: t.cwd, from: t.from, project: hook.projectOf(t.cwd), sessionId: t.sessionId, title: t.title, customTitle: t.customTitle || null, task: t.task, role: t.role, pr: t.pr, work: describeWork ? describeWork(t.channel, t) : null, talked: t.talked, lead: !!t.lead, owesBrief: !!t.owesBrief, briefHeld: !!(t.owesBrief && briefHeld(t)), hooksSilent: !!(t.spoke && !t.hooked), board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, lastStart: t.lastStart || null, startedAt: t.startedAt, running: !t.exited, exitCode: t.exitCode, hooks: t.hooks, state: t.state, message: t.message, lastActAt: t.lastActAt, replay: t.outSize, refresh: t.refresh ? t.refresh.phase : null, refreshNote: t.refreshNote || null, tired: leadTired.tiredOf(t) };
 }
 
 // The Lead's session, in a file so it outlives the relay. It always holds the current one: a new
@@ -263,7 +265,7 @@ function keepOf(t) {
   // talked: whether this session id has a conversation for claude --resume to find. Only a hook's prompt,
   // or a start with --resume, says so, and /clear takes it back. Enter alone is not enough: it may have
   // answered the question about trusting the folder, and a resume with no conversation fails.
-  return { sessionId: t.sessionId, seat: t.seat || undefined, who: t.who || undefined, talked: !!t.talked, cwd: t.cwd, from: t.from, title: t.title, task: t.task, role: t.role, pr: t.pr,
+  return { sessionId: t.sessionId, seat: t.seat || undefined, who: t.who || undefined, talked: !!t.talked, cwd: t.cwd, from: t.from, title: t.title, customTitle: t.customTitle || undefined, task: t.task, role: t.role, pr: t.pr,
     lead: !!t.lead, board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, owesBrief: !!t.owesBrief, owesPrompt: t.owesPrompt || undefined, reviewOf: t.reviewOf || undefined, posted: t.posted || undefined, cols: t.cols, rows: t.rows,
     // What a relay needs to take the session back from the host as it is (start).
     terminal: t.id, state: t.state, message: t.message || undefined, waitingAt: t.state === 'waiting' ? t.waitingAt : undefined, hooked: !!t.hooked, heard: !!t.heard, spoke: !!t.spoke, hookAt: t.hookAt || undefined };
@@ -454,6 +456,7 @@ function start(channel, body, ctx, onExit, own) {
   if (restoring) {
     t.seat = typeof restoring.seat === 'string' ? restoring.seat : null;
     t.who = typeof restoring.who === 'string' ? plainName(restoring.who) || null : null;
+    t.customTitle = customTitleOf(restoring.customTitle);
     const h = held.get(channel), n = heldNames.get(channel);
     if (h) delete h['saved ' + restoring.sessionId];
     if (n) delete n['saved ' + restoring.sessionId];
@@ -690,7 +693,7 @@ function noteHook(channel, ev) {
       moved.sessionId = UUID.test(ev.full_session_id || '') ? ev.full_session_id : sid; moved.talked = ev.source === 'resume' || (ev.source === 'compact' && moved.sessionId === was && moved.talked); if (!moved.task && !moved.role) moved.title = null;
       if ((moved.board || moved.starts || moved.merge) && moved.sessionId !== was) { try { clearSavedGrants(channel); } catch (e) { console.error('Could not save the Lead: ' + e.message); } }
       // A new conversation is not in a turn, even if the last one was interrupted and never said it ended.
-      if (moved.sessionId !== was) { moved.state = 'idle'; moved.message = null; }
+      if (moved.sessionId !== was) { moved.state = 'idle'; moved.message = null; moved.customTitle = null; }  // this event's own customTitle, below, puts back the new one's
       // The same terminal keeps its person, and ticket history keeps the name against the new id too.
       if (moved.who && namer) namer(channel, moved);
       if (moved.sessionId !== was) for (const fn of movers) { try { fn(channel, moved, was); } catch (e) { console.error('Could not follow a new session: ' + e.message); } }
@@ -708,6 +711,8 @@ function noteHook(channel, ev) {
   t.hookAt = at;
   t.hooked = true; t.lastActAt = Date.now();
   if (ev.title && !t.task && !t.role) t.title = ev.title;  // a task, the PM or the COO keeps its own title
+  // The title you gave it with /rename, whatever its job, shown beside its person's name. '' takes it away.
+  if (typeof ev.customTitle === 'string') t.customTitle = customTitleOf(ev.customTitle);
   if (name === 'UserPromptSubmit') t.talked = t.spoke = t.heard = true;  // heard: it is past any question about trusting the folder
   // A tool or the end of a turn means a turn began, in case its prompt's hook was lost.
   if (['PreToolUse', 'PostToolUse', 'Stop'].includes(name)) t.talked = t.spoke = true;

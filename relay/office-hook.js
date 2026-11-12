@@ -34,7 +34,8 @@
 //                         is a task notice, which Claude Code types when a background command
 //                         ends, is marked as one, with none of its words.
 //   OFFICE_SHOW_PROMPTS   1 to send the first 120 characters of each prompt. Off by default.
-//   OFFICE_SHOW_TITLES    0 to not send the session's title, which is written from its prompts.
+//   OFFICE_SHOW_TITLES    0 to not send the session's title, which is written from its prompts,
+//                         nor the title you gave it with /rename, which is sent on its own too.
 //   OFFICE_HOOK_LOG       a file path: also append each raw event there, to see what Claude
 //                         Code sends. Raw events can hold whole prompts and file contents.
 'use strict';
@@ -134,8 +135,9 @@ function summarize(p) {
   // The relay must not take it for the person, so it says which it is, and sends none of its words.
   if (p.hook_event_name === 'UserPromptSubmit' && typeof p.prompt === 'string' && p.prompt.startsWith('<task-notification>')) out.notice = true;
   if (TITLES && p.transcript_path && p.hook_event_name !== 'SessionEnd' && p.hook_event_name !== 'PostToolUse') {
-    const title = sessionTitle(p.transcript_path);
+    const { title, custom } = sessionTitle(p.transcript_path);
     if (title) out.title = cut(title, 60);
+    if (custom !== null) out.customTitle = cut(custom, 60);  // '' when the newest /rename record has none
   }
   if (p.tool_input && typeof p.tool_input === 'object') out.tool_input = toolInput(p.tool_name || '', p.tool_input, p.cwd);
   // A huddle question asks for one line starting with its marker. Only that line leaves the hook, and
@@ -273,7 +275,8 @@ function movesBranch(args) {
   return true;
 }
 // The session's title from its transcript: the one you gave it with /rename, or else the one
-// Claude Code wrote. These records are not a public format, so anything unexpected means no title.
+// Claude Code wrote. custom is the newest /rename record's title alone, or null when there is none.
+// These records are not a public format, so anything unexpected means no title.
 function sessionTitle(file) {
   let fd;
   try {
@@ -281,16 +284,17 @@ function sessionTitle(file) {
     const size = fs.fstatSync(fd).size, tail = Math.min(size, TITLE_TAIL);
     const buf = Buffer.alloc(tail);
     const lines = buf.toString('utf8', 0, fs.readSync(fd, buf, 0, tail, size - tail)).split('\n');
-    let ai = '';
+    let ai = '', title = '', custom = null;
     for (let i = lines.length - 1; i >= 0; i--) {
       if (lines[i].length > 2000 || !lines[i].includes('-title"')) continue;
       let r;
       try { r = JSON.parse(lines[i]); } catch (e) { continue; }
-      if (r.type === 'custom-title' && r.customTitle) return r.customTitle;
+      if (r.type === 'custom-title' && custom === null) custom = typeof r.customTitle === 'string' ? r.customTitle : '';
+      if (r.type === 'custom-title' && r.customTitle) { title = r.customTitle; break; }
       if (r.type === 'ai-title' && r.aiTitle && !ai) ai = r.aiTitle;
     }
-    return ai;
-  } catch (e) { return ''; } finally { if (fd !== undefined) fs.closeSync(fd); }
+    return { title: title || ai, custom };
+  } catch (e) { return { title: '', custom: null }; } finally { if (fd !== undefined) fs.closeSync(fd); }
 }
 function toolInput(tool, ti, cwd) {
   const o = {};

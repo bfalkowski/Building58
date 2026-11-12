@@ -709,10 +709,10 @@
     DESKS[deskKey].mug.visible = Math.random() < 0.5;
     DESKS[deskKey].worker = w;
     const tag = document.createElement('div'); tag.className = 'tag'; tag.style.setProperty('--c', w.color);
-    tag.innerHTML = '<i></i><b></b><span></span>'; tag.querySelector('b').textContent = w.name; tagLayer.appendChild(tag);
+    tag.innerHTML = '<i></i><b></b><em></em><span></span>'; tag.querySelector('b').textContent = w.name; tagLayer.appendChild(tag);
     tag.addEventListener('click', () => pickWorker(w));
     const bub = document.createElement('div'); bub.className = 'bubble'; bub.hidden = true; tagLayer.appendChild(bub);
-    tagFor[w.id] = { tag, bub, span: tag.querySelector('span') };
+    tagFor[w.id] = { tag, bub, span: tag.querySelector('span'), named: tag.querySelector('em') };
     people.push(w); byId[w.id] = w;
     return w;
   }
@@ -1413,9 +1413,12 @@
       const state = w.waiting ? 'wait' : w.task ? 'work' : 'idle';
       if (T.tag.dataset.state !== state) T.tag.dataset.state = state;
       const seated = w.sessionId && sessions.get(w.sessionId);
-      const what = w.task ? w.task.label : seated ? seated.title || seated.project || seated.id : '';
+      const said = w.task ? w.task.label : seated ? seated.title || seated.project || seated.id : '';
+      const what = seated && seated.customTitle && said === seated.customTitle ? seated.project || '' : said;  // not twice beside the name
       const sub = w.waiting ? 'needs you' + (what ? ' · ' + what : '') : what;
       if (T.span.textContent !== sub) { T.span.textContent = sub; T.span.title = sub; T.w = 0; }
+      const named = window.OfficeSeats.titleBeside(seated && seated.customTitle);  // the title you gave it with /rename
+      if (T.named.textContent !== named.text) { T.named.textContent = named.text; T.named.title = named.full; T.w = 0; }
       T.tag.hidden = !showTags || !vis || !w.present;
       if (!w.present) continue;
       if (!T.bub.hidden) {
@@ -1671,6 +1674,7 @@
       takeOver(S, String(t.id));
       if (t.project && !S.project) S.project = String(t.project).slice(0, 40);
       S.lead = !!t.lead;
+      S.customTitle = t.customTitle ? String(t.customTitle) : null;
       mine.push([S, t]);
     }
     // Sessions the relay no longer runs leave first, so their people are free.
@@ -1795,7 +1799,7 @@
       waitingOnYou: people.filter((p) => p.waiting).map((p) => ({ who: p.id, name: p.name, message: p.waiting.message })),
       workers: people.map((w) => ({
         id: w.id, name: w.name, role: w.role, color: w.color, lead: w.lead, floater: w.floater, skills: w.skills, present: w.present,
-        session: w.sessionId && sessions.get(w.sessionId) ? (({ id, project, title, terminal, work }) => ({ id, project, title, terminal, work: work || null }))(sessions.get(w.sessionId)) : null,
+        session: w.sessionId && sessions.get(w.sessionId) ? (({ id, project, title, customTitle, terminal, work }) => ({ id, project, title, customTitle: customTitle || null, terminal, work: work || null }))(sessions.get(w.sessionId)) : null,
         status: w.waiting ? 'waiting' : w.task ? 'working' : 'idle', doing: w.waiting ? 'Needs your OK: ' + w.waiting.message : w.doing,
         task: w.task ? { label: w.task.label, skill: w.task.skill || null, session: w.task.session || null, seconds: Math.round((Date.now() - w.task.startedAt) / 1000), last: (w.task.lines[w.task.lines.length - 1] || {}).text || '' } : null,
         recent: w.history.slice(0, 5)
