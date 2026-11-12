@@ -12,9 +12,12 @@
     return;
   }
   const R = window.OFFICE_ROSTER || {};
-  $('title').textContent = R.company || 'Building58';
-  $('hud-company').textContent = R.company || 'Office';
-  document.title = (R.company || 'Room') + ' · Building58';
+  const roomName = R.company || 'Building58';
+  // The room's own name, then Building58 when it has another (office/roster.js, ?name=).
+  const pageTitle = roomName === 'Building58' ? roomName : roomName + ' · Building58';
+  $('title').textContent = roomName;
+  $('hud-company').textContent = roomName;
+  document.title = pageTitle;
 
   const fmt = (s) => s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
   let selected = null;
@@ -132,7 +135,7 @@
     const waiting = s.waitingOnYou.length;
     const text = s.busy + ' of ' + s.people + ' busy' + (waiting ? ', ' + waiting + ' waiting on you' : '');
     busyEl.textContent = text; hudBusy.textContent = text;
-    document.title = (waiting ? '(' + waiting + ') ' : '') + (R.company || 'Room') + ' · Building58';
+    document.title = (waiting ? '(' + waiting + ') ' : '') + pageTitle;
   }
 
   // ---------- the feed ----------
