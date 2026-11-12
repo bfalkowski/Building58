@@ -2,11 +2,13 @@
 // Keep `height` between 0.8 and 1.1: outside that range a seated person's hands miss the keyboard.
 //
 // The relay picks the desk each Claude Code session sits at (relay/seats.js): the first free person,
-// leaving the lead for the session you make the Lead, and keeps them until it ends. There are nine
+// leaving `lead` for the session that is the Lead, and keeps them until it ends. There are nine
 // desks, so nine sessions at a time. A desk is a look. The name a session shows comes from `names`:
 // the least recently used name of the desk's `kind`, so it fits the look. Keep every name one word,
 // so @mentions find it, and apart from the desks' own names. A desk's own name shows only while no
-// session of the relay's sits there, and the Lead at the Lead's desk is always called Lead. `skills` is only used by the "work" action, which sends a free
+// session of the relay's sits there, and the Lead at the Lead's desk is always called by that desk's
+// name, Paul, after Paul in Building 58. The role is still called the Lead. When the relay starts, it
+// brings back the saved Lead or starts a new one, unless RELAY_LEAD=0. `skills` is only used by the "work" action, which sends a free
 // person to work from outside a session. `startWith` people are always in the room. The rest come
 // in for a session and leave when it ends. The relay reads this file when it starts, so restart it
 // after you add, remove or rename someone.
@@ -33,7 +35,7 @@
     },
 
     lead: {
-      id: 'lead', name: 'Lead', kind: 'man', role: 'Coding agent',
+      id: 'lead', name: 'Paul', kind: 'man', role: 'Coding agent',
       color: '#e3b26a',
       look: { skin: '#c58c64', hair: '#2b211c', hairStyle: 'short', shirt: '#3a3f47', top: 'hoodie', pants: '#2c3440', shoes: '#e8e4dc', mug: '#e3b26a', height: 1.0, extra: 'headphones' }
     },

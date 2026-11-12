@@ -154,7 +154,8 @@ function info(t) {
 // You choose the Lead: sitting at the Lead's desk is only a free seat. One session on a channel is
 // the Lead (t.lead). It stays the Lead through /clear and Bring back, and the relay keeps the file
 // up to date itself. A file written before you could choose may name a session that got there by
-// accident, so it is the Lead again only if you press Bring back (lead: true on the start). Answering
+// accident, so it is the Lead again only through Bring back (lead: true on the start), which the relay
+// also does by itself when it starts with no Lead running (startLead, unless RELAY_LEAD=0). Answering
 // No, or using Resume with its id, gives a plain session. Bring back also restores permission to move
 // the board, if the file says you granted it.
 //
@@ -378,6 +379,30 @@ function setLead(channel, body) {
   saveSessions();
   return [200, { ok: true, lead: true, board, merge, starts, startsLeft }];
 }
+// The relay's own Lead, once it has taken back and brought back its sessions (relay/sessions.js). With a
+// Lead running it does nothing, so there is never a second. The saved Lead comes back first, as Bring back
+// brings it, with the permissions the file says you granted. If there is none, or it cannot come back, a
+// new plain session in cwd is made the Lead, with every permission off. Either way the panel offers
+// nothing back, since there is a Lead. It starts nothing while an update is under way.
+function startLead(channel, cwd, ctx) {
+  if (leadOf(channel)) return;
+  if (updating()) { ctx.log('No Lead started on ' + channel + ': an update is under way.'); return; }
+  const offer = restoreOf(channel);
+  offered.delete(channel);
+  const startNew = (why) => {
+    if (leadOf(channel) || closing) return;
+    const r = start(channel, { cwd }, ctx, null, { newLead: true });
+    ctx.log(r.status < 400 ? why + 'Started a new Lead in ' + cwd + ' on ' + channel + '.' : why + 'Could not start a Lead on ' + channel + ': ' + r.body.message);
+  };
+  if (!offer) { startNew(''); return; }
+  const who = 'the saved Lead (' + String(offer.sessionId).slice(0, 8) + ')';
+  // claude --resume ends at once when it cannot find the conversation. An exit you asked for does not count.
+  const r = start(channel, { cwd: offer.cwd, resume: offer.sessionId, lead: true }, ctx, (t) => {
+    if (!t.stopped && !closing && t.exitCode !== 0 && !t.typedAt && Date.now() - Date.parse(t.startedAt) < FAIL_WITHIN) startNew('Could not bring back ' + who + ': it ended at once. ');
+  });
+  if (r.status >= 400) { startNew('Could not bring back ' + who + ': ' + r.body.message + ' '); return; }
+  ctx.log('Brought back ' + who + ' as the Lead on ' + channel + '.');
+}
 function sse(res, event, data) { res.write('event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n'); }
 
 // onExit (t) runs once the session has ended. Only relay/checkouts.js and relay/sessions.js pass it,
@@ -411,12 +436,15 @@ function start(channel, body, ctx, onExit, own) {
   const global = hook.hooksInstalled();
   const saved = leads.get(channel);
   // Only Bring back asks for this. Two sessions can share an old id after /clear, and the one already
-  // running stays the Lead.
-  const lead = kept ? !!(kept.lead && !body.task && !body.role && !running.some((x) => x.lead))
-    : !!(body.lead === true && resume && !body.task && !body.role && saved && saved.sessionId === resume && !running.some((x) => x.lead));
-  const board = !!(lead && (kept ? kept.board : saved.board)), merge = !!(lead && (kept ? kept.merge : saved.merge));
-  const { starts, startsLeft } = lead ? keptStarts(kept || saved) : keptStarts(null);
+  // running stays the Lead. own.newLead is the relay's own new Lead (startLead): a plain session, made the
+  // Lead as it starts so it gets the Lead's model, with every permission off.
+  const fresh = !!(own && own.newLead && !resume && !body.task && !body.role && !running.some((x) => x.lead));
+  const lead = fresh || (kept ? !!(kept.lead && !body.task && !body.role && !running.some((x) => x.lead))
+    : !!(body.lead === true && resume && !body.task && !body.role && saved && saved.sessionId === resume && !running.some((x) => x.lead)));
+  const board = !!(lead && !fresh && (kept ? kept.board : saved.board)), merge = !!(lead && !fresh && (kept ? kept.merge : saved.merge));
+  const { starts, startsLeft } = lead && !fresh ? keptStarts(kept || saved) : keptStarts(null);
   if (lead && kept) offered.delete(channel);
+  if (fresh) clearSavedGrants(channel);  // as for a session you make the Lead: the file's grants were for another
   if (resume) forgetFailed(channel, resume);  // tried again, here or by hand
   const talked = adopted ? !!adopted.talked : !!resume;
   const t = { id, channel, cwd, from: body.from || null, title: body.title ? String(body.title).slice(0, 80) : null, task: body.task || null, role: body.role || null, pr: body.pr || null, token, lead, board, merge, starts, startsLeft, talked, spoke: adopted ? !!(adopted.spoke || adopted.talked) : talked, state: 'idle', message: null, drafting: false, sinceKey: null, lastEnterAt: 0, lastActAt: Date.now(), lastOutAt: 0, tail: '', sessionId, startedAt: new Date().toISOString(), hooks: global ? 'global' : 'session', cols, rows,
@@ -981,4 +1009,4 @@ const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited)
 // Every running session on every channel.
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { DESKS: MAX_TERMINALS, setRoster, rebriefLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit };
+module.exports = { DESKS: MAX_TERMINALS, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit };

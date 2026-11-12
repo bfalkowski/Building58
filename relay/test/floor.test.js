@@ -9,6 +9,7 @@ const { relay, makeRepo, sleep, until, sessionToken, ROOT } = require('./helpers
 // Not the person's settings file: a PM talk time set on their page would change the verdicts below.
 process.env.RELAY_SETTINGS_FILE = path.join(require('os').tmpdir(), 'office-floor-test-no-settings-' + process.pid + '.json');
 const { stopVerdict, leadMayStop, PM_TALK, ENTER_SETTLES, TOLD_CHECK } = require('../stop-verdict.js');
+const LEAD_DESK = require('../../office/roster.js').lead.name;  // the name of the Lead's desk, Paul
 
 const CLI = path.join(ROOT, 'relay', 'ticket.js');
 const PR = 'https://github.com/o/r/pull/31';
@@ -107,7 +108,7 @@ test('the floor', async (t) => {
     assert.strictEqual(list.length, 8);
     assert.ok(names.every((n) => typeof n === 'string' && n), names.join(', '));
     assert.strictEqual(new Set(names).size, 8, 'nobody twice');
-    assert.ok(!names.includes('Lead'), 'nobody is at the Lead\'s desk while there is no Lead and other desks are free');
+    assert.ok(!names.includes(LEAD_DESK), 'nobody is at the Lead\'s desk while there is no Lead and other desks are free');
     assert.strictEqual((await R.call('POST', '/terminals/names', { names: { [working.id]: 'Nobody' } })).status, 404, 'no page names a session');
   });
 
@@ -131,7 +132,7 @@ test('the floor', async (t) => {
     assert.strictEqual(typeof theo.minutesSinceHook, 'number');
     assert.deepStrictEqual([(await rowOf(dev)).role, (await rowOf(dev)).name], ['Dev', await nameOf(dev)]);
     assert.strictEqual((await rowOf(pm)).role, 'PM');
-    assert.deepStrictEqual([(await rowOf(lead)).role, (await rowOf(lead)).name], ['Lead', 'Lead'], 'the Lead sits at the Lead\'s desk');
+    assert.deepStrictEqual([(await rowOf(lead)).role, (await rowOf(lead)).name], ['Lead', LEAD_DESK], 'the Lead sits at the Lead\'s desk');
     assert.strictEqual((await rowOf(waiting)).state, 'waiting on the person');
     const f = await rowOf(fresh);
     assert.deepStrictEqual([f.named, f.name, f.minutesSinceHook], [true, await nameOf(fresh), null]);

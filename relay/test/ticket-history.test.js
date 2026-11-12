@@ -97,7 +97,7 @@ test('a ticket\'s history', async (t) => {
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     const now = await ticketOf(ticket.id);
     const m = steps(now, 'moved').at(-1);
-    assert.deepStrictEqual([m.from, m.to, m.by, m.role, m.name, m.session.sessionId], ['in_review', 'waiting_on_you', 'Lead', 'lead', 'Lead', lead.sessionId]);
+    assert.deepStrictEqual([m.from, m.to, m.by, m.role, m.name, m.session.sessionId], ['in_review', 'waiting_on_you', 'Lead', 'lead', require('../../office/roster.js').lead.name, lead.sessionId]);  // signed by the role, named by the Lead's desk, Paul
     assert.deepStrictEqual(now.assignee, { role: 'you', name: 'You', session: null });
   });
 

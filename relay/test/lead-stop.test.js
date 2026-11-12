@@ -115,7 +115,7 @@ test('the Lead never stops a session the verdict calls not safe', async (t) => {
       [name.working, working, 'Not stopped: it is working.'],
       [name.waiting, waiting, 'Not stopped: it is waiting on the person: Claude needs your permission to use Bash.'],
       [name.menu, menu, 'Not stopped: a menu is open on its screen.'],
-      ['Lead', o.lead, 'Not stopped: it is the Lead.'],
+      [require('../../office/roster.js').lead.name, o.lead, 'Not stopped: it is the Lead.'],  // the Lead's desk's name, Paul
     ];
     for (const [who, s, message] of refused) {
       const r = await o.stop(who);
