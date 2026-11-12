@@ -77,9 +77,14 @@ test('the relay keeps each session\'s customTitle, sends it, and brings it back 
   assert.strictEqual(await named(R, worker.id), 'radio work', 'a task\'s worker too');
 
   await t.test('it survives a restart', async () => {
+    // A worker whose brief is not marked delivered yet starts over after a restart, with a new session
+    // (relay/tasks.js resume). Wait for the mark, so the worker comes back in its own conversation.
+    await until(async () => (await R.call('GET', '/tasks')).body.tasks.find((x) => x.id === task.id).briefed === true, 'the brief marked delivered');
     await R.kill();
     R = await relay(RESUME, home);
-    const back = await until(async () => { const l = await terminals(R); return l.length === 4 && l; }, 'four sessions back');
+    // Each session is on the list before its restore has finished, so wait for all four by their session ids.
+    const ids = [plain, pm, reviewer, worker].map((s) => s.sessionId);
+    const back = await until(async () => { const l = await terminals(R); return ids.every((id) => l.some((x) => x.sessionId === id)) && l; }, 'all four sessions back');
     const of = (s) => back.find((x) => x.sessionId === s.sessionId).customTitle;
     assert.deepStrictEqual([of(plain), of(pm), of(reviewer), of(worker)], ['my title', 'pm things', 'checking <b>PR 3</b>', 'radio work']);
   });
