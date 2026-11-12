@@ -70,8 +70,9 @@
   // ---------- in the page ----------
   const state = { look: 'live', baked: false, time: null, status: 'off', hidden: 0, missing: 0, fx: 'off', error: null };
   let ctx = null, room = null, parts = [], meta = null, wantBaked = false, loading = null;
-  let fxWanted = false, fxLoading = null, composer = null, liveFog = null, bloomPass = null, gradePass = null;
+  let fxWanted = false, fxLoading = null, fxScripts = null, composer = null, liveFog = null, bloomPass = null, gradePass = null, aoMap = null;
   const lightMaps = {};  // each time's light texture, fetched the first time that time shows
+  const onGpu = new Set();  // the light textures already sent to the GPU (r128 textures have no userData)
   const view = { w: 0, h: 0 };
 
   function loadScript(src) {
@@ -80,7 +81,18 @@
       s.onerror = () => reject(new Error('could not load ' + src)); document.head.appendChild(s);
     });
   }
-  function loadTexture(url) { return new Promise((resolve, reject) => new THREE.TextureLoader().load(url, resolve, undefined, () => reject(new Error('could not load ' + url)))); }
+  // A texture whose picture the browser decodes off the main thread where it can, so a big PNG does
+  // not hold up a frame. The bake's textures are never flipped.
+  function loadTexture(url, encoding) {
+    const done = (t) => { t.flipY = false; if (encoding) t.encoding = encoding; return t; };
+    if (typeof createImageBitmap !== 'function' || !THREE.ImageBitmapLoader) {
+      return new Promise((resolve, reject) => new THREE.TextureLoader().load(url, (t) => resolve(done(t)), undefined, () => reject(new Error('could not load ' + url))));
+    }
+    return new Promise((resolve, reject) => new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'none', premultiplyAlpha: 'none' }).load(url, (bitmap) => {
+      const t = new THREE.Texture(bitmap); t.needsUpdate = true; resolve(done(t));
+    }, undefined, () => reject(new Error('could not load ' + url))));
+  }
+  const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
   function moverSet() { return new Set(ctx.movers().filter(Boolean)); }
   function liveParts() {
@@ -91,13 +103,14 @@
   }
 
   async function load() {
-    if (!THREE.GLTFLoader) await loadScript(LOADER);
-    meta = await (await fetch(BASE + 'bake.json')).json();
+    [, meta] = await Promise.all([THREE.GLTFLoader ? null : loadScript(LOADER), fetch(BASE + 'bake.json').then((r) => r.json())]);
+    // The light for the time showing now comes beside the room, not after it.
+    if (meta.times[ctx.part()]) lightMap(ctx.part()).catch(() => {});
     const [gltf, ao] = await Promise.all([
       new Promise((resolve, reject) => new THREE.GLTFLoader().load(BASE + 'room.glb', resolve, undefined, reject)),
       loadTexture(BASE + 'ao.png')
     ]);
-    ao.flipY = false;
+    aoMap = ao;
     // The live materials, by the name the bake gave them, so the copy keeps their textures and colours.
     const keys = new Set(meta.keys), byName = {};
     parts = liveParts().filter((m) => keys.has(m.userData.bakeKey = meshKey(m)));
@@ -117,7 +130,7 @@
 
   async function lightMap(time) {
     if (!lightMaps[time]) {
-      lightMaps[time] = loadTexture(BASE + meta.times[time].light).then((t) => { t.flipY = false; t.encoding = THREE.sRGBEncoding; return t; });
+      lightMaps[time] = loadTexture(BASE + meta.times[time].light, THREE.sRGBEncoding);
     }
     return lightMaps[time];
   }
@@ -137,6 +150,7 @@
     const on = !!(time && meta.times[time]);
     if (on) {
       const map = await lightMap(time), k = meta.times[time].lightMapIntensity;
+      if (!onGpu.has(map)) { ctx.renderer.initTexture(map); onGpu.add(map); await nextFrame(); }
       if (ctx.part() !== time) return;  // the Light changed while the texture came
       room.traverse((o) => { if (o.isMesh) { o.material.lightMap = map; o.material.lightMapIntensity = k; } });
       lights(time);
@@ -149,7 +163,7 @@
     state.status = on ? 'baked' : 'live';
     state.fx = on && fxWanted ? (composer ? 'on' : 'loading') : 'off';
     if (on && fxWanted && !composer && !fxLoading) {
-      fxLoading = loadFx().then(() => { tune(state.time); state.fx = state.baked ? 'on' : 'off'; }).catch((e) => {
+      fxLoading = loadFxScripts().then(buildFx).then(() => { tune(state.time); state.fx = state.baked ? 'on' : 'off'; }).catch((e) => {
         fxWanted = false; state.fx = 'off'; haze(null); state.error = String(e && e.message || e);
         console.warn('The baked look\'s effects could not load, so it draws without them:', state.error);
       });
@@ -160,6 +174,7 @@
   // The haze, and the background colour in linear light: the effects turn the whole picture into sRGB
   // at the end, the background too, so without this the dark void around the loft would turn grey.
   // The grid in the void goes while the haze is on: the haze would turn its far lines into a pale band.
+  function hazeFog(time) { return new THREE.FogExp2(FX[time].haze.colour, FX[time].haze.density); }
   function haze(time) {
     const scene = ctx.scene;
     if (time) {
@@ -169,7 +184,7 @@
         liveFog = { fog: scene.fog, background: scene.background, grids };
       }
       liveFog.grids.forEach((g) => { g.visible = false; });
-      scene.fog = new THREE.FogExp2(FX[time].haze.colour, FX[time].haze.density);
+      scene.fog = hazeFog(time);
       if (liveFog.background && liveFog.background.isColor) scene.background = liveFog.background.clone().convertSRGBToLinear();
     } else if (liveFog) {
       scene.fog = liveFog.fog; scene.background = liveFog.background;
@@ -195,20 +210,90 @@
       '}'
     ].join('\n')
   };
-  async function loadFx() {
-    for (const src of ADDONS) await loadScript(src);
-    const r = ctx.renderer, w = Math.max(1, view.w), h = Math.max(1, view.h);
+  function loadFxScripts() {
+    if (!fxScripts) fxScripts = (async () => { for (const src of ADDONS) await loadScript(src); })();
+    return fxScripts;
+  }
+  function buildFx() {
+    if (composer) return;
+    const r = ctx.renderer, size = r.getSize(new THREE.Vector2()), w = Math.max(1, size.x), h = Math.max(1, size.y);
     // The scene is drawn into a target first, so it keeps its edges smooth only with multisampling.
     const target = r.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget
       ? new THREE.WebGLMultisampleRenderTarget(w, h, { format: THREE.RGBAFormat }) : undefined;
-    const c = new THREE.EffectComposer(r, target);
-    c.addPass(new THREE.RenderPass(ctx.scene, ctx.camera));
+    const c = new THREE.EffectComposer(r, target), scenePass = new THREE.RenderPass(ctx.scene, ctx.camera);
+    c.addPass(scenePass);
     bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(w, h), 0, 0, 1);
     c.addPass(bloomPass);
     gradePass = new THREE.ShaderPass(GRADE);
     c.addPass(gradePass);
+    c.setPixelRatio(r.getPixelRatio()); c.setSize(w, h);
+    view.w = size.x; view.h = size.y;
+    // Run the bloom and the grade once into the composer's own targets, not the screen, so their
+    // shaders compile now. The grade's last step draws to the screen, which needs a shader of its own.
+    scenePass.enabled = false; c.renderToScreen = false;
+    c.render();
+    scenePass.enabled = true; c.renderToScreen = true;
+    const last = r.getRenderTarget();
+    r.setRenderTarget(null);
+    r.compile(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), gradePass.material), ctx.camera);
+    r.setRenderTarget(last);
     composer = c;
-    view.w = view.h = 0;  // the next frame sets the composer's size
+  }
+
+  // Before the swap: send the textures to the GPU, build the effects, and compile every shader the swap
+  // will need a few materials a frame, so the swap itself is one short frame, not a long freeze.
+  async function warmUp(time) {
+    const r = ctx.renderer, t = time && meta.times[time] ? time : null;
+    r.initTexture(aoMap); await nextFrame();
+    if (!t) return;
+    const map = await lightMap(t);
+    r.initTexture(map); onGpu.add(map); await nextFrame();
+    room.traverse((o) => { if (o.isMesh) { o.material.lightMap = map; o.material.lightMapIntensity = meta.times[t].lightMapIntensity; } });
+    if (fxWanted && fxScripts) {
+      try { await fxScripts; buildFx(); tune(t); await nextFrame(); } catch (e) { /* show() tries again and reports it */ }
+    }
+    await precompile(t);
+  }
+  // three.js keeps a shader for each material, fog and target, and compile() makes the ones that are
+  // missing without drawing. For the length of each call the scene is set as the swap leaves it: the
+  // baked copy shown, the parts it stands in for hidden, and with the effects, their haze and target.
+  // compile() takes every material in the scene, shown or not, so for each call all but the next few
+  // are taken out, and all go back before the frame. Nothing draws in between, so no frame sees it.
+  async function precompile(t) {
+    const r = ctx.renderer, scene = ctx.scene, fx = !!(composer && fxWanted);
+    const fog = fx ? hazeFog(t) : scene.fog, target = fx ? composer.renderTarget1 : null, inRoom = new Set([room]);
+    function asSwap(fn) {
+      const was = { fog: scene.fog, target: r.getRenderTarget(), parts: parts.map((m) => m.visible), room: room.visible };
+      parts.forEach((m) => { m.visible = false; }); room.visible = true; scene.fog = fog; r.setRenderTarget(target);
+      try { return fn(); } finally {
+        r.setRenderTarget(was.target); scene.fog = was.fog; room.visible = was.room;
+        parts.forEach((m, i) => { m.visible = was.parts[i]; });
+      }
+    }
+    // What the swap shows. Without the effects only the baked copy is new. With them, everything that
+    // shows draws through the effects' target and haze, and the haze hides the grid.
+    const todo = [], seen = new Set();
+    asSwap(() => scene.traverse((o) => {
+      if (!o.material || !shown(o) || (fx ? o.type === 'GridHelper' : !under(o, inRoom))) return;
+      if (mats(o).some((m) => m && !seen.has(m))) { mats(o).forEach((m) => seen.add(m)); todo.push(o); }
+    }));
+    for (let i = 0; i < todo.length;) {
+      asSwap(() => {
+        const out = [];
+        scene.traverse((o) => { if (o.material) { out.push([o, o.material]); o.material = null; } });
+        const own = new Map(out), start = performance.now();
+        try {
+          while (i < todo.length && performance.now() - start < 8) {
+            const next = todo.slice(i, i + 8).filter((o) => own.has(o));
+            i += 8;
+            next.forEach((o) => { o.material = own.get(o); });
+            r.compile(scene, ctx.camera);
+            next.forEach((o) => { o.material = null; });
+          }
+        } finally { out.forEach(([o, m]) => { o.material = m; }); }
+      });
+      await nextFrame();
+    }
   }
   // Set the bloom and the grade for a time of day.
   function tune(time) {
@@ -236,7 +321,8 @@
     if (!room) {
       if (!loading) {
         state.status = 'loading';
-        loading = load().then(() => show(ctx.part())).catch((e) => {
+        if (fxWanted) loadFxScripts().catch(() => {});  // beside the bake, not after it
+        loading = load().then(() => warmUp(ctx.part())).then(() => show(ctx.part())).catch((e) => {
           state.status = 'live'; state.error = String(e && e.message || e);
           console.warn('The baked look could not load, so the room is lit live:', state.error);
         });
