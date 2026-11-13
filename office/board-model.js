@@ -37,17 +37,23 @@
     return t.status === 'started' ? 'building' : null;
   }
 
+  // A ticket's labels (relay/tickets.js), or none.
+  const labelsOf = (t) => (Array.isArray(t.labels) ? t.labels : []);
+  // The label filter's value for tickets with no label.
+  const NO_LABEL = '-';
   // A filter keeps a ticket when every part matches: text found in its id, title or body (any case),
-  // the same repo folder, and the same priority. An empty part matches everything.
+  // the same repo folder, the same priority, and the label among its labels (NO_LABEL: it has none).
+  // An empty part matches everything.
   function matches(t, f) {
     if (!f) return true;
     const text = String(f.text || '').trim().toLowerCase();
     if (text && ![t.id, t.title, t.body].some((s) => String(s || '').toLowerCase().includes(text))) return false;
     if (f.repo && (t.repo || '') !== f.repo) return false;
     if (f.priority && t.priority !== f.priority) return false;
+    if (f.label && (f.label === NO_LABEL ? labelsOf(t).length > 0 : !labelsOf(t).includes(f.label))) return false;
     return true;
   }
-  const filtering = (f) => !!(f && (String(f.text || '').trim() || f.repo || f.priority));
+  const filtering = (f) => !!(f && (String(f.text || '').trim() || f.repo || f.priority || f.label));
   // The repo folders on the Board, for the repo filter.
   const repos = (tickets) => [...new Set(tickets.map((t) => t.repo).filter(Boolean))].sort();
 
@@ -65,11 +71,18 @@
   // A column's folded groups, each { key, label, cards }, closed until you open one. Done is one
   // group of the cards it shows, whatever their number. Triage and Ready, from GROUP_FROM cards on,
   // are one group per priority (with its priority), high first, each in the order it came, and only
-  // the priorities they have. null when the column shows every card.
+  // the priorities they have. With by 'label' they are one group per label instead, A to Z, then
+  // No label: a ticket with several labels is in the group of each, so the same card can show more
+  // than once. null when the column shows every card.
   const GROUP_WORDS = { high: 'High', normal: 'Normal', low: 'Low' };
-  function groupsOf(id, cards) {
+  function groupsOf(id, cards, by) {
     if (id === 'done') return cards.length ? [{ key: 'all', label: 'Latest', cards }] : null;
     if (!GROUPED.includes(id) || cards.length < GROUP_FROM) return null;
+    if (by === 'label') {
+      const names = [...new Set(cards.flatMap(labelsOf))].sort();
+      return names.map((l) => ({ key: 'label:' + l, label: l, cards: cards.filter((t) => labelsOf(t).includes(l)) }))
+        .concat([{ key: 'label:', label: 'No label', cards: cards.filter((t) => !labelsOf(t).length) }]).filter((g) => g.cards.length);
+    }
     return PRIORITIES.map((p) => ({ key: p, label: GROUP_WORDS[p], priority: p, cards: cards.filter((t) => priorityOf(t) === p) })).filter((g) => g.cards.length);
   }
 
@@ -88,7 +101,7 @@
   // name, so a card never names someone twice.
   const alsoWith = (names, assignee) => (names || []).filter((n) => !(assignee && assignee.name === n));
 
-  const api = { COLUMNS, DONE_SHOWN, PRIORITIES, GROUP_FROM, priorityOf, groupsOf, stateOf, columnOf, matches, filtering, repos, cardsOf, peopleOn, alsoWith };
+  const api = { COLUMNS, DONE_SHOWN, PRIORITIES, GROUP_FROM, NO_LABEL, priorityOf, labelsOf, groupsOf, stateOf, columnOf, matches, filtering, repos, cardsOf, peopleOn, alsoWith };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.BoardModel = api;
 })(this);

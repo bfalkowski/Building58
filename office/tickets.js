@@ -16,7 +16,8 @@
   const full = section.dataset.full === '1';
   const cols = $('board-cols'), form = $('ticket-form'), note = $('ticket-note'), info = $('board-info'), rejectedBox = $('board-rejected'), rejectedList = rejectedBox.querySelector('ol');
   const status = $('board-status'), waitingLine = $('board-waiting');  // only in the tab
-  const filterText = $('board-filter-text'), filterRepo = $('board-filter-repo'), filterPriority = $('board-filter-priority');  // only in the tab
+  const filterText = $('board-filter-text'), filterRepo = $('board-filter-repo'), filterPriority = $('board-filter-priority'), filterLabel = $('board-filter-label');  // only in the tab
+  const groupPick = $('board-group-by');  // fold Triage and Ready by priority or by label
   const params = new URLSearchParams(location.search);
   const channel = params.get('channel'), key = params.get('key') || '';
   // The page tells you what is wrong in the tab. On the room page the Board just stays out of the way.
@@ -132,6 +133,20 @@
     f.append(input, save, button('Cancel', false, () => { editingKind.delete(t.id); last = ''; redraw(); }));
     return f;
   }
+  // Cards whose labels are being changed, with what has been typed: labels with commas between. The
+  // relay sends the labels in use (relay/tickets.js), which the box names. An empty box takes them all away.
+  const editingLabels = new Map();
+  let labelsInUse = [];
+  function labelsForm(t) {
+    const f = document.createElement('form'); f.className = 'card-actions';
+    const input = document.createElement('input'); input.type = 'text'; input.className = 'whole'; input.value = editingLabels.get(t.id); input.setAttribute('aria-label', 'Labels of ' + t.id); input.spellcheck = false;
+    input.placeholder = labelsInUse.length ? 'In use: ' + labelsInUse.join(', ') : 'Words with commas between, like flaky, follow-up';
+    input.addEventListener('input', () => editingLabels.set(t.id, input.value));
+    const save = document.createElement('button'); save.type = 'submit'; save.className = 'btn primary'; save.textContent = 'Save';
+    f.addEventListener('submit', (ev) => { ev.preventDefault(); act(t, 'labels', { labels: input.value.split(',').map((x) => x.trim()).filter(Boolean) }, () => editingLabels.delete(t.id)); });
+    f.append(input, save, button('Cancel', false, () => { editingLabels.delete(t.id); last = ''; redraw(); }));
+    return f;
+  }
   // Cards being marked done with the PR that merged their work outside the room, with the link typed so far.
   const markingDone = new Map();
   function doneForm(t) {
@@ -212,7 +227,7 @@
     const state = t.status === 'started' && t.task ? t.task.state : '';
     const after = finishedBlockers(t, byId);
     const others = M.alsoWith(people, t.assignee);  // T-24 names who has it; the Floor adds anyone else seated on it
-    meta.textContent = [(t.priority || 'normal') + ' priority', t.kind ? 'kind ' + t.kind : 'no kind', orderedNote(t), t.createdBy, startedNote(t), state ? 'task ' + (STATE_WORDS[state] || state) : '', pipelineNote(t), waitsOnNote(t), window.officeTicketHistory ? window.officeTicketHistory.assigneeText(t) : '', others.length ? 'also with ' + others.join(', ') : '', (t.repo || 'no repo').split('/').pop(), t.base ? 'base ' + t.base : '', t.waitingFor.length ? 'waiting for ' + t.waitingFor.join(', ') : '', t.rejectedBlockers.length ? t.rejectedBlockers.join(', ') + ' was rejected' : '', after.length ? 'after ' + after.join(', ') : '', t.status === 'done' && !t.task && t.pr ? 'merged outside the room' : '', t.status === 'ready' && !t.approved ? 'not approved by you, so nothing starts it by itself' : ''].filter(Boolean).join(' · ');
+    meta.textContent = [(t.priority || 'normal') + ' priority', t.kind ? 'kind ' + t.kind : 'no kind', M.labelsOf(t).length ? 'labels ' + M.labelsOf(t).join(', ') : '', orderedNote(t), t.createdBy, startedNote(t), state ? 'task ' + (STATE_WORDS[state] || state) : '', pipelineNote(t), waitsOnNote(t), window.officeTicketHistory ? window.officeTicketHistory.assigneeText(t) : '', others.length ? 'also with ' + others.join(', ') : '', (t.repo || 'no repo').split('/').pop(), t.base ? 'base ' + t.base : '', t.waitingFor.length ? 'waiting for ' + t.waitingFor.join(', ') : '', t.rejectedBlockers.length ? t.rejectedBlockers.join(', ') + ' was rejected' : '', after.length ? 'after ' + after.join(', ') : '', t.status === 'done' && !t.task && t.pr ? 'merged outside the room' : '', t.status === 'ready' && !t.approved ? 'not approved by you, so nothing starts it by itself' : ''].filter(Boolean).join(' · ');
     li.append(meta);
     const row = document.createElement('div'); row.className = 'card-actions';
     if (t.status === 'started' && !t.task) row.append(button('Start again', true, () => act(t, 'start', {})));
@@ -222,6 +237,7 @@
     if ((t.status === 'triage' || t.status === 'ready') && !editing.has(t.id)) row.append(button('Edit', false, () => { editing.set(t.id, { from: wordsOf(t), now: wordsOf(t) }); last = ''; redraw(); }));
     if ((t.status === 'triage' || t.status === 'ready') && !editingBase.has(t.id)) row.append(button('Change base', false, () => { editingBase.set(t.id, t.base || ''); last = ''; redraw(); }));
     if ((t.status === 'triage' || t.status === 'ready') && !editingKind.has(t.id)) row.append(button('Change kind', false, () => { editingKind.set(t.id, t.kind || ''); last = ''; redraw(); }));
+    if (!editingLabels.has(t.id)) row.append(button('Labels', false, () => { editingLabels.set(t.id, M.labelsOf(t).join(', ')); last = ''; redraw(); }));
     if ((t.status === 'triage' || t.status === 'ready') && !markingDone.has(t.id)) row.append(button('Merged elsewhere', false, () => { markingDone.set(t.id, ''); last = ''; redraw(); }));
     const pr = (t.task && t.task.pr) || t.pr;  // a ticket marked done without a task keeps its own
     if (pr && /^https:\/\/github\.com\//.test(pr)) { const a = document.createElement('a'); a.href = pr; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'PR #' + pr.split('/').pop(); row.append(a); }
@@ -229,13 +245,30 @@
     if ((t.status === 'triage' || t.status === 'ready') && editing.has(t.id)) li.append(editForm(t));
     if ((t.status === 'triage' || t.status === 'ready') && editingBase.has(t.id)) li.append(baseForm(t));
     if ((t.status === 'triage' || t.status === 'ready') && editingKind.has(t.id)) li.append(kindForm(t));
+    if (editingLabels.has(t.id)) li.append(labelsForm(t));
     if ((t.status === 'triage' || t.status === 'ready') && markingDone.has(t.id)) li.append(doneForm(t));
     return li;
   }
 
   // The tab's filters. The room page has none, so it shows every ticket.
-  const filters = () => ({ text: filterText ? filterText.value : '', repo: filterRepo ? filterRepo.value : '', priority: filterPriority ? filterPriority.value : '' });
-  function clearFilters() { if (filterText) filterText.value = ''; if (filterRepo) filterRepo.value = ''; if (filterPriority) filterPriority.value = ''; }
+  const filters = () => ({ text: filterText ? filterText.value : '', repo: filterRepo ? filterRepo.value : '', priority: filterPriority ? filterPriority.value : '', label: filterLabel ? filterLabel.value : '' });
+  function clearFilters() { if (filterText) filterText.value = ''; if (filterRepo) filterRepo.value = ''; if (filterPriority) filterPriority.value = ''; if (filterLabel) filterLabel.value = ''; }
+  // The label filter: any label, no label, then each label in use. A label no ticket has any more goes.
+  function fillLabels(labels) {
+    labelsInUse = Array.isArray(labels) ? labels : [];
+    if (!filterLabel) return;
+    const have = [...filterLabel.options].slice(2).map((o) => o.value);
+    if (labelsInUse.join('\n') === have.join('\n')) return;
+    const keep = filterLabel.value;
+    filterLabel.length = 2;
+    for (const l of labelsInUse) { const o = document.createElement('option'); o.value = l; o.textContent = l; filterLabel.append(o); }
+    filterLabel.value = keep === M.NO_LABEL || labelsInUse.includes(keep) ? keep : '';
+  }
+  // How Triage and Ready fold, kept in this browser only. The room page and the tab share the pick.
+  const GROUP_BY_KEY = 'office.boardGroupBy';
+  if (groupPick) { try { if (localStorage.getItem(GROUP_BY_KEY) === 'label') groupPick.value = 'label'; } catch (e) { /* no storage */ } }
+  const groupBy = () => (groupPick && groupPick.value === 'label' ? 'label' : 'priority');
+  if (groupPick) groupPick.addEventListener('change', () => { try { localStorage.setItem(GROUP_BY_KEY, groupBy()); } catch (e) { /* no storage */ } last = ''; redraw(); });
   function fillRepos(tickets) {
     if (!filterRepo) return;
     const want = M.repos(tickets), have = [...filterRepo.options].slice(1).map((o) => o.value);
@@ -245,7 +278,7 @@
     for (const r of want) { const o = document.createElement('option'); o.value = r; o.textContent = r.split('/').pop(); o.title = r; filterRepo.append(o); }
     filterRepo.value = want.includes(keep) ? keep : '';
   }
-  [filterText, filterRepo, filterPriority].forEach((el) => el && el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', () => { last = ''; redraw(); }));
+  [filterText, filterRepo, filterPriority, filterLabel].forEach((el) => el && el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', () => { last = ''; redraw(); }));
 
   let doneAll = false;  // every Done ticket, not just the latest
   // The Waiting on you line at the top of the tab: what the person most needs to see.
@@ -290,6 +323,7 @@
   }
   const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
   // more is a button to put at the end of the last group, such as Done's Show older.
+  let shownCards = new Set();  // the tickets drawn so far in this draw
   function groupsBox(colId, box, groups, cards, byId, filtering, more, now, groupsNow) {
     place(box, groups.map((g, i) => {
       const name = colId + ':' + g.key;
@@ -306,7 +340,8 @@
       const open = openGroups.has(name) || filtering || goneTo;
       if (e.d.open !== open) { e.was = open; e.d.open = open; }
       setText(e.s, g.label + ' (' + g.cards.length + ')');
-      place(e.ol, g.cards.map((t) => kept(cardEls, now, t.id, card(t, byId, people.get(t.id) || [], cards))));
+      // By label, a card can be in more than one group. Its first one keeps the ticket's id as its key.
+      place(e.ol, g.cards.map((t) => { const k = shownCards.has(t.id) ? name + '|' + t.id : t.id; shownCards.add(t.id); return kept(cardEls, now, k, card(t, byId, people.get(t.id) || [], cards)); }));
       place(e.d, [e.s, e.ol].concat(more && i === groups.length - 1 ? [more] : []));
       return e.d;
     }));
@@ -325,7 +360,7 @@
   cols.addEventListener('focusout', () => setTimeout(() => { if (!using()) redraw(); }));
   function draw(r) {
     const f = filters();
-    const text = JSON.stringify([r.tickets, r.leadStarts, r.leadStartsLeft, [...people], f, doneAll]);
+    const text = JSON.stringify([r.tickets, r.leadStarts, r.leadStartsLeft, [...people], f, doneAll, groupBy()]);
     if (text === last || using()) return;
     last = text;
     const byId = new Map(r.tickets.map((t) => [t.id, t]));
@@ -333,6 +368,7 @@
     const rejected = shown.filter((t) => t.status === 'rejected'), rejectedAll = r.tickets.filter((t) => t.status === 'rejected').length;
     fillRepos(r.tickets);
     fillKinds(r.kinds);
+    fillLabels(r.labels);
     drawWaiting(r.tickets.filter((t) => M.columnOf(t) === 'waiting_on_you'));
     info.textContent = 'Kept in: ' + r.store + ' · up to ' + r.wipLimit + ' building at once, counting Changes requested' + (r.leadStarts ? ' · the Lead starts tickets while fewer than ' + r.leadStarts + ' are building, ' + r.leadStartsLeft + ' more at most' : '');
     // Ready tickets no person approved, most of them from before approvals were kept. One press approves
@@ -351,6 +387,7 @@
       info.append(' · ', b);
     }
     const now = new Map(), groupsNow = new Map();
+    shownCards = new Set();
     place(cols, M.COLUMNS.map((c) => {
       let e = columnEls.get(c.id);
       if (!e) {
@@ -363,7 +400,7 @@
       if (here.length) e.col.dataset.some = '1'; else delete e.col.dataset.some;
       setText(e.h, c.label + ' (' + (filtering ? here.length + ' of ' + all.length : all.length) + ')');
       const more = moreButton(e, c.id === 'done' && (hidden || (doneAll && here.length > M.DONE_SHOWN)) ? (hidden ? 'Show ' + hidden + ' older' : 'Show only the latest ' + M.DONE_SHOWN) : '');
-      const groups = M.groupsOf(c.id, cards);
+      const groups = M.groupsOf(c.id, cards, groupBy());
       if (groups) { groupsBox(c.id, e.groups, groups, cards, byId, filtering, more, now, groupsNow); place(e.col, [e.h, e.groups]); }
       else {
         place(e.list, cards.map((t) => kept(cardEls, now, t.id, card(t, byId, people.get(t.id) || [], cards))));
