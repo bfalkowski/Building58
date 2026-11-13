@@ -107,8 +107,8 @@
   hold(3.6);
   shot(5, track('manager', [1.2, 1.9, 3.6], [0.4, 1.75, 2.6]), { fov: 34 });
   shot(6.5, dolly([10.5, 7.6, 10.6], [-0.2, 0.6, -0.2], [7.4, 6.8, 13], [-0.2, 0.6, -0.2]), { fov: 34 });
-  shot(3.5, dolly([4.8, 4.2, 7.2], [-1.4, 1.4, -3], [8, 6.5, 11], [-0.6, 0.8, -0.6]), { fov: 34 });
-  shot(7.5, orbit('cake', { r: 2.6, h: 3.6, a0: 0.35, a1: 0.7, lift: 0.4 }), { fov: 44 });
+  shot(7.1, dolly([4.8, 4.2, 7.2], [-1.4, 1.4, -3], [11, 9, 14.5], [-0.2, 0.6, -0.2]), { fov: 34, ease: false });
+  shot(3.9, null);  // the last frame of the pull-back, frozen
 
   let t0 = 0; SHOTS.forEach((s) => { s.at = t0; t0 += s.dur; });
   const LENGTH = t0;
@@ -158,11 +158,10 @@
     [65.8, () => { run.speed({ value: 8 }); run.time('day'); }],
     [68, () => run.time('evening')],
     [70.2, () => run.time('night')],
-    [72.1, () => { run.done({ all: true }); run.party({ on: true, seconds: 60 }); run.speed({ value: 8 }); }],
-    [75.6, speed(1)]
+    [72.1, speed(1)]
   ];
-  // The end: a second party, and on the last chord the picture stops, like the last frame of an
-  // 80s film, and the title comes up over it.
+  // The end: the camera pulls back over the whole room, and on the last chord the picture stops,
+  // like the last frame of an 80s film, and the title comes up over it.
   const FREEZE = 79.2;
 
   // ---------- playing it ----------
