@@ -2288,6 +2288,8 @@
     clock: (t) => { if (filmDrawn == null) filmDrawn = t; filmAt = t; return t; },
     // Brings the whole roster into the room at once, for the trailer.
     cast: () => { people.forEach((w) => { w.extra = false; if (!w.present) { w.present = true; w.fig.root.visible = true; placeAway(w); } }); return people.length; },
+    // Ends the manager's visit at once, for the trailer: its cut to night jumps past his walk out.
+    managerGone: () => { if (boss.present) bossLeft(); return true; },
     tags: (on) => { showTags = on == null ? !showTags : !!on; return showTags; },
     time: setTime,
     holiday: setHoliday,

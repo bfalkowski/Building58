@@ -157,7 +157,7 @@
     [58.6, () => { run.speed({ value: 1 }); workers.forEach((who) => run.work({ who, label: 'Looking busy' })); }],
     [65.8, () => { run.speed({ value: 8 }); run.time('day'); }],
     [68, () => run.time('evening')],
-    [70.2, () => run.time('night')],
+    [69.7, () => { run.time('night'); run.managerGone(); }],  // the cut to night jumps past his walk out the door
     [72.1, speed(1)]
   ];
   // The end: the camera pulls back over the whole room, and on the last chord the picture stops,
