@@ -13,7 +13,7 @@ module.exports = [
     }
   },
   {
-    files: ['relay/**/*.js', '.githooks/**/*.js', 'office/baked/**/*.js', 'eslint.config.js'],
+    files: ['relay/**/*.js', '.githooks/**/*.js', 'office/baked/**/*.js', 'office/record-trailer.js', 'eslint.config.js'],
     languageOptions: { sourceType: 'commonjs', globals: globals.node }
   },
   {
