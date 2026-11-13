@@ -171,6 +171,7 @@
   .tasks header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
   .tasks h2 { margin: 0; font: 500 13px/1.3 var(--mono); color: var(--pane-strong); letter-spacing: 0.04em; }
   .tasks header p { margin: 0; color: var(--pane-dim); }
+  #board > #board-group-by { width: auto; max-width: 14em; justify-self: start; align-self: start; }
   .tasks[data-folded] > :not(header) { display: none !important; }  /* office/fold.js. It must beat each part's own display, such as #board-cols { display: grid } */
   .tasks h2 .fold { all: unset; cursor: pointer; }
   .tasks h2 .fold::before { content: '\25B8  '; color: var(--pane-dim); }
@@ -562,6 +563,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
       <div class="ticket-buttons"><button class="btn primary" type="submit">Add ticket</button> <button class="btn" id="ticket-pm" type="button">Ask the PM</button></div>
       <span id="ticket-note" role="status"></span>
     </form>
+    <select id="board-group-by" aria-label="Fold Triage and Ready by"><option value="priority">Fold by priority</option><option value="label">Fold by label</option></select>
     <div id="board-cols"></div>
     <details id="board-rejected" hidden><summary>Rejected</summary><ol></ol></details>
   </section>

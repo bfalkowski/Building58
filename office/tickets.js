@@ -17,7 +17,7 @@
   const cols = $('board-cols'), form = $('ticket-form'), note = $('ticket-note'), info = $('board-info'), rejectedBox = $('board-rejected'), rejectedList = rejectedBox.querySelector('ol');
   const status = $('board-status'), waitingLine = $('board-waiting');  // only in the tab
   const filterText = $('board-filter-text'), filterRepo = $('board-filter-repo'), filterPriority = $('board-filter-priority'), filterLabel = $('board-filter-label');  // only in the tab
-  const groupPick = $('board-group-by');  // only in the tab: fold Triage and Ready by priority or by label
+  const groupPick = $('board-group-by');  // fold Triage and Ready by priority or by label
   const params = new URLSearchParams(location.search);
   const channel = params.get('channel'), key = params.get('key') || '';
   // The page tells you what is wrong in the tab. On the room page the Board just stays out of the way.
@@ -264,7 +264,7 @@
     for (const l of labelsInUse) { const o = document.createElement('option'); o.value = l; o.textContent = l; filterLabel.append(o); }
     filterLabel.value = keep === M.NO_LABEL || labelsInUse.includes(keep) ? keep : '';
   }
-  // How Triage and Ready fold, kept in this browser only. The room page has no picker, so it folds by priority.
+  // How Triage and Ready fold, kept in this browser only. The room page and the tab share the pick.
   const GROUP_BY_KEY = 'office.boardGroupBy';
   if (groupPick) { try { if (localStorage.getItem(GROUP_BY_KEY) === 'label') groupPick.value = 'label'; } catch (e) { /* no storage */ } }
   const groupBy = () => (groupPick && groupPick.value === 'label' ? 'label' : 'priority');

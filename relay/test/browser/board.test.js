@@ -297,6 +297,13 @@ pageTest('a card takes labels, and the tab folds and filters by label', get, asy
 
   await page.reload();
   assert.strictEqual(await page.locator('#board-group-by').inputValue(), 'label', 'the fold is kept in this browser');
+  // The room page's Board has the same picker, and shares the pick.
+  await p.open(); await unfold(p, 'board');
+  assert.strictEqual(await page.locator('#board-group-by').inputValue(), 'label', 'the room page shares the pick');
+  await page.locator('[data-col="ready"] details.group[data-group="label:ci"]').waitFor({ state: 'attached' });
+  if (process.env.LABEL_SHOT) await page.locator('#board').screenshot({ path: process.env.LABEL_SHOT });
+  await page.selectOption('#board-group-by', 'priority');
+  await page.locator('[data-col="ready"] details.group[data-group="normal"]').waitFor({ state: 'attached' });
   await page.evaluate(() => { try { localStorage.removeItem('office.boardGroupBy'); } catch (e) { /* no storage */ } });
   for (const id of ids) await o.R.call('POST', '/tickets/' + id + '/move', { to: 'rejected' });
   assert.deepStrictEqual(p.errors, []);
