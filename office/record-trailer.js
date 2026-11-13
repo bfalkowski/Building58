@@ -8,6 +8,7 @@
 //   npm run trailer -- --out film.mp4 --fps 30 --width 3840 --height 2160
 //   npm run trailer -- --stills 5,16,47      only those seconds, as PNG pictures, to look at shots
 //   npm run trailer -- --look live           the room lit live, without the baked look
+//   npm run trailer -- --seed 7              another seed: people pick other spots
 //
 // Needs ffmpeg on the PATH, and Chrome or the Chromium from npx playwright-core install chromium.
 // Nothing leaves this computer except the page's own CDN and font links.
@@ -24,6 +25,7 @@ const opt = (name, fallback) => { const i = args.indexOf('--' + name); return i 
 const FPS = Number(opt('fps', 60)), WIDTH = Number(opt('width', 1920)), HEIGHT = Number(opt('height', 1080));
 const OUT = path.resolve(opt('out', 'trailer.mp4'));
 const LOOK = opt('look', 'baked');
+const SEED = Number(opt('seed', 58));
 const STILLS = opt('stills', '') ? opt('stills').split(',').map(Number).sort((a, b) => a - b) : null;
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.svg': 'image/svg+xml' };
@@ -51,6 +53,12 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.error('page error:', e.message));
   await page.clock.install({ time: new Date('2026-11-13T21:30:00') });
+  // The room picks spots and moves with Math.random. A fixed seed makes every run the same film,
+  // so the stills you check are the frames you get.
+  await page.addInitScript((seed) => {
+    let a = seed >>> 0;
+    Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }, SEED);
   const url = 'http://127.0.0.1:' + server.address().port + '/office/?trailer&look=' + encodeURIComponent(LOOK);
   await page.goto(url, { waitUntil: 'load' });
   // Let the room build and the baked look load, on the page's clock, until the film starts.

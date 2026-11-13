@@ -965,7 +965,7 @@
   function tickBoss(dt) {
     const open = boss.present && Math.hypot(boss.pos.x - DOOR.x, boss.pos.z + 5) < 1.7 ? -1.35 : 0;
     door.rotation.y += (open - door.rotation.y) * Math.min(1, dt * 5);
-    if (!boss.present) { if (worldT >= bossDue && !party.on) bossVisit('world'); return; }  // the manager does not walk in on a party
+    if (!boss.present) { if (worldT >= bossDue && !party.on && !directed) bossVisit('world'); return; }  // the manager does not walk in on a party, or on the trailer
     if (!boss.step && !boss.steps.length) { bossLeft(); return; }
     tickWorker(boss, dt);
   }
