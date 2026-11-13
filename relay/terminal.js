@@ -34,6 +34,7 @@ const wipLimit = () => config.get('wipLimit');
 const TAIL = 16 * 1024, SETTLED = 1500, AFTER_TRUST = 400;
 const { claim } = require('./lockfile.js');
 const sessionEnv = require('./session-env.js');
+const seatBoundary = require('./seat-boundary.js');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const channels = new Map();  // channel -> Map(terminal id -> terminal)
 function termsOf(channel) {
@@ -537,7 +538,11 @@ function start(channel, body, ctx, onExit, own) {
       ...(own && own.round ? { OFFICE_SEAT: '1', OFFICE_PLAY: path.join(__dirname, 'play.js') } : {})
     });
     // meta comes back from the host after a restart, so the next relay knows whose session it is.
-    t.io = link.spawn({ id, cwd, env, cmd: [CLAUDE].concat(args), cols, rows, meta: { channel, sessionId, token, cwd } }, { out: emitOut, exit: ended });
+    // A seat runs inside its own boundary, so its shell cannot read the game's truth, the other seats or
+    // the room's state (relay/seat-boundary.js), and it does not learn where the games are.
+    if (own && own.round) { delete env.GAMES_REPO; delete env.GAMES_HOME; }
+    const cmd = own && own.round ? seatBoundary.wrap([CLAUDE].concat(args), { seatDir: cwd, sessionId, stateDir: require('./state.js').dir() }) : [CLAUDE].concat(args);
+    t.io = link.spawn({ id, cwd, env, cmd, cols, rows, meta: { channel, sessionId, token, cwd } }, { out: emitOut, exit: ended });
   }
   // Bring back briefs the Lead again. A Lead the relay brings back after a restart is in the same
   // conversation, which has the brief already, unless it never went in.

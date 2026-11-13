@@ -36,6 +36,10 @@ const { launch } = require('../session-host.js');
 const REPO = path.join(__dirname, '..', '..');
 const FIXTURE = path.join(__dirname, 'game.fixture.js');
 const seatHeaders = (token) => ({ 'X-Office-Token': token });
+// Seats run inside sandbox-exec on macOS (relay/seat-boundary.js). Elsewhere, such as Linux CI, these
+// tests run rounds with the boundary off, and the attack test is skipped.
+const MAC = process.platform === 'darwin';
+const BOUNDARY = MAC ? {} : { RELAY_SEAT_ISOLATION: 'off' };
 
 // A temporary GAMES_REPO with one folder per game. Each game's entry file loads the fake game.
 function gamesRepo(t, games) {
@@ -56,7 +60,7 @@ const manifest = (extra) => Object.assign({ name: 'Coin toss', version: '0.1.0',
 async function roundOn(t, settings, body) {
   const root = gamesRepo(t, { coin: manifest() });
   const record = path.join(root, 'record.jsonl');
-  const R = await relay({ GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000' });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000' });
   t.after(R.stop);
   const before = (await R.call('GET', '/terminals')).body.terminals.map((x) => x.id);
   const started = await R.call('POST', '/rounds', Object.assign({ game: 'coin', seed: 'seed-1', settings: Object.assign({ record }, settings), seats: 2 }, body));
@@ -81,7 +85,7 @@ test('the relay lists the games in GAMES_REPO, and says why a folder is not one'
     nameless: manifest({ name: undefined }),
     future: manifest({ api: 99 })
   });
-  const R = await relay({ GAMES_REPO: root });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root });
   t.after(R.stop);
   const r = await R.call('GET', '/games');
   assert.strictEqual(r.status, 200);
@@ -97,14 +101,14 @@ test('the relay lists the games in GAMES_REPO, and says why a folder is not one'
 });
 
 test('with no GAMES_REPO the relay lists no games', async (t) => {
-  const R = await relay({ GAMES_REPO: '' });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: '' });
   t.after(R.stop);
   assert.deepStrictEqual((await R.call('GET', '/games')).body.games, []);
 });
 
 test('a game that needs what the loader cannot do yet is listed as not ok, and a round of it is refused', async (t) => {
   const root = gamesRepo(t, { vote: manifest({ needs: ['privateBriefs', 'votes'] }) });
-  const R = await relay({ GAMES_REPO: root });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root });
   t.after(R.stop);
   const g = (await R.call('GET', '/games')).body.games[0];
   assert.strictEqual(g.ok, false);
@@ -292,7 +296,7 @@ test('a second finish while the first waits gets the same answer', async (t) => 
 
 test('a seat that cannot get its folder ends the round, and the next round can start', async (t) => {
   const root = gamesRepo(t, { coin: manifest() });
-  const R = await relay({ GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000' });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000' });
   t.after(R.stop);
   const seats = path.join(R.home, '.office-world', 'seats');
   fs.rmSync(seats, { recursive: true, force: true });
@@ -308,7 +312,7 @@ test('a seat that cannot get its folder ends the round, and the next round can s
 
 test('a seat that is still ending after its round stays a seat: its token reaches no chat or tickets', async (t) => {
   const root = gamesRepo(t, { coin: manifest() });
-  const R = await relay({ GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000', FAKE_CLAUDE_SLOW_EXIT: '1' });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000', FAKE_CLAUDE_SLOW_EXIT: '1' });
   t.after(R.stop);
   const started = await R.call('POST', '/rounds', { game: 'coin', seats: 2 });
   const seat = started.body.round.seats[0];
@@ -385,14 +389,14 @@ test('under Watch none, seat screens are refused to the person while the round r
 
 test('a watch mode other than all or none is refused', async (t) => {
   const root = gamesRepo(t, { coin: manifest() });
-  const R = await relay({ GAMES_REPO: root });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root });
   t.after(R.stop);
   assert.strictEqual((await R.call('POST', '/rounds', { game: 'coin', seed: 's', seats: 2, watch: 'some' })).status, 400);
 });
 
 test('while a round runs, the Lead starts no new tickets, and work already running goes on', async (t) => {
   const root = gamesRepo(t, { coin: manifest() });
-  const R = await relay({ GAMES_REPO: root, RELAY_WIP_LIMIT: '3' });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, RELAY_WIP_LIMIT: '3' });
   t.after(R.stop);
   const repo = makeRepo(R.home);
   const lead = (await R.call('POST', '/terminals', { cwd: repo })).body;
@@ -412,7 +416,7 @@ test('while a round runs, the Lead starts no new tickets, and work already runni
 
 test('while a round runs, Autopilot starts no new tickets, and says why', async (t) => {
   const root = gamesRepo(t, { coin: manifest() });
-  const R = await relay({ GAMES_REPO: root, RELAY_AUTOPILOT_TICK_MS: '300' });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, RELAY_AUTOPILOT_TICK_MS: '300' });
   t.after(R.stop);
   const repo = makeRepo(R.home);
   const ticket = (await R.call('POST', '/tickets', { title: 'Wait for the round', repo })).body.ticket;
@@ -430,7 +434,7 @@ test('while a round runs, Autopilot starts no new tickets, and says why', async 
 
 test('a seat on the trust question shows waiting, takes the person\'s answer, then its brief, and is read-only after', async (t) => {
   const root = gamesRepo(t, { coin: manifest() });
-  const R = await relay({ GAMES_REPO: root, FAKE_CLAUDE_TRUST: '1' });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, FAKE_CLAUDE_TRUST: '1' });
   t.after(R.stop);
   const round = (await R.call('POST', '/rounds', { game: 'coin', seed: 's', seats: 2 })).body.round;
   const s1 = round.seats[0];
@@ -456,7 +460,7 @@ test('a relay that restarts mid-round brings back no seat, removes the seat fold
   t.after(() => new Promise((r) => host.stop(r)));
   assert.strictEqual(await host.ready, true);
   const root = gamesRepo(t, { coin: manifest() });
-  const env = { GAMES_REPO: root, RELAY_WORKER: '1', RELAY_HOST_SOCKET: host.socket, RELAY_RESUME: '1' };
+  const env = { ...BOUNDARY, GAMES_REPO: root, RELAY_WORKER: '1', RELAY_HOST_SOCKET: host.socket, RELAY_RESUME: '1' };
   let R = await relay(env);
   const home = R.home, port = R.port;
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
@@ -518,4 +522,73 @@ test('the relay drops a seat\'s words from a hook sent with the key, and an idle
 // Not testable yet
 
 test.todo('the spend cap counts each seat session\'s own cost, from what its status line reports');
-test.todo('a seat with a shell, asked to find out who is paid, cannot read the games repo, the sealed folder, the seed or another seat\'s transcript (needs seats separated by the operating system)');
+test('the attack test: a seat with a shell reads its own folder, and none of the games repo, the sealed truth, the room\'s state, the other seats or other transcripts', { skip: !MAC && 'sandbox-exec is macOS only' }, async (t) => {
+  const root = gamesRepo(t, { coin: manifest() });
+  const sealed = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sealed-')));
+  t.after(() => fs.rmSync(sealed, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(sealed, 'truth.json'), 'TRUTH-MARK');
+  const R = await relay({ GAMES_REPO: root, GAMES_HOME: sealed, FAKE_CLAUDE_TRUST: '1' });
+  t.after(R.stop);
+  const claude = path.join(R.home, '.claude');
+  fs.mkdirSync(path.join(claude, 'projects', 'someone-else'), { recursive: true });
+  fs.writeFileSync(path.join(claude, 'projects', 'someone-else', 'talk.jsonl'), 'OTHER-TRANSCRIPT');
+  fs.writeFileSync(path.join(claude, 'history.jsonl'), 'EVERY-PROMPT');
+  // The brief is the attack. Paths from the seat's own folder (<state>/seats/<round>/S1) reach the room's
+  // state and the other seat. The seats wait on the trust question while the test fills their folders.
+  const tries = { own: 'mine.txt', other: '../S2/mine.txt', state: '../../../sessions.json', game: path.join(root, 'coin', 'game.json'),
+    sealed: path.join(sealed, 'truth.json'), transcript: path.join(claude, 'projects', 'someone-else', 'talk.jsonl'), prompts: path.join(claude, 'history.jsonl') };
+  const r = await R.call('POST', '/rounds', { game: 'coin', seats: 2, settings: { briefText: '/readall ' + Object.values(tries).join(' ') } });
+  assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  assert.strictEqual(r.body.round.isolation, 'sandbox');
+  const [s1, s2] = r.body.round.seats;
+  const cwd = async (s) => (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === s.terminal).cwd;
+  fs.writeFileSync(path.join(await cwd(s1), 'mine.txt'), 'OWN-FOLDER');
+  fs.writeFileSync(path.join(await cwd(s2), 'mine.txt'), 'SEAT-TWO');
+  await until(() => fs.existsSync(path.join(R.home, '.office-world', 'sessions.json')), 'the room to save its sessions');
+  await until(async () => (await R.call('GET', '/rounds/current')).body.round.seats[0].waiting === 'trust', 'S1 to wait on the trust question');
+  assert.strictEqual((await R.call('POST', '/terminals/' + s1.terminal + '/input', { data: 'yes'.repeat(150) + '\r' })).status, 200);
+  const term = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === s1.terminal);
+  await R.hook({ hook_event_name: 'SessionStart', session_id: term.sessionId.slice(0, 12) });
+  let last = '';
+  const screen = await until(async () => { const text = last = await R.screen(s1.terminal); return (text.match(/READ /g) || []).length >= Object.keys(tries).length && text; }, 'S1 to try every read', 150).catch((e) => { throw new Error(e.message + '\nThe seat showed:\n' + last.slice(-1500)); });
+  const got = (p) => (screen.match(new RegExp('READ ' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ': (ok|refused)')) || [])[1];
+  assert.strictEqual(got(tries.own), 'ok', 'the seat reads its own folder');
+  for (const k of ['other', 'state', 'game', 'sealed', 'transcript', 'prompts']) assert.strictEqual(got(tries[k]), 'refused', 'the seat cannot read ' + k);
+  assert.ok(/OWN-FOLDER/.test(screen) && !/SEAT-TWO|TRUTH-MARK|OTHER-TRANSCRIPT|EVERY-PROMPT/.test(screen));
+  await R.call('POST', '/rounds/current/stop', {});
+});
+
+test('a seat does not learn where the games or the sealed truth are', async (t) => {
+  const root = gamesRepo(t, { coin: manifest() });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, GAMES_HOME: '/nowhere/sealed', FAKE_CLAUDE_TRUST: '1' });
+  t.after(R.stop);
+  const r = await R.call('POST', '/rounds', { game: 'coin', seats: 2, settings: { briefText: '/env' } });
+  assert.strictEqual(r.status, 200);
+  const s1 = r.body.round.seats[0];
+  await until(async () => (await R.call('GET', '/rounds/current')).body.round.seats[0].waiting === 'trust', 'S1 to wait on the trust question');
+  await R.call('POST', '/terminals/' + s1.terminal + '/input', { data: 'yes'.repeat(150) + '\r' });
+  const term = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === s1.terminal);
+  await R.hook({ hook_event_name: 'SessionStart', session_id: term.sessionId.slice(0, 12) });
+  const screen = await until(async () => { const text = await R.screen(s1.terminal); return /ENV-END/.test(text) && text; }, 'S1 to print its environment', 150);
+  assert.ok(/OFFICE_SEAT=1/.test(screen), 'the environment printed');
+  assert.ok(!/GAMES_REPO|GAMES_HOME/.test(screen), 'and it has no GAMES_REPO or GAMES_HOME');
+  await R.call('POST', '/rounds/current/stop', {});
+});
+
+test('a round is refused where seats have no boundary, unless the person turns it off', { skip: MAC && 'this computer has sandbox-exec' }, async (t) => {
+  const root = gamesRepo(t, { coin: manifest() });
+  const R = await relay({ GAMES_REPO: root });
+  t.after(R.stop);
+  const r = await R.call('POST', '/rounds', { game: 'coin', seats: 2 });
+  assert.strictEqual(r.status, 409);
+  assert.strictEqual(r.body.error, 'no_boundary');
+});
+
+test('with RELAY_SEAT_ISOLATION=off a round runs, and says it has no boundary', async (t) => {
+  const root = gamesRepo(t, { coin: manifest() });
+  const R = await relay({ GAMES_REPO: root, RELAY_SEAT_ISOLATION: 'off' });
+  t.after(R.stop);
+  const r = await R.call('POST', '/rounds', { game: 'coin', seats: 2 });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.body.round.isolation, 'none');
+});

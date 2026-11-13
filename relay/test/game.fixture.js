@@ -36,7 +36,8 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (m.type === 'hello') return send({ type: 'hello', api: 1 });
   if (m.type === 'setup') {
     if (mode === 'hang') return;
-    for (const seat of m.seats) send({ type: 'brief', seat, text: 'Your brief, ' + seat + '. BRIEF-MARK-' + seat });
+    // settings.briefText, when set, is each seat's whole brief, so a test can type a command into a seat.
+    for (const seat of m.seats) send({ type: 'brief', seat, text: settings.briefText || 'Your brief, ' + seat + '. BRIEF-MARK-' + seat });
     if (mode === 'badline') return process.stdout.write('this is not json\n');
     return send({ type: 'ready' });
   }

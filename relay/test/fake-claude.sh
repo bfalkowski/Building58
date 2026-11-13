@@ -56,6 +56,10 @@ while IFS= read -r line; do
   fi
   if [ "$line" = "/nojob" ] && [ -n "$job" ]; then pkill -P "$job" 2>/dev/null; kill "$job" 2>/dev/null; job=''; fi
   if [ "$line" = "/helper" ]; then sleep 60 & fi
+  # /env prints its environment, so a test can see what a session was given.
+  if [ "$line" = "/env" ]; then env | sort; echo ENV-END; fi
+  # /readall <path>... tries to read each path, as a seat with a shell could, and says what it got.
+  case "$line" in /readall\ *) for f in ${line#/readall }; do if c=$(head -c 40 "$f" 2>/dev/null); then echo "READ $f: ok $c"; else echo "READ $f: refused"; fi; done;; esac
   if [ "$line" = "/spin" ] && [ -z "$spin" ]; then
     ( i=0; while kill -0 $$ 2>/dev/null; do printf '\r\xe2\x9c\xbb Thinking\xe2\x80\xa6 (%ss)' $((i / 5)); i=$((i + 1)); sleep 0.2; done ) &
     spin=$!
