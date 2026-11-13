@@ -5,6 +5,12 @@ squad: a Lead, Devs, reviewers and a PM, with you as the manager. Each developer
 Claude Code sessions. Everything a room shows comes from real state: sessions, tickets, tasks and
 pull requests.
 
+[![The room at night, from the Building58 trailer](docs/trailer.jpg)](https://github.com/bfalkowski/Building58/releases/tag/trailer)
+
+[Watch the trailer](https://github.com/bfalkowski/Building58/releases/tag/trailer) (79 seconds, with
+sound). The room makes it itself: `npm run trailer` records it, with its own 80s music. This cut
+was also edited by hand after 1:00. See [the trailer](docs/manual/running.html#trailer) in the manual.
+
 A room is a world: a browser page with the API `window.run`. Other worlds can live in repos of
 their own and be linked in. The relay passes commands from outside callers (curl, a
 script, a coding agent's hooks) to whichever world is open.
