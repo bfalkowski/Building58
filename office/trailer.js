@@ -96,7 +96,7 @@
   shot(2.6, screen('theo', { side: -0.55 }), { fov: 30 });
   shot(3.4, dolly([2.6, 3.4, 5.4], [-1.2, 0.9, -1.2], [1.2, 2.6, 4.0], [-1.0, 0.9, -1.2]), { fov: 36 });
   hold(1.8);
-  shot(3.2, orbit('espresso', { r: 1.9, h: 0.35, a0: 0.55, a1: 0.15, lift: 0.15 }), { fov: 32 });
+  shot(3.2, orbit('espresso', { r: 1.7, h: 0.45, a0: 1.25, a1: 0.95, lift: 0.25 }), { fov: 34, key: 1.2 });
   shot(4, shoulder('sam'), { fov: 36 });
   shot(4, dolly([2.4, 1.7, 6.4], [-0.6, 0.8, 3.4], [1.4, 1.35, 5.7], [-0.6, 0.85, 3.4]), { fov: 38 });
   hold(1.8);
@@ -145,7 +145,8 @@
     [3.2, speed(1)],
     [15.4, () => run.say({ who: 'lead', text: 'Let\'s ship it.' })],
     [19.5, () => run.activity({ who: 'priya', text: 'All tests pass', kind: 'bash' })],
-    [29.8, () => { run.speed({ value: 8 }); run.idle({ who: 'kai', do: 'pingpong' }); run.idle({ who: 'sam', do: 'window' }); run.idle({ who: 'noor', do: 'coffee' }); }],
+    [29.8, () => { run.speed({ value: 8 }); run.idle({ who: 'kai', do: 'pingpong' }); run.idle({ who: 'sam', do: 'window' }); }],
+    [31.4, () => run.idle({ who: 'noor', do: 'coffee' })],  // late, so she is at the machine in the shot
     [31.6, speed(1)],
     [42.8, () => { run.done({ all: true }); run.party({ on: true, seconds: 60 }); run.speed({ value: 8 }); }],
     [44.6, speed(1)],
