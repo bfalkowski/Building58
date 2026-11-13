@@ -935,7 +935,15 @@
     return true;
   }
   function bossStop(key, pose, dur, extra) { return [{ t: 'walk', key }, { t: 'face', key }, act(Object.assign({ dur, pose }, extra))]; }
-  function bossRemark() { if (Math.random() < 0.55) bubble(boss, pick(['Hm.', 'Interesting.', 'Love the energy.', 'Keep it up.', 'Is that the Q3 deck?', 'Let\'s circle back.', 'Good, good.']), 2.6); }
+  // The manager's lines (office/manager-lines.js), in a shuffled deck: each is said once before any comes round again.
+  const bossLines = window.MANAGER_LINES || ['Hm.'];
+  let bossDeck = [];
+  function bossRemark() {
+    if (Math.random() >= 0.75) return;
+    if (!bossDeck.length) bossDeck = bossLines.slice().sort(() => Math.random() - 0.5);
+    const line = bossDeck.pop();
+    bubble(boss, line, Math.min(6, 2 + line.length / 15));  // long enough to read
+  }
   function bossVisit(src) {
     boss.present = true; boss.fig.root.visible = true; boss.spot = 'boss-door';
     boss.pos.set(DOOR.x, 0, DOOR.behind); boss.yaw = 0; boss.moving = false; boss.step = null;
@@ -1405,7 +1413,7 @@
   // ---------- name tags and speech bubbles ----------
   let showTags = true;
   const proj = new THREE.Vector3();
-  function bubble(w, text, secs) { const b = tagFor[w.id].bub; b.textContent = text; b.hidden = false; w.bubbleUntil = performance.now() + (secs || 2.5) * 1000; }
+  function bubble(w, text, secs) { const b = tagFor[w.id].bub; b.textContent = text; b.classList.toggle('long', text.length > 28); b.hidden = false; w.bubbleUntil = performance.now() + (secs || 2.5) * 1000; }
   function tickTags() {
     const rect = canvas.getBoundingClientRect(), W = rect.width, H = rect.height, now = performance.now(), shown = [];
     for (const w of people) {

@@ -62,6 +62,7 @@
     position: absolute; left: 0; top: 0; padding: 5px 11px; border-radius: 12px; white-space: nowrap; max-width: 30ch; overflow: hidden; text-overflow: ellipsis;
     background: #fffdf6; color: #2b2420; font: 600 14px/1.2 var(--sans); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   }
+  .bubble.long { white-space: normal; width: max-content; max-width: 24ch; text-align: center; }  /* a sentence wraps instead of being cut off */
   .hud { position: absolute; pointer-events: none; font: 12.5px/1.5 var(--mono); color: var(--hud); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
   .hud-tl { top: 12px; left: 14px; }
   .hud-tl .big { font-size: 15px; color: #ffffff; }
@@ -737,6 +738,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
 <script src="holidays.js"></script>
 <script src="../shared/nav.js"></script>
 <script src="look.js"></script>
+<script src="manager-lines.js"></script>
 <script src="office.js"></script>
 <script src="panel.js"></script>
 <script src="orgchart.js"></script>
