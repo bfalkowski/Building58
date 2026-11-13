@@ -52,6 +52,15 @@ test('the filter matches text, repo and priority together', () => {
   assert.deepStrictEqual(repos([t, ticket({ repo: '/r/two' }), ticket({ repo: '/r/one' }), ticket({ repo: '' })]), ['/r/one', '/r/two']);
 });
 
+test('the filter keeps a label, or tickets with no label', () => {
+  const { matches, filtering, NO_LABEL } = model();
+  const a = { id: 'T-1', title: 'x', labels: ['flaky', 'ci'] }, b = { id: 'T-2', title: 'y' };
+  assert.ok(matches(a, { label: 'ci' }));
+  assert.ok(!matches(b, { label: 'ci' }));
+  assert.ok(matches(b, { label: NO_LABEL }));
+  assert.ok(!matches(a, { label: NO_LABEL }));
+  assert.ok(filtering({ label: 'ci' }));
+});
 test('Done shows the first 8 the relay sends, and every older one when asked', () => {
   const { cardsOf, DONE_SHOWN } = model();
   // The relay sends Done latest first (relay/ticket-order.js, T-42), so T-11 here is the latest.
@@ -147,4 +156,14 @@ test('a long Triage or Ready column folds into one group per priority, high firs
   assert.strictEqual(groupsOf('done', []), null, 'an empty Done has no group');
   assert.deepStrictEqual(g.map((x) => x.label), ['High', 'Normal', 'Low']);
   assert.deepStrictEqual(groupsOf('ready', many(GROUP_FROM).map((t) => Object.assign(t, { priority: 'low' }))).map((x) => x.priority), ['low'], 'only the priorities it has');
+});
+test('by label, a long Triage or Ready column folds into one group per label, A to Z, then No label', () => {
+  const { groupsOf, GROUP_FROM } = model();
+  const cards = Array.from({ length: GROUP_FROM }, (_, i) => ({ id: 'T-' + i, priority: 'normal', labels: i === 0 ? ['tests', 'flaky'] : i < 3 ? ['flaky'] : [] }));
+  const g = groupsOf('ready', cards, 'label');
+  assert.deepStrictEqual(g.map((x) => x.label), ['flaky', 'tests', 'No label']);
+  assert.deepStrictEqual(g.map((x) => x.cards.map((t) => t.id)), [['T-0', 'T-1', 'T-2'], ['T-0'], cards.slice(3).map((t) => t.id)], 'a ticket with two labels is in both');
+  assert.ok(g.every((x) => x.key.startsWith('label:')), 'keys apart from the priority groups');
+  assert.strictEqual(groupsOf('ready', cards.slice(1), 'label'), null, 'a short column still shows every card');
+  assert.deepStrictEqual(groupsOf('ready', cards).map((x) => x.label), ['Normal'], 'by priority unless asked');
 });

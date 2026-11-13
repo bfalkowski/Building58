@@ -4,6 +4,7 @@
 //   (blocked-by takes the ids that list and create print: T-1 on the local store, 12 on GitHub issues)
 //   node relay/ticket.js create "Title" --kind docs --body - <<'EOF'
 //   (kind is docs, tests, bug, feature, or one the person added; ticket.js kinds lists them. Leave it out if unsure)
+//   --label flaky,follow-up adds labels that tickets have already; ticket.js labels lists them
 // A body with line breaks, quotes, backticks or $( ) is safe only outside the shell's double quotes, so
 // pass it on stdin with a quoted heredoc, which the shell leaves as written, or from a file (T-49):
 //   node relay/ticket.js create "Title" --body - <<'EOF'
@@ -64,6 +65,7 @@ function flags(args) {
     else if (args[i] === '--priority') out.priority = args[++i];
     else if (args[i] === '--title') out.title = args[++i];
     else if (args[i] === '--kind') out.kind = args[++i];
+    else if (args[i] === '--label') out.labels = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else if (args[i] === '--blocked-by') out.blockedBy = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else out.rest.push(args[i]);
   }
@@ -109,13 +111,19 @@ async function main() {
     if (!r.ok) { console.error(r.message); return 1; }
     // In the Board's order, which the relay sends (relay/ticket-order.js). A ticket whose priority or place
     // the person set says so, since the PM leaves it as it is (T-46).
-    for (const t of r.tickets) console.log(t.id + '  ' + t.status + '  ' + t.priority + '  ' + t.title + (t.kind ? '  (kind ' + t.kind + ')' : '') + (t.task ? '  (task ' + t.task.id + ', ' + t.task.state + ')' : '') + (t.orderedBy === 'you' ? '  (set by the person)' : ''));
+    for (const t of r.tickets) console.log(t.id + '  ' + t.status + '  ' + t.priority + '  ' + t.title + (t.kind ? '  (kind ' + t.kind + ')' : '') + (t.labels && t.labels.length ? '  (labels ' + t.labels.join(', ') + ')' : '') + (t.task ? '  (task ' + t.task.id + ', ' + t.task.state + ')' : '') + (t.orderedBy === 'you' ? '  (set by the person)' : ''));
     return 0;
   }
   if (cmd === 'kinds') {
     const r = await (await fetch(URL_, { headers })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log(r.kinds.join('\n'));
+    return 0;
+  }
+  if (cmd === 'labels') {
+    const r = await (await fetch(URL_, { headers })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    if ((r.labels || []).length) console.log(r.labels.join('\n'));
     return 0;
   }
   if (cmd === 'verdict' && ['merge', 'fix'].includes(args[0])) {
@@ -127,7 +135,7 @@ async function main() {
   if (cmd === 'create') {
     const f = flags(args);
     if (!(await readBody(f))) return 1;
-    const r = await (await fetch(URL_, { method: 'POST', headers, body: JSON.stringify({ title: f.rest.join(' '), body: f.body, priority: f.priority, blockedBy: f.blockedBy, kind: f.kind }) })).json();
+    const r = await (await fetch(URL_, { method: 'POST', headers, body: JSON.stringify({ title: f.rest.join(' '), body: f.body, priority: f.priority, blockedBy: f.blockedBy, kind: f.kind, labels: f.labels }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log((r.duplicate ? 'Already filed: ' : 'Filed: ') + r.ticket.id + '  ' + r.ticket.title + (r.duplicate ? '  (' + r.ticket.status + ')' : '  (waiting in ' + r.ticket.status + ')'));
     return 0;

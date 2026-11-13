@@ -35,6 +35,23 @@ function kindFrom(value, all, agent) {
   if (agent && !known.includes(kind)) return { error: [400, { ok: false, error: 'bad_kind', message: 'Kind is one of: ' + known.join(', ') + '. Only the person adds a new kind.' }] };
   return { kind };
 }
+// A ticket's labels sort the Board: up to MAX_LABELS short words, in the same form as a kind, and
+// nothing in the room acts on them. Unlike a kind, a ticket can have several, and the person can change
+// them at any status, since no measure counts them. The labels in use are the ones the Board offers. A
+// session files with labels there are already; only the person adds a new one.
+const MAX_LABELS = 5;
+const labelsOf = (all) => [...new Set(all.flatMap((t) => (Array.isArray(t.labels) ? t.labels : [])))].sort();
+// The labels as given, as a list or as words with commas between, cleaned, or an error. None is [].
+function labelsFrom(value, all, agent) {
+  if (value === undefined || value === null) return { labels: [] };
+  const list = Array.isArray(value) ? value : String(value).split(',');
+  const labels = [...new Set(list.map((l) => clean(l).toLowerCase()).filter(Boolean))];
+  if (labels.some((l) => !KIND.test(l))) return { error: [400, { ok: false, error: 'bad_label', message: 'A label is one short word: a lowercase letter, then letters, digits or dashes, up to 24 in all, such as flaky or follow-up.' }] };
+  if (labels.length > MAX_LABELS) return { error: [400, { ok: false, error: 'bad_label', message: 'A ticket has at most ' + MAX_LABELS + ' labels.' }] };
+  const known = labelsOf(all), unknown = labels.filter((l) => !known.includes(l));
+  if (agent && unknown.length) return { error: [400, { ok: false, error: 'bad_label', message: 'No ticket has the label ' + unknown.join(', ') + ' yet. ' + (known.length ? 'Labels are: ' + known.join(', ') + '. ' : '') + 'Only the person adds a new label.' }] };
+  return { labels };
+}
 // The rest follow the task. Done from Triage or Ready is for work that merged without a task, so it needs the PR.
 const MOVES = { triage: ['ready', 'rejected', 'done'], ready: ['rejected', 'done'], rejected: ['triage'] };
 // A pull request on GitHub, and nothing more: the Board links to it. Whether it merged is not checked.
@@ -129,12 +146,14 @@ async function create(channel, body, agent) {
   }
   const unusable = tasks.baseProblem(base);
   if (unusable) return [400, { ok: false, error: 'bad_base', message: unusable }];
-  return inTurn(channel, () => file(channel, { title, text, priority, repo, base, blockedBy: body.blockedBy, kind: body.kind }, agent));
+  return inTurn(channel, () => file(channel, { title, text, priority, repo, base, blockedBy: body.blockedBy, kind: body.kind, labels: body.labels }, agent));
 }
-async function file(channel, { title, text, priority, repo, base, blockedBy: asked, kind: askedKind }, agent) {
+async function file(channel, { title, text, priority, repo, base, blockedBy: asked, kind: askedKind, labels: askedLabels }, agent) {
   const all = await listAll(channel);
   const { kind, error } = kindFrom(askedKind, all, agent);
   if (error) return error;
+  const { labels, error: badLabels } = labelsFrom(askedLabels, all, agent);
+  if (badLabels) return badLabels;
   const blockedBy = [...new Set((Array.isArray(asked) ? asked : []).map(String))];
   const unknown = blockedBy.filter((id) => !all.some((t) => t.id === id));
   if (unknown.length) return [400, { ok: false, error: 'bad_blocker', message: 'No such ticket: ' + unknown.join(', ') + '.' }];
@@ -148,7 +167,7 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   }
   // Last in its priority (relay/ticket-order.js). Only this ticket is written.
   const rank = lastRank(all, priority, Date.now());
-  const ticket = await store.create(channel, Object.assign({ title, body: text, priority, rank, repo, base, blockedBy }, kind ? { kind } : {}, { status: agent ? 'triage' : 'ready', createdBy: agent ? agentName(agent) : 'you' }, agent ? {} : { approvedBy: 'you' }));
+  const ticket = await store.create(channel, Object.assign({ title, body: text, priority, rank, repo, base, blockedBy }, kind ? { kind } : {}, labels.length ? { labels } : {}, { status: agent ? 'triage' : 'ready', createdBy: agent ? agentName(agent) : 'you' }, agent ? {} : { approvedBy: 'you' }));
   history.add(channel, ticket, { stage: 'filed', by: ticket.createdBy }, agent || null);
   return [201, { ok: true, ticket: await view(channel, ticket, all.concat(ticket)) }];
 }
@@ -252,6 +271,22 @@ function setKind(channel, ticket, body) {
     if (state !== 'triage' && state !== 'ready') return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can change its kind. This one is ' + state + '.' }];
     if ((now.kind || null) === kind) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
     const changed = await store.update(channel, now.id, { kind });
+    return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
+  });
+}
+
+// The person sets a ticket's labels, at any status, or takes them all away with []. Only the person's key
+// reaches it: relay/server.js lets no session's token post here. The list given replaces the one there.
+function setLabels(channel, ticket, body) {
+  return inTurn(channel, async () => {
+    const all = await listAll(channel);
+    if (body.labels === undefined) return [400, { ok: false, error: 'bad_param', message: 'Give "labels", a list of labels, or [] for none.' }];
+    const { labels, error } = labelsFrom(body.labels, all, null);
+    if (error) return error;
+    const now = all.find((t) => t.id === ticket.id) || ticket;
+    const had = Array.isArray(now.labels) ? now.labels : [];
+    if (had.join(',') === labels.join(',')) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
+    const changed = await store.update(channel, now.id, { labels });
     return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
   });
 }
@@ -551,7 +586,7 @@ function approveReady(channel, body) {
 async function board(channel) {
   const all = await listAll(channel);
   const lead = terminal.leadOf(channel);
-  return { ok: true, store: store.name, wipLimit: tasks.wipLimit(), leadStarts: lead ? lead.starts || 0 : 0, leadStartsLeft: lead ? lead.startsLeft || 0 : 0, statuses: STATUSES, kinds: kindsOf(all), tickets: await Promise.all(boardOrder(all).map((t) => view(channel, t, all))) };
+  return { ok: true, store: store.name, wipLimit: tasks.wipLimit(), leadStarts: lead ? lead.starts || 0 : 0, leadStartsLeft: lead ? lead.startsLeft || 0 : 0, statuses: STATUSES, kinds: kindsOf(all), labels: labelsOf(all), tickets: await Promise.all(boardOrder(all).map((t) => view(channel, t, all))) };
 }
 // Who wants to hear that a channel's tickets were written to (relay/board-push.js), so the Board
 // shows a change at once instead of on its next look.
@@ -563,7 +598,7 @@ const changed = (channel) => changeWatchers.forEach((fn) => fn(channel));
 // An agent proves who it is with its session's own token, which only lets it list and file. The
 // Lead's can also move a ticket (relay/server.js decides that). Only move and create see the agent.
 async function handle(req, res, channel, rest, ctx) {
-  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|base|kind|priority|order|edit)|\/([\w-]{1,64}))?$/);
+  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|base|kind|labels|priority|order|edit)|\/([\w-]{1,64}))?$/);
   if (!route) { if (!/^\/tickets(\/|$)/.test(rest)) return false; ctx.problem(res, 404, 'not_found', 'Unknown ticket route.'); return true; }
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
@@ -602,6 +637,7 @@ async function handle(req, res, channel, rest, ctx) {
         if (ctx.agent && out[1].ok && !out[1].unchanged) ctx.log('The ' + (ctx.agent.lead ? 'Lead' : 'PM') + ' edited ' + ticket.id + ': ' + out[1].edited.join(', ') + (out[1].approvalTaken ? '. It needs your approval again.' : ''));
       }
       else if (req.method === 'POST' && verb === 'kind') out = await setKind(channel, ticket, body || {});
+      else if (req.method === 'POST' && verb === 'labels') out = await setLabels(channel, ticket, body || {});
       else if (req.method === 'POST' && (verb === 'priority' || verb === 'order')) {
         const refused = ctx.agent && sessionMayOrder(channel, ctx.agent);
         if (refused) { ctx.problem(res, 403, 'forbidden', refused); return true; }
@@ -622,4 +658,4 @@ async function handle(req, res, channel, rest, ctx) {
 // Autopilot (relay/autopilot.js) starts a ticket the way the person does, signed with its own name.
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { handle, listAll, board, onChange, startBy, holdStarts, heldWhy, CLI, KINDS };
+module.exports = { handle, listAll, board, onChange, startBy, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };

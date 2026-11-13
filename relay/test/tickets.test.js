@@ -628,6 +628,52 @@ for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..'
     assert.strictEqual((await R.call('GET', '/tickets/' + docs.id)).body.ticket.kind, 'bug');
   });
 }
+// A ticket's labels sort the Board. The person adds and changes them at any status; a session files
+// with labels there are already, and cannot change a ticket's labels.
+for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..', 'ticket-stores', 'github.js')]]) {
+  test('a ticket carries labels, and only the person adds a new one (' + name + ')', async (t) => {
+    const R = await relay(store); t.after(R.stop);
+    const agent = await sessionIn(R, R.repo);
+    const env = { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: agent['X-Office-Token'] };
+    const cli = (...args) => execFileSync('node', [path.join(ROOT, 'relay', 'ticket.js'), ...args], { env, encoding: 'utf8' });
+
+    const flaky = (await R.call('POST', '/tickets', { title: 'A test fails now and then', repo: R.repo, labels: [' Flaky ', 'tests', 'flaky'] })).body.ticket;
+    assert.deepStrictEqual(flaky.labels, ['flaky', 'tests'], 'cleaned, lowercased, each once');
+    const none = (await R.call('POST', '/tickets', { title: 'No labels', repo: R.repo })).body.ticket;
+    assert.ok(!(none.labels || []).length, 'a ticket can have none');
+    const bad = await R.call('POST', '/tickets', { title: 'Odd label', repo: R.repo, labels: ['two words'] });
+    assert.strictEqual(bad.status, 400);
+    assert.strictEqual(bad.body.error, 'bad_label');
+    const many = await R.call('POST', '/tickets', { title: 'Too many', repo: R.repo, labels: ['a', 'b', 'c', 'd', 'e', 'f'] });
+    assert.strictEqual(many.body.error, 'bad_label', 'at most five');
+    assert.deepStrictEqual((await R.call('GET', '/tickets')).body.labels, ['flaky', 'tests'], 'the labels in use, A to Z');
+
+    // A session files with labels there are, and cannot add one.
+    assert.match(cli('create', 'Another flaky test', '--label', 'flaky', '--body', 'Fix it'), /Filed:/);
+    const fromCli = (await R.call('GET', '/tickets')).body.tickets.find((x) => x.title === 'Another flaky test');
+    assert.deepStrictEqual(fromCli.labels, ['flaky']);
+    assert.match(cli('list'), /Another flaky test {2}\(labels flaky\)/);
+    assert.match(cli('labels'), /^flaky\ntests\n$/);
+    assert.throws(() => cli('create', 'A chore', '--label', 'chore', '--body', 'Tidy'), /Only the person adds a new label/);
+
+    // Only the person changes them: a session's token cannot.
+    assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/labels', { labels: ['tests'] }, agent)).status, 401, 'not a session');
+    const changed = await R.call('POST', '/tickets/' + flaky.id + '/labels', { labels: ['ci', 'flaky'] });
+    assert.strictEqual(changed.status, 200, JSON.stringify(changed.body));
+    assert.deepStrictEqual(changed.body.ticket.labels, ['ci', 'flaky'], 'the list given replaces the one there');
+    assert.deepStrictEqual((await R.call('GET', '/tickets/' + flaky.id)).body.ticket.labels, ['ci', 'flaky'], 'the store kept them');
+    assert.deepStrictEqual((await R.call('GET', '/tickets')).body.labels, ['ci', 'flaky'], 'a label no ticket has goes from the list');
+    assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/labels', {})).body.error, 'bad_param');
+    const cleared = await R.call('POST', '/tickets/' + fromCli.id + '/labels', { labels: [] });
+    assert.deepStrictEqual(cleared.body.ticket.labels, [], '[] takes them away');
+
+    if (name !== 'local') return;  // starting needs a checkout, which the fake GitHub has no use for
+    assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/start', {})).status, 200);
+    const late = await R.call('POST', '/tickets/' + flaky.id + '/labels', { labels: ['flaky'] });
+    assert.strictEqual(late.status, 200, 'labels still change once it has started');
+    assert.deepStrictEqual(late.body.ticket.labels, ['flaky']);
+  });
+}
 test('a base change that would make two open tickets with one title on one branch is refused', async (t) => {
   const R = await relay(); t.after(R.stop);
   const wt = branchedRepo(R, 'old');

@@ -266,3 +266,38 @@ pageTest('Edit changes a Ready ticket\'s title, body and priority, and the histo
   await card.locator('p', { hasText: 'See https://example.com/x' }).waitFor();
   await card.locator('.th-steps li', { hasText: 'Edited (body, priority) by you' }).waitFor();
 });
+
+// Labels sort a long Board. The person sets them on a card, and the tab folds Triage and Ready by label,
+// and filters by one. The fold is kept in this browser, so a reload keeps it.
+pageTest('a card takes labels, and the tab folds and filters by label', get, async (p) => {
+  const repo = makeRepo(o.R.home, 'label-repo');
+  const ids = [];
+  for (let i = 0; i < 7; i++) ids.push((await o.R.call('POST', '/tickets', { title: 'Label test ticket ' + i, body: 'x', repo, labels: i < 2 ? ['flaky'] : [] })).body.ticket.id);
+  const page = p.page;
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto(o.address.replace('/office/?', '/office/board.html?'));
+  await page.locator('#board-filter-repo option[value="' + repo + '"]').waitFor({ state: 'attached' });
+  await page.selectOption('#board-filter-repo', repo);
+  const card = page.locator('[data-col="ready"] li[data-ticket="' + ids[2] + '"]').first();
+  await card.getByRole('button', { name: 'Labels' }).click();
+  await page.getByLabel('Labels of ' + ids[2]).fill('Flaky, ci');
+  await card.getByRole('button', { name: 'Save' }).click();
+  await page.locator('[data-col="ready"] li[data-ticket="' + ids[2] + '"] small', { hasText: 'labels flaky, ci' }).first().waitFor();
+
+  await page.selectOption('#board-group-by', 'label');
+  const groups = () => page.locator('[data-col="ready"] details.group > summary').allInnerTexts();
+  await until(p, () => [...document.querySelectorAll('[data-col="ready"] details.group')].some((d) => d.dataset.group === 'label:ci'));
+  assert.deepStrictEqual(await groups(), ['ci (1)', 'flaky (3)', 'No label (4)'], 'one group per label, A to Z, then No label');
+  assert.strictEqual(await page.locator('[data-col="ready"] li[data-ticket="' + ids[2] + '"]').count(), 2, 'a ticket with two labels is in both groups');
+
+  await page.selectOption('#board-filter-label', 'ci');
+  await until(p, () => /^Ready \(1 of \d+\)$/.test(document.querySelector('[data-col="ready"] h3').textContent));
+  await page.selectOption('#board-filter-label', '-');
+  await until(p, () => /^Ready \(4 of \d+\)$/.test(document.querySelector('[data-col="ready"] h3').textContent));
+
+  await page.reload();
+  assert.strictEqual(await page.locator('#board-group-by').inputValue(), 'label', 'the fold is kept in this browser');
+  await page.evaluate(() => { try { localStorage.removeItem('office.boardGroupBy'); } catch (e) { /* no storage */ } });
+  for (const id of ids) await o.R.call('POST', '/tickets/' + id + '/move', { to: 'rejected' });
+  assert.deepStrictEqual(p.errors, []);
+});
