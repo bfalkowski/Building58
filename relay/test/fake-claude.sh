@@ -12,7 +12,14 @@ echo "office panel channel: ${OFFICE_PANEL_CHANNEL:-none}"
 echo "office hook url: ${OFFICE_HOOK_URL:-none}"
 echo "office play: ${OFFICE_PLAY:-none}"
 # With FAKE_CLAUDE_TRUST set, it asks whether to trust the folder, as a real one does in a new folder.
+# With FAKE_CLAUDE_TRUST=arrow it also waits for the answer. Like a real one, its first choice is No, so
+# Enter alone ends it, and Down, then Enter, picks Yes. It then draws a line as long as a real one's
+# welcome box, so the question is far back on screen (AFTER_TRUST in relay/terminal.js).
 if [ -n "$FAKE_CLAUDE_TRUST" ]; then echo "Do you trust the files in this folder?"; fi
+if [ "$FAKE_CLAUDE_TRUST" = "arrow" ]; then
+  IFS= read -r answer
+  case "$answer" in *$'\e[B'*) echo "folder accepted"; printf '=%.0s' $(seq 450); echo;; *) echo "folder refused, exiting"; exit 0;; esac
+fi
 printf '\xe2\x9d\xaf \n'
 # With FAKE_CLAUDE_SLOW_EXIT set, it takes a second to end once the relay hangs it up, so a test can see
 # a session that is stopped but still ending.

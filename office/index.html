@@ -212,6 +212,33 @@
   #chat-note:empty { display: none; }
   #chat-note[data-bad="1"] { color: var(--err); }
   @media (max-width: 720px) { .chat-in { grid-template-columns: minmax(0, 1fr); } }
+  /* The Games panel (office/games.js): the games in GAMES_REPO, a round's seats, and its score and reveal. */
+  #game-form { grid-template-columns: minmax(0, 2fr) 6em minmax(0, 1fr) auto auto; }
+  #game-form textarea { grid-column: 1 / -2; }
+  #game-note { grid-column: 1 / -1; color: var(--pane-dim); }
+  #game-note:empty { display: none; }
+  #game-trust-note { margin: 0; color: var(--pane-dim); }
+  #games [hidden] { display: none !important; }
+  #game-note[data-bad="1"] { color: var(--err); }
+  #game-list, #game-seats, #game-past { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  #game-list li, #game-seats li, #game-past li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 4px 8px; border-left: 3px solid var(--idle); }
+  #game-list li[data-ok="1"] { border-left-color: var(--ok); }
+  #game-list li[data-ok="0"] small { color: var(--err); }
+  #game-seats li[data-waiting="trust"] { border-left-color: var(--wait); }
+  #game-seats li[data-waiting=""] { border-left-color: var(--work); }
+  #game-list b, #game-seats b, #game-past b { font-weight: 500; color: var(--pane-strong); }
+  #game-list small, #game-seats small, #game-past small { color: var(--pane-dim); }
+  #game-round, #game-result { display: grid; gap: 6px; }
+  #game-round h3, #game-result h3 { margin: 0; font: 500 13px/1.3 var(--mono); color: var(--pane-strong); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  #game-round h3 small, #game-result h3 small { color: var(--pane-dim); font-weight: 400; }
+  #game-round [data-isolation="none"] { color: var(--err); }
+  #game-score, #game-reveal { display: grid; gap: 2px; justify-items: start; }
+  #game-score b, #game-reveal b { font-weight: 500; color: var(--pane-strong); }
+  #game-score small { color: var(--pane-dim); margin-top: 4px; }
+  .game-data { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; }
+  .game-data dt { color: var(--pane-dim); }
+  .game-data dd { margin: 0; color: var(--pane-strong); overflow-wrap: anywhere; white-space: pre-wrap; }
+  @media (max-width: 640px) { #game-form { grid-template-columns: minmax(0, 1fr); } #game-form textarea { grid-column: 1; } }
   #task-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   #task-rows li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 8px; border-left: 3px solid var(--idle); }
   #task-rows li[data-state="building"], #task-rows li[data-state="changes_requested"] { border-left-color: var(--work); }
@@ -606,6 +633,36 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
     <ol id="task-rows" aria-label="Tasks"></ol>
   </section>
 
+  <section class="tasks" id="games" aria-labelledby="games-title">
+    <header>
+      <h2 id="games-title">Games</h2>
+      <p id="games-info">A round of a game from GAMES_REPO. Each seat is a fresh session.</p>
+      <a class="help-link" href="../docs/manual/running.html#games-panel" target="_blank" rel="noopener">Games in the manual</a>
+    </header>
+    <ol id="game-list" aria-label="Games"></ol>
+    <form id="game-form" autocomplete="off" novalidate>
+      <select id="game-pick" aria-label="Game"></select>
+      <input id="game-seats-n" type="number" min="1" step="1" value="1" aria-label="Seats">
+      <input id="game-seed" type="text" maxlength="64" spellcheck="false" placeholder="Seed (optional)" aria-label="Seed">
+      <select id="game-watch" aria-label="Watch"><option value="all">Watch all</option><option value="none">Watch none</option></select>
+      <button class="btn primary" type="submit">Start a round</button>
+      <textarea id="game-settings" rows="1" maxlength="4000" spellcheck="false" placeholder='Settings as JSON (optional), like {"rate": 0.5}' aria-label="Settings as JSON"></textarea>
+      <span id="game-note" role="status"></span>
+    </form>
+    <div id="game-round" hidden>
+      <h3><span id="game-round-title"></span><small id="game-round-about"></small></h3>
+      <p id="game-trust-note" hidden>A new seat asks whether to trust its folder, and Claude Code's first choice is No, exit. The trust buttons pick Yes for you.</p>
+      <ol id="game-seats" aria-label="Seats"></ol>
+      <div><button class="btn" id="game-trust-all" type="button" hidden>Trust all waiting seats</button> <button class="btn primary" id="game-finish" type="button">Finish</button> <button class="btn" id="game-stop" type="button">Stop</button></div>
+    </div>
+    <div id="game-result" hidden>
+      <h3><span id="game-result-title"></span><small id="game-result-about"></small></h3>
+      <div id="game-score"></div>
+      <div id="game-reveal"></div>
+    </div>
+    <details id="game-past-box" hidden><summary>Past rounds</summary><ol id="game-past"></ol></details>
+  </section>
+
   <div class="toolbar" aria-label="Room controls">
     <section class="group" aria-labelledby="tb-people">
       <h2 id="tb-people">People</h2>
@@ -750,6 +807,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
 <script src="reviews.js"></script>
 <script src="terminal.js"></script>
 <script src="tasks.js"></script>
+<script src="games.js"></script>
 <script src="ticket-history.js"></script>
 <script src="board-model.js"></script>
 <script src="tickets.js"></script>
