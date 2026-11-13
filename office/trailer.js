@@ -138,16 +138,16 @@
   };
   const speed = (value) => () => run.speed({ value });
   const CUES = [
-    [0, () => { run.tags(false); run.time('night'); run.cast(); run.speed({ value: 6 });
+    [0, () => { run.tags(false); run.time('night'); run.cast(); run.speed({ value: 8 });
       workers.forEach((who) => run.work({ who, label: who === 'lead' ? 'Ship the room' : 'PR' }));
       for (const who in lines) lines[who].forEach(([text, kind]) => run.activity({ who, text, kind })); }],
     [1, () => { run.idle({ who: 'sam', do: 'window' }); run.idle({ who: 'june', do: 'couch' }); }],
     [3.2, speed(1)],
     [15.4, () => run.say({ who: 'lead', text: 'Let\'s ship it.' })],
     [19.5, () => run.activity({ who: 'priya', text: 'All tests pass', kind: 'bash' })],
-    [29.8, () => { run.speed({ value: 5 }); run.idle({ who: 'kai', do: 'pingpong' }); run.idle({ who: 'sam', do: 'window' }); run.idle({ who: 'noor', do: 'coffee' }); }],
+    [29.8, () => { run.speed({ value: 8 }); run.idle({ who: 'kai', do: 'pingpong' }); run.idle({ who: 'sam', do: 'window' }); run.idle({ who: 'noor', do: 'coffee' }); }],
     [31.6, speed(1)],
-    [42.8, () => { run.done({ all: true }); run.party({ on: true, seconds: 60 }); run.speed({ value: 6 }); }],
+    [42.8, () => { run.done({ all: true }); run.party({ on: true, seconds: 60 }); run.speed({ value: 8 }); }],
     [44.6, speed(1)],
     [48.4, () => run.say({ who: 'june', text: 'Cake!' })],
     [55.2, () => run.party({ on: false })],
@@ -168,6 +168,7 @@
     if (start === null) start = now;
     // The recorder sets the film's time for each frame; in a browser it follows the clock.
     const t = window.trailer.clock != null ? window.trailer.clock : (now - start) / 1000;
+    if (window.trailer.clock != null) run.clock(t);
     while (fired < CUES.length && CUES[fired][0] <= t) { try { CUES[fired][1](); } catch (e) { /* a cue that cannot happen is skipped */ } fired++; }
     const s = SHOTS.find((x) => t >= x.at && t < x.at + x.dur) || SHOTS[SHOTS.length - 1];
     if (s.move && !stage.classList.contains('tr-snap')) {  // a snapshot holds the camera still

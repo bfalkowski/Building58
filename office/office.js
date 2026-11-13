@@ -2194,7 +2194,7 @@
   // direct({ pos, target, fov }) holds the camera there and turns the mouse off; direct(null) gives
   // it back. where(name) says where a thing is, so a shot can point at it while it moves.
   // A key light rides with the camera, for close-ups of faces lit from behind: key is how bright.
-  let directed = false;
+  let directed = false, filmAt = null, filmDrawn = null;
   const lookAt = new THREE.Vector3();
   const keyLight = new THREE.PointLight(C(0xffe6cc), 0, 4, 2); scene.add(keyLight);
   function direct(c) {
@@ -2238,7 +2238,8 @@
   function frame(nowMs) {
     requestAnimationFrame(frame);
     lastFrameAt = performance.now();
-    const real = Math.min(0.1, (nowMs - last) / 1000); last = nowMs;
+    // While the trailer's recorder sets the film's time (run.clock), the room moves by exactly that.
+    const real = filmAt != null ? Math.min(0.1, Math.max(0, filmAt - filmDrawn)) : Math.min(0.1, (nowMs - last) / 1000); last = nowMs; filmDrawn = filmAt;
     const dt = real * speed;
     if (dt > 0) tick(dt);
     for (const w of people) applyPose(w, dt);
@@ -2282,6 +2283,9 @@
     view: (name) => setView(name),
     direct,
     where,
+    // The film's time in seconds, set for each frame by the trailer's recorder. From then on the room
+    // moves by the film's time, not the browser's, so a slow frame never makes people hurry.
+    clock: (t) => { if (filmDrawn == null) filmDrawn = t; filmAt = t; return t; },
     // Brings the whole roster into the room at once, for the trailer.
     cast: () => { people.forEach((w) => { w.extra = false; if (!w.present) { w.present = true; w.fig.root.visible = true; placeAway(w); } }); return people.length; },
     tags: (on) => { showTags = on == null ? !showTags : !!on; return showTags; },

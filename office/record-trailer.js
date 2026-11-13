@@ -9,6 +9,7 @@
 //   npm run trailer -- --stills 5,16,47      only those seconds, as PNG pictures, to look at shots
 //   npm run trailer -- --look live           the room lit live, without the baked look
 //   npm run trailer -- --seed 7              another seed: people pick other spots
+//   npm run trailer -- --audio song.m4a --audio-start 12   music under it, from 12 s in, faded out at the end
 //
 // Needs ffmpeg on the PATH, and Chrome or the Chromium from npx playwright-core install chromium.
 // Nothing leaves this computer except the page's own CDN and font links.
@@ -26,6 +27,7 @@ const FPS = Number(opt('fps', 60)), WIDTH = Number(opt('width', 1920)), HEIGHT =
 const OUT = path.resolve(opt('out', 'trailer.mp4'));
 const LOOK = opt('look', 'baked');
 const SEED = Number(opt('seed', 58));
+const AUDIO = opt('audio', ''), AUDIO_START = Number(opt('audio-start', 0));
 const STILLS = opt('stills', '') ? opt('stills').split(',').map(Number).sort((a, b) => a - b) : null;
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.svg': 'image/svg+xml' };
@@ -73,7 +75,9 @@ async function main() {
   const frames = Math.ceil(length * FPS);
   let ffmpeg = null;
   if (!STILLS) {
-    ffmpeg = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-',
+    const sound = AUDIO ? ['-ss', String(AUDIO_START), '-i', path.resolve(AUDIO), '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '256k',
+      '-af', 'afade=t=in:d=0.5,afade=t=out:st=' + Math.max(0, length - 4).toFixed(2) + ':d=4', '-shortest'] : [];
+    ffmpeg = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-', ...sound,
       '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', OUT], { stdio: ['pipe', 'inherit', 'inherit'] });
   }
   const started = Date.now();
