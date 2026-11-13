@@ -460,7 +460,7 @@ test('a relay that restarts mid-round brings back no seat, removes the seat fold
   t.after(() => new Promise((r) => host.stop(r)));
   assert.strictEqual(await host.ready, true);
   const root = gamesRepo(t, { coin: manifest() });
-  const env = { GAMES_REPO: root, RELAY_WORKER: '1', RELAY_HOST_SOCKET: host.socket, RELAY_RESUME: '1' };
+  const env = { ...BOUNDARY, GAMES_REPO: root, RELAY_WORKER: '1', RELAY_HOST_SOCKET: host.socket, RELAY_RESUME: '1' };
   let R = await relay(env);
   const home = R.home, port = R.port;
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
