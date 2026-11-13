@@ -285,7 +285,7 @@ async function handle(req, res) {
     ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) ||  // the PM and the Lead edit a Triage or Ready ticket (relay/tickets.js)
     (req.method === 'POST' && m[2] === '/terminals/context') ||  // its own status line says how full its context is (relay/terminal.js)
     (req.method === 'POST' && m[2] === '/commands'))));  // its own hooks, and nothing else (below)
-  if (!authorized(req, url) && !tokenMay && (seat || (office && plays))) { problem(res, 403, 'forbidden', seat ? 'A seat in a round only plays, with node relay/play.js.' : 'Only a seat in the round that runs can play.'); return; }
+  if (!authorized(req, url) && !tokenMay && (seat || (office && plays))) { problem(res, 403, 'forbidden', seat ? 'A seat in a round only plays, with node "$OFFICE_PLAY".' : 'Only a seat in the round that runs can play.'); return; }
   // Priority and the work order are the person's, and a PM's or Lead's they allowed: a session's token is known here, so it is told no (403), not asked who it is.
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.'); return; }
   // Only the person, the PM and the Lead edit a ticket's words (T-90).
@@ -350,9 +350,8 @@ async function handle(req, res) {
         command.event = Object.assign({}, ev, { terminal: agent.id });
       }
       // A seat's hooks keep their events, but none of the seat's words: its first prompt is its brief.
-      if (office && command.action === 'hook' && command.event && typeof command.event === 'object' && office.games.isSeat({ id: command.event.terminal })) {
-        command.event = Object.assign({}, command.event);
-        for (const k of ['prompt', 'title', 'customTitle', 'message']) delete command.event[k];
+      if (office && command.action === 'hook' && command.event && typeof command.event === 'object' && office.games.isSeat({ id: command.event.terminal }, name)) {
+        command.event = require('./round-seats.js').quiet(command.event);
       }
       if (command.action === 'hook') {
         // Hooks run on this computer and post to localhost. One from anywhere else, such as a tunnel with

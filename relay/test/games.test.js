@@ -225,14 +225,30 @@ test('a seat gets no real work: the ticket routes refuse its token', async (t) =
   assert.strictEqual((await R.call('GET', '/tickets', null, seatHeaders(token))).status, 403);
 });
 
-test('relay/play.js sends an action with the session\'s own token', async (t) => {
+test('relay/play.js sends an action with the session\'s own token, from the seat\'s own empty folder', async (t) => {
   const { R, started } = await roundOn(t, {});
-  const token = await tokenOf(R, started.body.round.seats[0].terminal);
+  const seat = started.body.round.seats[0];
+  const token = await tokenOf(R, seat.terminal);
+  // The seat is told where play.js is, since its own folder holds nothing (OFFICE_PLAY).
+  const shown = await until(async () => (await R.screen(seat.terminal)).match(/office play: (\S+)/), 'the seat to show OFFICE_PLAY');
+  assert.strictEqual(shown[1], path.join(REPO, 'relay', 'play.js'));
+  const cwd = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === seat.terminal).cwd;
   const { execFileSync } = require('child_process');
-  const out = execFileSync('node', [path.join(REPO, 'relay', 'play.js'), 'ask', 'Is "keeps colds away" a claim?'], {
-    env: { ...process.env, OFFICE_TICKET_TOKEN: token, OFFICE_TICKET_URL: R.base }, encoding: 'utf8'
+  const out = execFileSync('node', [shown[1], 'ask', 'Is "keeps colds away" a claim?'], {
+    cwd, env: { ...process.env, OFFICE_TICKET_TOKEN: token, OFFICE_TICKET_URL: R.base }, encoding: 'utf8'
   });
   assert.match(out, /The assistant answers S1 about ask/);
+});
+
+test('the game routes answer only the room page and the sessions on this computer', async (t) => {
+  const { R } = await roundOn(t, {});
+  const away = { Authorization: 'Bearer test-key', Origin: 'https://example.com' };
+  for (const [method, route] of [['GET', '/games'], ['POST', '/rounds'], ['GET', '/rounds'], ['GET', '/rounds/current'], ['POST', '/rounds/current/finish'], ['POST', '/rounds/current/stop']]) {
+    const r = await R.call(method, route, method === 'POST' ? {} : null, away);
+    assert.strictEqual(r.status, 403, method + ' ' + route);
+    assert.strictEqual(r.body.error, 'local_only', method + ' ' + route);
+  }
+  assert.ok((await R.call('GET', '/rounds/current')).body.round, 'the round still runs');
 });
 
 // Ending a round
@@ -254,6 +270,53 @@ test('finish shows the score and the reveal, ends every seat, and removes the se
   assert.strictEqual(past.length, 1);
   assert.deepStrictEqual(Object.keys(past[0]).sort(), ['game', 'id', 'score', 'time'], 'the office keeps only the id, the game, the time and the score');
   assert.ok(!/TRUTH-MARK|BRIEF-MARK/.test(textUnder(R.home)), 'and keeps no truth and no brief');
+});
+
+test('a game that sends its score and exits at once still finishes with its score', async (t) => {
+  const { R } = await roundOn(t, { mode: 'quickexit' });
+  const r = await R.call('POST', '/rounds/current/finish', {});
+  assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  assert.strictEqual(r.body.round.state, 'done');
+  assert.deepStrictEqual(r.body.round.score.metrics, { caught: 1, falseAccusations: 0 });
+  assert.deepStrictEqual((await R.call('GET', '/rounds')).body.rounds[0].score.metrics, { caught: 1, falseAccusations: 0 });
+});
+
+test('a second finish while the first waits gets the same answer', async (t) => {
+  const { R } = await roundOn(t, {});
+  const [a, b] = await Promise.all([R.call('POST', '/rounds/current/finish', {}), R.call('POST', '/rounds/current/finish', {})]);
+  assert.deepStrictEqual([a.status, b.status], [200, 200]);
+  assert.strictEqual(a.body.round.state, 'done');
+  assert.strictEqual(b.body.round.state, 'done');
+  assert.strictEqual((await R.call('GET', '/rounds')).body.rounds.length, 1);
+});
+
+test('a seat that cannot get its folder ends the round, and the next round can start', async (t) => {
+  const root = gamesRepo(t, { coin: manifest() });
+  const R = await relay({ GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000' });
+  t.after(R.stop);
+  const seats = path.join(R.home, '.office-world', 'seats');
+  fs.rmSync(seats, { recursive: true, force: true });
+  fs.writeFileSync(seats, 'a file where the seats folder goes');
+  const r = await R.call('POST', '/rounds', { game: 'coin', seats: 2 });
+  assert.strictEqual(r.status, 500, JSON.stringify(r.body));
+  assert.strictEqual(r.body.error, 'seat_failed');
+  assert.strictEqual((await R.call('GET', '/rounds/current')).body.round, null, 'the round is not left running');
+  assert.strictEqual((await R.call('GET', '/rounds')).body.rounds[0].score, null);
+  fs.rmSync(seats);
+  assert.strictEqual((await R.call('POST', '/rounds', { game: 'coin', seats: 2 })).status, 200, 'a new round starts');
+});
+
+test('a seat that is still ending after its round stays a seat: its token reaches no chat or tickets', async (t) => {
+  const root = gamesRepo(t, { coin: manifest() });
+  const R = await relay({ GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000', FAKE_CLAUDE_SLOW_EXIT: '1' });
+  t.after(R.stop);
+  const started = await R.call('POST', '/rounds', { game: 'coin', seats: 2 });
+  const seat = started.body.round.seats[0];
+  const token = await tokenOf(R, seat.terminal);
+  assert.strictEqual((await R.call('POST', '/rounds/current/stop', {})).status, 200);
+  assert.ok((await R.call('GET', '/terminals')).body.terminals.some((x) => x.id === seat.terminal), 'the seat is still ending');
+  assert.strictEqual((await R.call('GET', '/chat', null, seatHeaders(token))).status, 403);
+  assert.strictEqual((await R.call('POST', '/tickets', { title: 'From a seat' }, seatHeaders(token))).status, 403);
 });
 
 test('stop sends abort, ends every seat, and keeps no score', async (t) => {
@@ -413,21 +476,43 @@ test('a relay that restarts mid-round brings back no seat, removes the seat fold
   assert.ok(!/BRIEF-MARK/.test(R.output()), 'the log holds no brief');
 });
 
-test('a seat\'s hook keeps none of its words, sent or queued while the relay is away', () => {
+test('a seat\'s hook keeps none of its words, sent, queued or logged, and an idle notice stays idle', () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'seat-hook-')));
   fs.mkdirSync(path.join(home, '.office-world'));  // the queue is kept only where a room has run
+  const log = path.join(home, 'hook-log.jsonl');
   try {
     const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(OFFICE_|RELAY_)/.test(k)));
-    Object.assign(env, { HOME: home, OFFICE_SEAT: '1', OFFICE_SHOW_PROMPTS: '1', OFFICE_TICKET_TOKEN: 'seat-token', OFFICE_TERMINAL_ID: 'abcdefabcdef', OFFICE_HOOK_URL: 'http://127.0.0.1:9/channels/t/commands' });
-    const event = { hook_event_name: 'UserPromptSubmit', session_id: 'b299ee24-0c4c-4507-afb7-bb2625eeb192', prompt: 'Your brief, S1. BRIEF-MARK-S1', message: 'BRIEF-MARK-S1 again', cwd: home };
-    const r = spawnSync('node', [path.join(REPO, 'relay', 'office-hook.js')], { input: JSON.stringify(event), env, encoding: 'utf8', timeout: 10000 });
-    assert.strictEqual(r.status, 0);
+    Object.assign(env, { HOME: home, OFFICE_SEAT: '1', OFFICE_SHOW_PROMPTS: '1', OFFICE_HOOK_LOG: log, OFFICE_TICKET_TOKEN: 'seat-token', OFFICE_TERMINAL_ID: 'abcdefabcdef', OFFICE_HOOK_URL: 'http://127.0.0.1:9/channels/t/commands' });
+    const sid = 'b299ee24-0c4c-4507-afb7-bb2625eeb192';
+    const events = [
+      { hook_event_name: 'UserPromptSubmit', session_id: sid, prompt: 'Your brief, S1. BRIEF-MARK-S1', message: 'BRIEF-MARK-S1 again', cwd: home },
+      { hook_event_name: 'PreToolUse', session_id: sid, tool_name: 'Bash', tool_input: { command: 'echo BRIEF-MARK-S1', description: 'Check BRIEF-MARK-S1 role' }, cwd: home },
+      { hook_event_name: 'Notification', session_id: sid, message: 'Claude is waiting for your input', cwd: home }
+    ];
+    for (const event of events) {
+      const r = spawnSync('node', [path.join(REPO, 'relay', 'office-hook.js')], { input: JSON.stringify(event), env, encoding: 'utf8', timeout: 10000 });
+      assert.strictEqual(r.status, 0);
+    }
     const queued = fs.readFileSync(path.join(home, '.office-world', 'hook-queue.jsonl'), 'utf8');
-    const e = JSON.parse(queued.trim().split('\n')[0]).event;
-    assert.strictEqual(e.hook_event_name, 'UserPromptSubmit', 'the event still goes');
-    assert.ok(!/BRIEF-MARK/.test(queued), 'but none of the seat\'s words: ' + queued);
-    for (const k of ['prompt', 'title', 'customTitle', 'message']) assert.ok(!(k in e), 'no ' + k);
+    const sent = queued.trim().split('\n').map((l) => JSON.parse(l).event);
+    assert.deepStrictEqual(sent.map((e) => e.hook_event_name), ['UserPromptSubmit', 'PreToolUse', 'Notification'], 'the events still go');
+    assert.ok(!/BRIEF-MARK|waiting for your input/.test(queued), 'but none of the seat\'s words: ' + queued);
+    for (const e of sent) for (const k of ['prompt', 'title', 'customTitle', 'message', 'tool_input']) assert.ok(!(k in e), 'no ' + k);
+    assert.strictEqual(sent[1].tool_name, 'Bash', 'the tool\'s name still goes');
+    assert.strictEqual(sent[2].notification_type, 'idle_prompt', 'an idle notice says so without its words');
+    assert.ok(!fs.existsSync(log) || !/BRIEF-MARK/.test(fs.readFileSync(log, 'utf8')), 'OFFICE_HOOK_LOG gets no raw seat event');
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
+});
+
+test('the relay drops a seat\'s words from a hook sent with the key, and an idle seat does not show as waiting', async (t) => {
+  const { R, started } = await roundOn(t, {});
+  const seat = started.body.round.seats[0];
+  const sid = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === seat.terminal).sessionId;
+  await R.hook({ hook_event_name: 'Notification', session_id: sid, terminal: seat.terminal, message: 'Claude is waiting for your input BRIEF-MARK-S1' });
+  await sleep(200);
+  const t1 = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === seat.terminal);
+  assert.notStrictEqual(t1.state, 'waiting');
+  assert.ok(!/BRIEF-MARK/.test(JSON.stringify(t1)) && !/BRIEF-MARK/.test(R.output()));
 });
 
 // Not testable yet

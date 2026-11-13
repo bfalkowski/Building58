@@ -40,7 +40,7 @@ test('the environment a session gets, by name only (relay/session-env.js)', () =
   assert.deepStrictEqual(n.removed, ['CLAUDECODE', 'RELAY_KEY', 'RELAY_TERMINAL']);
   assert.deepStrictEqual(n.passedOn, ['EDITOR', 'GH_TOKEN', 'HOME', 'MY_API_SECRET', 'PATH']);
   assert.deepStrictEqual(n.loginLike, ['GH_TOKEN', 'MY_API_SECRET']);
-  assert.deepStrictEqual(n.added, ['OFFICE_CHANNEL', 'OFFICE_HOOK_URL', 'OFFICE_PANEL_CHANNEL', 'OFFICE_TERMINAL_ID', 'OFFICE_TICKET_TOKEN', 'OFFICE_TICKET_URL']);
+  assert.deepStrictEqual(n.added, ['OFFICE_CHANNEL', 'OFFICE_HOOK_URL', 'OFFICE_PANEL_CHANNEL', 'OFFICE_PLAY', 'OFFICE_SEAT', 'OFFICE_TERMINAL_ID', 'OFFICE_TICKET_TOKEN', 'OFFICE_TICKET_URL']);
   noLeak('the names', JSON.stringify(n, null, 2));
 });
 

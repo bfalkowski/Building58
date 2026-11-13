@@ -532,8 +532,9 @@ function start(channel, body, ctx, onExit, own) {
       // hooks in ~/.claude/settings.json name another one (relay/office-hook.js). 127.0.0.1, where the
       // relay listens, since Node 18's fetch tries only ::1 for localhost.
       OFFICE_HOOK_URL: 'http://127.0.0.1:' + ctx.port + '/channels/' + encodeURIComponent(channel) + '/commands',
-      // A seat in a round of a game (relay/games.js): its hooks send none of its words (relay/office-hook.js).
-      ...(own && own.round ? { OFFICE_SEAT: '1' } : {})
+      // A seat in a round of a game (relay/games.js): its hooks send none of its words (relay/office-hook.js),
+      // and it plays with node "$OFFICE_PLAY", since its own folder is empty.
+      ...(own && own.round ? { OFFICE_SEAT: '1', OFFICE_PLAY: path.join(__dirname, 'play.js') } : {})
     });
     // meta comes back from the host after a restart, so the next relay knows whose session it is.
     t.io = link.spawn({ id, cwd, env, cmd: [CLAUDE].concat(args), cols, rows, meta: { channel, sessionId, token, cwd } }, { out: emitOut, exit: ended });

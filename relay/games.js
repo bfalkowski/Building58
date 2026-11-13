@@ -54,10 +54,10 @@ const TIMEOUT = () => (Number(process.env.RELAY_GAME_TIMEOUT_MS) >= 1 ? Number(p
 const BRIEF_RETRY = 300, BRIEF_GIVE_UP = 10 * 60 * 1000;  // a seat may wait on a question, such as trusting its folder
 const KEEP_PAST = 50;
 
+const roundSeats = require('./round-seats.js');
+
 const repo = () => process.env.GAMES_REPO || '';
-// Every seat folder sits under one parent in the state folder, <state>/seats/<round>/<seat>, so the
-// person can trust that one folder in Claude Code once, if Claude Code honors a parent's trust.
-const seatsDir = () => path.join(require('./state.js').dir(), 'seats');
+const seatsDir = roundSeats.dir;
 const rounds = new Map();  // channel: the round that runs
 const past = new Map();    // channel: [{ id, game, time, score }], newest first
 
@@ -78,7 +78,7 @@ function readGame(root, folder) {
   Object.assign(out, { name: g.name, version: g.version, players: g.players, needs: g.needs });
   const why = whyNot(root, folder, g);
   if (why) return Object.assign(out, why);
-  return Object.assign(out, { ok: true });
+  return Object.assign(out, { ok: true, entry: g.entry });
 }
 function whyNot(root, folder, g) {
   if (typeof g.name !== 'string' || !g.name.trim()) return { reason: 'It has no name.' };
@@ -115,24 +115,31 @@ function startRound(channel, body, ctx) {
   if (terminal.all(channel).length + n > terminal.DESKS) return [409, { ok: false, error: 'full', message: 'A round of ' + n + ' seats needs ' + n + ' free desks.' }];
 
   const dir = path.join(repo(), game.folder);
-  const entry = JSON.parse(fs.readFileSync(path.join(dir, 'game.json'), 'utf8')).entry;
   const r = { id: crypto.randomBytes(4).toString('hex'), channel, game: game.folder, name: game.name, watch, cap, spent: 0, state: 'running',
     startedAt: new Date().toISOString(), seats: [], waiting: new Map(), ctx, ready: false, child: null };
   rounds.set(channel, r);
   // The game gets the relay's environment without its key and settings, as a session does.
-  r.child = spawn(process.execPath, [path.join(dir, entry)], { cwd: dir, env: sessionEnv.build(process.env, {}), stdio: ['pipe', 'pipe', 'pipe'] });
+  r.child = spawn(process.execPath, [path.join(dir, game.entry)], { cwd: dir, env: sessionEnv.build(process.env, {}), stdio: ['pipe', 'pipe', 'pipe'] });
   r.child.stderr.on('data', () => {});  // a game's own errors may hold its truth, so they are not logged
   r.child.on('error', (e) => endRound(r, 'failed', null, 'The game could not start: ' + e.message));
-  r.child.on('exit', (code) => { if (r.state === 'running') endRound(r, 'failed', null, 'The game ended by itself (code ' + code + ').'); });
+  // close, not exit: exit can come before the last lines the game wrote are read, such as its done.
+  r.child.on('close', (code) => { if (r.state === 'running') endRound(r, 'failed', null, 'The game ended by itself (code ' + code + ').'); });
   r.child.stdin.on('error', () => {});
   readline.createInterface({ input: r.child.stdout }).on('line', (line) => fromGame(r, line));
 
   for (let i = 1; i <= n; i++) {
     const seat = 'S' + i;
-    const folder = path.join(seatsDir(), r.id, seat);
-    fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
-    const s = { seat, dir: fs.realpathSync(folder), terminal: null };
-    const got = terminal.start(channel, { cwd: s.dir, title: 'Seat ' + seat }, ctx, () => removeDir(s), { round: r.id });
+    let s, got;
+    try {
+      const folder = path.join(seatsDir(), r.id, seat);
+      fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
+      s = { seat, dir: fs.realpathSync(folder), terminal: null };
+      got = terminal.start(channel, { cwd: s.dir, title: 'Seat ' + seat }, ctx, () => removeDir(s), { round: r.id });
+    } catch (e) {
+      if (s) removeDir(s);
+      endRound(r, 'failed', null, 'Seat ' + seat + ' could not start: ' + e.message);
+      return [500, { ok: false, error: 'seat_failed', message: 'Seat ' + seat + ' could not start: ' + e.message }];
+    }
     if (got.status >= 300) { removeDir(s); endRound(r, 'failed', null, 'A seat could not start: ' + got.body.message); return [got.status, got.body]; }
     s.terminal = got.body.id;
     r.seats.push(s);
@@ -194,12 +201,15 @@ function play(channel, agent, body) {
   });
 }
 
+// A second finish while the first waits gets the same answer.
 function finishRound(r) {
-  return new Promise((resolve) => {
+  if (r.finishing) return r.finishing;
+  r.finishing = new Promise((resolve) => {
     const timer = setTimeout(() => { endRound(r, 'failed', null, 'The game did not finish in time.'); resolve([504, { ok: false, error: 'timeout', message: 'The game did not send its score in time.' }]); }, TIMEOUT());
     r.onDone = () => { clearTimeout(timer); resolve([200, { ok: true, round: Object.assign(view(r), r.result || { score: null, reveal: null }) }]); };
     toGame(r, { type: 'finish' });
   });
+  return r.finishing;
 }
 
 // Ends a round: answers whatever waits, stops the game and every seat, and keeps only the id, game,
@@ -230,9 +240,14 @@ function removeDir(s) {
   try { fs.rmdirSync(path.dirname(s.dir)); } catch (e) { /* another seat is still in it */ }
 }
 
-// For relay/server.js: whether a session is a seat in a round. Its token then reaches only /play.
-function isSeat(t) {
+// For relay/server.js: whether a session is a seat in a round. Its token then reaches only /play. A
+// seat stays one after its round ends, while it is still ending, since the session itself says so (its
+// round). channel finds the session when only its id is known, as in a hook.
+function isSeat(t, channel) {
   if (!t) return false;
+  if (t.round) return true;
+  const own = channel && t.id ? terminal.find(channel, t.id) : null;
+  if (own && own.round) return true;
   for (const r of rounds.values()) if (r.seats.some((s) => s.terminal === t.id)) return true;
   return false;
 }
@@ -253,10 +268,15 @@ terminal.guard((channel, t, verb) => {
 // For relay/tickets.js and relay/autopilot.js: new starts wait while a round runs.
 tickets.holdStarts((channel) => (rounds.has(channel) ? 'A round of ' + rounds.get(channel).name + ' is running. New tickets start when it ends.' : null));
 
+const ROUTE = /^\/(games|play|rounds(\/current(\/(finish|stop))?)?)$/;
 async function handle(req, res, channel, rest, ctx) {
+  if (!ROUTE.test(rest)) return false;
+  // Like every room route, these answer only the room page and the sessions on this computer.
+  const deny = terminal.localOnly(req, ctx.port);
+  if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (rest === '/games') {
     if (req.method !== 'GET') return false;
-    ctx.send(res, 200, { ok: true, games: listGames().map((g) => { const o = Object.assign({}, g); delete o.need; return o; }) });
+    ctx.send(res, 200, { ok: true, games: listGames().map((g) => { const o = Object.assign({}, g); delete o.need; delete o.entry; return o; }) });
     return true;
   }
   if (rest === '/play') {

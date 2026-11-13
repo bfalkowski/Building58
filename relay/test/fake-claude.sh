@@ -10,6 +10,7 @@ echo "child session: ${CLAUDE_CODE_CHILD_SESSION:-none}"
 echo "office channel: ${OFFICE_CHANNEL:-none}"
 echo "office panel channel: ${OFFICE_PANEL_CHANNEL:-none}"
 echo "office hook url: ${OFFICE_HOOK_URL:-none}"
+echo "office play: ${OFFICE_PLAY:-none}"
 # With FAKE_CLAUDE_TRUST set, it asks whether to trust the folder, as a real one does in a new folder.
 if [ -n "$FAKE_CLAUDE_TRUST" ]; then echo "Do you trust the files in this folder?"; fi
 printf '\xe2\x9d\xaf \n'

@@ -20,7 +20,6 @@
 // clean-up for when it ends (relay/checkouts.js).
 'use strict';
 const fs = require('fs');
-const path = require('path');
 const terminal = require('./terminal.js');
 const delivery = require('./delivery.js');
 const tasks = require('./tasks.js');
@@ -61,7 +60,7 @@ const restored = { done: false, saved: 0, back: 0, failed: [] };
 // Runs once, when the relay starts. Says what came back and what did not.
 // No round of a game outlives the relay that ran it (relay/games.js). Its seats are never brought
 // back: the host hangs them up with the other unclaimed sessions, and their folders go.
-const SEATS = () => path.join(require('./state.js').dir(), 'seats');
+const SEATS = () => require('./round-seats.js').dir();
 function dropSeats(channel, list, ctx) {
   const seats = list.filter((s) => s && typeof s === 'object' && s.round);
   for (const s of seats) ctx.log('Did not bring back ' + (s.title || 'a seat') + ' on ' + channel + ': a round of a game ends with the relay that ran it.');

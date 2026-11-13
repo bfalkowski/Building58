@@ -12,11 +12,13 @@
 //   badline  sends a line that is not JSON after setup
 //   crash    exits with code 3 on the first action
 //   spend    reports 0.6 dollars of spend with every action
+//   quickexit  sends done and exits at once, as a game that has nothing left to do may
 'use strict';
 const fs = require('fs');
 const readline = require('readline');
 
 let settings = {};
+const DONE = { type: 'done', score: { metrics: { caught: 1, falseAccusations: 0 }, seats: { S1: 'caught' } }, reveal: { member: 'S1', note: 'TRUTH-MARK' } };
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\n');
 // The record file comes in setup's settings, so what came before setup waits until then.
 const early = [];
@@ -44,7 +46,8 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     return send({ type: 'answer', id: m.id, text: 'The assistant answers ' + m.seat + ' about ' + m.kind });
   }
   if (m.type === 'finish') {
-    return send({ type: 'done', score: { metrics: { caught: 1, falseAccusations: 0 }, seats: { S1: 'caught' } }, reveal: { member: 'S1', note: 'TRUTH-MARK' } });
+    if (mode === 'quickexit') return process.stdout.write(JSON.stringify(DONE) + '\n', () => process.exit(0));
+    return send(DONE);
   }
   if (m.type === 'abort') process.exit(0);
 });

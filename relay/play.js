@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 // Plays one action in a round of a game, from inside a seat's session (relay/games.js). The seat is
-// the session itself: its own token says who it is, so a play never names a seat.
-//   node relay/play.js ask "Is this allowed?"
-//   node relay/play.js <kind> [text]        any other kind the game's brief names, with optional text
-//   node relay/play.js <kind> --json '{"item":"I17","decision":"flag"}'
+// the session itself: its own token says who it is, so a play never names a seat. A seat's folder is
+// empty, so the room gives it this file's full path as OFFICE_PLAY (relay/terminal.js):
+//   node "$OFFICE_PLAY" ask "Is this allowed?"
+//   node "$OFFICE_PLAY" <kind> [text]        any other kind the game's brief names, with optional text
+//   node "$OFFICE_PLAY" <kind> --json '{"item":"I17","decision":"flag"}'
 // It prints the game's answer.
 'use strict';
 
 const URL_ = process.env.OFFICE_TICKET_URL, TOKEN = process.env.OFFICE_TICKET_TOKEN;
 const [kind, ...rest] = process.argv.slice(2);
 if (!kind || !URL_ || !TOKEN) {
-  console.error(!kind ? 'Say what to play, for example: node relay/play.js ask "Is this allowed?"' : 'Run this from a seat the room started for a round.');
+  console.error(!kind ? 'Say what to play, for example: node "$OFFICE_PLAY" ask "Is this allowed?"' : 'Run this from a seat the room started for a round.');
   process.exit(2);
 }
 let args;
