@@ -55,6 +55,7 @@ const BRIEF_RETRY = 300, BRIEF_GIVE_UP = 10 * 60 * 1000;  // a seat may wait on 
 const KEEP_PAST = 50;
 
 const roundSeats = require('./round-seats.js');
+const seatBoundary = require('./seat-boundary.js');
 
 const repo = () => process.env.GAMES_REPO || '';
 const seatsDir = roundSeats.dir;
@@ -97,7 +98,7 @@ function whyNot(root, folder, g) {
 
 // What anyone may see of a round while it runs. No brief, no role and no truth are in it.
 function view(r) {
-  return { id: r.id, game: r.game, state: r.state, watch: r.watch, startedAt: r.startedAt, spentUsd: r.spent, capUsd: r.cap,
+  return { id: r.id, game: r.game, state: r.state, watch: r.watch, isolation: r.isolation, startedAt: r.startedAt, spentUsd: r.spent, capUsd: r.cap,
     seats: r.seats.map((s) => ({ seat: s.seat, terminal: s.terminal, waiting: onTrust(r.channel, s.terminal) ? 'trust' : null })) };
 }
 
@@ -112,10 +113,13 @@ function startRound(channel, body, ctx) {
   if (!WATCH.includes(watch)) return [400, { ok: false, error: 'bad_watch', message: 'Watch is all or none.' }];
   const cap = body.capUsd === undefined ? null : Number(body.capUsd);
   if (cap !== null && !(cap > 0)) return [400, { ok: false, error: 'bad_cap', message: 'The spend cap is a number of dollars above 0.' }];
+  // Every seat runs inside its own boundary (relay/seat-boundary.js), or the person said to run without.
+  const isolation = seatBoundary.mode();
+  if (!isolation) return [409, { ok: false, error: 'no_boundary', message: 'Seats need sandbox-exec, which this computer does not have. Set RELAY_SEAT_ISOLATION=off to run rounds without a boundary.' }];
   if (terminal.all(channel).length + n > terminal.DESKS) return [409, { ok: false, error: 'full', message: 'A round of ' + n + ' seats needs ' + n + ' free desks.' }];
 
   const dir = path.join(repo(), game.folder);
-  const r = { id: crypto.randomBytes(4).toString('hex'), channel, game: game.folder, name: game.name, watch, cap, spent: 0, state: 'running',
+  const r = { id: crypto.randomBytes(4).toString('hex'), channel, game: game.folder, name: game.name, watch, cap, isolation, spent: 0, state: 'running',
     startedAt: new Date().toISOString(), seats: [], waiting: new Map(), ctx, ready: false, child: null };
   rounds.set(channel, r);
   // The game gets the relay's environment without its key and settings, as a session does.
@@ -147,7 +151,7 @@ function startRound(channel, body, ctx) {
   toGame(r, { type: 'hello', api: API });
   toGame(r, { type: 'setup', seed: String(body.seed || crypto.randomBytes(8).toString('hex')), settings: body.settings && typeof body.settings === 'object' ? body.settings : {}, seats: r.seats.map((s) => s.seat) });
   r.readyTimer = setTimeout(() => { if (!r.ready) endRound(r, 'failed', null, 'The game did not get ready in time.'); }, TIMEOUT());
-  ctx.log('A round of ' + r.name + ' started with ' + n + ' seats, watch ' + watch + '.');
+  ctx.log('A round of ' + r.name + ' started with ' + n + ' seats, watch ' + watch + ', isolation ' + isolation + '.');
   return [200, { ok: true, round: view(r) }];
 }
 
