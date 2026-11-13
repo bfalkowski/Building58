@@ -266,7 +266,7 @@ function keepOf(t) {
   // or a start with --resume, says so, and /clear takes it back. Enter alone is not enough: it may have
   // answered the question about trusting the folder, and a resume with no conversation fails.
   return { sessionId: t.sessionId, seat: t.seat || undefined, who: t.who || undefined, talked: !!t.talked, cwd: t.cwd, from: t.from, title: t.title, customTitle: t.customTitle || undefined, task: t.task, role: t.role, pr: t.pr,
-    lead: !!t.lead, board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, owesBrief: !!t.owesBrief, owesPrompt: t.owesPrompt || undefined, reviewOf: t.reviewOf || undefined, posted: t.posted || undefined, cols: t.cols, rows: t.rows,
+    lead: !!t.lead, board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, owesBrief: !!t.owesBrief, owesPrompt: t.owesPrompt || undefined, reviewOf: t.reviewOf || undefined, round: t.round || undefined, posted: t.posted || undefined, cols: t.cols, rows: t.rows,
     // What a relay needs to take the session back from the host as it is (start).
     terminal: t.id, state: t.state, message: t.message || undefined, waitingAt: t.state === 'waiting' ? t.waitingAt : undefined, hooked: !!t.hooked, heard: !!t.heard, spoke: !!t.spoke, hookAt: t.hookAt || undefined };
 }
@@ -450,7 +450,7 @@ function start(channel, body, ctx, onExit, own) {
   if (resume) forgetFailed(channel, resume);  // tried again, here or by hand
   const talked = adopted ? !!adopted.talked : !!resume;
   const t = { id, channel, cwd, from: body.from || null, title: body.title ? String(body.title).slice(0, 80) : null, task: body.task || null, role: body.role || null, pr: body.pr || null, token, lead, board, merge, starts, startsLeft, talked, spoke: adopted ? !!(adopted.spoke || adopted.talked) : talked, state: 'idle', message: null, drafting: false, sinceKey: null, lastEnterAt: 0, lastActAt: Date.now(), lastOutAt: 0, tail: '', sessionId, startedAt: new Date().toISOString(), hooks: global ? 'global' : 'session', cols, rows,
-    io: null, out: [], outSize: 0, viewers: new Set(), exited: false, exitCode: null, pendingOut: [], flush: null, reviewOf: (own && own.reviewOf) || null, posted: null, ending: null };
+    io: null, out: [], outSize: 0, viewers: new Set(), exited: false, exitCode: null, pendingOut: [], flush: null, reviewOf: (own && own.reviewOf) || null, round: (own && own.round) || null, posted: null, ending: null };
   if (restoring && resume && !adopted) { t.restoredAt = Date.now(); t.tries = restoring.tries || 0; }
   // A session brought back starts from the person and name it had. reseat below checks that against the rules.
   if (restoring) {
@@ -531,7 +531,10 @@ function start(channel, body, ctx, onExit, own) {
       // The hook sends here first, with the token, so the session reports to this relay even when the
       // hooks in ~/.claude/settings.json name another one (relay/office-hook.js). 127.0.0.1, where the
       // relay listens, since Node 18's fetch tries only ::1 for localhost.
-      OFFICE_HOOK_URL: 'http://127.0.0.1:' + ctx.port + '/channels/' + encodeURIComponent(channel) + '/commands'
+      OFFICE_HOOK_URL: 'http://127.0.0.1:' + ctx.port + '/channels/' + encodeURIComponent(channel) + '/commands',
+      // A seat in a round of a game (relay/games.js): its hooks send none of its words (relay/office-hook.js),
+      // and it plays with node "$OFFICE_PLAY", since its own folder is empty.
+      ...(own && own.round ? { OFFICE_SEAT: '1', OFFICE_PLAY: path.join(__dirname, 'play.js') } : {})
     });
     // meta comes back from the host after a restart, so the next relay knows whose session it is.
     t.io = link.spawn({ id, cwd, env, cmd: [CLAUDE].concat(args), cols, rows, meta: { channel, sessionId, token, cwd } }, { out: emitOut, exit: ended });
@@ -875,6 +878,10 @@ function hookCheckoutInfo() {
 }
 
 // Routes under /channels/{channel}/terminals. Returns true when it answered.
+// Who may say no to opening or typing into a session: relay/games.js, for the seats of a round.
+// fn (channel, t, verb) gives the reason, or null.
+let guarded = null;
+const guard = (fn) => { guarded = fn; };
 async function handle(req, res, channel, rest, ctx) {
   const route = rest.match(/^\/terminals(?:\/([0-9a-f]{12})(?:\/(stream|input|resize|stop))?)?$/);
   const isLead = rest === '/terminals/lead', isFailed = rest === '/terminals/failed', isContext = rest === '/terminals/context';
@@ -908,6 +915,8 @@ async function handle(req, res, channel, rest, ctx) {
   }
   const t = terms.get(id);
   if (!t) { ctx.problem(res, 404, 'no_terminal', 'No such session on this channel.'); return true; }
+  const refused = guarded ? guarded(channel, t, verb) : null;
+  if (refused) { ctx.problem(res, 403, 'held', refused); return true; }
   if (req.method === 'GET' && verb === 'stream') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write('retry: 2000\n\n');
@@ -1014,4 +1023,4 @@ const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited)
 // Every running session on every channel.
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { DESKS: MAX_TERMINALS, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit };
+module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit };

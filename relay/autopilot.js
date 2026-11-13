@@ -304,6 +304,8 @@ async function maybeStart(channel) {
   const c = chOf(channel);
   if (starting || tasks.busy() || update.restarting() || tasks.list(channel).filter((t) => open(channel, t)).length >= AT_ONCE()) return;
   if (c.merged >= MAX_MERGES_A_DAY()) return;
+  const held = tickets.heldWhy(channel);
+  if (held) { c.idle = held; return; }
   starting = true;
   try {
     const all = await tickets.listAll(channel);

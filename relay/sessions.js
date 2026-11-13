@@ -58,11 +58,20 @@ function restoreOne(channel, s, ctx) {
 const restored = { done: false, saved: 0, back: 0, failed: [] };
 
 // Runs once, when the relay starts. Says what came back and what did not.
+// No round of a game outlives the relay that ran it (relay/games.js). Its seats are never brought
+// back: the host hangs them up with the other unclaimed sessions, and their folders go.
+const SEATS = () => require('./round-seats.js').dir();
+function dropSeats(channel, list, ctx) {
+  const seats = list.filter((s) => s && typeof s === 'object' && s.round);
+  for (const s of seats) ctx.log('Did not bring back ' + (s.title || 'a seat') + ' on ' + channel + ': a round of a game ends with the relay that ran it.');
+  return list.filter((s) => !seats.includes(s));
+}
 function restoreAll(ctx) {
+  try { fs.rmSync(SEATS(), { recursive: true, force: true }); } catch (e) { ctx.log('Could not remove the old seat folders: ' + e.message); }
   if (!terminal.ENABLED || process.env.RELAY_RESUME === '0') { terminal.takeLastRun(); if (terminal.ENABLED) terminal.dropUnclaimed(ctx.log); restored.done = true; return; }
   const last = terminal.takeLastRun();
   for (const channel of Object.keys(last)) {
-    const list = Array.isArray(last[channel]) ? last[channel] : [];
+    const list = dropSeats(channel, Array.isArray(last[channel]) ? last[channel] : [], ctx);
     // The Lead first, so a second session that once shared its id cannot take the Lead's place.
     list.sort((a, b) => (b.lead ? 1 : 0) - (a.lead ? 1 : 0));
     // Each comes back as the person it was, so nobody takes a person whose session is not back yet.

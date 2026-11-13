@@ -95,10 +95,15 @@ function main() {
 async function send(text) {
   let p;
   try { p = JSON.parse(text); } catch (e) { return; }
-  if (LOG) { try { fs.appendFileSync(LOG, JSON.stringify(p) + '\n'); } catch (e) { /* ignore */ } }
+  const seat = process.env.OFFICE_SEAT === '1';
+  // A seat's raw events hold its private brief, so they go to no file (relay/games.js).
+  if (LOG && !seat) { try { fs.appendFileSync(LOG, JSON.stringify(p) + '\n'); } catch (e) { /* ignore */ } }
   if (!p || !p.hook_event_name) return;
   // at: when Claude Code ran the hook, so the relay can tell an old event from a new one.
-  const event = Object.assign(summarize(p), { at: STARTED });
+  let event = Object.assign(summarize(p), { at: STARTED });
+  // A seat in a round of a game sends its events, but none of its words, sent or queued: its first
+  // prompt is its private brief (relay/games.js).
+  if (seat) event = require('./round-seats.js').quiet(event);
   const body = JSON.stringify({ action: 'hook', event, source: 'claude-code', wait: false });
   const to = OWN_URL || RELAY + '/channels/' + encodeURIComponent(CHANNEL) + '/commands';
   let r = null;

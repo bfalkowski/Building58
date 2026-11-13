@@ -425,9 +425,16 @@ function leadMayStart(channel, ticket, all, agent) {
 
 // The ticket says started first, so a store that cannot be reached leaves nothing running.
 const starting = new Set();
+// Who may hold new starts by the Lead and Autopilot: relay/games.js, while a round runs. fn (channel)
+// gives the reason, or null. The person's own start is never held.
+let holder = () => null;
+const holdStarts = (fn) => { holder = fn; };
+const heldWhy = (channel) => holder(channel);
 async function start(channel, ticket, body, ctx) {
   const agent = ctx.agent;
   if (!agent) return startTicket(channel, ticket, body, ctx);
+  const held = heldWhy(channel);
+  if (held) return [409, { ok: false, error: 'held', message: held }];
   // Taken before anything waits, so a burst of starts from the Lead gets one through and refuses the rest.
   if (leadStarting.has(channel)) return [409, { ok: false, error: 'one_at_a_time', message: 'You are already starting a ticket. Start the next one after its worker has picked up its brief.' }];
   leadStarting.add(channel);
@@ -615,4 +622,4 @@ async function handle(req, res, channel, rest, ctx) {
 // Autopilot (relay/autopilot.js) starts a ticket the way the person does, signed with its own name.
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { handle, listAll, board, onChange, startBy, CLI, KINDS };
+module.exports = { handle, listAll, board, onChange, startBy, holdStarts, heldWhy, CLI, KINDS };

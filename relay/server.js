@@ -57,7 +57,7 @@ const office = SESSIONS ? {
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
   config: require('./config.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'),
-  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js')
+  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js')
 } : null;
 // Who the sessions are: the roster of the world that runs them, or of the first one that has a roster.
 // It exports { lead, workers }, the Lead's desk first. Without one, sessions have no names.
@@ -71,7 +71,7 @@ if (office) {
 // (relay/sessions.js, startLead).
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
 // In the order they answer routes.
-const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch'].map((k) => office[k]) : [];
+const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'games'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -271,7 +271,11 @@ async function handle(req, res) {
   // its measures and saves its report (relay/coo.js), and the security officer's its own (relay/security.js). That is all.
   // The COO and the security officer propose only, so their tokens list tickets but do not file them.
   const proposer = agent && (agent.role === 'coo' || agent.role === 'security');
-  const tokenMay = agent && agent.channel === m[1] && ((m[2] === '/tickets' && !(proposer && req.method !== 'GET')) || (!proposer && /^\/chat(\/[\w-]{1,64})?$/.test(m[2] || '')) || (agent.lead && req.method === 'GET' && m[2] === '/floor') ||
+  // A seat in a round of a game plays, sends its own hooks and status line, and reaches nothing else
+  // (relay/games.js). Any other session may ask to play, and is told no there.
+  const seat = !!(agent && office.games.isSeat(agent));
+  const plays = req.method === 'POST' && m[2] === '/play';
+  const tokenMay = agent && agent.channel === m[1] && (plays || (seat ? req.method === 'POST' && (m[2] === '/commands' || m[2] === '/terminals/context') : ((m[2] === '/tickets' && !(proposer && req.method !== 'GET')) || (!proposer && /^\/chat(\/[\w-]{1,64})?$/.test(m[2] || '')) || (agent.lead && req.method === 'GET' && m[2] === '/floor') ||
     (agent.board && ((req.method === 'GET' && m[2] === '/tasks') || (req.method === 'POST' && (m[2] === '/floor/stop' || /^\/(tasks|tickets)\/[^/]+\/move$/.test(m[2] || ''))))) ||
     (agent.lead && agent.starts > 0 && req.method === 'POST' && /^\/tickets\/[^/]+\/start$/.test(m[2] || '')) ||
     (agent.role === 'coo' && ((req.method === 'GET' && m[2] === '/coo/measures') || (req.method === 'POST' && m[2] === '/coo/report'))) ||
@@ -280,7 +284,8 @@ async function handle(req, res) {
     ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) ||  // relay/tickets.js checks the PM's and the Lead's switch
     ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) ||  // the PM and the Lead edit a Triage or Ready ticket (relay/tickets.js)
     (req.method === 'POST' && m[2] === '/terminals/context') ||  // its own status line says how full its context is (relay/terminal.js)
-    (req.method === 'POST' && m[2] === '/commands'));  // its own hooks, and nothing else (below)
+    (req.method === 'POST' && m[2] === '/commands'))));  // its own hooks, and nothing else (below)
+  if (!authorized(req, url) && !tokenMay && (seat || (office && plays))) { problem(res, 403, 'forbidden', seat ? 'A seat in a round only plays, with node "$OFFICE_PLAY".' : 'Only a seat in the round that runs can play.'); return; }
   // Priority and the work order are the person's, and a PM's or Lead's they allowed: a session's token is known here, so it is told no (403), not asked who it is.
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.'); return; }
   // Only the person, the PM and the Lead edit a ticket's words (T-90).
@@ -343,6 +348,10 @@ async function handle(req, res) {
         const ev = command.event && typeof command.event === 'object' ? command.event : null, sid = ev ? String(ev.session_id || '') : '';
         if (command.action !== 'hook' || !ev || !sid || (ev.hook_event_name !== 'SessionStart' && !agent.sessionId.startsWith(sid))) { problem(res, 403, 'forbidden', 'A session\'s token sends only the hooks of its own session.'); return; }
         command.event = Object.assign({}, ev, { terminal: agent.id });
+      }
+      // A seat's hooks keep their events, but none of the seat's words: its first prompt is its brief.
+      if (office && command.action === 'hook' && command.event && typeof command.event === 'object' && office.games.isSeat({ id: command.event.terminal }, name)) {
+        command.event = require('./round-seats.js').quiet(command.event);
       }
       if (command.action === 'hook') {
         // Hooks run on this computer and post to localhost. One from anywhere else, such as a tunnel with
