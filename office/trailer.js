@@ -76,7 +76,7 @@
   document.body.appendChild(layer);
   const $ = (s) => layer.querySelector(s);
   const black = $('.tr-black'), flash = $('.tr-flash'), card = $('.tr-card'), big = $('.tr-big'), small = $('.tr-small');
-  const stage = document.getElementById('stage'), canvas = document.getElementById('world');
+  const stage = document.getElementById('stage');
   const caption = document.createElement('div'); caption.className = 'tr-caption'; stage.appendChild(caption);
 
   // ---------- the film ----------
@@ -107,8 +107,8 @@
   hold(3.6);
   shot(5, track('manager', [1.2, 1.9, 3.6], [0.4, 1.75, 2.6]), { fov: 34 });
   shot(6.5, dolly([10.5, 7.6, 10.6], [-0.2, 0.6, -0.2], [7.4, 6.8, 13], [-0.2, 0.6, -0.2]), { fov: 34 });
-  shot(7.1, dolly([4.8, 4.2, 7.2], [-1.4, 1.4, -3], [11, 9, 14.5], [-0.2, 0.6, -0.2]), { fov: 34, ease: false });
-  shot(3.9, null);  // the last frame of the pull-back, frozen
+  shot(7, dolly([4.8, 4.2, 7.2], [-1.4, 1.4, -3], [11, 9, 14.5], [-0.2, 0.6, -0.2]), { fov: 34 });
+  hold(4);
 
   let t0 = 0; SHOTS.forEach((s) => { s.at = t0; t0 += s.dur; });
   const LENGTH = t0;
@@ -121,7 +121,7 @@
     [42.8, 1.6, 'Ship it.', '', true],
     [57.0, 1.6, 'And whatever happens...', '', true],
     [58.9, 1.5, 'look busy.', '', true],
-    [79.6, 3.0, 'BUILDING58', 'Every Claude Code session gets a desk.<br>github.com/bfalkowski/Building58', false]
+    [79.0, 3.8, 'BUILDING58', 'Every Claude Code session gets a desk.<br>github.com/bfalkowski/Building58', true]
   ];
   const SNAPS = [  // [time, seconds, caption, tilt in degrees]
     [46.6, 1.4, 'PR #16 merged!', -3],
@@ -160,9 +160,6 @@
     [69.7, () => { run.time('night'); run.managerGone(); }],  // the cut to night jumps past his walk out the door
     [72.1, speed(1)]
   ];
-  // The end: the camera pulls back over the whole room, and on the last chord the picture stops,
-  // like the last frame of an 80s film, and the title comes up over it.
-  const FREEZE = 79.2;
 
   // ---------- playing it ----------
   let start = null, fired = 0, last = null;
@@ -175,10 +172,7 @@
     if (window.trailer.clock != null) run.clock(t);
     while (fired < CUES.length && CUES[fired][0] <= t) { try { CUES[fired][1](); } catch (e) { /* a cue that cannot happen is skipped */ } fired++; }
     const s = SHOTS.find((x) => t >= x.at && t < x.at + x.dur) || SHOTS[SHOTS.length - 1];
-    const frozen = t >= FREEZE;
-    if (frozen && !html.classList.contains('tr-frozen')) { html.classList.add('tr-frozen'); run.speed({ value: 0 }); }
-    canvas.style.filter = frozen ? 'sepia(' + (0.35 * smooth((t - FREEZE) / 0.4)).toFixed(3) + ') saturate(1.25) contrast(1.06)' : '';
-    if (s.move && !frozen && !stage.classList.contains('tr-snap')) {  // a snapshot holds the camera still
+    if (s.move && !stage.classList.contains('tr-snap')) {  // a snapshot holds the camera still
       const k = s.ease ? smooth((t - s.at) / s.dur) : clamp01((t - s.at) / s.dur);
       const c = s.move(k) || last;
       if (c) { last = c; run.direct({ pos: c.pos, target: c.target, fov: s.fov, key: s.key || 0 }); }

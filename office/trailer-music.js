@@ -14,7 +14,7 @@
 //   bars 20 to 26   the party: the full lead, and handclaps
 //   bars 26 to 28   "And whatever happens... look busy.": only the choir, one hit on "look busy"
 //   bars 28 to 36   the manager, the time-lapse and the pull-back: everything, the tune again
-//   bar 36 on       the freeze-frame: one big chord rings out
+//   bar 36 on       the title on black: one big chord rings out
 'use strict';
 const fs = require('fs');
 
