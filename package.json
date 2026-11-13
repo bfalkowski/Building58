@@ -9,6 +9,7 @@
     "office": "node relay/office.js",
     "office:demo": "node relay/office.js --demo",
     "office:hooks": "node relay/office-hook.js --install",
+    "trailer": "node office/record-trailer.js",
     "serve": "python3 -m http.server",
     "test": "node relay/test/run.js",
     "test:browser": "node relay/test/run.js relay/test/browser",

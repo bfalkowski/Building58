@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 node_modules
 test-results/
+/trailer*.mp4
+/trailer-*.png

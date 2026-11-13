@@ -420,6 +420,23 @@
     h1 { font-size: 26px; }
     .stage { aspect-ratio: 4 / 5; }
   }
+/* the trailer (office/trailer.js): only the scene, full screen, with its own overlay */
+html.trailer, html.trailer body { overflow: hidden; background: #111317; }
+html.trailer #stage { position: fixed; inset: 0; z-index: 50; border-radius: 0; aspect-ratio: auto; overflow: visible; transform-origin: 50% 46%; }
+html.trailer #stage .hud, html.trailer #tags, html.trailer .navpad { display: none; }
+html.trailer body > :not(#trailer) { visibility: hidden; }
+html.trailer #stage { visibility: visible; }
+html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0, 0, 0, .7); }
+#trailer { position: fixed; inset: 0; z-index: 60; pointer-events: none; font-family: "Source Sans 3", "Helvetica Neue", Arial, sans-serif; }
+#trailer > div { position: absolute; }
+#trailer .tr-black { inset: 0; background: #000; opacity: 1; }
+#trailer .tr-flash { inset: 0; background: #fff; opacity: 0; }
+#trailer .tr-bar { left: 0; right: 0; height: 9vh; background: #000; }
+#trailer .tr-top { top: 0; } #trailer .tr-bottom { bottom: 0; }
+#trailer .tr-card { inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.4vh; color: #f4f1ea; text-align: center; opacity: 0; text-shadow: 0 0.3vh 2vh rgba(0, 0, 0, .8); }
+#trailer .tr-big { font-size: 5.2vh; font-weight: 600; letter-spacing: .14em; }
+#trailer .tr-small { font-size: 2.4vh; letter-spacing: .06em; line-height: 1.6; opacity: .8; }
+.tr-caption { position: absolute; left: -1.4vw; right: -1.4vw; top: 100%; height: 7.5vh; background: #f6f3ec; color: #2a2a2a; display: flex; align-items: center; justify-content: center; font: 4vh "Marker Felt", "Comic Sans MS", cursive; opacity: 0; }
 </style>
 <link href="board.css" rel="stylesheet">
 </head>
@@ -740,5 +757,6 @@
 <script src="officers.js"></script>
 <script src="desks.js"></script>
 <script src="update.js"></script>
+<script src="trailer.js"></script>
 </body>
 </html>

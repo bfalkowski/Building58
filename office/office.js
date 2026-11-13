@@ -965,7 +965,7 @@
   function tickBoss(dt) {
     const open = boss.present && Math.hypot(boss.pos.x - DOOR.x, boss.pos.z + 5) < 1.7 ? -1.35 : 0;
     door.rotation.y += (open - door.rotation.y) * Math.min(1, dt * 5);
-    if (!boss.present) { if (worldT >= bossDue && !party.on) bossVisit('world'); return; }  // the manager does not walk in on a party
+    if (!boss.present) { if (worldT >= bossDue && !party.on && !directed) bossVisit('world'); return; }  // the manager does not walk in on a party, or on the trailer
     if (!boss.step && !boss.steps.length) { bossLeft(); return; }
     tickWorker(boss, dt);
   }
@@ -2190,6 +2190,38 @@
 
   let last = performance.now(), introT = 0, built = false;
   const camGoal = new THREE.Vector3();
+  // ---------- the director: the trailer (office/trailer.js) moves the camera itself ----------
+  // direct({ pos, target, fov }) holds the camera there and turns the mouse off; direct(null) gives
+  // it back. where(name) says where a thing is, so a shot can point at it while it moves.
+  // A key light rides with the camera, for close-ups of faces lit from behind: key is how bright.
+  let directed = false, filmAt = null, filmDrawn = null;
+  const lookAt = new THREE.Vector3();
+  const keyLight = new THREE.PointLight(C(0xffe6cc), 0, 4, 2); scene.add(keyLight);
+  function direct(c) {
+    if (!c) { directed = false; keyLight.intensity = 0; if (controls) { controls.enabled = true; camera.position.copy(HOME); controls.target.copy(TARGET); } return false; }
+    directed = true; introCam = false; follow = null; if (controls) controls.enabled = false;
+    camera.position.set(c.pos[0], c.pos[1], c.pos[2]);
+    if (c.fov && c.fov !== camera.fov) { camera.fov = c.fov; camera.updateProjectionMatrix(); }
+    camera.lookAt(lookAt.set(c.target[0], c.target[1], c.target[2]));
+    keyLight.intensity = c.key || 0; keyLight.position.copy(camera.position); keyLight.position.y += 0.25;
+    return true;
+  }
+  const xyz = (v) => [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)];
+  function where(name) {
+    const v = new THREE.Vector3(), n = String(name || '');
+    if (n.startsWith('screen:')) {  // the middle of a person's first monitor, and the way it faces
+      const w = byId[n.slice(7)], d = w && DESKS[w.desk]; if (!d) return null;
+      const g = d.screens[0].group; g.updateMatrixWorld(); g.localToWorld(v.set(0, 0.38, 0.01));
+      const f = new THREE.Vector3(0, 0, 1).applyQuaternion(g.getWorldQuaternion(new THREE.Quaternion()));
+      return { at: xyz(v), facing: xyz(f) };
+    }
+    const fixed = { neon: neon.position, cake: CAKE_AT, espresso: espresso.getWorldPosition(v.clone()), pingpong: pp.position, city: backdrop.position, clock: clockFace.position };
+    if (fixed[n]) return { at: xyz(fixed[n]) };
+    const w = n === 'manager' ? boss : byId[n];  // a person: their head, and the way they face
+    if (!w || !w.present) return null;
+    w.fig.head.getWorldPosition(v);
+    return { at: xyz(v), facing: [+Math.sin(w.yaw).toFixed(3), 0, +Math.cos(w.yaw).toFixed(3)] };
+  }
   function tick(dt) {
     worldT += dt;
     for (const w of people) if (w.present) tickWorker(w, dt);
@@ -2206,7 +2238,8 @@
   function frame(nowMs) {
     requestAnimationFrame(frame);
     lastFrameAt = performance.now();
-    const real = Math.min(0.1, (nowMs - last) / 1000); last = nowMs;
+    // While the trailer's recorder sets the film's time (run.clock), the room moves by exactly that.
+    const real = filmAt != null ? Math.min(0.1, Math.max(0, filmAt - filmDrawn)) : Math.min(0.1, (nowMs - last) / 1000); last = nowMs; filmDrawn = filmAt;
     const dt = real * speed;
     if (dt > 0) tick(dt);
     for (const w of people) applyPose(w, dt);
@@ -2214,8 +2247,8 @@
     if (!built && !renderer) { built = true; emit('office.live', {}); readyWaiters.splice(0).forEach((r) => r(snapshot())); }
     if (!renderer) return;
     if (introCam) { introT += real / 3.2; const k = 1 - Math.pow(1 - Math.min(1, introT), 3); camera.position.lerpVectors(START, HOME, k); if (introT >= 1) introCam = false; }
-    if (follow && controls) { follow.fig.root.getWorldPosition(camGoal); camGoal.y = 0.9; controls.target.lerp(camGoal, Math.min(1, real * 3)); }
-    if (controls) { controls.update(); const t = controls.target; t.x = clamp(t.x, -6.5, 6.5); t.z = clamp(t.z, -4.5, 4.5); t.y = clamp(t.y, 0, 2.5); }
+    if (follow && controls && !directed) { follow.fig.root.getWorldPosition(camGoal); camGoal.y = 0.9; controls.target.lerp(camGoal, Math.min(1, real * 3)); }
+    if (controls && !directed) { controls.update(); const t = controls.target; t.x = clamp(t.x, -6.5, 6.5); t.z = clamp(t.z, -4.5, 4.5); t.y = clamp(t.y, 0, 2.5); }
     { const before = clockMin; drawClock(); if (clockMin !== before && before !== -1) clockMinChanged = true; }
     if (boardDirty) { drawBoard(); boardDirty = false; }
     tickScreens();
@@ -2248,6 +2281,15 @@
     roster: () => ACTIONS.roster.run().people,
     focus: (id) => { follow = id ? byId[id] || null : null; introCam = false; return !!follow; },
     view: (name) => setView(name),
+    direct,
+    where,
+    // The film's time in seconds, set for each frame by the trailer's recorder. From then on the room
+    // moves by the film's time, not the browser's, so a slow frame never makes people hurry.
+    clock: (t) => { if (filmDrawn == null) filmDrawn = t; filmAt = t; return t; },
+    // Brings the whole roster into the room at once, for the trailer.
+    cast: () => { people.forEach((w) => { w.extra = false; if (!w.present) { w.present = true; w.fig.root.visible = true; placeAway(w); } }); return people.length; },
+    // Ends the manager's visit at once, for the trailer: its cut to night jumps past his walk out.
+    managerGone: () => { if (boss.present) bossLeft(); return true; },
     tags: (on) => { showTags = on == null ? !showTags : !!on; return showTags; },
     time: setTime,
     holiday: setHoliday,
