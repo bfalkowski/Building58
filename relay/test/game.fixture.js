@@ -13,6 +13,7 @@
 //   crash    exits with code 3 on the first action
 //   spend    reports 0.6 dollars of spend with every action
 //   quickexit  sends done and exits at once, as a game that has nothing left to do may
+// settings.finishDelayMs, when set, is how long it waits before it answers finish.
 'use strict';
 const fs = require('fs');
 const readline = require('readline');
@@ -48,6 +49,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   }
   if (m.type === 'finish') {
     if (mode === 'quickexit') return process.stdout.write(JSON.stringify(DONE) + '\n', () => process.exit(0));
+    if (settings.finishDelayMs) return setTimeout(() => send(DONE), settings.finishDelayMs);
     return send(DONE);
   }
   if (m.type === 'abort') process.exit(0);
