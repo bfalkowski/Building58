@@ -31,5 +31,16 @@ module.exports = [
     // Also loaded with require: by relay/office.js, relay/server.js (the roster), and by the tests.
     files: ['office/demo-session.js', 'office/look.js', 'office/seats.js', 'office/roster.js', 'office/poses.js', 'office/holidays.js', 'office/reviews.js', 'office/board-model.js', 'office/manager-lines.js'],
     languageOptions: { globals: { module: 'writable' } }
+  },
+  {
+    // A fixed wait in the page guesses how long something takes, and a slow computer makes the guess
+    // wrong (T-278). Wait for the event the thing sends, or let the relay type a first prompt.
+    files: ['office/**/*.js', 'shared/**/*.js'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: "NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']",
+        message: 'Wait for the event, or use delivery.promptOnce in the relay. Do not wait a fixed time.'
+      }]
+    }
   }
 ];

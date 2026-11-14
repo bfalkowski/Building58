@@ -882,6 +882,18 @@ function hookCheckoutInfo() {
   return Object.assign(c, { fix: c.match ? null : 'cd ' + dir + ' && RELAY_KEY=<your relay key> npm run office:hooks' });
 }
 
+const MAX_PROMPT = 8000;
+function startPrompted(channel, body, ctx) {
+  const prompt = body.prompt ? String(body.prompt) : '';
+  if (prompt.length > MAX_PROMPT) return { status: 400, body: { ok: false, error: 'bad_prompt', message: 'Keep the prompt to ' + MAX_PROMPT + ' characters.' } };
+  const r = start(channel, body, ctx);
+  if (prompt && r.status < 400) {
+    const who = body.title ? String(body.title).slice(0, 80) : 'A session';
+    delivery().promptOnce(channel, r.body.id, prompt, (problem) => { if (problem) ctx.log(who + ' in ' + r.body.cwd + ' did not get its first prompt: ' + problem); });
+  }
+  return r;
+}
+
 // Routes under /channels/{channel}/terminals. Returns true when it answered.
 // Who may say no to opening or typing into a session: relay/games.js, for the seats of a round.
 // fn (channel, t, verb) gives the reason, or null.
@@ -915,7 +927,7 @@ async function handle(req, res, channel, rest, ctx) {
   const terms = termsOf(channel), [, id, verb] = route;
   if (!id) {
     if (req.method === 'GET') { ctx.send(res, 200, { ok: true, enabled: true, home: os.homedir(), cwd: process.cwd(), hooksInstalled: hook.hooksInstalled(), hookCheckout: hookCheckoutInfo(), terminals: [...terms.values()].map(info), lead: leads.get(channel) || null, restore: restoreOf(channel), finished: finishedOf(channel), failed: failedOf(channel), wipLimit: wipLimit() }); return true; }
-    if (req.method === 'POST') { const r = start(channel, await ctx.readJson(req), ctx); ctx.send(res, r.status, r.body); return true; }
+    if (req.method === 'POST') { const r = startPrompted(channel, await ctx.readJson(req), ctx); ctx.send(res, r.status, r.body); return true; }
     ctx.problem(res, 404, 'not_found', 'Unknown terminal route.'); return true;
   }
   const t = terms.get(id);
@@ -1028,4 +1040,4 @@ const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited)
 // Every running session on every channel.
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit };
+module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit, MAX_PROMPT };

@@ -107,6 +107,7 @@
     for (const s of seats) {
       const p = '/terminals/' + encodeURIComponent(s.terminal) + '/input';
       let r = await api(p, { data: DOWN });
+      // eslint-disable-next-line no-restricted-syntax -- keys sent together read as a paste, so Down and Enter need a gap; the relay takes them only while the question shows
       if (r.ok) { await new Promise((done) => setTimeout(done, 200)); r = await api(p, { data: '\r' }); }
       if (!r.ok) bad.push(s.seat + ': ' + r.message);
     }
