@@ -42,8 +42,10 @@ function countLinks() {
   window.__links = 0;
   for (const C of [window.WebGLRenderingContext, window.WebGL2RenderingContext]) {
     if (!C) continue;
-    const link = C.prototype.linkProgram;
-    C.prototype.linkProgram = function (program) { window.__links++; return link.call(this, program); };
+    const link = C.prototype.linkProgram, source = C.prototype.shaderSource;
+    // Which shader: its name and the features it was built for, so a failure says what compiled late.
+    C.prototype.shaderSource = function (shader, src) { window.__lastShader = String(src).split('\n').filter((l) => /^#define (SHADER_NAME|USE_|NUM_|FOG|DOUBLE_SIDED|FLAT_SHADED|USE_SHADOWMAP)/.test(l)).join(', '); return source.call(this, shader, src); };
+    C.prototype.linkProgram = function (program) { window.__links++; if (window.__atSwap !== undefined) (window.__late = window.__late || []).push(window.__lastShader); return link.call(this, program); };
   }
   let api;
   Object.defineProperty(window, 'OfficeLook', { configurable: true, get: () => api, set: (v) => {
@@ -72,10 +74,10 @@ pageTest('the swap to the baked look compiles no shader, with the effects and wi
     await page.evaluate(() => window.run.ready());
     await page.waitForFunction(() => window.OfficeLook.state.status === 'baked' && window.OfficeLook.state.fx !== 'loading');
     await frames(page, 10);
-    const s = await page.evaluate(() => ({ fx: window.OfficeLook.state.fx, atSwap: window.__atSwap, links: window.__links }));
+    const s = await page.evaluate(() => ({ fx: window.OfficeLook.state.fx, atSwap: window.__atSwap, links: window.__links, late: window.__late || [] }));
     assert.strictEqual(s.fx, fx ? 'off' : 'on');
     assert.ok(s.atSwap > 0, 'the room linked its shaders before the swap');
-    assert.strictEqual(s.links - s.atSwap, 0, 'shaders linked at the swap or after it, with fx ' + s.fx);
+    assert.strictEqual(s.links - s.atSwap, 0, 'shaders linked at the swap or after it, with fx ' + s.fx + ': ' + JSON.stringify(s.late));
   }
   assert.deepStrictEqual(p.errors, []);
 }, SOFTWARE);
