@@ -679,7 +679,9 @@ To run the worlds you need Node 18 or later and `python3`, and nothing else. The
 step and no runtime npm package. ESLint and its friends are dev dependencies. Browser libraries
 come from a CDN at exact, pinned versions.
 
-*Enforced by:* review. A test that reads `package.json` would make it a check.
+*Enforced by:* `relay/test/install-free.test.js`, in `npm test`: it fails when `package.json` has
+`dependencies`, or when a CDN link in `office/` or `shared/` does not name an exact version, like
+`three@0.128.0`. A link to a CDN it does not know is left to review.
 
 *Check:* `package.json` has no `dependencies`, and CDN links name exact versions.
 
@@ -714,7 +716,8 @@ Technical English. Use one word for one thing. Do not use em dashes. pstack's
 `/pstack:technical-writing` applies the Simplified Technical English vocabulary rules, and
 `/pstack:unslop` removes the tells of AI writing.
 
-*Enforced by:* review. An em dash is a mechanical mistake, so a lint rule could catch it.
+*Enforced by:* review. For em dashes, `npm test`: `relay/test/manual.test.js` checks the manual,
+and `relay/test/plain-words.test.js` checks the code and text in `relay/`, `office/` and `shared/`.
 
 *Check:* a new reader can follow the text on the first read.
 

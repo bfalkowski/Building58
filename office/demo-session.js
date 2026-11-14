@@ -1,6 +1,6 @@
 // Three pretend Claude Code sessions, written as the hook events they would send, about two
-// and a half minutes long, each with its own person. The "Run a demo" button plays it in the page, and relay/office-demo.js sends
-// the same events through the relay, the way the real hook does.
+// and a half minutes long, each with its own person. The "Run a demo" button plays it in the page, and relay/office.js --demo
+// (npm run office:demo) sends the same events through the relay, the way the real hook does.
 // Each step is [seconds from the start, hook payload].
 (function (root) {
   'use strict';
