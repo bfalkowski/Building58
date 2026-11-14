@@ -19,7 +19,7 @@ const { claim } = require('./lockfile.js');
 
 const FILE = state.file('checkouts.json', 'RELAY_CHECKOUTS_FILE');
 const PR_URL = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)$/;
-const { MAX_PROMPT } = terminal;  // the same limit as a start from the room page
+const { MAX_PROMPT } = terminal;
 
 // ---------- the store: { channel: [checkout] } ----------
 // A relay that does not own the file does not read it: it cannot see the owner's sessions, so it

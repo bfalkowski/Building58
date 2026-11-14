@@ -882,9 +882,6 @@ function hookCheckoutInfo() {
   return Object.assign(c, { fix: c.match ? null : 'cd ' + dir + ' && RELAY_KEY=<your relay key> npm run office:hooks' });
 }
 
-// A start from the room page can bring its first prompt, as Get a review does for a session with no PR.
-// The relay types it once the session shows its prompt (relay/delivery.js, promptOnce), not after a
-// fixed wait, so a claude that is slow to start still gets it (T-278).
 const MAX_PROMPT = 8000;
 function startPrompted(channel, body, ctx) {
   const prompt = body.prompt ? String(body.prompt) : '';
