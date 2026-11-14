@@ -112,7 +112,6 @@
 
   // ---------- reviews: another worker reads the work ----------
   const { PR_URL, prBrief, manualReview } = window.OfficeReviews;
-  const READY_MS = 5000;  // how long `claude` takes to be ready for a typed prompt
   async function reviewerStarted(r) {
     if (!r.ok) { tell('Could not start a reviewer: ' + (r.message || 'the relay did not answer.'), 'off'); return false; }
     await sync();
@@ -124,14 +123,10 @@
   async function reviewPr(from, pr) {
     return reviewerStarted(await api('', { from, pr, prompt: prBrief(pr), cols: term.cols, rows: term.rows }, '/checkouts'));
   }
-  // Any other review stays in the session's folder: it has to see the uncommitted work there.
+  // Any other review stays in the session's folder: it has to see the uncommitted work there. The
+  // relay types its brief once claude is ready for it, however long that takes.
   async function addReviewer(cwd, prompt) {
-    const r = await api('', { cwd, title: 'Review', role: 'reviewer', cols: term.cols, rows: term.rows });  // the role keeps it from being made the Lead
-    if (!await reviewerStarted(r)) return;
-    await new Promise((done) => setTimeout(done, READY_MS));
-    await api('/' + r.id + '/input', { data: prompt });
-    await new Promise((done) => setTimeout(done, 300));
-    await api('/' + r.id + '/input', { data: '\r' });
+    return reviewerStarted(await api('', { cwd, title: 'Review', role: 'reviewer', prompt, cols: term.cols, rows: term.rows }));  // the role keeps it from being made the Lead
   }
   const reviewBtn = document.createElement('button');
   reviewBtn.type = 'button'; reviewBtn.className = 'btn'; reviewBtn.id = 'cc-review'; reviewBtn.hidden = true; reviewBtn.textContent = 'Get a review';
@@ -735,6 +730,7 @@
     ask.hidden = true;
     attach(r.id); term.focus();
     await sync();
+    // eslint-disable-next-line no-restricted-syntax -- the check is that no exit came within this time, so the wait is the check
     await new Promise((done) => setTimeout(done, RESUME_CHECK));  // claude exits at once if it cannot find the conversation
     askYes.disabled = false;
     const now = await api('');

@@ -71,6 +71,7 @@ async function main() {
     if (state === 'playing') break;
     if (i > 1200) throw new Error('The trailer did not start. Is the page showing its fallback (no WebGL)?');
     await page.clock.runFor(50);
+    // eslint-disable-next-line no-restricted-syntax -- a Node script that looks at the page's state each loop; this gives real time to files the page clock does not move
     await new Promise((r) => setTimeout(r, 20));  // real time for the model and textures to arrive
   }
   const length = await page.evaluate(() => window.trailer.length);

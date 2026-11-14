@@ -59,6 +59,7 @@
       for (let i = 0; i < 10; i++) {  // the session gets a person within a moment; show it
         const w = window.run && window.run.state().workers.find((p) => p.session && p.session.terminal === r.terminal);
         if (w) { window.dispatchEvent(new CustomEvent('office:pick', { detail: { who: w.id, keep: true } })); break; }
+        // eslint-disable-next-line no-restricted-syntax -- polls this page's own state at most 10 times, only to follow the new person; no event says they appeared
         await new Promise((done) => setTimeout(done, 500));
       }
     });
