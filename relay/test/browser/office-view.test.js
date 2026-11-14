@@ -5,7 +5,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { office, pageTest, SOFTWARE } = require('./page.js');
+const { office, pageTest, SOFTWARE, until } = require('./page.js');
 
 test.describe('the office view, with WebGL, in software', () => {
   let o;
@@ -30,7 +30,11 @@ test.describe('the office view, with WebGL, in software', () => {
     const later = await angles();
     for (const k of ['theta', 'phi', 'radius']) assert.ok(Math.abs(later[k] - inside[k]) < 0.02, 'the view stays in the office, ' + k + ': ' + JSON.stringify([inside, later]));
     assert.ok(inside.radius < 2.1, 'the view is behind him at his desk, close up: ' + JSON.stringify(inside));
-    assert.strictEqual(await p.page.evaluate(() => [...document.querySelectorAll('#tags .tag')].filter((t) => !t.hidden).length), 0, 'no tag from the floor shows from his desk');
+    // Tags move on the next frame, which in software can take a while. Only people in his office keep theirs.
+    await until(p, () => {
+      const inOffice = new Set(window.run.roster().filter((w) => { const d = window.run.debug(w.id); return d && d.pos[1] < -5; }).map((w) => w.name));
+      return [...document.querySelectorAll('#tags .tag')].filter((t) => !t.hidden).every((t) => inOffice.has(t.querySelector('b').textContent));
+    });
     // Turning, it stays at his desk and stops before the walls: about 70 degrees each way.
     const left = p.page.locator('.navpad button[data-dir="left"]'), box = await left.boundingBox();
     await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.page.mouse.down(); await p.page.waitForTimeout(2500); await p.page.mouse.up();
