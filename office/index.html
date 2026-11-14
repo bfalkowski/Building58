@@ -66,6 +66,12 @@
   .hud { position: absolute; pointer-events: none; font: 12.5px/1.5 var(--mono); color: var(--hud); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
   .hud-tl { top: 12px; left: 14px; }
   .hud-tl .big { font-size: 15px; color: #ffffff; }
+  /* Into the manager's office and back, at the bottom left of the scene, in the pad's colours (shared/nav.js). */
+  .view-btn { all: unset; box-sizing: border-box; position: absolute; left: 12px; bottom: 12px; z-index: 5; padding: 8px 12px; border-radius: 10px;
+    background: rgba(12, 14, 18, 0.62); color: #f4f1ea; font: 12.5px/1.2 var(--mono); cursor: pointer; }
+  .view-btn:hover { background: rgba(12, 14, 18, 0.8); }
+  .view-btn:focus-visible { outline: 2px solid #f0c25e; outline-offset: 1px; }
+  .view-btn[hidden] { display: none; }
   #radio-now { color: var(--muted); font-style: italic; }
   .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; font: 14px/1.7 var(--mono); }
 
@@ -452,7 +458,7 @@
 /* the trailer (office/trailer.js): only the scene, full screen, with its own overlay */
 html.trailer, html.trailer body { overflow: hidden; background: #111317; }
 html.trailer #stage { position: fixed; inset: 0; z-index: 50; border-radius: 0; aspect-ratio: auto; overflow: visible; transform-origin: 50% 46%; }
-html.trailer #stage .hud, html.trailer #tags, html.trailer .navpad { display: none; }
+html.trailer #stage .hud, html.trailer #tags, html.trailer .navpad, html.trailer .view-btn { display: none; }
 html.trailer body > :not(#trailer) { visibility: hidden; }
 html.trailer #stage { visibility: visible; }
 html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0, 0, 0, .7); }
@@ -503,6 +509,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
       <canvas id="world" aria-label="A loft with developers at desks."></canvas>
       <div id="tags" aria-hidden="true"></div>
       <div class="hud hud-tl"><div class="big" id="hud-company">Building58</div><div id="hud-busy">Starting</div></div>
+      <button class="view-btn" id="view-office" type="button" aria-pressed="false" hidden>Manager's office</button>
       <div class="fallback" id="fallback" hidden><p>This view needs WebGL and three.js. The floor board on the right still works.</p></div>
     </div>
 

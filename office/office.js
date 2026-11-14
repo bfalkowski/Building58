@@ -50,13 +50,21 @@
     lead: [new THREE.Vector3(-2.6, 2.2, 1.6), new THREE.Vector3(-5.9, 0.95, -0.7)],
     coffee: [new THREE.Vector3(5.6, 2.4, 0.6), new THREE.Vector3(5.0, 1.0, -3.6)],
     lounge: [new THREE.Vector3(6.0, 2.5, 5.9), new THREE.Vector3(5.2, 0.7, 1.5)],
-    board: [new THREE.Vector3(0.6, 2.4, -0.6), new THREE.Vector3(-0.95, 1.8, -4.9)]
+    board: [new THREE.Vector3(0.6, 2.4, -0.6), new THREE.Vector3(-0.95, 1.8, -4.9)],
+    office: [new THREE.Vector3(4.9, 6.6, -5.2), new THREE.Vector3(2.04, 0.6, -7.5)]  // down into the manager's office, from over its front right corner
   };
+  // How low the camera may go: with its pivot in the manager's office, it stays high, over the office's walls.
+  function highFor(t) { return t.z < MO.z0 ? 0.9 : 1.4; }
+  // The button at the bottom left of the scene goes into the manager's office, and back to the first view.
+  const officeBtn = $('view-office');
   function setView(name) {
     const v = VIEWS[name] || VIEWS.home; introCam = false; follow = null;
-    camera.position.copy(v[0]); if (controls) { controls.target.copy(v[1]); controls.update(); } else camera.lookAt(v[1]);
-    return name in VIEWS ? name : 'home';
+    camera.position.copy(v[0]); if (controls) { controls.target.copy(v[1]); controls.maxPolarAngle = highFor(v[1]); controls.update(); } else camera.lookAt(v[1]);
+    const shown = name in VIEWS ? name : 'home';
+    if (officeBtn) { const inOffice = shown === 'office'; officeBtn.textContent = inOffice ? 'Back to the room' : "Manager's office"; officeBtn.setAttribute('aria-pressed', String(inOffice)); }
+    return shown;
   }
+  if (controls && officeBtn) { officeBtn.hidden = false; officeBtn.addEventListener('click', () => setView(officeBtn.getAttribute('aria-pressed') === 'true' ? 'home' : 'office')); }
   if (controls) controls.addEventListener('start', () => { introCam = false; follow = null; });
   // The on-screen pad for turning and zooming (shared/nav.js). Home is the same as the home view.
   if (controls && window.NavPad) window.NavPad.attach({ stage, canvas, controls, camera, home: () => setView('home') });
@@ -2414,7 +2422,10 @@
     if (!renderer) return;
     if (introCam) { introT += real / 3.2; const k = 1 - Math.pow(1 - Math.min(1, introT), 3); camera.position.lerpVectors(START, HOME, k); if (introT >= 1) introCam = false; }
     if (follow && controls && !directed) { follow.fig.root.getWorldPosition(camGoal); camGoal.y = 0.9; controls.target.lerp(camGoal, Math.min(1, real * 3)); }
-    if (controls && !directed) { controls.update(); const t = controls.target; t.x = clamp(t.x, -6.5, 6.5); t.z = clamp(t.z, -4.5, 4.5); t.y = clamp(t.y, 0, 2.5); }
+    if (controls && !directed) { controls.update(); const t = controls.target; t.x = clamp(t.x, -6.5, 6.5); t.z = clamp(t.z, t.x > MO.x0 + 0.3 && t.x < MO.x1 - 0.3 ? MO.z1 + 0.3 : -4.5, 4.5); t.y = clamp(t.y, 0, 2.5);
+      // The view's pivot stays in the room, or in the manager's office behind it. While it is in the
+      // office, the camera stays high, so it looks down over the office walls and never into them.
+      controls.maxPolarAngle = highFor(t); }
     { const before = clockMin; drawClock(); if (clockMin !== before && before !== -1) clockMinChanged = true; }
     if (boardDirty) { drawBoard(); boardDirty = false; }
     tickScreens();
