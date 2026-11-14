@@ -52,7 +52,7 @@ test('The manual', async (t) => {
   });
 
   await t.test('no page has an em dash', () => {
-    const bad = pages().filter((p) => /—|&mdash;|&#8212;|&#x2014;/i.test(read(path.join(MANUAL, p))));
+    const bad = pages().filter((p) => /\u2014|&(?:mdash|#8212|#x2014);/i.test(read(path.join(MANUAL, p))));
     assert.deepStrictEqual(bad, []);
   });
 

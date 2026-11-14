@@ -13,6 +13,6 @@ test('each line is one short sentence a bubble can show in full', () => {
   for (const line of LINES) {
     assert.ok(line.length <= 48, 'too long for three lines of a bubble: ' + line);
     assert.match(line, /[.?!]$/, 'ends without a stop: ' + line);
-    assert.ok(!line.includes('—'), 'em dash: ' + line);
+    assert.ok(!line.includes('\u2014'), 'em dash: ' + line);
   }
 });

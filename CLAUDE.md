@@ -25,10 +25,10 @@ stops you, and leave the decision to the person.
 | Keep new routes local: they answer only the room page on this computer. | Code. No test sends a request from another site yet. |
 | Keep keys out of commits, logs, URLs, briefs and tickets. | The secret check: before each commit, and in CI on each pull request |
 | Keep the hook fast: it gives up on the relay after one second and always exits 0. | Code |
-| Keep it install-free: no runtime `dependencies`, and CDN links at exact versions. | Review |
+| Keep it install-free: no runtime `dependencies`, and CDN links at exact versions. | `npm test` (`relay/test/install-free.test.js`) |
 | Keep the relay and the room apart from the worlds: no code in `relay/`, `office/` or `shared/` names another world. A world is its own folder with a `world.json`, and its scripts live there. | `npm test` (`relay/test/worlds-apart.test.js`) |
 | When behavior changes, update the manual in `docs/manual/` in the same pull request. Describe only what the code does now. Behavior lives only there: the READMEs keep setup and links. | Review, and `npm test` checks the manual's links and em dashes |
-| Write plain words: short sentences, one word for one thing, no em dashes. | Review |
+| Write plain words: short sentences, one word for one thing, no em dashes. | Review. For em dashes, `npm test` checks the manual and the code in `relay/`, `office/` and `shared/` (`relay/test/manual.test.js`, `relay/test/plain-words.test.js`). |
 
 Some of these rules are rungs on the trust ladder in article 5. They change only when a person
 turns a rung on, never because a session decides to.
