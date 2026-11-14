@@ -48,5 +48,16 @@ module.exports = [
     // Removing control characters is what clean.js does, and terminal.js reads terminal escape codes.
     files: ['relay/clean.js', 'relay/terminal.js'],
     rules: { 'no-control-regex': 'off', 'no-restricted-syntax': 'off' }
+  },
+  {
+    files: ['eslint-local.js'],
+    languageOptions: { sourceType: 'commonjs', globals: globals.node }
+  },
+  {
+    // No new comments in product code. eslint-suppressions.json holds the ones that exist now.
+    files: ['relay/**/*.js', 'office/**/*.js', 'shared/**/*.js'],
+    ignores: ['relay/test/**'],
+    plugins: { local: require('./eslint-local.js') },
+    rules: { 'local/no-comments': 'error' }
   }
 ];
