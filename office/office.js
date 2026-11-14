@@ -1027,6 +1027,7 @@
   };
   boss.phone = block(bossFig.hands.R, std(0x15171a, { roughness: 0.3 }), [0, -0.03, 0.03], [0.07, 0.14, 0.012]); boss.phone.visible = false;
   reserve('boss-desk', boss);
+  boss.steps.push(act({ dur: rand(20, 40), pose: 'type', work: true, label: 'At his desk' }));  // the room opens with him at work
   { const bub = document.createElement('div'); bub.className = 'bubble'; bub.hidden = true; tagLayer.appendChild(bub); tagFor[boss.id] = { bub }; }
   const bossGap = (share) => { const [a, b] = M.everyMinutes || []; return a > 0 ? worldT + rand(a, b || a) * 60 * share : Infinity; };
   let bossDue = bossGap(0.5);
@@ -1066,11 +1067,15 @@
       ...bossStop(looks[0], 'behindBack', rand(3, 6), { scan: true })
     ];
     for (const k of desks) boss.steps.push({ t: 'walk', key: 'boss-behind-' + k }, { t: 'face', key: 'boss-behind-' + k }, { t: 'call', fn: bossRemark }, act({ dur: rand(4, 8), pose: 'lookOver' }));
-    boss.steps.push(...bossStop(looks[1], 'behindBack', rand(3, 6), { scan: true }), { t: 'walk', key: 'boss-door' }, { t: 'walk', key: 'boss-in' }, { t: 'call', fn: bossLeft });
+    boss.steps.push(...bossStop(looks[1], 'behindBack', rand(3, 6), { scan: true }), { t: 'walk', key: 'boss-door' }, { t: 'walk', key: 'boss-in' }, { t: 'call', fn: bossLeft },
+      ...backToDesk());
     const startled = people.filter(looksBusy);
     if (startled.length) bubble(pick(startled), pick(['Manager!', 'Look busy!', 'Heads up']), 1.8);
     emit('manager.arrived', {}, src);
   }
+  // After a round, and when the room opens, he sits down at his desk and works a while before
+  // anything else.
+  function backToDesk() { reserve('boss-desk', boss); return [{ t: 'walk', key: 'boss-desk' }, { t: 'face', key: 'boss-desk' }, { t: 'sit', key: 'boss-desk' }, act({ dur: rand(20, 40), pose: 'type', work: true, label: 'At his desk' })]; }
   // Puts the manager at his desk at once, sitting, with nothing left to do.
   function bossHome() {
     const sp = SPOTS['boss-desk'];
