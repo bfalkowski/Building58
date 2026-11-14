@@ -92,6 +92,32 @@ that line. It looks for known patterns, so it can miss a secret, and `--no-verif
 the same check on what each pull request adds, so a secret that gets past the hook still fails the
 `pipeline` check. See [Guards at each boundary](docs/manual/how-it-works.html#guards).
 
+### Comments in product code
+
+Lint fails on a new comment in `relay/`, `office/` and `shared/`, but not in `relay/test/`. The
+rule is `local/no-comments`, in `eslint-local.js`. Two kinds of comment stay allowed: the header
+block before a file's first line of code, and an `eslint-disable` comment that gives its reason
+after ` -- `.
+
+Put what a comment would say in its own place instead:
+
+- A rule the code must keep becomes a test or a lint rule.
+- Behavior goes in the manual, in `docs/manual/`.
+- History, such as a ticket number or why a change was made, goes in the pull request.
+
+The comments that were there when the rule came in are counted, per file, in
+`eslint-suppressions.json`. `npm run lint` and CI read that file on their own. The counts only go
+down:
+
+- A file with more comments than its count fails lint. ESLint then lists every comment in that
+  file, not only the new one. Look for the one your change added.
+- A file with fewer comments than its count also fails lint, with "There are suppressions left
+  that do not occur anymore". Run `npx eslint . --prune-suppressions` and commit the smaller counts.
+- Never run `--suppress-all` to make a new comment pass. Run it only after a change to
+  `eslint.config.js` or a merge that leaves the counts wrong, and check that no count went up.
+
+Your editor's ESLint may not read the suppressions file, so it can show every old comment.
+
 ## The manual
 
 How the room and the relay behave is in one place, the manual in
