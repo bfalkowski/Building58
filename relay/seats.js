@@ -37,6 +37,7 @@
 //   3. Anyone left takes the least recently used name of their desk's kind that nobody has and nobody
 //      is holding, then any that nobody has. Names never used come first, in this room's own order.
 'use strict';
+const { oneLine } = require('./clean.js');
 
 const earlier = (a, b) => (a.lead ? 0 : 1) - (b.lead ? 0 : 1) || String(a.at || '').localeCompare(String(b.at || '')) || String(a.id).localeCompare(String(b.id));
 
@@ -114,8 +115,7 @@ function nameAll(people, names, sessions, seats, before, used, seed) {
 // U+034F is a combining mark, so it sits outside the brackets, where lint would read it as joined to the one before.
 const HIDDEN = /\u034f|[\u00ad\u180e\u200b-\u200f\u2060-\u2064\u202a-\u202e\u2066-\u2069\u061c\ufeff]/g;
 function plainName(v) {
-  // eslint-disable-next-line no-control-regex -- removing control characters is the point
-  const one = String(v == null ? '' : v).replace(/[\x00-\x1f\x7f-\x9f]+/g, ' ').replace(HIDDEN, '').replace(/\s+/g, ' ').trim();
+  const one = oneLine(String(v == null ? '' : v).replace(HIDDEN, ''));
   return Array.from(one).slice(0, 40).join('');
 }
 
