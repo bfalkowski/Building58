@@ -28,6 +28,7 @@
 // cached list at once while a new one is fetched, so a change made on GitHub shows a poll later.
 // What the relay writes through this store shows at once.
 'use strict';
+const { keepLines } = require('../clean.js');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -40,8 +41,7 @@ const COLORS = { 'office:triage': 'fbca04', 'office:ready': '0e8a16', 'office:st
 const MAX_TITLE = 80, MAX_BODY = 8000;  // the limits relay/tickets.js sets at filing, for text edited on GitHub
 const NATIVE = ['id', 'title', 'body', 'status', 'priority', 'blockedBy', 'createdAt', 'updatedAt'];
 const NOTE = /\n*<!-- office (\{(?:(?!-->).)*\}) -->\s*$/s;  // the last note: one never holds -->, since > is written \u003e
-// eslint-disable-next-line no-control-regex -- the same characters relay/tickets.js takes out, since text edited on GitHub skips its checks
-const clean = (v) => String(v == null ? '' : v).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
+const clean = (v) => keepLines(v);
 const isNumber = (id) => /^[1-9]\d{0,9}$/.test(String(id));
 
 function repos(spec) {

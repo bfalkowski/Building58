@@ -14,6 +14,7 @@
 //
 // Like the terminal, this answers only the room page on this machine, while RELAY_TERMINAL=1.
 'use strict';
+const { keepLines } = require('./clean.js');
 const fs = require('fs');
 const path = require('path');
 const state = require('./state.js');
@@ -55,8 +56,7 @@ function of(channel) {
   return s;
 }
 const cap = (list, n) => { if (list.length > n) list.splice(0, list.length - n); };
-// eslint-disable-next-line no-control-regex -- removing control characters is the point
-const clean = (v, n) => String(v == null ? '' : v).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '').slice(0, n);
+const clean = keepLines;
 const nameOf = (t) => clean(t.who || (t.role === 'coo' ? 'COO' : t.role === 'pm' ? 'PM' : t.lead ? 'Lead' : t.title) || 'Session ' + String(t.sessionId).slice(0, 8), 80);
 
 // ---------- what the relay sees, kept as it happens ----------

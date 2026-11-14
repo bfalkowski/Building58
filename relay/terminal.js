@@ -558,10 +558,8 @@ function start(channel, body, ctx, onExit, own) {
 const PROMPT = Buffer.from('❯').toString('latin1');  // t.tail holds bytes as latin1
 const { ENTER_SETTLES } = require('./stop-verdict.js');  // one grace for Enter, shared with the Lead's stop verdict
 // CSI (any parameters, so DA2 replies and SGR mouse too), OSC, DCS (such as an XTVERSION reply), charset, and the rest.
-// eslint-disable-next-line no-control-regex -- matching terminal escape codes is the point
 const ANSI = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1bP[^\x1b]*\x1b\\|\x1b[()][A-Za-z0-9]|\x1b./g;
 // The old mouse mode: ESC [ M and three raw bytes. Only in what xterm sends, since ESC [ M in output deletes a line.
-// eslint-disable-next-line no-control-regex -- matching terminal escape codes is the point
 const X10_MOUSE = /\x1b\[M[\s\S]{3}/g;
 // While an update is under way (relay/update.js), the relay types no saved delivery, so no turn it starts
 // can be cut off by the restart: they stay in their file and reach the session when it comes back. A first
@@ -675,15 +673,12 @@ function noteTyping(t, data) {
   const enter = Math.max(plain.lastIndexOf('\r'), plain.lastIndexOf('\n'));
   // A key or Enter at a question answers it, and the turn goes on with no hook until its next tool or
   // its end (relay/update.js). Esc and arrow keys alone do not.
-  // eslint-disable-next-line no-control-regex -- control keys other than Enter answer nothing
   if (t.state === 'waiting' && (enter >= 0 || /[^\x00-\x1f\x7f]/.test(plain))) t.answeredAt = Date.now();
   // A key pressed while a menu is up picks from it, and goes nowhere near the prompt.
   if (MENU.test(screenOf({ tail: t.sinceKey === null ? t.tail : t.sinceKey }).slice(-AFTER_TRUST))) { t.sinceKey = ''; return; }
   if (enter >= 0) { t.drafting = false; t.lastEnterAt = Date.now(); }
   if (enter >= 0 || plain.includes('\x1b')) t.sinceKey = '';  // what is left of the codes is a bare Esc
-  // eslint-disable-next-line no-control-regex -- control keys are not text in the prompt
   if (/[^\x00-\x1f\x7f]/.test(plain.slice(enter + 1))) t.drafting = true;
-  // eslint-disable-next-line no-control-regex -- Ctrl+C and Ctrl+U clear it
   else if (/\x03|\x15/.test(plain)) t.drafting = false;
 }
 
@@ -945,7 +940,6 @@ async function handle(req, res, channel, rest, ctx) {
       t.typedAt = Date.now();
       noteTyping(t, body.data);
       // Any key counts, but not the focus and cursor reports xterm sends by itself.
-      // eslint-disable-next-line no-control-regex -- what is left of an escape code is a bare Esc
       if (/[^\x1b]/.test(body.data.replace(X10_MOUSE, '').replace(ANSI, ''))) {
         t.keyedAt = Date.now();  // a real key: the COO stays for a person who talks to it after its report (relay/coo.js)
         if (t.reviewOf) keepReviewer(t);
