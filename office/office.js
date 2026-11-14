@@ -48,17 +48,22 @@
     coffee: [new THREE.Vector3(5.6, 2.4, 0.6), new THREE.Vector3(5.0, 1.0, -3.6)],
     lounge: [new THREE.Vector3(6.0, 2.5, 5.9), new THREE.Vector3(5.2, 0.7, 1.5)],
     board: [new THREE.Vector3(0.6, 2.4, -0.6), new THREE.Vector3(-0.95, 1.8, -4.9)],
-    office: [new THREE.Vector3(2.04, 1.95, -8.75), new THREE.Vector3(2.04, 1.75, -8.15)]  // from just above the manager's head at his desk, out through the glass
+    office: [new THREE.Vector3(2.04, 1.95, -9.42), new THREE.Vector3(2.04, 1.2, -7.6)]  // behind the manager at his desk, over his head and out through the glass
   };
-  // How the camera may move. In the room it circles a point on the floor. From the manager's desk it
-  // stays at his chair and turns, as a head turns, about 70 degrees each way, so it never goes
-  // through the office's walls.
+  // How the camera may move. In the room it circles a point on the floor. In the manager's office it
+  // stands behind him at his desk and circles a point on his desk, with a wider lens, so his head sits low
+  // in view and the room shows through the glass above it. It turns about 70 degrees each way and
+  // stays in front of the pin board, so it never reaches the office's walls.
   const LIMITS = {
-    room: { minDistance: 3, maxDistance: 26, minPolarAngle: 0.3, maxPolarAngle: 1.4, minAzimuthAngle: -0.15, maxAzimuthAngle: 1.6, enablePan: true },
-    desk: { minDistance: 0.4, maxDistance: 0.9, minPolarAngle: 1.15, maxPolarAngle: 1.95, minAzimuthAngle: Math.PI - 1.25, maxAzimuthAngle: -(Math.PI - 1.25), enablePan: false }
+    room: { fov: 34, minDistance: 3, maxDistance: 26, minPolarAngle: 0.3, maxPolarAngle: 1.4, minAzimuthAngle: -0.15, maxAzimuthAngle: 1.6, enablePan: true },
+    desk: { fov: 60, minDistance: 1.7, maxDistance: 2.0, minPolarAngle: 0.95, maxPolarAngle: 1.2, minAzimuthAngle: Math.PI - 1.25, maxAzimuthAngle: -(Math.PI - 1.25), enablePan: false }
   };
   let lookFrom = 'room';
-  function limits(mode) { lookFrom = mode; if (controls) Object.assign(controls, LIMITS[mode]); }
+  function limits(mode) {
+    const { fov, ...rest } = LIMITS[mode]; lookFrom = mode;
+    if (controls) Object.assign(controls, rest);
+    if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  }
   limits('room');
   // How low the camera may go: with its pivot in the manager's office, it stays high, over the office's walls.
   function highFor(t) { return t.z < MO.z0 ? 0.9 : 1.4; }
@@ -1621,7 +1626,8 @@
       if (T.span.textContent !== sub) { T.span.textContent = sub; T.span.title = sub; T.w = 0; }
       const named = window.OfficeSeats.titleBeside(seated && seated.customTitle);  // the title you gave it with /rename
       if (T.named.textContent !== named.text) { T.named.textContent = named.text; T.named.title = named.full; T.w = 0; }
-      T.tag.hidden = !showTags || !vis || !w.present;
+      const inOffice = w.pos.z < MO.z0;  // from the manager's desk, only tags of people in his office show, not ones out on the floor
+      T.tag.hidden = !showTags || !vis || !w.present || (lookFrom === 'desk' && !inOffice);
       if (!w.present) continue;
       if (!T.bub.hidden) {
         T.bub.hidden = now > w.bubbleUntil; T.bub.style.visibility = vis ? '' : 'hidden';
