@@ -26,10 +26,12 @@
         'Nico', 'Omar', 'Oscar', 'Pablo', 'Rafael', 'Ravi', 'Simon', 'Tomas', 'Victor', 'Wes', 'Yusuf', 'Zane']
     },
 
-    // Walks through every so often, and anyone without real work sits down and looks busy until
-    // the manager has gone. `everyMinutes` is the shortest and longest gap between visits. Take it
-    // out and the manager only comes when sent with the "manager" action.
+    // Works in the glass office off the back wall, and walks the floor every so often. Anyone
+    // without real work sits down and looks busy until he is back in his office. `everyMinutes` is
+    // the shortest and longest gap between rounds. Take it out and he only comes out when sent with
+    // the "manager" action. `title` is the name on his door.
     manager: {
+      title: 'Manager',
       everyMinutes: [6, 15],
       look: { skin: '#d9b08c', hair: '#8d8d8d', hairStyle: 'short', shirt: '#262a33', top: 'suit', lapel: '#1c1f27', dress: '#e8e4dc', tie: '#8c2f39', pants: '#262a33', shoes: '#15120f', height: 1.05 }
     },
