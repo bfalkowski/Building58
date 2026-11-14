@@ -197,13 +197,28 @@
     const b = mesh(G.box, [m, m, capMat, capMat, m, m], scene);
     b.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); b.scale.set(x1 - x0, y1 - y0, z1 - z0); return b;
   }
-  wallBox(-7.3, 7.0, 0, ROOM.h, -5.3, -5.0, 14.3, ROOM.h);  // back wall
+  // The back wall has an opening for the manager's office: a glass door with a glass pane on each
+  // side, centred in the brick between the board and the coffee counter, with the clock above it.
+  // The office behind it is wider than the opening, a room of its own off the loft.
+  const BOARD_EDGE = -0.95 + 3.3 / 2, COUNTER_EDGE = 3.38;
+  const MO = { mid: (BOARD_EDGE + COUNTER_EDGE) / 2, half: 1.09, top: 2.25, x0: -1.0, x1: 5.0, z0: -5.3, z1: -9.6 };
+  MO.open0 = MO.mid - MO.half; MO.open1 = MO.mid + MO.half;
+  wallBox(-7.3, MO.open0, 0, ROOM.h, -5.3, -5.0, MO.open0 + 7.3, ROOM.h);  // back wall, left of the opening
+  wallBox(MO.open1, 7.0, 0, ROOM.h, -5.3, -5.0, 7.0 - MO.open1, ROOM.h);    // and right of it
+  wallBox(MO.open0, MO.open1, MO.top, ROOM.h, -5.3, -5.0, MO.open1 - MO.open0, ROOM.h - MO.top);
+  // the office's own walls, left, right and back, and its floor
+  const moD = MO.z0 - MO.z1;
+  wallBox(MO.x0 - 0.3, MO.x0, 0, ROOM.h, MO.z1 - 0.3, MO.z0, moD, ROOM.h);
+  wallBox(MO.x1, MO.x1 + 0.3, 0, ROOM.h, MO.z1 - 0.3, MO.z0, moD, ROOM.h);
+  wallBox(MO.x0 - 0.3, MO.x1 + 0.3, 0, ROOM.h, MO.z1 - 0.3, MO.z1, MO.x1 - MO.x0 + 0.6, ROOM.h);
+  { const f = mesh(new THREE.PlaneGeometry(MO.x1 - MO.x0, moD), std(0x5a5148, { roughness: 0.95 }), scene, false); f.rotation.x = -Math.PI / 2; f.position.set((MO.x0 + MO.x1) / 2, 0.002, (MO.z0 + MO.z1) / 2);
+    const sl = block(scene, std(0x1d1a18, { roughness: 0.95 }), [(MO.x0 + MO.x1) / 2, -0.165, (MO.z0 + MO.z1) / 2 - 0.15], [MO.x1 - MO.x0 + 0.6, 0.3, moD + 0.3]); sl.castShadow = false; }
   const WIN = [[-4.1, -1.9], [-1.1, 1.1], [1.9, 4.1]], WY0 = 0.9, WY1 = 3.9;
   wallBox(-7.3, -7.0, 0, WY0, -5.3, 5.0, 10.3, WY0);
   wallBox(-7.3, -7.0, WY1, ROOM.h, -5.3, 5.0, 10.3, ROOM.h - WY1);
   [[-5.3, -4.1], [-1.9, -1.1], [1.1, 1.9], [4.1, 5.0]].forEach(([a, b]) => wallBox(-7.3, -7.0, WY0, WY1, a, b, b - a, WY1 - WY0));
   // baseboard on the back wall
-  block(scene, std(0x2b2724), [0, 0.06, -4.985], [13.9, 0.12, 0.03]);
+  block(scene, std(0x2b2724), [(-6.95 + MO.open0) / 2, 0.06, -4.985], [MO.open0 + 6.95, 0.12, 0.03]); block(scene, std(0x2b2724), [(MO.open1 + 6.95) / 2, 0.06, -4.985], [6.95 - MO.open1, 0.12, 0.03]);
 
   // steel factory windows, sills and old radiators
   const steel = std(0x15181b, { roughness: 0.5, metalness: 0.5 });
@@ -334,7 +349,7 @@
     clockTex.needsUpdate = true;
   }
   const clockFace = mesh(new THREE.CircleGeometry(0.42, 48), new THREE.MeshStandardMaterial({ map: clockTex, roughness: 0.5 }), scene, false);
-  clockFace.position.set(2.05, 2.75, -4.94);
+  clockFace.position.set(MO.mid, 2.85, -4.94);  // above the manager's door, in the middle of the brick
   const rim = mesh(new THREE.TorusGeometry(0.43, 0.03, 10, 48), metal(0x222222), scene); rim.position.copy(clockFace.position);
   drawClock();
 
@@ -351,7 +366,8 @@
   const OBST = { rects: [], circles: [] };
   const solid = (x0, x1, z0, z1) => OBST.rects.push([x0, x1, z0, z1]);
   const solidC = (x, z, r) => OBST.circles.push([x, z, r]);
-  solid(-7.3, -6.7, -5.3, 5); solid(-7.3, 7, -5.3, -4.95);
+  solid(-7.3, -6.7, -5.3, 5); solid(-7.3, MO.mid - 0.5, -5.3, -4.95); solid(MO.mid + 0.5, 7, -5.3, -4.95);  // the back wall, open only at the glass door
+  solid(-7.3, MO.x0, -9.95, -5.3); solid(MO.x1, 7.3, -9.95, -5.3); solid(-7.3, 7.3, -9.95, MO.z1);  // round the manager's office
   COLUMNS.forEach(([x, z]) => solidC(x, z, 0.2));
 
   function bench(cx, cz, len) {
@@ -539,7 +555,76 @@
   tablePaddles.forEach((p, i) => { p.position.set(-0.6 + (i ? 0.9 : -0.9), 0.77, 3.2 + i * 0.3); p.rotation.set(0, 0.6 + i, Math.PI / 2); scene.add(p); });
 
   // plants and the window seats
-  plant(-6.45, -4.45, 1.25, 0xe9e4da); plant(-6.45, 4.45, 1.1, 0xb8735a); plant(6.6, 4.55, 1.2, 0x2b2b2b); plant(2.75, -4.55, 0.95, 0xb8735a); plant(-3.8, 4.5, 0.9);
+  plant(-6.45, -4.45, 1.25, 0xe9e4da); plant(-6.45, 4.45, 1.1, 0xb8735a); plant(6.6, 4.55, 1.2, 0x2b2b2b); plant(-3.8, 4.5, 0.9);
+
+  // ---------- the manager's office ----------
+  // His desk faces the glass door, so the room sees him at work. Guest chairs, a sofa, shelves,
+  // filing cabinets and plants give him places to go between rounds.
+  const MD = { x: MO.mid, z: -8.0 };  // the desk's middle
+  block(scene, darkWood, [MD.x, 0.74, MD.z], [1.6, 0.05, 0.75]);
+  for (const sx of [-0.75, 0.75]) for (const sz of [-0.32, 0.32]) block(scene, blackMetal, [MD.x + sx, 0.36, MD.z + sz], [0.04, 0.72, 0.04]);
+  block(scene, darkWood, [MD.x, 0.42, MD.z + 0.36], [1.5, 0.6, 0.03]);  // the front panel
+  monitor(scene, [MD.x - 0.5, 0.765, MD.z], Math.PI - 0.5);  // to his left, so the room sees his face
+  { const lp = [MD.x + 0.6, 0.765, MD.z + 0.15]; cyl(scene, blackMetal, lp, 0.06, 0.02); rod(scene, blackMetal, lp, [lp[0], lp[1] + 0.38, lp[2]], 0.01); const sh = cyl(scene, std(0x7a2a24), [lp[0], lp[1] + 0.4, lp[2]], 0.09, 0.1, 0.04); sh.rotation.x = -0.3; }
+  block(scene, std(0xe9e2cf, { roughness: 0.8 }), [MD.x + 0.2, 0.775, MD.z - 0.05], [0.3, 0.02, 0.22]);
+  const moMug = mugMesh('#7a2a24'); moMug.position.set(MD.x + 0.35, 0.765, MD.z + 0.2); scene.add(moMug);
+  chair(MD.x, MD.z - 0.72, 0, 0x3a2a24);
+  for (const dx of [-0.5, 0.5]) chair(MD.x + dx, MD.z + 0.85, Math.PI, 0x2a2d33);
+  solid(MD.x - 0.8, MD.x + 0.8, MD.z - 0.38, MD.z + 0.38);
+  // a pin board on the back wall behind him, cork with a few quiet notes on it
+  { const c = makeCanvas(512, 288), x = c.getContext('2d'), r = rnd(58);
+    x.fillStyle = '#b8936a'; x.fillRect(0, 0, 512, 288);
+    for (let i = 0; i < 2600; i++) { x.fillStyle = 'rgba(' + (r() < 0.5 ? '90,60,35' : '230,200,160') + ',' + (0.1 + r() * 0.15) + ')'; x.fillRect(r() * 512, r() * 288, 2, 2); }
+    const notes = [[40, 34, '#efe9dc'], [150, 52, '#e9e3cf'], [270, 30, '#dfe6ea'], [385, 48, '#efe9dc'], [60, 160, '#e6e0cc'], [180, 168, '#efe9dc'], [300, 150, '#e9e3cf'], [410, 170, '#dfe6ea']];
+    for (const [nx, ny, col] of notes) {
+      x.save(); x.translate(nx + 45, ny + 45); x.rotate((r() - 0.5) * 0.12); x.fillStyle = 'rgba(0,0,0,0.18)'; x.fillRect(-43, -41, 90, 90); x.fillStyle = col; x.fillRect(-45, -45, 90, 90);
+      x.fillStyle = 'rgba(70,70,80,0.45)'; for (let l = 0; l < 4; l++) x.fillRect(-34, -22 + l * 14, 50 + r() * 18, 3);
+      x.fillStyle = '#8a3b30'; x.beginPath(); x.arc(0, -36, 5, 0, Math.PI * 2); x.fill(); x.restore();
+    }
+    block(scene, darkWood, [MD.x, 1.7, MO.z1 + 0.03], [2.1, 1.22, 0.05]);
+    const face = mesh(new THREE.PlaneGeometry(2.0, 1.12), new THREE.MeshStandardMaterial({ map: tex(c), roughness: 0.9 }), scene, false); face.position.set(MD.x, 1.7, MO.z1 + 0.06); }
+  // a sofa against the left wall, with a low table
+  const moSofa = new THREE.Group(); moSofa.position.set(MO.x0 + 0.5, 0, -7.4); moSofa.rotation.y = Math.PI / 2; scene.add(moSofa);
+  const sofaLeather = std(0x5a3a2a, { roughness: 0.6 });
+  block(moSofa, sofaLeather, [0, 0.23, 0], [1.6, 0.3, 0.9]); block(moSofa, sofaLeather, [0, 0.62, -0.33], [1.6, 0.55, 0.24]);
+  for (const sx of [-0.75, 0.75]) block(moSofa, sofaLeather, [sx, 0.5, 0], [0.18, 0.36, 0.9]);
+  for (const sx of [-0.35, 0.35]) block(moSofa, std(0x684534, { roughness: 0.6 }), [sx, 0.42, 0.06], [0.66, 0.1, 0.72]);
+  solid(MO.x0, MO.x0 + 0.95, -8.2, -6.6);
+  block(scene, wood, [MO.x0 + 1.55, 0.36, -7.4], [0.5, 0.04, 0.9]); for (const sz of [-0.38, 0.38]) block(scene, blackMetal, [MO.x0 + 1.55, 0.18, -7.4 + sz], [0.4, 0.34, 0.03]);
+  solid(MO.x0 + 1.3, MO.x0 + 1.8, -7.85, -6.95);
+  // filing cabinets on the right wall
+  for (const dz of [-0.55, 0]) block(scene, std(0x3c4148, { roughness: 0.5, metalness: 0.3 }), [MO.x1 - 0.28, 0.6, -8.0 + dz], [0.5, 1.2, 0.5]);
+  solid(MO.x1 - 0.55, MO.x1, -8.3, -7.75);
+  // a frame on the left wall, plants in the corners, and two lamps overhead
+  block(scene, darkWood, [MO.x0 + 0.02, 1.75, -7.4], [0.03, 0.7, 1.0]); block(scene, std(0x3d6f8f, { roughness: 0.6 }), [MO.x0 + 0.04, 1.75, -7.4], [0.01, 0.58, 0.88]);
+  plant(MO.x0 + 0.35, MO.z1 + 0.35, 1.1, 0xb8735a); plant(MO.x1 - 0.35, MO.z0 - 0.35, 0.95, 0xb8735a); plant(MO.x1 - 0.35, MO.z1 + 0.35, 1.0, 0x2b2b2b);
+  pendant(MD.x, MD.z + 0.6, 2.45);
+  // The office has no windows of its own, so its lamps set its light, by the room's Light: a floor
+  // lamp by the sofa, the desk lamp and the light over the desk. By day they are nearly off and the
+  // light comes in from above; in the evening they glow warm; at night, warmer and brighter. The
+  // manager never leaves, so his lamps never go out.
+  const MO_LIGHT = {
+    day:     { floor: 0, desk: 0, ceiling: 0.5, glow: 0.05, color: 0xfff1de },
+    evening: { floor: 4.0, desk: 1.8, ceiling: 0.9, glow: 3.0, color: 0xffad60 },
+    night:   { floor: 6.0, desk: 2.4, ceiling: 0.4, glow: 4.5, color: 0xff9a4a }
+  };
+  const moLamps = {};
+  { // the floor lamp: a black stand, a brass stem and a linen drum shade that glows
+    const fx = MO.x0 + 0.38, fz = -6.3;
+    cyl(scene, blackMetal, [fx, 0.02, fz], 0.17, 0.04); rod(scene, metal(0xc9a46a, 0.3), [fx, 0.04, fz], [fx, 1.5, fz], 0.014);
+    moLamps.shadeMat = new THREE.MeshStandardMaterial({ color: C(0xf3e6cc), emissive: C(0xffc27a), emissiveIntensity: 0.15, roughness: 0.9, side: THREE.DoubleSide });
+    const shade = mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.32, 28, 1, true), moLamps.shadeMat, scene, false); shade.position.set(fx, 1.55, fz);
+    moLamps.floor = new THREE.PointLight(C(0xffb36b), 0, 5, 2); moLamps.floor.position.set(fx, 1.5, fz); scene.add(moLamps.floor);
+    solidC(fx, fz, 0.2);
+  }
+  moLamps.desk = new THREE.PointLight(C(0xffb36b), 0, 2.5, 2); moLamps.desk.position.set(MD.x + 0.6, 1.05, MD.z + 0.15); scene.add(moLamps.desk);
+  moLamps.ceiling = new THREE.PointLight(C(0xffd9a8), 0, 7, 2); moLamps.ceiling.position.set(MD.x, 2.3, MD.z + 0.8); scene.add(moLamps.ceiling);
+  function lightOffice(time) {
+    const L = MO_LIGHT[time] || MO_LIGHT.evening;
+    moLamps.floor.intensity = L.floor; moLamps.desk.intensity = L.desk; moLamps.ceiling.intensity = L.ceiling;
+    moLamps.floor.color.set(C(L.color)); moLamps.desk.color.set(C(L.color));
+    moLamps.shadeMat.emissiveIntensity = L.glow;
+  }
 
   // ---------- spots people go to ----------
   spot('espresso', 4.3, -3.85, Math.PI, { label: 'Making coffee' });
@@ -553,15 +638,23 @@
   spot('board-0', -1.35, -3.75, Math.PI, { label: 'At the board' }); spot('board-1', -0.35, -3.75, Math.PI, { label: 'At the board' });
   spot('pp-w', -2.42, 3.4, Math.PI / 2); spot('pp-e', 1.22, 3.4, -Math.PI / 2);
   // where the manager stands: inside the door, behind each person's chair, and places to look around from
-  spot('boss-door', 1.7, -4.2, 0); spot('boss-aisle', -0.6, -0.55, 0.5); spot('boss-lounge', 3.2, 0.4, -0.9); spot('boss-board', -0.85, -3.55, Math.PI);
+  spot('boss-door', MO.mid, -4.2, 0);
+  // in his office: his desk, inside the door, the guest chairs, and the places he goes between rounds
+  spot('boss-desk', MD.x, MD.z - 0.7, 0, { sit: 'chair', approach: new THREE.Vector3(MD.x + 0.35, 0, MD.z - 0.78), label: 'At his desk' });
+  spot('boss-in', MO.mid, -5.85, 0);
+  [-0.5, 0.5].forEach((dx, i) => spot('boss-guest-' + i, MD.x + dx, MD.z + 0.83, Math.PI, { sit: 'chair', approach: new THREE.Vector3(MD.x + dx * 1.9, 0, MD.z + 1.0), label: "In the manager's office" }));
+  spot('boss-glass-0', MO.open0 + 0.35, -5.6, 0, { label: 'Looking out at the floor' }); spot('boss-glass-1', MO.open1 - 0.35, -5.6, 0, { label: 'Looking out at the floor' });
+  spot('boss-sofa', MO.x0 + 0.63, -7.05, Math.PI / 2, { sit: 'couch', seat: 0.47, approach: new THREE.Vector3(MO.x0 + 1.05, 0, -7.05), label: 'On a call' });
+  spot('boss-files', MO.x1 - 0.85, -7.75, Math.PI / 2, { label: 'In the files' });
+  spot('boss-pinboard', MD.x + 0.75, MO.z1 + 0.75, Math.PI, { label: 'At the pin board' }); spot('boss-aisle', -0.6, -0.55, 0.5); spot('boss-lounge', 3.2, 0.4, -0.9); spot('boss-board', -0.85, -3.55, Math.PI);
   for (const k in DESKS) { const d = DESKS[k]; spot('boss-behind-' + k, d.x - Math.sin(d.yaw) * 0.78, d.z - Math.cos(d.yaw) * 0.78, d.yaw); }
   for (const k in SPOTS) { const s = SPOTS[k]; if (!s.approach) s.approach = s.pos.clone(); s.by = null; }
 
   // ---------- walking: a grid over the floor and A* ----------
-  const CELL = 0.15, GX = Math.round(14 / CELL), GZ = Math.round(10 / CELL), BODY = 0.24;
+  const CELL = 0.15, GZ0 = -9.9, GX = Math.round(14 / CELL), GZ = Math.round((ROOM.z1 - GZ0) / CELL), BODY = 0.24;  // the loft and the manager's office
   const blocked = new Uint8Array(GX * GZ);
-  const cellX = (x) => clamp(Math.floor((x - ROOM.x0) / CELL), 0, GX - 1), cellZ = (z) => clamp(Math.floor((z - ROOM.z0) / CELL), 0, GZ - 1);
-  const cx = (i) => ROOM.x0 + (i + 0.5) * CELL, cz = (j) => ROOM.z0 + (j + 0.5) * CELL;
+  const cellX = (x) => clamp(Math.floor((x - ROOM.x0) / CELL), 0, GX - 1), cellZ = (z) => clamp(Math.floor((z - GZ0) / CELL), 0, GZ - 1);
+  const cx = (i) => ROOM.x0 + (i + 0.5) * CELL, cz = (j) => GZ0 + (j + 0.5) * CELL;
   for (let j = 0; j < GZ; j++) for (let i = 0; i < GX; i++) {
     const x = cx(i), z = cz(j); let b = 0;
     if (x > ROOM.x1 - 0.2 || z > ROOM.z1 - 0.2) b = 1;
@@ -569,6 +662,9 @@
     if (!b) for (const [ox, oz, r] of OBST.circles) if ((x - ox) ** 2 + (z - oz) ** 2 < (r + BODY) ** 2) { b = 1; break; }
     blocked[j * GX + i] = b;
   }
+  // The manager and the Lead walk into the manager's office. Nobody else does.
+  const officeGrid = blocked.slice();
+  for (let j = 0; j < GZ; j++) if (cz(j) < -4.95) for (let i = 0; i < GX; i++) blocked[j * GX + i] = 1;
   function freeCellNear(i, j, grid) {
     if (!grid[j * GX + i]) return [i, j];
     for (let r = 1; r < 12; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
@@ -723,6 +819,7 @@
 
   const deskOrder = ['a1', 'a2', 'b1', 'a0', 'b2', 'a3', 'b0', 'b3'];
   const lead = makeWorker(ROSTER.lead, 'lead', true);
+  lead.grid = officeGrid;  // the Lead may walk into the manager's office
   (ROSTER.workers || []).slice(0, deskOrder.length).forEach((def, i) => makeWorker(def, deskOrder[i]));
   people.forEach((w) => placeFigure(w));
 
@@ -769,6 +866,7 @@
     if (bars.length) add(bars.length < 3 ? 2.2 : 1.0, () => goTo(w, pick(bars), act({ dur: rand(15, 30), pose: 'stand', chat: true, label: 'Chatting' }), 'Going to the bar table'));
     const boards = ['board-0', 'board-1'].filter(free);
     if (boards.length) add(0.6, () => goTo(w, pick(boards), act({ dur: rand(8, 16), pose: 'pockets', board: true, label: 'Reading the board' }), 'Going to the board'));
+    if (w.lead && !boss.present) add(0.5, () => leadVisit('world'));
     if (free('fridge')) add(0.4, () => goTo(w, 'fridge', act({ dur: 4, pose: 'fridge', fridge: true, label: 'At the fridge' }), 'Going to the fridge'));
     if (!reduce && !party.on && free('pp-w') && free('pp-e') && !w.lead) {  // no new game during a party
       const partner = people.find((p) => p !== w && p.present && !p.lead && p.mode === 'idle' && !p.pingpong && p.step && p.step.t === 'act' && p.seated);
@@ -891,31 +989,45 @@
   }
 
   // ---------- the manager ----------
-  // Comes through the door now and then, looks around and over shoulders, then leaves. Not one
-  // of `people`: no session or desk, not on the Floor list, and cannot be clicked. While the
-  // manager is in, anyone without real work sits at their desk and looks busy. Real work is
-  // never touched, so what a session is doing and showing stays true throughout.
+  // Works in his glass office off the back wall, and now and then comes out through its door, looks
+  // around and over shoulders, then goes back in. Not one of `people`: no session or desk on the
+  // floor, not on the Floor list, and cannot be clicked. While he is out on the floor, anyone
+  // without real work sits at their desk and looks busy. Real work is never touched, so what a
+  // session is doing and showing stays true throughout.
   const M = ROSTER.manager || {};
-  const DOOR = { x: 1.7, behind: -5.7, inside: -4.2, width: 1.0, height: 2.15 };
-  const doorway = mesh(new THREE.PlaneGeometry(DOOR.width, DOOR.height), new THREE.MeshBasicMaterial({ color: C(0x08090b) }), scene, false);
-  doorway.position.set(DOOR.x, DOOR.height / 2, -4.968);
-  const doorFrame = std(0x2b2724, { roughness: 0.6 });
-  for (const s of [-1, 1]) block(scene, doorFrame, [DOOR.x + s * (DOOR.width / 2 + 0.04), (DOOR.height + 0.08) / 2, -4.96], [0.08, DOOR.height + 0.08, 0.08]);
-  block(scene, doorFrame, [DOOR.x, DOOR.height + 0.04, -4.96], [DOOR.width + 0.16, 0.08, 0.08]);
-  const door = new THREE.Group(); door.position.set(DOOR.x - DOOR.width / 2, 0, -4.955); scene.add(door);
-  block(door, std(0x3d4f45, { roughness: 0.5 }), [DOOR.width / 2, DOOR.height / 2, 0], [DOOR.width, DOOR.height, 0.04]);
-  ball(door, metal(0xc9b37a, 0.3), [DOOR.width - 0.09, 1.02, 0.05], 0.03);
+  const DOOR = { x: MO.mid, width: 1.0 };
+  const moGlass = new THREE.MeshStandardMaterial({ color: C(0xcfe3ef), transparent: true, opacity: 0.16, roughness: 0.05, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide });
+  const moFrame = std(0x1c1c1e, { roughness: 0.45, metalness: 0.4 });
+  // the steel frame: a head, a post at each side and each side of the door, and a pane each side
+  block(scene, moFrame, [MO.mid, MO.top - 0.03, -5.0], [MO.open1 - MO.open0, 0.06, 0.08]);
+  const posts = [MO.open0 + 0.03, DOOR.x - DOOR.width / 2 - 0.03, DOOR.x + DOOR.width / 2 + 0.03, MO.open1 - 0.03];
+  for (const x of posts) block(scene, moFrame, [x, MO.top / 2, -5.0], [0.06, MO.top, 0.08]);
+  for (const [a, b] of [[posts[0], posts[1]], [posts[2], posts[3]]]) {
+    const g = mesh(new THREE.PlaneGeometry(b - a, MO.top - 0.06), moGlass, scene, false); g.position.set((a + b) / 2, (MO.top - 0.06) / 2, -5.0); g.renderOrder = 2;
+    block(scene, moFrame, [(a + b) / 2, 0.03, -5.0], [b - a, 0.06, 0.06]);
+  }
+  // the door, hung on its left side, with a steel handle and his title on it
+  const door = new THREE.Group(); door.position.set(DOOR.x - DOOR.width / 2, 0, -5.0); scene.add(door);
+  const doorH = MO.top - 0.08;
+  { const g = mesh(new THREE.PlaneGeometry(DOOR.width, doorH), moGlass, door, false); g.position.set(DOOR.width / 2, doorH / 2, 0); g.renderOrder = 2; }
+  for (const [p, sz] of [[[DOOR.width / 2, 0.02, 0], [DOOR.width, 0.04, 0.04]], [[DOOR.width / 2, doorH, 0], [DOOR.width, 0.04, 0.04]], [[0.02, doorH / 2, 0], [0.04, doorH, 0.04]], [[DOOR.width - 0.02, doorH / 2, 0], [0.04, doorH, 0.04]]]) block(door, moFrame, p, sz);
+  for (const s of [-1, 1]) block(door, metal(0xd8d8d8, 0.2), [DOOR.width - 0.1, 1.05, s * 0.05], [0.025, 0.6, 0.025]);
+  { const c = makeCanvas(256, 64), x = c.getContext('2d'); x.fillStyle = '#e8e2d4'; x.font = '600 34px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(M.title || 'Manager', 128, 34);
+    const n = mesh(new THREE.PlaneGeometry(0.4, 0.1), new THREE.MeshBasicMaterial({ map: tex(c), transparent: true }), door, false); n.position.set(DOOR.width / 2, 1.5, 0.004); n.renderOrder = 3; }
   const bossSpots = ['boss-aisle', 'boss-lounge', 'boss-board'];
   // the manager walks around the people sitting at desks, not through them
-  const bossGrid = blocked.slice();
+  const bossGrid = officeGrid.slice();
   for (const k in DESKS) for (let j = 0; j < GZ; j++) for (let i = 0; i < GX; i++) if (Math.hypot(cx(i) - DESKS[k].x, cz(j) - DESKS[k].z) < 0.55) bossGrid[j * GX + i] = 1;
-  const bossFig = buildPerson(M.look); bossFig.root.visible = false; scene.add(bossFig.root);
+  const bossFig = buildPerson(M.look); scene.add(bossFig.root);
   const boss = {
-    id: 'manager', boss: true, grid: bossGrid, fig: bossFig, desk: null, spot: 'boss-door', pos: new THREE.Vector3(DOOR.x, 0, DOOR.behind), yaw: 0, speed: 1.05,
-    pose: Object.assign({}, POSE.stand), target: POSE.stand, seated: false, route: {}, steps: [], step: null, doing: '', mode: 'work', task: null, waiting: null, carry: null,
+    id: 'manager', boss: true, grid: bossGrid, fig: bossFig, desk: null, spot: 'boss-desk', pos: SPOTS['boss-desk'].pos.clone(), yaw: 0, speed: 1.05, typePose: typePoseFor((M.look || {}).height || 1),
+    pose: Object.assign({}, POSE.sit), target: POSE.sit, seated: true, route: {}, steps: [], step: null, doing: '', mode: 'work', task: null, waiting: null, carry: null,
     walkPhase: 0, swivel: 0, swivelTo: 0, gaze: 0, gazeTo: 0, fidget: null, moving: false, rush: false, bubbleUntil: 0, nextSip: 0, sipUntil: 0, present: false,
-    mug: { visible: false }, phone: { visible: false }, paddle: { visible: false }  // nothing in hand
+    mug: { visible: false }, paddle: { visible: false }
   };
+  boss.phone = block(bossFig.hands.R, std(0x15171a, { roughness: 0.3 }), [0, -0.03, 0.03], [0.07, 0.14, 0.012]); boss.phone.visible = false;
+  reserve('boss-desk', boss);
+  boss.steps.push(act({ dur: rand(20, 40), pose: 'type', work: true, label: 'At his desk' }));  // the room opens with him at work
   { const bub = document.createElement('div'); bub.className = 'bubble'; bub.hidden = true; tagLayer.appendChild(bub); tagFor[boss.id] = { bub }; }
   const bossGap = (share) => { const [a, b] = M.everyMinutes || []; return a > 0 ? worldT + rand(a, b || a) * 60 * share : Infinity; };
   let bossDue = bossGap(0.5);
@@ -945,23 +1057,34 @@
     bubble(boss, line, Math.min(6, 2 + line.length / 15));  // long enough to read
   }
   function bossVisit(src) {
-    boss.present = true; boss.fig.root.visible = true; boss.spot = 'boss-door';
-    boss.pos.set(DOOR.x, 0, DOOR.behind); boss.yaw = 0; boss.moving = false; boss.step = null;
+    boss.present = true; boss.step = null; boss.phone.visible = false; release(boss);
     const desks = people.filter((p) => p.present).map((p) => p.desk).sort(() => Math.random() - 0.5).slice(0, 2 + Math.floor(Math.random() * 2));
     const looks = bossSpots.slice().sort(() => Math.random() - 0.5);
     boss.steps = [
-      act({ dur: 1.2, pose: 'stand' }),  // the door opens, and people get a moment to scatter
-      { t: 'walk', key: 'boss-door', path: [new THREE.Vector3(DOOR.x, 0, DOOR.inside)] },
+      ...(boss.seated ? [{ t: 'stand' }, act({ dur: 0.6, pose: 'stand' })] : []),
+      { t: 'walk', key: 'boss-in' }, { t: 'face', key: 'boss-in' }, act({ dur: 0.9, pose: 'stand', label: 'Opening the door' }),  // he opens the door, and people get a moment to scatter
+      { t: 'walk', key: 'boss-door' },
       ...bossStop(looks[0], 'behindBack', rand(3, 6), { scan: true })
     ];
     for (const k of desks) boss.steps.push({ t: 'walk', key: 'boss-behind-' + k }, { t: 'face', key: 'boss-behind-' + k }, { t: 'call', fn: bossRemark }, act({ dur: rand(4, 8), pose: 'lookOver' }));
-    boss.steps.push(...bossStop(looks[1], 'behindBack', rand(3, 6), { scan: true }), { t: 'walk', key: 'boss-door' }, { t: 'walk', key: 'boss-door', path: [new THREE.Vector3(DOOR.x, 0, DOOR.behind)] });
+    boss.steps.push(...bossStop(looks[1], 'behindBack', rand(3, 6), { scan: true }), { t: 'walk', key: 'boss-door' }, { t: 'walk', key: 'boss-in' }, { t: 'call', fn: bossLeft },
+      ...backToDesk());
     const startled = people.filter(looksBusy);
     if (startled.length) bubble(pick(startled), pick(['Manager!', 'Look busy!', 'Heads up']), 1.8);
     emit('manager.arrived', {}, src);
   }
+  // After a round, and when the room opens, he sits down at his desk and works a while before
+  // anything else.
+  function backToDesk() { reserve('boss-desk', boss); return [{ t: 'walk', key: 'boss-desk' }, { t: 'face', key: 'boss-desk' }, { t: 'sit', key: 'boss-desk' }, act({ dur: rand(20, 40), pose: 'type', work: true, label: 'At his desk' })]; }
+  // Puts the manager at his desk at once, sitting, with nothing left to do.
+  function bossHome() {
+    const sp = SPOTS['boss-desk'];
+    boss.steps = []; boss.step = null; boss.moving = false; boss.rush = false; boss.phone.visible = false; release(boss);
+    boss.pos.copy(sp.pos); boss.yaw = sp.yaw; boss.seated = true; boss.spot = 'boss-desk'; reserve('boss-desk', boss);
+    boss.pose = Object.assign({}, POSE.sit); boss.target = POSE.sit;
+  }
   function bossLeft() {
-    boss.present = false; boss.fig.root.visible = false; boss.moving = false; boss.step = null; tagFor[boss.id].bub.hidden = true;
+    boss.present = false; tagFor[boss.id].bub.hidden = true;
     bossDue = bossGap(1);
     for (const p of people) {
       if (!p.busyAct) continue;
@@ -970,12 +1093,45 @@
     }
     emit('manager.left', {});
   }
+  // Between rounds the manager keeps busy in his office, in the same steps a worker takes. Real
+  // work comes first: with a task (one day, a session of his own) he stays at his desk on it.
+  function managerIdle(w) {
+    if (w.task) { goTo(w, 'boss-desk', act({ dur: Infinity, pose: 'type', work: true, label: 'Working' }), 'Going to his desk'); return; }
+    const atDesk = w.spot === 'boss-desk' && w.seated;
+    const desk = (a) => { if (atDesk) w.steps.push(a); else goTo(w, 'boss-desk', a, 'Back to his desk'); w.doing = a.label; };
+    const opts = [];
+    const add = (weight, fn) => { if (weight > 0) opts.push([weight, fn]); };
+    add(3.0, () => desk(act({ dur: rand(15, 35), pose: 'type', work: true, label: 'At his desk' })));
+    if (atDesk) add(1.0, () => desk(act({ dur: rand(6, 12), pose: 'leanback', label: 'Thinking' })));
+    if (atDesk) add(0.9, () => desk(act({ dur: rand(10, 20), pose: 'phoneSit', prop: 'phone', label: 'On a call' })));
+    const glass = ['boss-glass-0', 'boss-glass-1'].filter(free);
+    if (glass.length) add(1.4, () => goTo(w, pick(glass), act({ dur: rand(8, 15), pose: 'behindBack', scan: true, label: 'Looking out at the floor' }), 'Going to the glass'));
+    if (free('boss-sofa')) add(0.8, () => goTo(w, 'boss-sofa', act({ dur: rand(15, 30), pose: 'couch', prop: 'phone', label: 'On a call' }), 'Going to the sofa'));
+    if (free('boss-files')) add(0.7, () => goTo(w, 'boss-files', act({ dur: rand(5, 9), pose: 'fridge', label: 'In the files' }), 'Going to the files'));
+    if (free('boss-pinboard')) add(0.6, () => goTo(w, 'boss-pinboard', act({ dur: rand(6, 12), pose: 'pockets', board: true, label: 'At the pin board' }), 'Going to the pin board'));
+    let r = Math.random() * opts.reduce((n, o) => n + o[0], 0);
+    for (const [weight, fn] of opts) { if ((r -= weight) <= 0) { fn(); return; } }
+    opts[0][1]();
+  }
+  // The glass door opens into the office for the manager, and for the Lead, as they come up to it.
+  const nearDoor = (w) => w && !w.seated && Math.abs(w.pos.x - DOOR.x) < 0.8 && Math.abs(w.pos.z + 5) < 0.95;
   function tickBoss(dt) {
-    const open = boss.present && Math.hypot(boss.pos.x - DOOR.x, boss.pos.z + 5) < 1.7 ? -1.35 : 0;
-    door.rotation.y += (open - door.rotation.y) * Math.min(1, dt * 5);
-    if (!boss.present) { if (worldT >= bossDue && !party.on && !directed) bossVisit('world'); return; }  // the manager does not walk in on a party, or on the trailer
-    if (!boss.step && !boss.steps.length) { bossLeft(); return; }
+    const open = nearDoor(boss) || nearDoor(lead) ? 1.45 : 0;
+    door.rotation.y += (open - door.rotation.y) * Math.min(1, dt * 4);
+    if (!boss.present) {
+      if (!boss.step && !boss.steps.length) managerIdle(boss);
+      // He goes on his rounds from wherever he is in the office, but not mid-walk, not into a party, and not in the trailer.
+      if (worldT >= bossDue && !party.on && !directed && !boss.moving) bossVisit('world');
+    }
     tickWorker(boss, dt);
+  }
+  // The Lead goes to the manager's office now and then: in through the door, a sit in a guest chair, and back.
+  function leadVisit(src) {
+    const seat = ['boss-guest-1', 'boss-guest-0'].find(free);
+    if (lead.task || lead.waiting || !lead.present || !seat) return false;
+    goTo(lead, seat, act({ dur: rand(10, 18), pose: 'sit', chat: true, label: "In the manager's office" }), "Going to the manager's office");
+    emit('lead.visit', {}, src);
+    return true;
   }
 
   // Sends people with no real work to these spots, one each, to do actFor(spot) there. Someone
@@ -1785,6 +1941,7 @@
         return { ok: true, party: partyState() };
       } },
     say: { desc: 'Shows a speech bubble.', params: { who: 'a person', text: 'what they say' }, run: (c) => { const w = findWorker(c) || lead; bubble(w, String(c.text || '').slice(0, 60), 3); return { ok: true, who: w.id }; } },
+    leadVisit: { desc: "Sends the Lead to the manager's office for a moment, if the Lead has no real work.", params: {}, run: (c, src) => leadVisit(src) ? { ok: true } : fail('busy', 'The Lead is working, or the guest chairs are taken.') },
     manager: { desc: 'Sends the manager through now, instead of waiting for the next visit.', params: {}, run: (c, src) => { if (boss.present) return fail('busy', 'The manager is already here.'); bossVisit(src); return { ok: true }; } },
     reset: { desc: 'Ends all work and clears the board.', params: {}, run: (c, src) => { people.forEach((p) => { finish(p, 'reset', src); if (p.waiting) setWaiting(p, null); }); done.length = 0; [...sessions.values()].forEach(unseat); boardDirty = true; return { ok: true }; } },
     speed: { desc: 'How fast the room moves: 0 to 8, 1 is normal. Work state does not depend on it.', params: { value: '0 to 8' }, run: (c) => { const v = Number(c.value); if (!(v >= 0 && v <= 8)) return fail('bad_param', '"value" is 0 to 8.'); speed = v; return { ok: true, speed }; } },
@@ -2183,6 +2340,7 @@
     lamps.forEach((l) => { l.intensity = P.lamps; });
     bulbMat.emissiveIntensity = 0.4 + P.lamps * 1.4;
     neonLight.intensity = part === 'day' ? 0.3 : 0.9;
+    lightOffice(part);
     if (renderer) renderer.toneMappingExposure = P.exposure;
     drawSkyline();
   }
@@ -2251,7 +2409,7 @@
     const dt = real * speed;
     if (dt > 0) tick(dt);
     for (const w of people) applyPose(w, dt);
-    if (boss.present) applyPose(boss, dt);
+    applyPose(boss, dt);  // in his office or out on the floor, he is always in the room
     if (!built && !renderer) { built = true; emit('office.live', {}); readyWaiters.splice(0).forEach((r) => r(snapshot())); }
     if (!renderer) return;
     if (introCam) { introT += real / 3.2; const k = 1 - Math.pow(1 - Math.min(1, introT), 3); camera.position.lerpVectors(START, HOME, k); if (introT >= 1) introCam = false; }
@@ -2296,8 +2454,8 @@
     clock: (t) => { if (filmDrawn == null) filmDrawn = t; filmAt = t; return t; },
     // Brings the whole roster into the room at once, for the trailer.
     cast: () => { people.forEach((w) => { w.extra = false; if (!w.present) { w.present = true; w.fig.root.visible = true; placeAway(w); } }); return people.length; },
-    // Ends the manager's visit at once, for the trailer: its cut to night jumps past his walk out.
-    managerGone: () => { if (boss.present) bossLeft(); return true; },
+    // Ends the manager's round at once, for the trailer: its cut to night finds him back at his desk.
+    managerGone: () => { if (boss.present) bossLeft(); bossHome(); return true; },
     tags: (on) => { showTags = on == null ? !showTags : !!on; return showTags; },
     time: setTime,
     holiday: setHoliday,
