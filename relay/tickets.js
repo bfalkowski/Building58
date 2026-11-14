@@ -4,6 +4,7 @@
 //
 // Where tickets are kept is up to the store: see relay/ticket-stores/local.js.
 'use strict';
+const { keepLines } = require('./clean.js');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -99,8 +100,7 @@ function inTurn(channel, fn) {
   return run;
 }
 
-// eslint-disable-next-line no-control-regex -- removing control characters is the point
-const clean = (v) => String(v == null ? '' : v).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '').trim();
+const clean = (v) => keepLines(v).trim();
 
 // A rejected ticket will not be built, so nothing waits for it. The card says so, for you to judge.
 const blockersOf = (ticket, all, statuses) => (ticket.blockedBy || []).filter((id) => { const b = all.find((x) => x.id === id); return b && statuses.includes(b.status); });

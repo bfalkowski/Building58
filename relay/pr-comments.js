@@ -16,6 +16,7 @@
 // The message is typed through relay/delivery.js, so only while the Dev's session is idle. It has
 // links and a count, never a comment's words. T-4's review loop can call tell() with its own news.
 'use strict';
+const { oneLine } = require('./clean.js');
 const { execFile } = require('child_process');
 const path = require('path');
 const tasks = require('./tasks.js');
@@ -45,8 +46,7 @@ const KEY_ID = /^review-([0-9a-f]{6})$/;
 const ENDED = 'Review waiting, Dev session has ended';
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
-// eslint-disable-next-line no-control-regex -- removing control characters is the point
-const clean = (v, n) => String(v == null ? '' : v).replace(/[\x00-\x1f\x7f-\x9f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+const clean = oneLine;
 const plural = (n) => n + ' new comment' + (n === 1 ? '' : 's');
 function stateOf(task) {
   if (!task.reviews) task.reviews = { seen: [], own: [], pending: null, owesPost: null, problem: null, checkedAt: null };
