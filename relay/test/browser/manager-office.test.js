@@ -22,8 +22,11 @@ pageTest('the manager works in his office, goes out through its door on a round,
   assert.ok(start.seated, 'he sits at his desk');
   assert.ok(start.pos[1] < BACK_WALL, 'his desk is in the office, behind the back wall');
   assert.strictEqual((await p.page.evaluate(() => window.run.state())).managerHere, false, 'at his desk, he is not out on the floor');
+  assert.strictEqual(start.door, 0, 'the door is shut while he sits');
 
   await p.page.evaluate(() => { window.run.do({ action: 'speed', value: 8 }); window.run.do({ action: 'manager' }); });
+  // The door opens for him on his way out, before he reaches it.
+  await until(p, () => { const d = window.run.debug('manager'); return d.door > 1 && d.pos[1] < -5; });
   // He comes out through the door, in the middle of the opening, onto the floor.
   await until(p, () => { const d = window.run.debug('manager'); return d.pos[1] > -4.5; });
   const out = await boss();

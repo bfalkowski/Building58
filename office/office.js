@@ -575,6 +575,8 @@
   monitor(scene, [MD.x - 0.5, 0.765, MD.z], Math.PI - 0.5);  // to his left, so the room sees his face
   { const lp = [MD.x + 0.6, 0.765, MD.z + 0.15]; cyl(scene, blackMetal, lp, 0.06, 0.02); rod(scene, blackMetal, lp, [lp[0], lp[1] + 0.38, lp[2]], 0.01); const sh = cyl(scene, std(0x7a2a24), [lp[0], lp[1] + 0.4, lp[2]], 0.09, 0.1, 0.04); sh.rotation.x = -0.3; }
   block(scene, std(0xe9e2cf, { roughness: 0.8 }), [MD.x + 0.2, 0.775, MD.z - 0.05], [0.3, 0.02, 0.22]);
+  block(scene, std(0x2b2e33, { roughness: 0.5 }), [MD.x - 0.16, 0.774, MD.z - 0.2], [0.4, 0.018, 0.13]);  // his keyboard, under his hands
+  ball(scene, std(0x2b2e33, { roughness: 0.4 }), [MD.x + 0.14, 0.778, MD.z - 0.25], 0.03, [0.7, 0.35, 1]);
   const moMug = mugMesh('#7a2a24'); moMug.position.set(MD.x + 0.35, 0.765, MD.z + 0.2); scene.add(moMug);
   chair(MD.x, MD.z - 0.72, 0, 0x3a2a24);
   for (const dx of [-0.5, 0.5]) chair(MD.x + dx, MD.z + 0.85, Math.PI, 0x2a2d33);
@@ -649,7 +651,7 @@
   spot('boss-door', MO.mid, -4.2, 0);
   // in his office: his desk, inside the door, the guest chairs, and the places he goes between rounds
   spot('boss-desk', MD.x, MD.z - 0.7, 0, { sit: 'chair', approach: new THREE.Vector3(MD.x + 0.35, 0, MD.z - 0.78), label: 'At his desk' });
-  spot('boss-in', MO.mid, -5.85, 0);
+  spot('boss-in', MO.mid, -5.85, 0); spot('boss-door-in', MO.mid, -4.2, Math.PI);  // just inside the office door, and outside it facing in
   [-0.5, 0.5].forEach((dx, i) => spot('boss-guest-' + i, MD.x + dx, MD.z + 0.83, Math.PI, { sit: 'chair', approach: new THREE.Vector3(MD.x + dx * 1.9, 0, MD.z + 1.0), label: "In the manager's office" }));
   spot('boss-glass-0', MO.open0 + 0.35, -5.6, 0, { label: 'Looking out at the floor' }); spot('boss-glass-1', MO.open1 - 0.35, -5.6, 0, { label: 'Looking out at the floor' });
   spot('boss-sofa', MO.x0 + 0.63, -7.05, Math.PI / 2, { sit: 'couch', seat: 0.47, approach: new THREE.Vector3(MO.x0 + 1.05, 0, -7.05), label: 'On a call' });
@@ -1019,7 +1021,9 @@
   const doorH = MO.top - 0.08;
   { const g = mesh(new THREE.PlaneGeometry(DOOR.width, doorH), moGlass, door, false); g.position.set(DOOR.width / 2, doorH / 2, 0); g.renderOrder = 2; }
   for (const [p, sz] of [[[DOOR.width / 2, 0.02, 0], [DOOR.width, 0.04, 0.04]], [[DOOR.width / 2, doorH, 0], [DOOR.width, 0.04, 0.04]], [[0.02, doorH / 2, 0], [0.04, doorH, 0.04]], [[DOOR.width - 0.02, doorH / 2, 0], [0.04, doorH, 0.04]]]) block(door, moFrame, p, sz);
-  for (const s of [-1, 1]) block(door, metal(0xd8d8d8, 0.2), [DOOR.width - 0.1, 1.05, s * 0.05], [0.025, 0.6, 0.025]);
+  const steelBright = metal(0xd8d8d8, 0.2);
+  for (const s of [-1, 1]) block(door, steelBright, [DOOR.width - 0.1, 1.05, s * 0.045], [0.025, 0.6, 0.025]);  // a pull on each side
+  for (const y of [0.83, 1.27]) block(door, steelBright, [DOOR.width - 0.1, y, 0], [0.018, 0.018, 0.1]);       // through the glass, holding both
   { const c = makeCanvas(256, 64), x = c.getContext('2d'); x.fillStyle = '#e8e2d4'; x.font = '600 34px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(M.title || 'Manager', 128, 34);
     const n = mesh(new THREE.PlaneGeometry(0.4, 0.1), new THREE.MeshBasicMaterial({ map: tex(c), transparent: true }), door, false); n.position.set(DOOR.width / 2, 1.5, 0.004); n.renderOrder = 3; }
   const bossSpots = ['boss-aisle', 'boss-lounge', 'boss-board'];
@@ -1075,7 +1079,7 @@
       ...bossStop(looks[0], 'behindBack', rand(3, 6), { scan: true })
     ];
     for (const k of desks) boss.steps.push({ t: 'walk', key: 'boss-behind-' + k }, { t: 'face', key: 'boss-behind-' + k }, { t: 'call', fn: bossRemark }, act({ dur: rand(4, 8), pose: 'lookOver' }));
-    boss.steps.push(...bossStop(looks[1], 'behindBack', rand(3, 6), { scan: true }), { t: 'walk', key: 'boss-door' }, { t: 'walk', key: 'boss-in' }, { t: 'call', fn: bossLeft },
+    boss.steps.push(...bossStop(looks[1], 'behindBack', rand(3, 6), { scan: true }), { t: 'walk', key: 'boss-door' }, { t: 'face', key: 'boss-door-in' }, act({ dur: 0.7, pose: 'stand', label: 'Opening the door' }), { t: 'walk', key: 'boss-in' }, { t: 'call', fn: bossLeft },
       ...backToDesk());
     const startled = people.filter(looksBusy);
     if (startled.length) bubble(pick(startled), pick(['Manager!', 'Look busy!', 'Heads up']), 1.8);
@@ -1121,10 +1125,25 @@
     for (const [weight, fn] of opts) { if ((r -= weight) <= 0) { fn(); return; } }
     opts[0][1]();
   }
-  // The glass door opens into the office for the manager, and for the Lead, as they come up to it.
-  const nearDoor = (w) => w && !w.seated && Math.abs(w.pos.x - DOOR.x) < 0.8 && Math.abs(w.pos.z + 5) < 0.95;
+  // The glass door opens only for the manager or the Lead on their way through it, not for him
+  // standing at the glass. It opens as they come up to it and stays open until they are clear of
+  // its swing on the other side.
+  const BACK_Z = -5;
+  function goingThrough(w) {
+    const s = w.step; if (!s) return false;
+    if (s.t === 'act' && s.label === 'Opening the door') return true;
+    if (s.t !== 'walk') return false;
+    const to = s.path && s.path.length ? s.path[s.path.length - 1] : SPOTS[s.key] && SPOTS[s.key].approach;
+    return !!to && (to.z < BACK_Z) !== (w.pos.z < BACK_Z);
+  }
+  function usingDoor(w) {
+    if (!w || w.seated) return false;
+    if (Math.abs(w.pos.x - DOOR.x) > 0.9 || Math.abs(w.pos.z - BACK_Z) > 1.3) { w.throughDoor = false; return false; }
+    if (goingThrough(w)) w.throughDoor = true;
+    return !!w.throughDoor;
+  }
   function tickBoss(dt) {
-    const open = nearDoor(boss) || nearDoor(lead) ? 1.45 : 0;
+    const open = usingDoor(boss) || usingDoor(lead) ? 1.45 : 0;
     door.rotation.y += (open - door.rotation.y) * Math.min(1, dt * 4);
     if (!boss.present) {
       if (!boss.step && !boss.steps.length) managerIdle(boss);
@@ -2358,7 +2377,7 @@
   if (window.OfficeLook && renderer) {
     window.OfficeLook.attach({
       scene, camera, renderer, sun, hemi, amb, fill, part: () => part,
-      movers: () => [...people.map((w) => w.fig.root), boss.fig.root, ...Object.values(DESKS).flatMap((d) => [d.chair, d.mug]), ...tablePaddles, ppBall]
+      movers: () => [...people.map((w) => w.fig.root), boss.fig.root, ...Object.values(DESKS).flatMap((d) => [d.chair, d.mug]), ...tablePaddles, ppBall, door]
     });
   }
 
@@ -2470,7 +2489,7 @@
     tags: (on) => { showTags = on == null ? !showTags : !!on; return showTags; },
     time: setTime,
     holiday: setHoliday,
-    debug: (id) => { const w = id === boss.id ? boss : byId[id]; return w && { pos: [+w.pos.x.toFixed(2), +w.pos.z.toFixed(2)], yaw: +w.yaw.toFixed(2), spot: w.spot, seated: w.seated, fidget: w.fidget, swivel: +w.swivel.toFixed(2), phone: w.phone.visible, hat: w.hat.visible, step: w.step && { t: w.step.t, key: w.step.key, el: +(w.step.el || 0).toFixed(1), left: w.step.path ? w.step.path.length : null }, steps: w.steps.map((s) => s.t + (s.key ? ':' + s.key : '')) }; }
+    debug: (id) => { const w = id === boss.id ? boss : byId[id]; return w && { pos: [+w.pos.x.toFixed(2), +w.pos.z.toFixed(2)], yaw: +w.yaw.toFixed(2), spot: w.spot, seated: w.seated, fidget: w.fidget, swivel: +w.swivel.toFixed(2), phone: w.phone.visible, hat: w.hat.visible, step: w.step && { t: w.step.t, key: w.step.key, el: +(w.step.el || 0).toFixed(1), left: w.step.path ? w.step.path.length : null }, steps: w.steps.map((s) => s.t + (s.key ? ':' + s.key : '')), ...(w === boss ? { door: +door.rotation.y.toFixed(2) } : {}) }; }
   };
   ACTIONS.ready.run = () => run.ready().then((s) => ({ ok: true, people: s.people, busy: s.busy }));
   Object.keys(ACTIONS).forEach((k) => { if (!run[k]) run[k] = (o) => doAction(Object.assign({ action: k }, o || {})); });
