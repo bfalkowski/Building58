@@ -1,6 +1,8 @@
 // The Games panel: the games in GAMES_REPO, a form to start a round, the round's seats while it runs,
-// and its score and reveal when it ends. The relay runs the round (relay/games.js). This panel names
-// no game: it shows what the relay sends. Like the Tasks panel, it asks the relay every 2 seconds.
+// its score and reveal when it ends, and what each seat did (Steps), from the seat's own transcript. The
+// relay runs the round (relay/games.js). This panel names no game: it shows what the relay sends, and
+// a game's own words for itself and its numbers (about, metrics). Like the Tasks panel, it asks the
+// relay every 2 seconds.
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -15,6 +17,8 @@
   const roundBox = $('game-round'), seatRows = $('game-seats'), finishBtn = $('game-finish'), stopBtn = $('game-stop');
   const trustAll = $('game-trust-all'), trustNote = $('game-trust-note');
   const resultBox = $('game-result'), pastBox = $('game-past-box'), pastRows = $('game-past');
+  const aboutBox = $('game-about'), doneNote = $('game-done');
+  const stepsBox = $('game-steps'), stepRows = $('game-step-rows');
 
   const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + p + '?key=' + encodeURIComponent(key);
   function api(p, body) {
@@ -51,6 +55,8 @@
   // The seat count stays inside the picked game's players.
   function fitSeats() {
     const g = games.find((x) => x.folder === pick.value);
+    aboutBox.textContent = g && g.about ? g.about : '';
+    aboutBox.hidden = !(g && g.about);
     form.querySelector('[type=submit]').disabled = !g || !!round;
     if (!g) return;
     seatsIn.min = g.players.min; seatsIn.max = g.players.max;
@@ -78,23 +84,29 @@
     if (!round) return;
     $('game-round-title').textContent = 'Round ' + round.id + ' · ' + nameOf(round.game);
     const about = $('game-round-about');
-    // The relay counts only what the game reports, not yet what each seat's session costs.
-    const spend = !round.spentUsd && round.capUsd == null ? 'spend not counted yet' : 'spent $' + Number(round.spentUsd || 0).toFixed(2) + (round.capUsd != null ? ' of $' + round.capUsd : '');
+    // The relay counts each seat's tokens at API prices, plus what the game reports.
+    const spend = '$' + Number(round.spentUsd || 0).toFixed(2) + (round.capUsd != null ? ' of $' + round.capUsd : '') + ' at API prices' + (round.unpriced && round.unpriced.length ? ' (no price for ' + round.unpriced.join(', ') + ')' : '');
     about.textContent = 'started ' + time(round.startedAt) + ' · watch ' + round.watch + ' · ' + spend + ' · ' + (round.isolation === 'sandbox' ? 'each seat in its own sandbox' : 'no boundary: seats can read your files');
     about.dataset.isolation = round.isolation;
     const waiting = round.seats.filter((s) => s.waiting === 'trust');
     trustAll.hidden = !waiting.length;
     trustNote.hidden = !waiting.length;
+    // Every seat has worked and is idle now: the seats said they are done, so the person can finish.
+    doneNote.hidden = !(round.seats.length && round.seats.every((s) => s.worked && (s.state === 'idle' || s.state === 'ended')));
     seatRows.textContent = '';
     for (const s of round.seats) {
-      const li = el('li'); li.dataset.waiting = s.waiting || '';
+      const li = el('li'); li.dataset.waiting = s.waiting || ''; li.dataset.state = s.state || ''; li.dataset.worked = s.worked ? '1' : '';
       const w = seatPerson(s.terminal);
-      li.append(el('b', s.seat), el('small', (w ? w.name + ' · ' : '') + 'session ' + s.terminal));
+      const doing = s.waiting ? '' : s.state === 'working' ? 'working' : s.worked && s.state === 'idle' ? 'done' : s.state === 'ended' ? 'ended' : 'starting';
+      li.append(el('b', s.seat), el('small', [w && w.name, 'session ' + s.terminal, doing, s.tokens && tokens(s.tokens) + ', $' + Number(s.usd || 0).toFixed(2)].filter(Boolean).join(' · ')));
       if (s.waiting === 'trust') {
         li.append(el('small', 'Waiting on you: Claude Code asks whether to trust this seat\'s folder.'));
         li.append(button('Trust this seat\'s folder', () => trust([s])));
       }
-      if (round.watch === 'all') li.append(button('Show its screen', () => window.dispatchEvent(new CustomEvent('office:session', { detail: { terminal: s.terminal } }))));
+      if (round.watch === 'all') {
+        li.append(button('Show its screen', () => window.dispatchEvent(new CustomEvent('office:session', { detail: { terminal: s.terminal } }))));
+        li.append(button('Steps', () => showSteps(round.id, s.seat)));
+      }
       seatRows.append(li);
     }
   }
@@ -119,13 +131,20 @@
 
   // ---------- the score and the reveal ----------
   // Any value the relay sends: an object becomes rows of its keys, anything else is shown as text.
-  function data(value) {
+  // meanings: the game's own line for a key, shown under its value.
+  function data(value, meanings) {
     if (value === null || value === undefined) return el('p', 'none', 'task-empty');
     if (typeof value !== 'object' || Array.isArray(value)) return el('pre', typeof value === 'string' ? value : JSON.stringify(value, null, 2), 'game-data');
     const dl = el('dl', undefined, 'game-data');
-    for (const [k, v] of Object.entries(value)) dl.append(el('dt', k), el('dd', v !== null && typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)));
+    for (const [k, v] of Object.entries(value)) {
+      const dd = el('dd', v !== null && typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v));
+      if (meanings && typeof meanings[k] === 'string') dd.append(el('small', meanings[k]));
+      dl.append(el('dt', k), dd);
+    }
     return dl;
   }
+  const metricsOf = (folder) => { const g = games.find((x) => x.folder === folder); return (g && g.metrics) || null; };
+  const tokens = (t) => Math.round((t.input + t.cacheWrite + t.cacheRead) / 1000) + 'k in, ' + Math.round(t.output / 100) / 10 + 'k out';
   function showResult(r) {
     resultBox.hidden = false;
     $('game-result-title').textContent = 'Round ' + r.id + ' · ' + nameOf(r.game);
@@ -135,13 +154,40 @@
     const s = r.score;
     score.append(el('b', 'Score'));
     if (s && typeof s === 'object' && !Array.isArray(s) && ('metrics' in s || 'seats' in s)) {
-      if ('metrics' in s) score.append(el('small', 'Metrics'), data(s.metrics));
+      if ('metrics' in s) score.append(el('small', 'Metrics'), data(s.metrics, metricsOf(r.game)));
       if ('seats' in s) score.append(el('small', 'Seats'), data(s.seats));
       const rest = Object.fromEntries(Object.entries(s).filter(([k]) => k !== 'metrics' && k !== 'seats'));
       if (Object.keys(rest).length) score.append(data(rest));
     } else score.append(data(s));
     reveal.append(el('b', 'Reveal'), data(r.reveal));
+    if (r.seats && r.seats.length) reveal.append(el('b', 'What each seat did'), seatButtons(r.id, r.seats.map((x) => x.seat)));
   }
+  const seatButtons = (id, seats) => { const d = el('div'); for (const seat of seats) d.append(button('Steps ' + seat, () => showSteps(id, seat)), ' '); return d; };
+
+  // ---------- what a seat did ----------
+  // One row per step, folded to its first line. The relay reads them from the seat's own transcript.
+  const KIND = { brief: 'brief', prompt: 'prompt', says: 'says', runs: 'runs', result: 'got back' };
+  let stepsOf = null;
+  async function showSteps(id, seat) {
+    stepsOf = id + '/' + seat;
+    stepsBox.hidden = false;
+    $('game-steps-title').textContent = 'Round ' + id + ' · seat ' + seat;
+    $('game-steps-about').textContent = 'reading…';
+    stepRows.textContent = '';
+    const r = await api('/rounds/' + encodeURIComponent(id) + '/seats/' + encodeURIComponent(seat) + '/steps');
+    if (stepsOf !== id + '/' + seat) return;
+    if (!r.ok) { $('game-steps-about').textContent = r.message; return; }
+    const cost = r.tokens ? tokens(r.tokens) + ' · $' + Number(r.usd || 0).toFixed(2) + ' at API prices' + (r.unpriced && r.unpriced.length ? ' (no price for ' + r.unpriced.join(', ') + ')' : '') : '';
+    $('game-steps-about').textContent = r.found ? [r.steps.length + ' steps', cost, r.truncated && 'only the first part is shown'].filter(Boolean).join(' · ') : r.message;
+    for (const st of r.steps) {
+      const li = el('li'); li.dataset.kind = st.kind; if (st.error) li.dataset.error = '1';
+      const d = el('details'), sum = el('summary');
+      sum.append(el('b', (KIND[st.kind] || st.kind) + (st.tool ? ' ' + st.tool : '')), st.text.split('\n')[0].slice(0, 160));
+      d.append(sum, el('pre', st.text));
+      li.append(d); stepRows.append(li);
+    }
+  }
+  $('game-steps-close').addEventListener('click', () => { stepsBox.hidden = true; stepsOf = null; });
   async function loadPast() {
     const r = await api('/rounds');
     if (!r.ok) return;
@@ -150,7 +196,8 @@
     for (const p of r.rounds) {
       const li = el('li');
       const metrics = p.score && p.score.metrics;
-      li.append(el('b', nameOf(p.game)), el('small', time(p.time) + ' · round ' + p.id), el('small', !p.score ? 'no score' : metrics ? Object.entries(metrics).map(([k, v]) => k + ' ' + v).join(', ') : JSON.stringify(p.score)));
+      li.append(el('b', nameOf(p.game)), el('small', time(p.time) + ' · round ' + p.id + (p.spentUsd != null ? ' · $' + Number(p.spentUsd).toFixed(2) : '')), el('small', !p.score ? 'no score' : metrics ? Object.entries(metrics).map(([k, v]) => k + ' ' + v).join(', ') : JSON.stringify(p.score)));
+      if (p.seatNames && p.seatNames.length) li.append(seatButtons(p.id, p.seatNames));
       pastRows.append(li);
     }
   }

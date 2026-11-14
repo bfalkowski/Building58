@@ -20,7 +20,11 @@
 // A round ends with finish (the game's score and reveal), with stop (no score), or when the game fails:
 // it exits, sends a line that is not JSON, stops answering for RELAY_GAME_TIMEOUT_MS (30 seconds), or
 // the round reaches its spend cap. Then the relay stops every seat and removes the seat folders. The
-// room keeps only each round's id, game, time and score, in memory.
+// room keeps only each round's id, game, time, spend and score, in memory, and for each seat its folder
+// and session id, so the person can still read what the seat did (GET .../steps).
+//
+// The spend is what the game reports plus each seat's tokens at API prices, read from the seat's own
+// transcript every RELAY_SEAT_SPEND_MS (5 seconds), so a spend cap counts the seats too.
 //
 // While a round runs, the Lead and Autopilot start no new tickets (relay/tickets.js), and the person
 // cannot type into a seat. A round is Watch all (the default): the person can open any seat's screen.
@@ -32,7 +36,9 @@
 //   GET  /rounds/current           the round that runs, or null
 //   POST /rounds/current/finish    asks the game for its score and reveal
 //   POST /rounds/current/stop      ends the round with no score
-//   GET  /rounds                   past rounds: id, game, time and score only
+//   GET  /rounds                   past rounds: id, game, time, spend and score only
+//   GET  /rounds/{id}/seats/{seat}/steps   what one seat did, from its own transcript (relay/seat-steps.js).
+//                                  For the round that runs only under Watch all, and for a past round any time.
 // And with a seat's own token:
 //   POST /play                     { kind, args } one action for that seat. The answer comes back.
 'use strict';
@@ -56,11 +62,13 @@ const KEEP_PAST = 50;
 
 const roundSeats = require('./round-seats.js');
 const seatBoundary = require('./seat-boundary.js');
+const seatSteps = require('./seat-steps.js');
+const SPEND_EVERY = () => (Number(process.env.RELAY_SEAT_SPEND_MS) >= 50 ? Number(process.env.RELAY_SEAT_SPEND_MS) : 5000);
 
 const repo = () => process.env.GAMES_REPO || '';
 const seatsDir = roundSeats.dir;
 const rounds = new Map();  // channel: the round that runs
-const past = new Map();    // channel: [{ id, game, time, score }], newest first
+const past = new Map();    // channel: [{ id, game, time, spentUsd, score, seats }], newest first. seats stay in the relay.
 
 // Every folder in GAMES_REPO with a game.json, with whether the loader can run it and why not.
 function listGames() {
@@ -76,10 +84,20 @@ function readGame(root, folder) {
   let g;
   try { g = JSON.parse(fs.readFileSync(path.join(root, folder, 'game.json'), 'utf8')); } catch (e) { return Object.assign(out, { reason: 'Its game.json is not valid JSON: ' + e.message }); }
   if (!g || typeof g !== 'object') return Object.assign(out, { reason: 'Its game.json is not an object.' });
-  Object.assign(out, { name: g.name, version: g.version, players: g.players, needs: g.needs });
+  Object.assign(out, { name: g.name, version: g.version, players: g.players, needs: g.needs }, words(g));
   const why = whyNot(root, folder, g);
   if (why) return Object.assign(out, why);
   return Object.assign(out, { ok: true, entry: g.entry });
+}
+// A game's own plain words, when it gives them: about (what the round is) and metrics ({ name: meaning }).
+function words(g) {
+  const out = {};
+  if (typeof g.about === 'string' && g.about.trim()) out.about = g.about.trim().slice(0, 4000);
+  if (g.metrics && typeof g.metrics === 'object' && !Array.isArray(g.metrics)) {
+    const m = Object.entries(g.metrics).filter(([k, v]) => typeof v === 'string' && k.length <= 64).slice(0, 50).map(([k, v]) => [k, v.slice(0, 500)]);
+    if (m.length) out.metrics = Object.fromEntries(m);
+  }
+  return out;
 }
 function whyNot(root, folder, g) {
   if (typeof g.name !== 'string' || !g.name.trim()) return { reason: 'It has no name.' };
@@ -99,7 +117,12 @@ function whyNot(root, folder, g) {
 // What anyone may see of a round while it runs. No brief, no role and no truth are in it.
 function view(r) {
   return { id: r.id, game: r.game, state: r.state, watch: r.watch, isolation: r.isolation, startedAt: r.startedAt, spentUsd: r.spent, capUsd: r.cap,
-    seats: r.seats.map((s) => ({ seat: s.seat, terminal: s.terminal, waiting: onTrust(r.channel, s.terminal) ? 'trust' : null })) };
+    unpriced: [...new Set(r.seats.flatMap((s) => (s.cost ? s.cost.unpriced : [])))],
+    seats: r.seats.map((s) => {
+      const t = s.terminal && terminal.find(r.channel, s.terminal);
+      return { seat: s.seat, terminal: s.terminal, waiting: onTrust(r.channel, s.terminal) ? 'trust' : null, state: !t || t.exited ? 'ended' : t.state,
+        worked: !!(s.cost && s.cost.worked), tokens: s.cost ? s.cost.tokens : null, usd: s.cost ? s.cost.usd : 0 };
+    }) };
 }
 
 function startRound(channel, body, ctx) {
@@ -119,7 +142,7 @@ function startRound(channel, body, ctx) {
   if (terminal.all(channel).length + n > terminal.DESKS) return [409, { ok: false, error: 'full', message: 'A round of ' + n + ' seats needs ' + n + ' free desks.' }];
 
   const dir = path.join(repo(), game.folder);
-  const r = { id: crypto.randomBytes(4).toString('hex'), channel, game: game.folder, name: game.name, watch, cap, isolation, spent: 0, state: 'running',
+  const r = { id: crypto.randomBytes(4).toString('hex'), channel, game: game.folder, name: game.name, watch, cap, isolation, spent: 0, gameSpent: 0, state: 'running',
     startedAt: new Date().toISOString(), seats: [], waiting: new Map(), ctx, ready: false, child: null };
   rounds.set(channel, r);
   // The game gets the relay's environment without its key and settings, as a session does.
@@ -145,9 +168,10 @@ function startRound(channel, body, ctx) {
       return [500, { ok: false, error: 'seat_failed', message: 'Seat ' + seat + ' could not start: ' + e.message }];
     }
     if (got.status >= 300) { removeDir(s); endRound(r, 'failed', null, 'A seat could not start: ' + got.body.message); return [got.status, got.body]; }
-    s.terminal = got.body.id;
+    s.terminal = got.body.id; s.sessionId = got.body.sessionId;
     r.seats.push(s);
   }
+  r.spendTimer = setInterval(() => countSpend(r), SPEND_EVERY());
   toGame(r, { type: 'hello', api: API });
   toGame(r, { type: 'setup', seed: String(body.seed || crypto.randomBytes(8).toString('hex')), settings: body.settings && typeof body.settings === 'object' ? body.settings : {}, seats: r.seats.map((s) => s.seat) });
   r.readyTimer = setTimeout(() => { if (!r.ready) endRound(r, 'failed', null, 'The game did not get ready in time.'); }, TIMEOUT());
@@ -167,12 +191,24 @@ function fromGame(r, line) {
   if (m.type === 'brief') { const s = r.seats.find((x) => x.seat === m.seat); if (s && typeof m.text === 'string') brief(r, s, m.text); return; }
   if (m.type === 'ready') { r.ready = true; clearTimeout(r.readyTimer); return; }
   if (m.type === 'answer') { const w = r.waiting.get(m.id); if (w) { r.waiting.delete(m.id); clearTimeout(w.timer); w.done(200, { ok: true, answer: m.text === undefined ? null : m.text }); } return; }
-  if (m.type === 'spend') {
-    r.spent += Number(m.usd) > 0 ? Number(m.usd) : 0;
-    if (r.cap !== null && r.spent >= r.cap) endRound(r, 'stopped', null, 'The round reached its spend cap of $' + r.cap + '.');
-    return;
-  }
+  if (m.type === 'spend') { r.gameSpent += Number(m.usd) > 0 ? Number(m.usd) : 0; countSpend(r); return; }
   if (m.type === 'done') { r.result = { score: m.score === undefined ? null : m.score, reveal: m.reveal === undefined ? null : m.reveal }; endRound(r, 'done', r.result.score); }
+}
+
+// The round's spend: what the game reported, and each seat's tokens from its transcript. A transcript is
+// read again only when it has grown. Then the cap, except on the last count, as the round ends.
+function countSpend(r, last) {
+  if (r.state !== 'running') return;
+  for (const s of r.seats) {
+    const file = seatSteps.fileOf(s.dir, s.sessionId, s.configDir);
+    let size = -1;
+    try { size = fs.statSync(file).size; } catch (e) { /* not written yet */ }
+    if (size < 0 || size === s.costSize) continue;
+    s.costSize = size;
+    s.cost = seatSteps.read(file, { steps: false });
+  }
+  r.spent = r.gameSpent + r.seats.reduce((a, s) => a + (s.cost ? s.cost.usd : 0), 0);
+  if (!last && r.cap !== null && r.spent >= r.cap) endRound(r, 'stopped', null, 'The round reached its spend cap of $' + r.cap + '.');
 }
 
 // Types a seat's brief as its first prompt, once the session can take it. The text lives only here.
@@ -220,8 +256,9 @@ function finishRound(r) {
 // time and score. why is said in the relay's log, and never holds the game's words.
 function endRound(r, state, score, why) {
   if (r.state !== 'running') return;
+  countSpend(r, true);
   r.state = state;
-  clearTimeout(r.readyTimer);
+  clearTimeout(r.readyTimer); clearInterval(r.spendTimer);
   if (rounds.get(r.channel) === r) rounds.delete(r.channel);
   for (const w of r.waiting.values()) { clearTimeout(w.timer); w.done(409, { ok: false, error: 'round_over', message: 'The round has ended.' }); }
   r.waiting.clear();
@@ -233,7 +270,8 @@ function endRound(r, state, score, why) {
     if (t && !t.exited) terminal.stop(t); else removeDir(s);
   }
   const list = past.get(r.channel) || [];
-  list.unshift({ id: r.id, game: r.game, time: r.startedAt, score: state === 'done' ? score : null });
+  list.unshift({ id: r.id, game: r.game, time: r.startedAt, spentUsd: r.spent, score: state === 'done' ? score : null,
+    seats: r.seats.map((s) => ({ seat: s.seat, dir: s.dir, sessionId: s.sessionId, configDir: s.configDir })) });
   past.set(r.channel, list.slice(0, KEEP_PAST));
   r.ctx.log('The round of ' + r.name + ' ' + (state === 'done' ? 'is done.' : 'ended: ' + (why || state) + '.'));
   if (r.onDone) r.onDone();
@@ -272,7 +310,7 @@ terminal.guard((channel, t, verb) => {
 // For relay/tickets.js and relay/autopilot.js: new starts wait while a round runs.
 tickets.holdStarts((channel) => (rounds.has(channel) ? 'A round of ' + rounds.get(channel).name + ' is running. New tickets start when it ends.' : null));
 
-const ROUTE = /^\/(games|play|rounds(\/current(\/(finish|stop))?)?)$/;
+const ROUTE = /^\/(games|play|rounds(\/current(\/(finish|stop))?)?|rounds\/[0-9a-f]{8}\/seats\/S\d{1,2}\/steps)$/;
 async function handle(req, res, channel, rest, ctx) {
   if (!ROUTE.test(rest)) return false;
   // Like every room route, these answer only the room page and the sessions on this computer.
@@ -290,7 +328,7 @@ async function handle(req, res, channel, rest, ctx) {
     ctx.send(res, status, out); return true;
   }
   if (rest === '/rounds') {
-    if (req.method === 'GET') { ctx.send(res, 200, { ok: true, rounds: past.get(channel) || [] }); return true; }
+    if (req.method === 'GET') { ctx.send(res, 200, { ok: true, rounds: (past.get(channel) || []).map((p) => { const o = Object.assign({}, p, { seatNames: (p.seats || []).map((x) => x.seat) }); delete o.seats; return o; }) }); return true; }
     if (req.method === 'POST') { const [status, out] = startRound(channel, (await ctx.readJson(req)) || {}, ctx); ctx.send(res, status, out); return true; }
     return false;
   }
@@ -298,6 +336,12 @@ async function handle(req, res, channel, rest, ctx) {
     if (req.method !== 'GET') return false;
     const r = rounds.get(channel);
     ctx.send(res, 200, { ok: true, round: r ? view(r) : null }); return true;
+  }
+  const st = rest.match(/^\/rounds\/([0-9a-f]{8})\/seats\/(S\d{1,2})\/steps$/);
+  if (st) {
+    if (req.method !== 'GET') return false;
+    const [status, out] = steps(channel, st[1], st[2]);
+    ctx.send(res, status, out); return true;
   }
   const m = rest.match(/^\/rounds\/current\/(finish|stop)$/);
   if (m && req.method === 'POST') {
@@ -308,6 +352,21 @@ async function handle(req, res, channel, rest, ctx) {
     ctx.send(res, status, out); return true;
   }
   return false;
+}
+
+// One seat's steps, read from its transcript now. The round that runs shows them only under Watch all,
+// as it does the seat's screen. They go to the room page and are kept and logged nowhere.
+function steps(channel, id, seat) {
+  const r = rounds.get(channel);
+  const now = r && r.id === id ? r : null;
+  const was = now ? null : (past.get(channel) || []).find((p) => p.id === id);
+  if (!now && !was) return [404, { ok: false, error: 'no_round', message: 'The relay has no round ' + id + '. It keeps the last ' + KEEP_PAST + ' rounds until it restarts.' }];
+  if (now && now.watch === 'none') return [403, { ok: false, error: 'watch_none', message: 'This round is Watch none, so what a seat did shows when it ends.' }];
+  const s = (now ? now.seats : was.seats || []).find((x) => x.seat === seat);
+  if (!s) return [404, { ok: false, error: 'no_seat', message: 'Round ' + id + ' has no seat ' + seat + '.' }];
+  const got = seatSteps.read(seatSteps.fileOf(s.dir, s.sessionId, s.configDir));
+  if (!got.found) return [200, { ok: true, round: id, seat, found: false, steps: [], message: 'Claude Code has not written this seat\'s transcript yet.' }];
+  return [200, { ok: true, round: id, seat, found: true, steps: got.steps, truncated: got.truncated, tokens: got.tokens, usd: got.usd, unpriced: got.unpriced, models: got.models }];
 }
 
 module.exports = { handle, isSeat, listGames };

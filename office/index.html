@@ -233,6 +233,22 @@
   #game-round h3, #game-result h3 { margin: 0; font: 500 13px/1.3 var(--mono); color: var(--pane-strong); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
   #game-round h3 small, #game-result h3 small { color: var(--pane-dim); font-weight: 400; }
   #game-round [data-isolation="none"] { color: var(--err); }
+  #game-about { margin: 0; color: var(--pane-dim); white-space: pre-wrap; }
+  #game-done { margin: 0; color: var(--ok); }
+  #game-seats li[data-state="idle"][data-worked="1"] { border-left-color: var(--ok); }
+  #game-steps { display: grid; gap: 6px; }
+  #game-steps h3 { margin: 0; font: 500 13px/1.3 var(--mono); color: var(--pane-strong); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  #game-steps h3 small { color: var(--pane-dim); font-weight: 400; flex: 1 1 auto; }
+  #game-step-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  #game-step-rows li { border-left: 3px solid var(--idle); padding: 2px 8px; }
+  #game-step-rows li[data-kind="brief"], #game-step-rows li[data-kind="prompt"] { border-left-color: var(--wait); }
+  #game-step-rows li[data-kind="says"] { border-left-color: var(--ok); }
+  #game-step-rows li[data-kind="runs"] { border-left-color: var(--work); }
+  #game-step-rows li[data-error="1"] summary { color: var(--err); }
+  #game-step-rows summary { cursor: pointer; color: var(--pane-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #game-step-rows summary b { font-weight: 500; color: var(--pane-dim); margin-right: 8px; }
+  #game-step-rows pre { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--pane-strong); max-height: 24em; overflow: auto; }
+  .game-data dd small { display: block; color: var(--pane-dim); white-space: normal; }
   #game-score, #game-reveal { display: grid; gap: 2px; justify-items: start; }
   #game-score b, #game-reveal b { font-weight: 500; color: var(--pane-strong); }
   #game-score small { color: var(--pane-dim); margin-top: 4px; }
@@ -651,16 +667,22 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
       <textarea id="game-settings" rows="1" maxlength="4000" spellcheck="false" placeholder='Settings as JSON (optional), like {"rate": 0.5}' aria-label="Settings as JSON"></textarea>
       <span id="game-note" role="status"></span>
     </form>
+    <p id="game-about" hidden></p>
     <div id="game-round" hidden>
       <h3><span id="game-round-title"></span><small id="game-round-about"></small></h3>
       <p id="game-trust-note" hidden>A new seat asks whether to trust its folder, and Claude Code's first choice is No, exit. The trust buttons pick Yes for you.</p>
       <ol id="game-seats" aria-label="Seats"></ol>
+      <p id="game-done" role="status" hidden>All seats are done. Press Finish to see the score.</p>
       <div><button class="btn" id="game-trust-all" type="button" hidden>Trust all waiting seats</button> <button class="btn primary" id="game-finish" type="button">Finish</button> <button class="btn" id="game-stop" type="button">Stop</button></div>
     </div>
     <div id="game-result" hidden>
       <h3><span id="game-result-title"></span><small id="game-result-about"></small></h3>
       <div id="game-score"></div>
       <div id="game-reveal"></div>
+    </div>
+    <div id="game-steps" hidden>
+      <h3><span id="game-steps-title"></span><small id="game-steps-about"></small><button class="btn" id="game-steps-close" type="button">Close</button></h3>
+      <ol id="game-step-rows" aria-label="Steps"></ol>
     </div>
     <details id="game-past-box" hidden><summary>Past rounds</summary><ol id="game-past"></ol></details>
   </section>

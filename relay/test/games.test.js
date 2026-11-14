@@ -16,12 +16,14 @@
 //     GET  /rounds/current           the round that runs, or null
 //     POST /rounds/current/finish    asks the game for its score and reveal
 //     POST /rounds/current/stop      ends the round with no score
-//     GET  /rounds                   past rounds: id, game, time and score only
+//     GET  /rounds                   past rounds: id, game, time, spend and score only
+//     GET  /rounds/{id}/seats/{seat}/steps  what one seat did, read from its Claude Code transcript
 //   And with a seat's own session token (X-Office-Token), as relay/play.js sends it:
 //     POST /play                     { kind, args } passes one action to the game for that seat
 //
 // The rules behind them are in the games repo's requirements: fresh sessions for seats, briefs as
-// opaque text that the office never stores or shows, a seat that acts only as itself, the truth only
+// opaque text that the office never stores or logs, and shows only to the person in a seat's own
+// screen and steps, a seat that acts only as itself, the truth only
 // after the reveal, and a game that fails ends its own round and nothing else.
 'use strict';
 const test = require('node:test');
@@ -32,6 +34,7 @@ const path = require('path');
 const { relay, until, sleep, sessionToken, makeRepo } = require('./helpers.js');
 const { spawnSync } = require('child_process');
 const { launch } = require('../session-host.js');
+const { writeTranscript, REQUEST_USD } = require('./transcript.fixture.js');
 
 const REPO = path.join(__dirname, '..', '..');
 const FIXTURE = path.join(__dirname, 'game.fixture.js');
@@ -57,10 +60,10 @@ function gamesRepo(t, games) {
 const manifest = (extra) => Object.assign({ name: 'Coin toss', version: '0.1.0', api: 1, entry: 'game.js', players: { min: 2, max: 4 }, needs: ['privateBriefs', 'ask'] }, extra);
 
 // A relay with one good game, and a round of two seats started on it.
-async function roundOn(t, settings, body) {
+async function roundOn(t, settings, body, env) {
   const root = gamesRepo(t, { coin: manifest() });
   const record = path.join(root, 'record.jsonl');
-  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000' });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, RELAY_GAME_TIMEOUT_MS: '2000', ...(env || {}) });
   t.after(R.stop);
   const before = (await R.call('GET', '/terminals')).body.terminals.map((x) => x.id);
   const started = await R.call('POST', '/rounds', Object.assign({ game: 'coin', seed: 'seed-1', settings: Object.assign({ record }, settings), seats: 2 }, body));
@@ -185,6 +188,8 @@ test('each seat is a fresh session in a new folder, and sees only its own brief'
   assert.ok(!(await R.screen(seats[1].terminal)).includes('BRIEF-MARK-S1'), 'S2 never sees the brief of S1');
 });
 
+// The person's own room page may read a seat's brief, in the seat's screen and its steps, as it reads
+// everything else the seat did. No other route shows it, and the relay keeps and logs none of it.
 test('the office never stores, logs or shows a brief, and has no field for a role', async (t) => {
   const { R, started } = await roundOn(t, {});
   const seats = started.body.round.seats;
@@ -272,7 +277,7 @@ test('finish shows the score and the reveal, ends every seat, and removes the se
   for (const d of dirs) assert.ok(!fs.existsSync(d), 'the seat folder is removed: ' + d);
   const past = (await R.call('GET', '/rounds')).body.rounds;
   assert.strictEqual(past.length, 1);
-  assert.deepStrictEqual(Object.keys(past[0]).sort(), ['game', 'id', 'score', 'time'], 'the office keeps only the id, the game, the time and the score');
+  assert.deepStrictEqual(Object.keys(past[0]).sort(), ['game', 'id', 'score', 'seatNames', 'spentUsd', 'time'], 'the office shows only the id, the game, the time, the seats, the spend and the score');
   assert.ok(!/TRUTH-MARK|BRIEF-MARK/.test(textUnder(R.home)), 'and keeps no truth and no brief');
 });
 
@@ -591,4 +596,106 @@ test('with RELAY_SEAT_ISOLATION=off a round runs, and says it has no boundary', 
   const r = await R.call('POST', '/rounds', { game: 'coin', seats: 2 });
   assert.strictEqual(r.status, 200);
   assert.strictEqual(r.body.round.isolation, 'none');
+});
+
+// What a seat did, and what it cost
+
+// The seats of a round, with the folder and session id Claude Code keeps each one's transcript under.
+const seatSessions = async (R, round) => {
+  const terms = (await R.call('GET', '/terminals')).body.terminals;
+  return round.seats.map((s) => { const x = terms.find((y) => y.id === s.terminal); return Object.assign({}, s, { cwd: x.cwd, sessionId: x.sessionId }); });
+};
+const stepsOf = (R, id, seat) => R.call('GET', '/rounds/' + id + '/seats/' + seat + '/steps');
+
+test('a seat\'s steps come from its own transcript, with none of Claude Code\'s own notes', async (t) => {
+  const { R, started } = await roundOn(t, {});
+  const round = started.body.round;
+  const [s1, s2] = await seatSessions(R, round);
+  const none = (await stepsOf(R, round.id, 'S1')).body;
+  assert.strictEqual(none.found, false, 'no transcript yet');
+  writeTranscript(R.home, s1.cwd, s1.sessionId, { brief: 'BRIEF-ONE', requests: 2 });
+  const got = await stepsOf(R, round.id, 'S1');
+  assert.strictEqual(got.status, 200);
+  const st = got.body.steps;
+  assert.deepStrictEqual(st.map((x) => x.kind), ['brief', 'says', 'runs', 'result', 'says', 'runs', 'result', 'says']);
+  assert.strictEqual(st[0].text, 'BRIEF-ONE', 'the brief, without the paste marks around it');
+  assert.strictEqual(st[2].tool, 'Bash');
+  assert.match(st[2].text, /OFFICE_PLAY/);
+  assert.strictEqual(st[3].text, 'RESULT-MARK 0');
+  const text = JSON.stringify(got.body);
+  for (const mark of ['REMINDER-MARK', 'example.com', 'META-MARK', 'THINK-MARK']) assert.ok(!text.includes(mark), 'no ' + mark + ' in the steps');
+  assert.deepStrictEqual(got.body.tokens, { input: 2000, cacheWrite: 4000, cacheRead: 20000, output: 1000 }, 'each request once, though its lines repeat its usage');
+  assert.ok(Math.abs(got.body.usd - 2 * REQUEST_USD) < 1e-9, 'two requests at Opus 5.5 prices: ' + got.body.usd);
+  assert.deepStrictEqual((await stepsOf(R, round.id, 'S2')).body.steps, [], 'each seat has its own');
+  assert.strictEqual((await stepsOf(R, round.id, 'S9')).status, 404);
+  assert.strictEqual((await stepsOf(R, 'abcdef12', 'S1')).status, 404);
+  assert.ok(!/BRIEF-ONE|SAYS-MARK|RESULT-MARK/.test(R.output()), 'the relay logs none of it');
+  // The round ends and keeps the seats' folders and session ids, so the steps can still be read.
+  writeTranscript(R.home, s2.cwd, s2.sessionId, { brief: 'BRIEF-TWO' });
+  await R.call('POST', '/rounds/current/finish', {});
+  const later = await stepsOf(R, round.id, 'S2');
+  assert.strictEqual(later.body.steps[0].text, 'BRIEF-TWO');
+  const listed = (await R.call('GET', '/rounds')).body.rounds[0];
+  assert.deepStrictEqual(listed.seatNames, ['S1', 'S2']);
+  assert.ok(!('seats' in listed) && !/sessionId|cwd/.test(JSON.stringify(listed)), 'the list of past rounds has no folder or session id');
+  assert.ok(Math.abs(listed.spentUsd - 3 * REQUEST_USD) < 1e-9, 'the past round keeps its spend: ' + listed.spentUsd);
+});
+
+test('under Watch none, a seat\'s steps open only when its round ends', async (t) => {
+  const { R, started } = await roundOn(t, {}, { watch: 'none' });
+  const round = started.body.round;
+  const [s1] = await seatSessions(R, round);
+  writeTranscript(R.home, s1.cwd, s1.sessionId, { brief: 'BRIEF-ONE' });
+  const refused = await stepsOf(R, round.id, 'S1');
+  assert.strictEqual(refused.status, 403);
+  assert.strictEqual(refused.body.error, 'watch_none');
+  await R.call('POST', '/rounds/current/stop', {});
+  assert.strictEqual((await stepsOf(R, round.id, 'S1')).body.steps[0].text, 'BRIEF-ONE');
+});
+
+test('the steps answer only the room page and the sessions on this computer, and never a seat', async (t) => {
+  const { R, started } = await roundOn(t, {});
+  const round = started.body.round;
+  const token = await tokenOf(R, round.seats[0].terminal);
+  const r = await fetch(R.base + '/rounds/' + round.id + '/seats/S2/steps', { headers: { 'X-Office-Token': token } });
+  assert.notStrictEqual(r.status, 200, 'a seat cannot read another seat\'s steps');
+});
+
+test('a round counts each seat\'s tokens as its spend, and stops at its cap', async (t) => {
+  const { R, started } = await roundOn(t, {}, { capUsd: 0.1 }, { RELAY_SEAT_SPEND_MS: '100' });
+  const round = started.body.round;
+  const [s1, s2] = await seatSessions(R, round);
+  writeTranscript(R.home, s1.cwd, s1.sessionId, { requests: 1 });
+  const seen = await until(async () => { const r = (await R.call('GET', '/rounds/current')).body.round; return r && r.spentUsd > 0 ? r : null; }, 'the first seat\'s spend');
+  assert.ok(Math.abs(seen.spentUsd - REQUEST_USD) < 1e-9, 'spent ' + seen.spentUsd);
+  const one = seen.seats.find((x) => x.seat === 'S1');
+  assert.strictEqual(one.worked, true);
+  assert.deepStrictEqual(one.tokens, { input: 1000, cacheWrite: 2000, cacheRead: 10000, output: 500 });
+  assert.strictEqual(seen.seats.find((x) => x.seat === 'S2').worked, false);
+  assert.deepStrictEqual(seen.unpriced, []);
+  writeTranscript(R.home, s2.cwd, s2.sessionId, { requests: 3 });  // 0.032 + 0.096 is over 0.10
+  const ended = await until(async () => (await R.call('GET', '/rounds')).body.rounds[0], 'the round to stop at the cap');
+  assert.strictEqual(ended.score, null);
+  assert.ok(ended.spentUsd >= 0.1, 'spent ' + ended.spentUsd);
+  assert.match(R.output(), /spend cap of \$0\.1/);
+});
+
+test('a seat on a model with no price here counts its tokens, and says the price is unknown', async (t) => {
+  const { R, started } = await roundOn(t, {}, {}, { RELAY_SEAT_SPEND_MS: '100' });
+  const round = started.body.round;
+  const [s1] = await seatSessions(R, round);
+  writeTranscript(R.home, s1.cwd, s1.sessionId, { model: 'claude-future-9' });
+  const seen = await until(async () => { const r = (await R.call('GET', '/rounds/current')).body.round; return r && r.unpriced.length ? r : null; }, 'the unpriced model');
+  assert.deepStrictEqual(seen.unpriced, ['claude-future-9']);
+  assert.strictEqual(seen.spentUsd, 0);
+  assert.strictEqual(seen.seats[0].tokens.output, 500);
+});
+
+test('a game\'s about and the meaning of its numbers come through GET /games', async (t) => {
+  const root = gamesRepo(t, { coin: manifest({ about: 'ABOUT-MARK in plain words.', metrics: { caught: 'Paid seats found.', bad: 5 } }) });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root });
+  t.after(R.stop);
+  const g = (await R.call('GET', '/games')).body.games[0];
+  assert.strictEqual(g.about, 'ABOUT-MARK in plain words.');
+  assert.deepStrictEqual(g.metrics, { caught: 'Paid seats found.' }, 'a meaning that is not text is dropped');
 });

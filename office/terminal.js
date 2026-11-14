@@ -76,7 +76,9 @@
     const named = window.OfficeSeats.titleBeside(w && w.session && w.session.customTitle);  // the title you gave it with /rename
     title.textContent = w ? 'Claude Code · ' + w.name + named.text : 'Claude Code';
     title.title = named.full ? w.name + ' · ' + named.full : '';
-    if (running && Date.now() >= heldUntil) say('Running in ' + home(t.cwd) + ' · session ' + short(t.sessionId), 'on');
+    // A seat in a round takes no keys but the answer to its trust question, so the screen says so.
+    if (running && t.round) say('A seat in round ' + t.round + ': read-only, so watching never changes the play. To see everything it did, open Steps in Games.', 'on');
+    else if (running && Date.now() >= heldUntil) say('Running in ' + home(t.cwd) + ' · session ' + short(t.sessionId), 'on');
   }
   function b64(s) { const bin = atob(s); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
   function attach(id) {
