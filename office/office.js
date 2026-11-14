@@ -38,9 +38,6 @@
     controls = new THREE.OrbitControls(camera, canvas);
     controls.target.copy(TARGET);
     controls.enableDamping = true; controls.dampingFactor = 0.08;
-    controls.minDistance = 3; controls.maxDistance = 26;
-    controls.minPolarAngle = 0.3; controls.maxPolarAngle = 1.4;
-    controls.minAzimuthAngle = -0.15; controls.maxAzimuthAngle = 1.6;
     controls.screenSpacePanning = false;
   } else camera.lookAt(TARGET);
   let introCam = !reduce && !!controls, follow = null;
@@ -51,15 +48,26 @@
     coffee: [new THREE.Vector3(5.6, 2.4, 0.6), new THREE.Vector3(5.0, 1.0, -3.6)],
     lounge: [new THREE.Vector3(6.0, 2.5, 5.9), new THREE.Vector3(5.2, 0.7, 1.5)],
     board: [new THREE.Vector3(0.6, 2.4, -0.6), new THREE.Vector3(-0.95, 1.8, -4.9)],
-    office: [new THREE.Vector3(4.9, 6.6, -5.2), new THREE.Vector3(2.04, 0.6, -7.5)]  // down into the manager's office, from over its front right corner
+    office: [new THREE.Vector3(2.04, 1.95, -8.75), new THREE.Vector3(2.04, 1.75, -8.15)]  // from just above the manager's head at his desk, out through the glass
   };
+  // How the camera may move. In the room it circles a point on the floor. From the manager's desk it
+  // stays at his chair and turns, as a head turns, about 70 degrees each way, so it never goes
+  // through the office's walls.
+  const LIMITS = {
+    room: { minDistance: 3, maxDistance: 26, minPolarAngle: 0.3, maxPolarAngle: 1.4, minAzimuthAngle: -0.15, maxAzimuthAngle: 1.6, enablePan: true },
+    desk: { minDistance: 0.4, maxDistance: 0.9, minPolarAngle: 1.15, maxPolarAngle: 1.95, minAzimuthAngle: Math.PI - 1.25, maxAzimuthAngle: -(Math.PI - 1.25), enablePan: false }
+  };
+  let lookFrom = 'room';
+  function limits(mode) { lookFrom = mode; if (controls) Object.assign(controls, LIMITS[mode]); }
+  limits('room');
   // How low the camera may go: with its pivot in the manager's office, it stays high, over the office's walls.
   function highFor(t) { return t.z < MO.z0 ? 0.9 : 1.4; }
   // The button at the bottom left of the scene goes into the manager's office, and back to the first view.
   const officeBtn = $('view-office');
   function setView(name) {
     const v = VIEWS[name] || VIEWS.home; introCam = false; follow = null;
-    camera.position.copy(v[0]); if (controls) { controls.target.copy(v[1]); controls.maxPolarAngle = highFor(v[1]); controls.update(); } else camera.lookAt(v[1]);
+    limits(name === 'office' ? 'desk' : 'room');
+    camera.position.copy(v[0]); if (controls) { controls.target.copy(v[1]); if (lookFrom === 'room') controls.maxPolarAngle = highFor(v[1]); controls.update(); } else camera.lookAt(v[1]);
     const shown = name in VIEWS ? name : 'home';
     if (officeBtn) { const inOffice = shown === 'office'; officeBtn.textContent = inOffice ? 'Back to the room' : "Manager's office"; officeBtn.setAttribute('aria-pressed', String(inOffice)); }
     return shown;
@@ -2372,7 +2380,7 @@
   const lookAt = new THREE.Vector3();
   const keyLight = new THREE.PointLight(C(0xffe6cc), 0, 4, 2); scene.add(keyLight);
   function direct(c) {
-    if (!c) { directed = false; keyLight.intensity = 0; if (controls) { controls.enabled = true; camera.position.copy(HOME); controls.target.copy(TARGET); } return false; }
+    if (!c) { directed = false; keyLight.intensity = 0; if (controls) { controls.enabled = true; limits('room'); camera.position.copy(HOME); controls.target.copy(TARGET); } return false; }
     directed = true; introCam = false; follow = null; if (controls) controls.enabled = false;
     camera.position.set(c.pos[0], c.pos[1], c.pos[2]);
     if (c.fov && c.fov !== camera.fov) { camera.fov = c.fov; camera.updateProjectionMatrix(); }
@@ -2421,8 +2429,10 @@
     if (!built && !renderer) { built = true; emit('office.live', {}); readyWaiters.splice(0).forEach((r) => r(snapshot())); }
     if (!renderer) return;
     if (introCam) { introT += real / 3.2; const k = 1 - Math.pow(1 - Math.min(1, introT), 3); camera.position.lerpVectors(START, HOME, k); if (introT >= 1) introCam = false; }
+    if (follow && lookFrom === 'desk') { const who = follow; setView('home'); follow = who; }  // following someone leaves the desk view
     if (follow && controls && !directed) { follow.fig.root.getWorldPosition(camGoal); camGoal.y = 0.9; controls.target.lerp(camGoal, Math.min(1, real * 3)); }
-    if (controls && !directed) { controls.update(); const t = controls.target; t.x = clamp(t.x, -6.5, 6.5); t.z = clamp(t.z, t.x > MO.x0 + 0.3 && t.x < MO.x1 - 0.3 ? MO.z1 + 0.3 : -4.5, 4.5); t.y = clamp(t.y, 0, 2.5);
+    if (controls && !directed && lookFrom === 'desk') controls.update();
+    else if (controls && !directed) { controls.update(); const t = controls.target; t.x = clamp(t.x, -6.5, 6.5); t.z = clamp(t.z, t.x > MO.x0 + 0.3 && t.x < MO.x1 - 0.3 ? MO.z1 + 0.3 : -4.5, 4.5); t.y = clamp(t.y, 0, 2.5);
       // The view's pivot stays in the room, or in the manager's office behind it. While it is in the
       // office, the camera stays high, so it looks down over the office walls and never into them.
       controls.maxPolarAngle = highFor(t); }

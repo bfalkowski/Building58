@@ -1,6 +1,6 @@
-// The Manager's office button (office/office.js) on the room page. Drawn in software, it takes the
-// view into the manager's office, where it stays (its pivot is behind the back wall, which the room
-// allows), and Back to the room brings back the first view. With no WebGL there is no scene, so
+// The Manager's office button (office/office.js) on the room page. Drawn in software, it puts the
+// view at the manager's desk, where it turns like a head but never moves off it, and Back to the room
+// brings back the first view. With no WebGL there is no scene, so
 // there is no button.
 'use strict';
 const test = require('node:test');
@@ -29,6 +29,14 @@ test.describe('the office view, with WebGL, in software', () => {
     await p.page.waitForTimeout(800);
     const later = await angles();
     for (const k of ['theta', 'phi', 'radius']) assert.ok(Math.abs(later[k] - inside[k]) < 0.02, 'the view stays in the office, ' + k + ': ' + JSON.stringify([inside, later]));
+    assert.ok(inside.radius < 1, 'the view is at his desk, close up: ' + JSON.stringify(inside));
+    // Turning, it stays at his desk and stops before the walls: about 70 degrees each way.
+    const left = p.page.locator('.navpad button[data-dir="left"]'), box = await left.boundingBox();
+    await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.page.mouse.down(); await p.page.waitForTimeout(2500); await p.page.mouse.up();
+    const turned = await angles();
+    assert.ok(Math.abs(turned.radius - inside.radius) < 0.05, 'turning keeps the view at his desk: ' + JSON.stringify([inside, turned]));
+    const off = Math.abs(Math.atan2(Math.sin(turned.theta - inside.theta), Math.cos(turned.theta - inside.theta)));
+    assert.ok(off > 0.5 && off < 1.3, 'it turns, and stops before the wall: ' + JSON.stringify([inside, turned]));
 
     await btn.click();
     assert.strictEqual(await btn.innerText(), 'Manager\'s office');
