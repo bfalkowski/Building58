@@ -75,3 +75,16 @@ test('the next ticket: Ready, approved, unblocked, in Board order, and only the 
   assert.strictEqual(nextTicket(all, none, ['T-1']).id, 'T-1');
   assert.strictEqual(nextTicket(all, none, ['T-4', 'T-5']), null);
 });
+test('the next ticket can come from a label in the allowed list', () => {
+  const all = [
+    { id: 'T-1', status: 'ready', repo: '/r', createdBy: 'you', priority: 'high' },
+    { id: 'T-2', status: 'ready', repo: '/r', createdBy: 'you', priority: 'normal', labels: ['flaky', 'ci'] },
+    { id: 'T-3', status: 'ready', repo: '/r', createdBy: 'you', priority: 'low', labels: ['docs'] },
+    { id: 'T-4', status: 'ready', repo: '/r', createdBy: 'lead', approvedBy: 'none', priority: 'high', labels: ['flaky'] }
+  ];
+  const none = () => false;
+  assert.strictEqual(nextTicket(all, none, ['flaky']).id, 'T-2', 'a label lets in its approved tickets, not T-1 above it');
+  assert.strictEqual(nextTicket(all, (t) => t.id === 'T-2', ['flaky']), null, 'an unapproved ticket stays out, label or not');
+  assert.strictEqual(nextTicket(all, none, ['docs', 'T-1']).id, 'T-1', 'ids and labels together, in Board order');
+  assert.strictEqual(nextTicket(all, none, ['games']), null);
+});

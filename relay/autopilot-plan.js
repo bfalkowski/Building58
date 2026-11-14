@@ -52,10 +52,13 @@ function forPr(pr, files, verdict, rounds, maxRounds) {
 
 // The next ticket to start: Ready, approved by a person, every blocker done, no task yet, in the
 // Board's order (relay/ticket-order.js). only, when set, is the ticket ids Autopilot may start.
+// only: null for every ticket, or a list of ticket ids (T-12) and labels (flaky). A ticket is allowed when
+// its id is in the list or it has one of the labels.
+const allowed = (t, only) => !only || only.includes(t.id) || (Array.isArray(t.labels) && t.labels.some((l) => only.includes(l)));
 function nextTicket(all, hasTask, only) {
   const approved = (t) => ('approvedBy' in t ? t.approvedBy === 'you' : t.createdBy === 'you');
   const settled = (t) => (t.blockedBy || []).every((id) => { const b = all.find((x) => x.id === id); return b && b.status === 'done'; });
-  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && settled(t) && !hasTask(t) && (!only || only.includes(t.id))))[0] || null;
+  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && settled(t) && !hasTask(t) && allowed(t, only)))[0] || null;
 }
 
 // A reviewer's posted review on the PR, for when its hook never said it posted (relay/autopilot.js). comments

@@ -421,13 +421,13 @@
   // Off until you tick it. The box beside it limits it to the tickets you list, such as T-12, or none for all of Ready.
   const apLabel = document.createElement('label'), apBox = document.createElement('input'), apOnly = document.createElement('input'), apSays = document.createElement('span');
   apBox.type = 'checkbox'; apBox.style.flex = 'none'; apBox.disabled = true;
-  apOnly.type = 'text'; apOnly.placeholder = 'only T-12, T-15 (or all Ready)'; apOnly.size = 20; apOnly.setAttribute('aria-label', 'Autopilot starts only these tickets');
+  apOnly.type = 'text'; apOnly.placeholder = 'only T-12, flaky (or all Ready)'; apOnly.size = 20; apOnly.setAttribute('aria-label', 'Autopilot starts only these tickets and labels');
   apSays.setAttribute('aria-live', 'polite');
   apLabel.append(apBox, ' Autopilot');
   const apRow = settingRow('set-autopilot', [apLabel], '');
   apSays.className = 'set-now';
   apRow.what.after(apSays);
-  settingRow('set-autopilot', [apOnly], 'Type the tickets that Autopilot may start, like T-12, T-15. Leave it empty to let it start every Ready ticket that a person approved, in Board order. Type the list before you turn Autopilot on. You cannot change it while Autopilot is on. When you turn Autopilot off, the list is cleared.');
+  settingRow('set-autopilot', [apOnly], 'Type the tickets that Autopilot may start, like T-12, T-15, or labels, like flaky, or both. A label lets in every ticket that has it, also one you label while Autopilot runs. Leave it empty to let it start every Ready ticket that a person approved, in Board order. Type the list before you turn Autopilot on. You cannot change it while Autopilot is on. When you turn Autopilot off, the list is cleared.');
   let apSet = 0;
   apBox.addEventListener('change', async () => {
     apSet++;
