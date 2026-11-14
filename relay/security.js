@@ -8,6 +8,7 @@
 //
 // Like the terminal, this answers only the room page on this machine, while RELAY_TERMINAL=1.
 'use strict';
+const { keepLines } = require('./clean.js');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -51,8 +52,7 @@ function of(channel) {
   if (!Array.isArray(s.reports)) s.reports = [];
   return s;
 }
-// eslint-disable-next-line no-control-regex -- removing control characters is the point
-const clean = (v, n) => String(v == null ? '' : v).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '').slice(0, n);
+const clean = keepLines;
 const roleOf = (t) => (t.lead ? 'Lead' : t.role === 'pm' ? 'PM' : t.role === 'coo' ? 'COO' : t.role === 'security' ? 'Security' : t.role === 'reviewer' ? 'reviewer' : t.task ? 'Dev' : 'session');
 const nameOf = (t) => clean(t.who || 'Session ' + String(t.sessionId).slice(0, 8), 80);
 

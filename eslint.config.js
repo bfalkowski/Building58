@@ -33,6 +33,23 @@ module.exports = [
     languageOptions: { globals: { module: 'writable' } }
   },
   {
+    // Relay code cannot switch a rule off for one line, so a copy of clean() fails lint with no way around it.
+    files: ['relay/**/*.js'],
+    ignores: ['relay/test/**'],
+    linterOptions: { noInlineConfig: true, reportUnusedInlineConfigs: 'off' },
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: 'Literal[regex.pattern=/\\\\x[01][0-9a-fA-F]|\\\\x[79][fF]/]',
+        message: 'Use oneLine or keepLines from relay/clean.js. Do not copy the control character regex.'
+      }]
+    }
+  },
+  {
+    // Removing control characters is what clean.js does, and terminal.js reads terminal escape codes.
+    files: ['relay/clean.js', 'relay/terminal.js'],
+    rules: { 'no-control-regex': 'off', 'no-restricted-syntax': 'off' }
+  },
+  {
     files: ['eslint-local.js'],
     languageOptions: { sourceType: 'commonjs', globals: globals.node }
   },

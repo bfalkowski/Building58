@@ -21,6 +21,7 @@
 //
 // Like the terminal, this answers only while RELAY_TERMINAL=1.
 'use strict';
+const { oneLine } = require('./clean.js');
 const { execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -46,8 +47,7 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 // The words of a post. « and » mark where a post starts and ends when a session reads it, so a post
 // cannot use them to pass for another.
-// eslint-disable-next-line no-control-regex -- removing control characters is the point
-const clean = (v, n) => String(v == null ? '' : v).replace(/[\x00-\x1f\x7f-\x9f]+/g, ' ').replace(/[«»]/g, '"').replace(/\s+/g, ' ').trim().slice(0, n);
+const clean = (v, n) => oneLine(v == null ? '' : String(v).replace(/[«»]/g, '"'), n);
 
 // ---------- the store: { channel: { rooms: [room], prs: { link: { state, pipeline } } } } ----------
 // A room is one chat channel: { name, kind, ticket, ticketAt, title, createdAt, createdBy, seq, posts }.
