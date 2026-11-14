@@ -286,9 +286,12 @@ test('a game that sends its score and exits at once still finishes with its scor
 });
 
 test('a second finish while the first waits gets the same answer', async (t) => {
-  const { R } = await roundOn(t, {});
+  // The game waits before it sends its score, so the second finish comes while the first waits,
+  // even on a slow computer. Without the wait, the first could end the round before the second came.
+  const { R, received } = await roundOn(t, { finishDelayMs: 500 });
   const [a, b] = await Promise.all([R.call('POST', '/rounds/current/finish', {}), R.call('POST', '/rounds/current/finish', {})]);
   assert.deepStrictEqual([a.status, b.status], [200, 200]);
+  assert.strictEqual(received().filter((m) => m.type === 'finish').length, 1, 'the game was asked to finish once');
   assert.strictEqual(a.body.round.state, 'done');
   assert.strictEqual(b.body.round.state, 'done');
   assert.strictEqual((await R.call('GET', '/rounds')).body.rounds.length, 1);
