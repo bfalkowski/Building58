@@ -47,10 +47,26 @@ function heldBack(t, all) {
 }
 
 const allowed = (t, only) => !only || only.includes(t.id) || (Array.isArray(t.labels) && t.labels.some((l) => only.includes(l)));
+const approved = (t) => ('approvedBy' in t ? t.approvedBy === 'you' : t.createdBy === 'you');
+const unsettled = (t, all) => (t.blockedBy || []).filter((id) => { const b = all.find((x) => x.id === id); return !b || b.status !== 'done'; });
 function nextTicket(all, hasTask, only) {
-  const approved = (t) => ('approvedBy' in t ? t.approvedBy === 'you' : t.createdBy === 'you');
-  const settled = (t) => (t.blockedBy || []).every((id) => { const b = all.find((x) => x.id === id); return b && b.status === 'done'; });
-  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && settled(t) && !heldBack(t, all) && !hasTask(t) && allowed(t, only)))[0] || null;
+  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && !unsettled(t, all).length && !heldBack(t, all) && !hasTask(t) && allowed(t, only)))[0] || null;
+}
+function waitsWhy(t, all) {
+  if (t.status === 'triage') return 'In Triage';
+  if (!approved(t)) return 'Not approved by you';
+  const blockers = unsettled(t, all);
+  if (blockers.length) return 'Waiting for ' + blockers.join(', ');
+  const held = heldBack(t, all);
+  if (held) return held.split('. ')[0].replace(/\.$/, '');
+  return t.repo ? null : 'No repo';
+}
+function whyNoneAllowed(all, hasTask, only) {
+  const mine = boardOrder(all.filter((t) => allowed(t, only)));
+  if (!mine.length) return 'No ticket on the Board has an id or label you allowed.';
+  const waiting = mine.filter((t) => ['triage', 'ready'].includes(t.status) && !hasTask(t)).map((t) => [t.id, waitsWhy(t, all)]).filter(([, why]) => why);
+  if (!waiting.length) return 'Every ticket you allowed is started or done.';
+  return 'No ticket you allowed can start. ' + waiting.map(([id, why]) => id + ': ' + why + '.').join(' ');
 }
 
 const HEADING = /^#{1,6}[ \t]+review of[ \t]+`?(?:[0-9a-f]{7,40}\.\.\.?)?([0-9a-f]{7,40})\b/i;
@@ -67,4 +83,4 @@ function reviewPostFor(comments, { login, since, commit }) {
   return found;
 }
 
-module.exports = { forPr, ciOf, nextTicket, heldBack, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { forPr, ciOf, nextTicket, whyNoneAllowed, heldBack, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };

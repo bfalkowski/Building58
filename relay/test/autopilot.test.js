@@ -72,6 +72,7 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
   await t.test('turning it off clears the ticket list, so a list from before does not come back', async () => {
     const on = await R.call('POST', '/autopilot', { on: true, only: 'T-999999' });
     assert.deepStrictEqual(on.body.only, ['T-999999']);
+    await until(async () => (await ap()).idle === 'No ticket on the Board has an id or label you allowed.', 'the idle note names why (T-291)');
     const off = await R.call('POST', '/autopilot', { on: false });
     assert.strictEqual(off.body.only, null);
     assert.strictEqual((await ap()).only, null);

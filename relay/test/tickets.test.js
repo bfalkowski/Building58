@@ -243,6 +243,13 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       assert.strictEqual(cleared.heldBack, null);
       assert.strictEqual(cleared.mark, null);
       for (const x of [a, b]) await call('POST', '/tickets/' + x.id + '/move', { to: 'rejected' });
+      for (const x of [a, d]) {
+        const late = await call('POST', '/tickets/' + x.id + '/shapes', { shapes: [b.id] });
+        assert.strictEqual(late.status, 409, 'a rejected ticket keeps no shapes list (T-291)');
+        assert.strictEqual(late.body.error, 'not_ready');
+        assert.match(late.body.message, /Triage, Ready or Started.*rejected/);
+      }
+      assert.deepStrictEqual((await call('GET', '/tickets/' + d.id)).body.ticket.shapes, [a.id, b.id], 'the list stays as it was');
     });
     await t.test('the same title in another repo is its own ticket', async () => {
       const other = H.makeRepo(R.home, 'other');
