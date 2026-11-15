@@ -2,8 +2,8 @@
 // can load them without starting a relay. See docs/manual/roles.html#autopilot.
 'use strict';
 
-// A PR may not change these: only a person merges a change to them (CLAUDE.md, the constitution).
-const PROTECTED = ['CLAUDE.md', 'docs/constitution.md'];
+// A PR may not change these: only a person merges a change to them (the rules, and the lint rules that check them).
+const PROTECTED = ['CLAUDE.md', 'docs/constitution.md', 'eslint.config.js', 'eslint-local.js'];
 // So a code PR stays free of them and Autopilot can merge it, wording changes to them gather in one open
 // ticket with this title, which the person merges (T-239). The Dev's and the PM's briefs name it.
 const WORDING_TICKET = 'CLAUDE.md and constitution updates';

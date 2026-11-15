@@ -67,6 +67,7 @@ test('one that changes the constitution or CLAUDE.md waits on you', () => {
   const m = nextMove(base({ files: ['a.txt', 'docs/constitution.md'] }));
   assert.deepStrictEqual(pick(m), ['you', 'protected', null]);
   assert.match(m.why, /docs\/constitution\.md/);
+  assert.deepStrictEqual(pick(nextMove(base({ files: ['eslint.config.js'] }))), ['you', 'protected', null], 'and so does one that changes the lint rules');
 });
 
 test('CI running, a verdict not posted, a review with no verdict', () => {
