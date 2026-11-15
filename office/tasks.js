@@ -18,19 +18,21 @@
   }
   const say = (text, bad) => { note.textContent = text || ''; note.dataset.bad = bad ? '1' : ''; };
   const repoIn = $('task-repo');
-  try { repoIn.value = localStorage.getItem('office.taskRepo') || ''; } catch (e) { /* no storage */ }
+  function storedRepo() { try { return localStorage.getItem('office.taskRepo') || ''; } catch (e) { return repoIn.value; } }
+  repoIn.value = storedRepo();
+  function remember(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
 
   function workerOf(task) {
     if (!task.worker || !window.run) return null;
     return window.run.state().workers.find((w) => w.session && w.session.terminal === task.worker.terminal) || null;
   }
   let lastDrawn = '', lastTasks = [], selectFocusAt = 0;
-  const asking = new Map();  // task id -> the ignored files Clean up would delete
+  const asking = new Map();
   const SELECT_HOLD = 15000;
   rows.addEventListener('focusin', (ev) => { if (ev.target.tagName === 'SELECT') selectFocusAt = Date.now(); });
   function draw(tasks) {
     const el = document.activeElement;
-    if (el && el.tagName === 'SELECT' && el.closest('#task-rows') && Date.now() - selectFocusAt < SELECT_HOLD) return;  // redrawing would close it
+    if (el && el.tagName === 'SELECT' && el.closest('#task-rows') && Date.now() - selectFocusAt < SELECT_HOLD) return;
     lastTasks = tasks;
     const text = JSON.stringify([tasks, [...asking]]);
     if (text === lastDrawn) return;
@@ -55,7 +57,7 @@
       }
       const sel = document.createElement('select'); sel.setAttribute('aria-label', 'State of ' + task.title);
       Object.keys(LABEL).forEach((s) => { const o = document.createElement('option'); o.value = s; o.textContent = LABEL[s]; o.selected = s === task.state; sel.append(o); });
-      sel.addEventListener('change', async () => { const r = await api('/' + task.id + '/move', { to: sel.value }); sel.blur(); if (!r.ok) { say(r.message, true); lastDrawn = ''; } refresh(); });  // redraw, so a refused move shows the old state
+      sel.addEventListener('change', async () => { const r = await api('/' + task.id + '/move', { to: sel.value }); sel.blur(); if (!r.ok) { say(r.message, true); lastDrawn = ''; } refresh(); });
       li.append(sel);
       if (!task.worker && task.state !== 'done') li.append(button('Bring back', () => act(task, 'resume')));
       const ignored = asking.get(task.id);
@@ -68,7 +70,6 @@
       rows.append(li);
     }
   }
-  // What relay/pr-comments.js is doing with the PR's comments, and the last thing it did.
   function reviewLine(task) {
     const p = task.pipeline;
     if (p && p.waits) return 'Waiting on the pipeline, not on ' + (task.state === 'in_review' ? 'a review' : 'you') + ': ' + (p.state === 'red' ? 'a check failed.' : 'checks are running.');
@@ -84,7 +85,6 @@
     say(r.ok ? '' : r.message, !r.ok);
     refresh();
   }
-  // Ignored files go only with a yes that names them. The relay asks again about any new since.
   async function clean(task, ignored) {
     const r = await api('/' + task.id + '/clean', { ignored: ignored || [] });
     asking.delete(task.id);
@@ -104,7 +104,7 @@
     const r = await api('', { title: $('task-title').value, brief: $('task-brief').value, repo: repoIn.value });
     submit.disabled = false;
     if (!r.ok) { say(r.message, true); return; }
-    try { localStorage.setItem('office.taskRepo', repoIn.value); } catch (e) { /* no storage */ }
+    remember('office.taskRepo', repoIn.value);
     $('task-title').value = ''; $('task-brief').value = '';
     say('Started on ' + r.task.branch + '. The brief goes in once the session is ready.');
     refresh();

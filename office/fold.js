@@ -6,8 +6,8 @@
   'use strict';
   const KEY = 'office.openSections';
   let kept = new Set();
-  try { kept = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) { /* no storage */ }
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...kept])); } catch (e) { /* no storage */ } };
+  try { kept = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) { kept = new Set(); }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...kept])); return true; } catch (e) { return false; } };
   const setters = {};
   for (const id of ['board', 'chat', 'tasks', 'games']) {
     const section = document.getElementById(id), h = section && section.querySelector(':scope > header h2');

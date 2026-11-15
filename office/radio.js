@@ -9,20 +9,14 @@
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC || !songs.length) { button.disabled = true; return; }
 
-  // How sour the radio sounds. Each note of the scale is always off by the same amount, as on
-  // an old instrument nobody has tuned, so chords beat against themselves. In cents, where 100
-  // is a semitone: at 1 the worst note is 18 cents off, close to wrong but not quite.
   const SOUR = 1;
   const TUNING = [14, -11, 18, -7, 12, -16, 9, 17, -13, 6, -18, 11];
-  // The warped record: a slow sway and a quick shiver in the pitch of everything at once.
   const WOW = { hz: 0.6, cents: 9 }, FLUTTER = { hz: 5.7, cents: 3 };
-  const LEVEL = 0.7; // keeps the speaker's mid boost from clipping in the busiest songs
-  // Seconds of notes to schedule ahead. A background tab's timers only fire about once a second.
+  const LEVEL = 0.7;
   const lookahead = () => document.hidden ? 3 : 1;
 
   const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
   const sour = (m) => TUNING[((m % 12) + 12) % 12] * SOUR;
-  // seconds of delay swing that bend the pitch by this many cents at this rate
   const delaySwing = ({ hz: rate, cents }) => (Math.pow(2, cents / 1200) - 1) / (2 * Math.PI * rate);
 
   let c = null, mix = null, out = null, noise = null, vibes = null;
@@ -39,17 +33,14 @@
     mix = c.createGain(); mix.gain.value = 0.6;
     out = c.createGain(); out.gain.value = 0;
 
-    // a small studio: a short tail of decaying noise
     const size = Math.floor(c.sampleRate * 1.3), ir = c.createBuffer(1, size, c.sampleRate), id = ir.getChannelData(0);
     for (let i = 0; i < size; i++) id[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / size, 3.2);
     const room = c.createConvolver(), wet = c.createGain(); room.buffer = ir; wet.gain.value = 0.16;
 
-    // the turntable bends the pitch of the whole band together by moving a short delay
     const table = c.createDelay(0.1); table.delayTime.value = 0.02;
     lfo(WOW.hz, delaySwing(WOW), table.delayTime);
     lfo(FLUTTER.hz, delaySwing(FLUTTER), table.delayTime);
 
-    // the small speaker
     const shaper = c.createWaveShaper(), curve = new Float32Array(1024);
     for (let i = 0; i < 1024; i++) curve[i] = Math.tanh((i / 511.5 - 1) * 1.6);
     shaper.curve = curve;
@@ -61,7 +52,6 @@
     mix.connect(table); mix.connect(room); room.connect(wet); wet.connect(table);
     table.connect(shaper); shaper.connect(low); low.connect(mid); mid.connect(high); high.connect(out); out.connect(c.destination);
 
-    // record crackle and hiss
     const cb = c.createBuffer(1, c.sampleRate * 4, c.sampleRate), cd = cb.getChannelData(0);
     for (let i = 0; i < cd.length; i++) cd[i] = (Math.random() * 2 - 1) * 0.012 + (Math.random() < 14 / c.sampleRate ? (Math.random() * 2 - 1) * 0.9 : 0);
     const hiss = c.createBiquadFilter(), hissGain = c.createGain();
@@ -72,11 +62,9 @@
     const nd = noise.getChannelData(0);
     for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
 
-    // every vibraphone bar shares one motor, so they all pulse together
     vibes = c.createGain(); vibes.gain.value = 0.72; vibes.connect(mix);
     lfo(4.6, 0.28, vibes.gain);
 
-    // a phone call or another app can stop the audio; pick the song up where it stopped
     c.addEventListener('statechange', () => { if (on) { if (c.state === 'running') begin(); else wake(); } });
   }
 
@@ -97,7 +85,6 @@
     s.connect(f); f.connect(dest); s.start(t); s.stop(t + dur);
   }
   function gainTo(dest) { const g = c.createGain(); g.connect(dest); return g; }
-  // two strings a little apart, plus overtones that fade faster the higher they are
   function struck(e, t, to, end) {
     const body = gainTo(to), bright = gainTo(to);
     env(body, t, 0.005, e.g, end);
@@ -113,7 +100,6 @@
   }
 
   const VOICES = {
-    // a bar is mostly one pure tone, with a bright fourth partial that dies quickly
     vibes(e, t, to) {
       const ring = Math.max(e.d + 0.5, e.m > 76 ? 1.4 : 2.2), end = t + ring, bar = gainTo(to);
       env(bar, t, 0.004, e.g, end);
@@ -123,13 +109,9 @@
       const mallet = gainTo(to); env(mallet, t, 0.001, e.g * 0.18, t + 0.03);
       burst(t, 0.04, mallet, 'bandpass', 2400, 1.1);
     },
-    // a sustained note rings on; the lower it is, the longer
     piano(e, t, to) { struck(e, t, to, t + Math.max(e.d + 0.25, 1.4 + Math.max(0, (72 - e.m) / 36) * 2.6)); },
-    // the same strings, damped as soon as the key comes up
     keys(e, t, to) { struck(e, t, to, t + e.d + 0.18); },
-    // two reedy voices with vibrato that arrives once the note has settled
     reed(e, t, to) { blown(e, t, to, 1500, 0.04, 0.16, 5.2, 13); },
-    // a brighter, tighter muted horn
     horn(e, t, to) { blown(e, t, to, 2200, 0.018, 0.07, 5.8, 9); },
     pad(e, t, to) {
       const g = gainTo(to), end = t + e.d + 0.5;
@@ -137,7 +119,6 @@
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(e.g, t + 0.4);
       g.gain.setValueAtTime(e.g, t + e.d); g.gain.linearRampToValueAtTime(0, end);
     },
-    // a plucked string: quick and bright at first, with a short warm tail
     guitar(e, t, to) {
       const end = t + Math.max(e.d + 0.3, 1), body = gainTo(to), pick = gainTo(to);
       env(body, t, 0.004, e.g, end);
@@ -173,8 +154,6 @@
     g.gain.setValueAtTime(e.g, t + hold); g.gain.linearRampToValueAtTime(0, t + e.d + release);
   }
 
-  // A disc is one gain that all of a song's notes go through, so changing songs can silence
-  // notes that are already scheduled. The vibraphone joins it through the motor's own gain.
   function putOn(i, delay) {
     takeOff();
     index = ((i % songs.length) + songs.length) % songs.length;
@@ -195,7 +174,6 @@
   function tick() {
     if (!on || !disc || c.state !== 'running') return;
     const song = songs[index], now = c.currentTime;
-    // if the timers stalled past the scheduled notes, the song waits rather than losing its place
     if (pos < song.ev.length && t0 + song.ev[pos].t < now) t0 = now + 0.05 - song.ev[pos].t;
     while (pos < song.ev.length && t0 + song.ev[pos].t < now + lookahead()) {
       const e = song.ev[pos++];
@@ -240,5 +218,5 @@
   }
   button.addEventListener('click', () => { if (on) turnOff(); else turnOn(); });
   nextBtn.addEventListener('click', () => { if (on) { wake(); putOn(index + 1, 0.35); } });
-  document.addEventListener('visibilitychange', tick); // fill the longer lookahead before timers slow down
+  document.addEventListener('visibilitychange', tick);
 })();

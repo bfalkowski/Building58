@@ -9,20 +9,17 @@
   const BY = { you: 'you', Lead: 'the Lead', relay: 'the relay', Autopilot: 'Autopilot', 'automatic review': 'an automatic review' };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-  // "Priya, Dev", or the role alone when the page never named that session.
   function personOf(x) {
     const role = ROLES[x.role] || x.role || '';
     if (x.role === 'you') return 'You';
     return x.name ? x.name + (role ? ', ' + role : '') : (role ? role.charAt(0).toUpperCase() + role.slice(1) : 'A session') + ' with no name recorded';
   }
   const ended = (s) => s && !s.running;
-  // For a card's one line: who has it now.
   function assigneeText(t) {
     const a = t.assignee;
     if (!a) return 'Unassigned';
     return 'with ' + personOf(a) + (ended(a.session) ? ' (session ended)' : '');
   }
-  // Who took a step: you, the Lead, Autopilot, or a session, with the name the page gave it if there is one.
   function byText(x) {
     const by = BY[x.by] || x.by;
     if (!by) return 'someone not recorded';
@@ -55,12 +52,11 @@
     });
     return b;
   }
-  // The session's full id and folder, which Resume needs, and whether it can be opened or brought back.
   function sessionBlock(s) {
     const box = el('div', 'th-session');
     const id = el('code', null, s.sessionId), folder = el('code', null, s.cwd || 'folder not recorded');
     box.append('Session ', id, ' ', copyButton(s.sessionId), ' in ', folder, ' ');
-    if (s.running && s.terminal && !window.run) box.append(el('span', null, 'It is running. Open it from the room page, which has the terminal.'));  // the Board in its own tab
+    if (s.running && s.terminal && !window.run) box.append(el('span', null, 'It is running. Open it from the room page, which has the terminal.'));
     else if (s.running && s.terminal) {
       const open = el('button', 'btn', 'Open its terminal'); open.type = 'button';
       open.addEventListener('click', () => window.dispatchEvent(new CustomEvent('office:session', { detail: { terminal: s.terminal } })));
@@ -70,7 +66,6 @@
     else box.append(el('span', null, 'It has ended.'));
     return box;
   }
-  // For a ticket's detail: who has it now, then each step, oldest first.
   function render(t) {
     const box = el('div', 'ticket-history');
     const now = el('p', 'th-now');

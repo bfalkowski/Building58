@@ -16,8 +16,10 @@
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url, opt).then((r) => r.json()).catch(() => ({ ok: false, message: 'The relay did not answer.' }));
   }
-  try { leadBox.checked = localStorage.getItem('office.huddleLead') !== '0'; } catch (e) { /* no storage */ }
-  leadBox.addEventListener('change', () => { try { localStorage.setItem('office.huddleLead', leadBox.checked ? '1' : '0'); } catch (e) { /* no storage */ } draw(last); });
+  function storedLead() { try { return localStorage.getItem('office.huddleLead') !== '0'; } catch (e) { return leadBox.checked; } }
+  leadBox.checked = storedLead();
+  function remember(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  leadBox.addEventListener('change', () => { remember('office.huddleLead', leadBox.checked ? '1' : '0'); draw(last); });
 
   let last = null, closedId = null, pressing = false, drawn = '';
   const workers = () => (window.run ? window.run.state().workers : []);
@@ -83,12 +85,11 @@
   askBtn.addEventListener('click', () => press(true));
   $('huddle-close').addEventListener('click', () => { closedId = last && last.report ? last.report.id : null; open(false); });
 
-  // The terminal has to be on, and only the page on this computer gets an answer.
   api().then((s) => {
     if (!s.ok) return;
     bar.hidden = false;
-    leadBox.dispatchEvent(new Event('change'));  // so the Settings chip says what the switch is
-    closedId = s.report ? s.report.id : null;  // an old report does not jump open on a reload
+    leadBox.dispatchEvent(new Event('change'));
+    closedId = s.report ? s.report.id : null;
     draw(s);
     setInterval(() => api().then(draw), 2000);
   });

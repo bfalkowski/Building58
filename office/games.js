@@ -30,7 +30,6 @@
   const button = (text, fn) => { const b = el('button', text, 'btn'); b.type = 'button'; b.addEventListener('click', () => { b.blur(); fn(); }); return b; };
   const time = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
 
-  // ---------- the games ----------
   let games = [], lastGames = '';
   function drawGames() {
     const text = JSON.stringify(games);
@@ -52,7 +51,6 @@
     if (games.some((g) => g.ok && g.folder === before)) pick.value = before;
     fitSeats();
   }
-  // The seat count stays inside the picked game's players.
   function fitSeats() {
     const g = games.find((x) => x.folder === pick.value);
     aboutBox.textContent = g && g.about ? g.about : '';
@@ -69,7 +67,6 @@
     if (r.ok) { games = r.games; drawGames(); }
   }
 
-  // ---------- the round that runs ----------
   let round = null, lastRound = '';
   function seatPerson(terminal) {
     if (!window.run) return null;
@@ -109,9 +106,6 @@
       seatRows.append(li);
     }
   }
-  // Claude Code's first choice is No, exit, so Enter alone would end the seat. Down, then Enter, picks
-  // Yes. The relay takes these keys only while the seat shows that question. Under Watch none the
-  // seat's screen stays closed, and this still works.
   const DOWN = '\u001b[B';
   async function trust(seats) {
     const bad = [];
@@ -125,12 +119,9 @@
     say(bad.length ? bad.join(' ') : 'Trusted the folder of ' + seats.map((s) => s.seat).join(', ') + '. Each brief goes in next.', bad.length > 0);
     lastRound = ''; refresh();
   }
-  // Asks the relay first, so a seat answered since the last look is not sent the keys again.
   trustAll.addEventListener('click', async () => { await refresh(); if (round) trust(round.seats.filter((s) => s.waiting === 'trust')); });
   const nameOf = (folder) => { const g = games.find((x) => x.folder === folder); return g ? g.name || folder : folder; };
 
-  // ---------- the score and the reveal ----------
-  // Any value the relay sends: an object becomes rows of its keys, anything else is shown as text.
   function data(value, meanings) {
     if (value === null || value === undefined) return el('p', 'none', 'task-empty');
     if (typeof value !== 'object' || Array.isArray(value)) return el('pre', typeof value === 'string' ? value : JSON.stringify(value, null, 2), 'game-data');
@@ -199,7 +190,6 @@
     }
   }
 
-  // ---------- asking the relay ----------
   async function refresh() {
     const r = await api('/rounds/current');
     if (!r.ok) return;
@@ -207,13 +197,12 @@
     round = r.round;
     drawRound();
     if (was && !round) {
-      // The round ended without this page's Finish: stopped, failed, or at its spend cap.
       if (!ended) say('The round ended. The relay\'s log says why.', false);
       ended = false;
       loadPast(); loadGames();
     }
   }
-  let ended = false;  // this page ended the round, and says so itself
+  let ended = false;
   finishBtn.addEventListener('click', async () => {
     if (!round) return;
     ended = true; finishBtn.disabled = true; stopBtn.disabled = true;

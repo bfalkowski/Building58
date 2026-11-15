@@ -13,14 +13,11 @@
   const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const fmt = (s) => s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
   const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
-  // An officer is in while a session runs in that role, at whichever desk it took. The Lead's desk with
-  // no session is the Lead's too: Paul waits there. Officers sit only in their own row, never in a group.
   const OFFICERS = ['lead', 'pm', 'coo', 'security'];
   const roleOf = (w) => (w.session && w.session.work && w.session.work.role) || null;
   const officerOf = (w) => OFFICERS.includes(roleOf(w)) ? roleOf(w) : w.lead && !w.session ? 'lead' : null;
   const stateOf = (w) => w.status === 'idle' ? (w.session ? 'ready' : 'free') : w.status;
 
-  // ---------- the three ways to arrange people ----------
   const STATES = [['waiting', 'Needs you'], ['working', 'Working'], ['ready', 'Ready for a prompt'], ['free', 'Free']];
   const BENCH = 'The bench';
   const LAYOUTS = [
@@ -38,9 +35,9 @@
 
   const REORGS_KEY = 'office.orgchart.reorgs';
   let reorgs = 0;
-  try { reorgs = Math.max(0, parseInt(localStorage.getItem(REORGS_KEY), 10) || 0); } catch (e) { /* no storage */ }
+  function remember(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  try { reorgs = Math.max(0, parseInt(localStorage.getItem(REORGS_KEY), 10) || 0); } catch (e) { reorgs = 0; }
 
-  // ---------- a badge photo, drawn from the same look as the person in the scene ----------
   const SVG = 'http://www.w3.org/2000/svg';
   function shape(parent, tag, attrs) {
     const el = document.createElementNS(SVG, tag);
@@ -80,10 +77,9 @@
   [R.lead].concat(R.workers || []).forEach((def) => { if (def) looks[def.id] = def.look || {}; });
   $('org-you-photo').replaceWith(photo({ skin: '#aab1bb', shirt: '#262a33', tie: '#b5523b', eyes: false }, '#e9dfc4'));
 
-  // ---------- cards and columns, kept and moved so focus and animations survive a refresh ----------
   function close() { dlg.close(); }
   function openSession(who) {
-    close();  // first, because closing hands focus back to the button and the terminal wants it
+    close();
     window.dispatchEvent(new CustomEvent('office:pick', { detail: { who, keep: true } }));
   }
   const cards = new Map();
@@ -121,7 +117,6 @@
     while (parent.children.length > wanted.length) parent.lastChild.remove();
   }
 
-  // the open desks: a real way to add a worker, when the panel can start one
   const hireCol = columnFor('open', 'Open headcount');
   hireCol.el.classList.add('org-hiring');
   const hireBtn = document.createElement('button');
@@ -134,11 +129,10 @@
   });
   hireCol.list.append(hireBtn);
 
-  // ---------- who gets the star: the most turns finished since this page opened ----------
   let finished = {};
   run.on('action', (e) => { if (e.action === 'reset') finished = {}; });
   run.on('worker.finished', (e) => {
-    if (e.reason !== 'done' || e.source === 'viewer') return;  // Finish all earns nobody a star
+    if (e.reason !== 'done' || e.source === 'viewer') return;
     const f = finished[e.who] || (finished[e.who] = { turns: 0, seconds: 0 });
     f.turns++; f.seconds += e.seconds;
   });
@@ -152,7 +146,6 @@
     return best;
   }
 
-  // ---------- the officers' row ----------
   const ROLE_WORDS = { lead: 'the Lead', pm: 'the PM', coo: 'the COO', security: 'security' };
   const OUT_PHOTO = { skin: '#cfc6b4', shirt: '#b9af9b', hair: '#b9af9b', eyes: false };
   const officerCards = OFFICERS.map((role) => {
@@ -164,7 +157,6 @@
   });
   function fillOfficer(card, here) {
     const lead = card.role === 'lead';
-    // The Lead is whoever runs as the Lead; with none, Paul at the Lead's desk, who is in the room but out of a session.
     const ins = here.filter((w) => roleOf(w) === card.role);
     const w = ins[0] || (lead ? here.find((x) => x.lead && !x.session) : null) || null;
     const isIn = ins.length > 0, state = isIn ? stateOf(w) : 'free';
@@ -182,19 +174,16 @@
       card.photoKey = key;
       card.slot.replaceChildren(key === 'out' ? photo(OUT_PHOTO, '#efe8d6') : photo(looks[w.id] || {}, 'color-mix(in srgb, ' + w.color + ' 35%, #fffdf6)'));
     }
-    // Go to: follows them and opens their session. The Lead's card always has it while Paul is in the room.
     card.go.hidden = !(isIn || (lead && w));
     card.go.textContent = w ? 'Go to ' + w.name : '';
     card.go.setAttribute('aria-label', w ? 'Go to ' + w.name + ', ' + ROLE_WORDS[card.role] + ', and open their session' : '');
     return isIn;
   }
-  // Ask the PM: the PM needs an idea, which it reads from the Board's ticket form. With one typed there,
-  // this does what the form's own Ask the PM does. With none, it takes you to the title box and says so.
   const pmAsk = $('org-pm-ask');
   pmAsk.addEventListener('click', () => {
     close();
     const title = $('ticket-title'), body = $('ticket-body');
-    if (window.officeFold) window.officeFold.open('board');  // a folded Board hides the form, and its note
+    if (window.officeFold) window.officeFold.open('board');
     if ((title.value + body.value).trim()) { $('ticket-pm').click(); return; }
     title.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
     title.focus({ preventScroll: true });
@@ -209,12 +198,11 @@
     pmAsk.disabled = $('ticket-pm').disabled;
   }
 
-  // ---------- drawing ----------
   function fillCard(w, s, star) {
     const c = cardFor(w), state = stateOf(w);
     c.btn.dataset.state = state;
     const role = (w.role || '') + (w.session && !w.session.terminal ? ' · other terminal' : '');
-    if (c.name.textContent !== w.name) c.name.textContent = w.name;  // a session's name, or the desk's own
+    if (c.name.textContent !== w.name) c.name.textContent = w.name;
     if (c.role.textContent !== role) c.role.textContent = role;
     const waiting = s.waitingOnYou.find((x) => x.who === w.id);
     const status = state === 'waiting' ? 'Needs your OK' : state === 'working' ? 'Working · ' + fmt(w.task.seconds) : state === 'ready' ? 'Ready for a prompt' : 'Free';
@@ -224,7 +212,6 @@
     c.btn.title = detail + (w.session && w.session.project ? ' (' + w.session.project + ')' : '');
     c.star.hidden = !star;
   }
-  // Slides cards from where they were to where they now are.
   function slide(change) {
     const before = new Map();
     cards.forEach((c) => { if (c.btn.isConnected) before.set(c.btn, c.btn.getBoundingClientRect()); });
@@ -236,7 +223,6 @@
       if (dx || dy) btn.animate([{ transform: 'translate(' + dx + 'px, ' + dy + 'px)' }, { transform: 'none' }], { duration: 480, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
     });
   }
-  // Nothing moves under the pointer, so a click cannot land on the wrong person's session. The text still updates.
   function render(force) {
     const s = run.state();
     const people = s.workers.filter((w) => w.present);
@@ -255,7 +241,6 @@
       .map(([title, members]) => {
         const col = columnFor(LAYOUTS[reorgs % LAYOUTS.length].says + '/' + title, title);
         col.count.textContent = members.length;
-        // needs you first, as on the Floor list; otherwise roster order, so nobody jumps about
         const order = members.map((w) => [STATES.findIndex(([k]) => k === stateOf(w)), w]).sort((a, b) => a[0] - b[0]).map(([, w]) => w);
         return { col, buttons: order.map((w) => cardFor(w).btn) };
       });
@@ -264,7 +249,7 @@
       wanted.forEach(({ col, buttons }) => setChildren(col.list, buttons));
       setChildren(groupsEl, wanted.map(({ col }) => col.el).concat(open > 0 ? [hireCol.el] : []));
     });
-    if (active && active !== document.activeElement) (active.isConnected ? active : $('org-reorg')).focus({ preventScroll: true });  // moving or removing a card drops its focus
+    if (active && active !== document.activeElement) (active.isConnected ? active : $('org-reorg')).focus({ preventScroll: true });
     if (open > 0) {
       const canHire = !$('cc-cwd').disabled;
       hireCol.count.textContent = open;
@@ -278,28 +263,25 @@
     memo.textContent = (reorgs ? 'Reorg #' + reorgs + ': everyone now sits ' + LAYOUTS[reorgs % LAYOUTS.length].says + '. Nothing else changes.' : 'Everyone reports to you. Press Reorg to arrange them another way.') + (heard ? ' ' + heard : '');
   }
 
-  // ---------- the room hears about it ----------
   const QUIPS = ['Another reorg?', 'Who do I report to now?', 'Do I keep my desk?', 'Is this about the ping pong?', 'Love what we are doing here.', 'Should I update my badge?'];
   function grumble() {
     const here = run.state().workers.filter((w) => w.present);
     if (!here.length) return '';
     const who = here[Math.floor(Math.random() * here.length)], text = QUIPS[Math.floor(Math.random() * QUIPS.length)];
     run.do({ action: 'say', who: who.id, text, source: 'viewer' });
-    return who.name + ': "' + text + '"';  // the sheet covers the scene, so the memo repeats it
+    return who.name + ': "' + text + '"';
   }
 
-  // ---------- buttons ----------
   $('org-company').textContent = R.company || 'Building58';
   $('org-btn').addEventListener('click', () => { stamp.hidden = true; writeMemo(); render(true); dlg.showModal(); });
   $('org-close').addEventListener('click', close);
   nextBtn.addEventListener('click', () => openSession(nextBtn.dataset.who));
-  // the backdrop, only when the press started there: a drag out of the sheet also clicks the dialog
   let pressedBackdrop = false;
   dlg.addEventListener('pointerdown', (ev) => { pressedBackdrop = ev.target === dlg; });
   dlg.addEventListener('click', (ev) => { if (ev.target === dlg && pressedBackdrop) close(); });
   $('org-reorg').addEventListener('click', () => {
     reorgs++;
-    try { localStorage.setItem(REORGS_KEY, String(reorgs)); } catch (e) { /* no storage */ }
+    remember(REORGS_KEY, String(reorgs));
     render(true); writeMemo(grumble());
     stamp.textContent = 'Reorganized #' + reorgs; stamp.hidden = false;
     if (!reduce) stamp.animate([{ transform: 'rotate(-9deg) scale(2.2)', opacity: 0 }, { transform: 'rotate(-9deg) scale(1)', opacity: 0.8 }], { duration: 200, easing: 'ease-in' });

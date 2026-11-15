@@ -23,7 +23,6 @@
       .catch(() => null);
   }
 
-  // forward every event, in small batches (this runs before the world's first event)
   let buffer = run.events();
   run.on('*', (e) => { buffer.push(e); });
   setInterval(() => {
@@ -32,24 +31,19 @@
     post('/events', { events: batch });
   }, 400);
 
-  // tell the relay whether this tab is on screen: the world is paused while it is hidden,
-  // so the relay sends commands to a page that is on screen when there is one
   let pageId = null;
   function reportVisibility() {
     if (pageId != null) post('/pages/' + pageId, { visible: !document.hidden });
   }
   document.addEventListener('visibilitychange', reportVisibility);
 
-  // take commands
   status('Relay: connecting', 'wait');
-  const es = new EventSource(url('/stream') + (document.getElementById('board') ? '&board=1' : ''));  // only a page with a Board wants its tickets
-  // The room relay also sends the Board's tickets on this stream (relay/board-push.js). The Board
-  // (office/tickets.js) hears them as office:tickets, and asks the relay itself only while it has none.
+  const es = new EventSource(url('/stream') + (document.getElementById('board') ? '&board=1' : ''));
   const board = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
   es.addEventListener('hello', (m) => {
     status('Relay: ' + channel, 'on');
     let hello = {};
-    try { hello = JSON.parse(m.data); } catch (e) { /* an old relay */ }
+    try { hello = JSON.parse(m.data); } catch (e) { hello = {}; }
     pageId = hello.page == null ? null : hello.page;
     board('office:stream', { tickets: !!hello.tickets });
     reportVisibility();

@@ -13,14 +13,10 @@
   'use strict';
   const BASE = 'baked/';
   const LOADER = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
-  const MIN_SIZE = 0.3;  // metres across. Anything smaller stays lit live: it is cheap and some of it moves.
+  const MIN_SIZE = 0.3;
   const ADDONS = ['shaders/CopyShader.js', 'shaders/LuminosityHighPassShader.js', 'postprocessing/EffectComposer.js',
     'postprocessing/RenderPass.js', 'postprocessing/ShaderPass.js', 'postprocessing/UnrealBloomPass.js']
     .map((f) => 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/' + f);
-  // The effects' settings for each time of day. Bloom is strongest at night, when the bulbs, the neon
-  // and the city's windows are the light. The haze is amber in the evening, pale at day and blue at
-  // night. The grade warms (or cools, below 0), adds a little contrast and darkens the corners, then
-  // turns the picture from linear light into sRGB.
   const FX = {
     evening: { bloom: { strength: 0.7, radius: 0.55, threshold: 0.72 }, haze: { colour: 0x6b4430, density: 0.022 }, grade: { warmth: 0.06, contrast: 1.16, saturation: 1.05, vignette: 0.6 } },
     day: { bloom: { strength: 0.3, radius: 0.5, threshold: 0.85 }, haze: { colour: 0xb7c3cc, density: 0.011 }, grade: { warmth: 0.02, contrast: 1.08, saturation: 1.04, vignette: 0.35 } },
@@ -31,11 +27,8 @@
     try { return new URLSearchParams(search || '').get(name); } catch (e) { return null; }
   }
   function wanted(search) { return param(search, 'look') === 'baked' ? 'baked' : 'live'; }
-  // The effects come with the baked look, unless fx=off.
   function wantFx(search) { return wanted(search) === 'baked' && param(search, 'fx') !== 'off'; }
 
-  // A mesh's key: where it is, how it is turned and sized, how many points it has, and its colours.
-  // The room is built the same way on every load, so a part that never moves has the same key each time.
   const r2 = (x) => Math.round(x * 100);
   function mats(mesh) { return Array.isArray(mesh.material) ? mesh.material : [mesh.material]; }
   function meshKey(mesh) {
@@ -45,7 +38,6 @@
     const colours = mats(mesh).map((m) => (m && m.color ? m.color.getHexString() : '-')).join('+');
     return at + '|' + (pos ? pos.count : 0) + '|' + colours;
   }
-  // A material's name in the baked copy: the key of the first part that uses it, and its slot.
   function materialName(key, slot) { return key + '#' + slot; }
 
   function under(obj, set) { for (let o = obj; o; o = o.parent) if (set.has(o)) return true; return false; }
@@ -58,8 +50,6 @@
     const scale = Math.max(Math.hypot(e[0], e[1], e[2]), Math.hypot(e[4], e[5], e[6]), Math.hypot(e[8], e[9], e[10]));
     return g.boundingSphere ? g.boundingSphere.radius * 2 * scale : 0;
   }
-  // Baked: a shown mesh that does not move, is lit (not a screen, sign or sky), is not see-through,
-  // and is at least MIN_SIZE across. People, chair seats, mugs, paddles and the ball are movers.
   function bakeable(mesh, movers) {
     if (!mesh || !mesh.isMesh || mesh.isInstancedMesh || mesh.isSkinnedMesh) return false;
     if (!shown(mesh) || under(mesh, movers)) return false;
@@ -67,12 +57,11 @@
     return size(mesh) >= MIN_SIZE;
   }
 
-  // ---------- in the page ----------
   const state = { look: 'live', baked: false, time: null, status: 'off', hidden: 0, missing: 0, fx: 'off', error: null };
   let ctx = null, room = null, parts = [], meta = null, wantBaked = false, loading = null;
   let fxWanted = false, fxLoading = null, fxScripts = null, composer = null, liveFog = null, bloomPass = null, gradePass = null, aoMap = null;
-  const lightMaps = {};  // each time's light texture, fetched the first time that time shows
-  const onGpu = new Set();  // the light textures already sent to the GPU (r128 textures have no userData)
+  const lightMaps = {};
+  const onGpu = new Set();
   const view = { w: 0, h: 0 };
 
   function loadScript(src) {
@@ -81,8 +70,6 @@
       s.onerror = () => reject(new Error('could not load ' + src)); document.head.appendChild(s);
     });
   }
-  // A texture whose picture the browser decodes off the main thread where it can, so a big PNG does
-  // not hold up a frame. The bake's textures are never flipped.
   function loadTexture(url, encoding) {
     const done = (t) => { t.flipY = false; if (encoding) t.encoding = encoding; return t; };
     if (typeof createImageBitmap !== 'function' || !THREE.ImageBitmapLoader) {
@@ -104,14 +91,12 @@
 
   async function load() {
     [, meta] = await Promise.all([THREE.GLTFLoader ? null : loadScript(LOADER), fetch(BASE + 'bake.json').then((r) => r.json())]);
-    // The light for the time showing now comes beside the room, not after it.
     if (meta.times[ctx.part()]) lightMap(ctx.part()).catch(() => {});
     const [gltf, ao] = await Promise.all([
       new Promise((resolve, reject) => new THREE.GLTFLoader().load(BASE + 'room.glb', resolve, undefined, reject)),
       loadTexture(BASE + 'ao.png')
     ]);
     aoMap = ao;
-    // The live materials, by the name the bake gave them, so the copy keeps their textures and colours.
     const keys = new Set(meta.keys), byName = {};
     parts = liveParts().filter((m) => keys.has(m.userData.bakeKey = meshKey(m)));
     for (const m of parts) mats(m).forEach((mat, i) => { byName[materialName(m.userData.bakeKey, i)] = mat; });
@@ -135,8 +120,6 @@
     return lightMaps[time];
   }
 
-  // The page's sun for this time, where the bake had it, and less of the page's fill light, which
-  // the bake's bounced light stands in for. applyPart has just set the live values.
   function lights(time) {
     const { sun, hemi, amb, fill } = ctx, t = meta.times[time], s = t.sun;
     sun.position.set(sun.target.position.x + s.from[0], sun.target.position.y + s.from[1], sun.target.position.z + s.from[2]);
@@ -144,14 +127,13 @@
     hemi.intensity *= t.ambientScale; amb.intensity *= t.ambientScale; fill.intensity *= t.ambientScale;
   }
 
-  // Show the bake for a time of day, or the live room with null.
   async function show(time) {
     if (!room) return;
     const on = !!(time && meta.times[time]);
     if (on) {
       const map = await lightMap(time), k = meta.times[time].lightMapIntensity;
       if (!onGpu.has(map)) { ctx.renderer.initTexture(map); onGpu.add(map); await nextFrame(); }
-      if (ctx.part() !== time) return;  // the Light changed while the texture came
+      if (ctx.part() !== time) return;
       room.traverse((o) => { if (o.isMesh) { o.material.lightMap = map; o.material.lightMapIntensity = k; } });
       lights(time);
     }
@@ -170,10 +152,6 @@
     }
   }
 
-  // ---------- the effects ----------
-  // The haze, and the background colour in linear light: the effects turn the whole picture into sRGB
-  // at the end, the background too, so without this the dark void around the loft would turn grey.
-  // The grid in the void goes while the haze is on: the haze would turn its far lines into a pale band.
   function hazeFog(time) { return new THREE.FogExp2(FX[time].haze.colour, FX[time].haze.density); }
   function haze(time) {
     const scene = ctx.scene;
@@ -192,7 +170,6 @@
       liveFog = null;
     }
   }
-  // Grade, vignette and sRGB in one pass, last, so the picture reaches the screen once.
   const GRADE = {
     uniforms: { tDiffuse: { value: null }, warmth: { value: 0 }, contrast: { value: 1 }, saturation: { value: 1 }, vignette: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -217,7 +194,6 @@
   function buildFx() {
     if (composer) return;
     const r = ctx.renderer, size = r.getSize(new THREE.Vector2()), w = Math.max(1, size.x), h = Math.max(1, size.y);
-    // The scene is drawn into a target first, so it keeps its edges smooth only with multisampling.
     const target = r.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget
       ? new THREE.WebGLMultisampleRenderTarget(w, h, { format: THREE.RGBAFormat }) : undefined;
     const c = new THREE.EffectComposer(r, target), scenePass = new THREE.RenderPass(ctx.scene, ctx.camera);
@@ -228,8 +204,6 @@
     c.addPass(gradePass);
     c.setPixelRatio(r.getPixelRatio()); c.setSize(w, h);
     view.w = size.x; view.h = size.y;
-    // Run the bloom and the grade once into the composer's own targets, not the screen, so their
-    // shaders compile now. The grade's last step draws to the screen, which needs a shader of its own.
     scenePass.enabled = false; c.renderToScreen = false;
     c.render();
     scenePass.enabled = true; c.renderToScreen = true;
@@ -240,8 +214,6 @@
     composer = c;
   }
 
-  // Before the swap: send the textures to the GPU, build the effects, and compile every shader the swap
-  // will need a few materials a frame, so the swap itself is one short frame, not a long freeze.
   async function warmUp(time) {
     const r = ctx.renderer, t = time && meta.times[time] ? time : null;
     r.initTexture(aoMap); await nextFrame();
@@ -249,16 +221,9 @@
     const map = await lightMap(t);
     r.initTexture(map); onGpu.add(map); await nextFrame();
     room.traverse((o) => { if (o.isMesh) { o.material.lightMap = map; o.material.lightMapIntensity = meta.times[t].lightMapIntensity; } });
-    if (fxWanted && fxScripts) {
-      try { await fxScripts; buildFx(); tune(t); await nextFrame(); } catch (e) { /* show() tries again and reports it */ }
-    }
+    if (fxWanted && fxScripts) await fxScripts.then(async () => { buildFx(); tune(t); await nextFrame(); }).catch(() => {});
     await precompile(t);
   }
-  // three.js keeps a shader for each material, fog and target, and compile() makes the ones that are
-  // missing without drawing. For the length of each call the scene is set as the swap leaves it: the
-  // baked copy shown, the parts it stands in for hidden, and with the effects, their haze and target.
-  // compile() takes every material in the scene, shown or not, so for each call all but the next few
-  // are taken out, and all go back before the frame. Nothing draws in between, so no frame sees it.
   async function precompile(t) {
     const r = ctx.renderer, scene = ctx.scene, fx = !!(composer && fxWanted);
     const fog = fx ? hazeFog(t) : scene.fog, target = fx ? composer.renderTarget1 : null, inRoom = new Set([room]);
@@ -270,8 +235,6 @@
         parts.forEach((m, i) => { m.visible = was.parts[i]; });
       }
     }
-    // What the swap shows. Without the effects only the baked copy is new. With them, everything that
-    // shows draws through the effects' target and haze, and the haze hides the grid.
     const todo = [], seen = new Set();
     asSwap(() => scene.traverse((o) => {
       if (!o.material || !shown(o) || (fx ? o.type === 'GridHelper' : !under(o, inRoom))) return;
@@ -295,14 +258,12 @@
       await nextFrame();
     }
   }
-  // Set the bloom and the grade for a time of day.
   function tune(time) {
     if (!bloomPass || !time || !FX[time]) return;
     const f = FX[time];
     bloomPass.strength = f.bloom.strength; bloomPass.radius = f.bloom.radius; bloomPass.threshold = f.bloom.threshold;
     for (const k of ['warmth', 'contrast', 'saturation', 'vignette']) gradePass.uniforms[k].value = f.grade[k];
   }
-  // The room's frame calls this. It draws through the effects and says so, or draws nothing and says no.
   function render(renderer) {
     if (!composer || !state.baked || !fxWanted) return false;
     const v = renderer.getSize(new THREE.Vector2());
@@ -314,14 +275,12 @@
     return true;
   }
 
-  // The room calls part() after each change of Light, and the look follows it. A time with no bake
-  // shows the room lit live.
   function part(name) {
     if (!wantBaked) return;
     if (!room) {
       if (!loading) {
         state.status = 'loading';
-        if (fxWanted) loadFxScripts().catch(() => {});  // beside the bake, not after it
+        if (fxWanted) loadFxScripts().catch(() => {});
         loading = load().then(() => warmUp(ctx.part())).then(() => show(ctx.part())).catch((e) => {
           state.status = 'live'; state.error = String(e && e.message || e);
           console.warn('The baked look could not load, so the room is lit live:', state.error);

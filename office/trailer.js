@@ -13,7 +13,6 @@
   html.classList.add('trailer');
   window.dispatchEvent(new Event('resize'));
 
-  // ---------- small helpers ----------
   const clamp01 = (k) => Math.max(0, Math.min(1, k));
   const smooth = (k) => { k = clamp01(k); return k * k * k * (k * (k * 6 - 15) + 10); };
   const mix = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
@@ -22,9 +21,7 @@
   const at = (name, fallback) => { const w = run.where(name); return w ? w.at : fallback; };
   const turn = (f, a) => [f[0] * Math.cos(a) + f[2] * Math.sin(a), 0, -f[0] * Math.sin(a) + f[2] * Math.cos(a)];
 
-  // ---------- camera moves: each returns k (0 to 1 through the shot) => { pos, target } ----------
   const dolly = (p0, t0, p1, t1) => (k) => ({ pos: mix(p0, p1, k), target: mix(t0, t1 || t0, k) });
-  // In front of a person's face, a little to one side, pushing in. It follows them as they move.
   function face(id, o) {
     o = Object.assign({ side: 0.6, d0: 1.1, d1: 0.8, up: 0.04 }, o);
     let last = null;
@@ -35,7 +32,6 @@
       return { pos: add(add(head, scale(dir, o.d0 + (o.d1 - o.d0) * k)), [0, o.up, 0]), target: head };
     };
   }
-  // In front of a person's monitor, pushing in.
   function screen(id, o) {
     o = Object.assign({ side: 0.55, d0: 0.95, d1: 0.7 }, o);
     return (k) => {
@@ -44,7 +40,6 @@
       return { pos: add(add(s.at, scale(dir, o.d0 + (o.d1 - o.d0) * k)), [0, 0.03, 0]), target: s.at };
     };
   }
-  // Round a point, from angle a0 to a1 (radians), at this distance and height.
   function orbit(name, o) {
     o = Object.assign({ r: 2, h: 1, a0: 0, a1: 0.6, lift: 0 }, o);
     return (k) => {
@@ -52,12 +47,10 @@
       return { pos: [c[0] + Math.sin(a) * o.r, c[1] + o.h, c[2] + Math.cos(a) * o.r], target: add(c, [0, o.lift, 0]) };
     };
   }
-  // From a camera path, keeping a person in the middle of the picture.
   function track(id, p0, p1) {
     let last = [0, 1, 0];
     return (k) => { const w = run.where(id); if (w) last = w.at; return { pos: mix(p0, p1, k), target: last }; };
   }
-  // Behind a person's shoulder, looking where they look.
   function shoulder(id, o) {
     o = Object.assign({ back: 1.4, side: 0.4, up: 0.15, ahead: 3, drift: 0.25 }, o);
     let last = null;
@@ -69,7 +62,6 @@
     };
   }
 
-  // ---------- the overlay: bars, cards, flashes and the snapshot frame ----------
   const layer = document.createElement('div'); layer.id = 'trailer';
   layer.innerHTML = '<div class="tr-black"></div><div class="tr-flash"></div><div class="tr-bar tr-top"></div><div class="tr-bar tr-bottom"></div>' +
     '<div class="tr-card"><div class="tr-big"></div><div class="tr-small"></div></div>';
@@ -79,12 +71,9 @@
   const stage = document.getElementById('stage');
   const caption = document.createElement('div'); caption.className = 'tr-caption'; stage.appendChild(caption);
 
-  // ---------- the film ----------
-  // Shots run one after another: [seconds, move, options]. Cues fire once at a time from the start.
-  // Cards show over the picture, or over black with black: true.
   const SHOTS = [];
   const shot = (dur, move, o) => SHOTS.push(Object.assign({ dur, move, fov: 34, ease: true }, o));
-  const hold = (dur) => shot(dur, null);  // keep the last picture (under a black card)
+  const hold = (dur) => shot(dur, null);
 
   hold(3.2);
   shot(6, dolly([-5.4, 1.65, -0.3], [-8.4, 2.25, -0.5], [-6.35, 1.75, -0.2], [-8.4, 2.2, -0.2]), { fov: 40 });
@@ -123,7 +112,7 @@
     [58.9, 1.5, 'look busy.', '', true],
     [79.0, 3.8, 'BUILDING58', 'Every Claude Code session gets a desk.<br>github.com/bfalkowski/Building58', true]
   ];
-  const SNAPS = [  // [time, seconds, caption, tilt in degrees]
+  const SNAPS = [
     [46.6, 1.4, 'PR #16 merged!', -3],
     [49.8, 1.4, '84 tests green', 2.5],
     [53.0, 1.4, 'Friday cake', -1.5]
@@ -146,7 +135,7 @@
     [15.4, () => run.say({ who: 'lead', text: 'Let\'s ship it.' })],
     [19.5, () => run.activity({ who: 'priya', text: 'All tests pass', kind: 'bash' })],
     [29.8, () => { run.speed({ value: 8 }); run.idle({ who: 'kai', do: 'pingpong' }); run.idle({ who: 'sam', do: 'window' }); }],
-    [31.4, () => run.idle({ who: 'noor', do: 'coffee' })],  // late, so she is at the machine in the shot
+    [31.4, () => run.idle({ who: 'noor', do: 'coffee' })],
     [31.6, speed(1)],
     [42.8, () => { run.done({ all: true }); run.party({ on: true, seconds: 60 }); run.speed({ value: 8 }); }],
     [44.6, speed(1)],
@@ -157,27 +146,25 @@
     [58.6, () => { run.speed({ value: 1 }); workers.forEach((who) => run.work({ who, label: 'Looking busy' })); }],
     [65.8, () => { run.speed({ value: 8 }); run.time('day'); }],
     [68, () => run.time('evening')],
-    [69.7, () => { run.time('night'); run.managerGone(); }],  // the cut to night jumps past his walk out the door
+    [69.7, () => { run.time('night'); run.managerGone(); }],
     [72.1, speed(1)]
   ];
 
-  // ---------- playing it ----------
   let start = null, fired = 0, last = null;
   function fade(t, a, d, edge) { return Math.min(smooth((t - a) / edge), smooth((a + d - t) / edge)); }
+  function fire(cue) { try { cue(); return true; } catch (e) { return false; } }
   function tick(now) {
     requestAnimationFrame(tick);
     if (start === null) start = now;
-    // The recorder sets the film's time for each frame; in a browser it follows the clock.
     const t = window.trailer.clock != null ? window.trailer.clock : (now - start) / 1000;
     if (window.trailer.clock != null) run.clock(t);
-    while (fired < CUES.length && CUES[fired][0] <= t) { try { CUES[fired][1](); } catch (e) { /* a cue that cannot happen is skipped */ } fired++; }
+    while (fired < CUES.length && CUES[fired][0] <= t) { fire(CUES[fired][1]); fired++; }
     const s = SHOTS.find((x) => t >= x.at && t < x.at + x.dur) || SHOTS[SHOTS.length - 1];
-    if (s.move && !stage.classList.contains('tr-snap')) {  // a snapshot holds the camera still
+    if (s.move && !stage.classList.contains('tr-snap')) {
       const k = s.ease ? smooth((t - s.at) / s.dur) : clamp01((t - s.at) / s.dur);
       const c = s.move(k) || last;
       if (c) { last = c; run.direct({ pos: c.pos, target: c.target, fov: s.fov, key: s.key || 0 }); }
     }
-    // cards
     let shown = null, opacity = 0, dark = 0;
     for (const [a, d, b, sm, isBlack] of CARDS) {
       if (t < a - 0.3 || t > a + d + 0.3) continue;
@@ -186,10 +173,8 @@
     }
     if (shown && big.innerHTML !== shown[0]) { big.innerHTML = shown[0]; small.innerHTML = shown[1]; }
     card.style.opacity = opacity.toFixed(3);
-    // the start and the end fade from and to black
     dark = Math.max(dark, 1 - smooth((t - 3.2) / 1.2), smooth((t - (LENGTH - 0.8)) / 0.7));
     black.style.opacity = dark.toFixed(3);
-    // snapshots: a flash, the picture stops and drops into a white frame, then it goes on
     let snap = null;
     for (const x of SNAPS) if (t >= x[0] && t < x[0] + x[1]) snap = x;
     const f = SNAPS.reduce((m, x) => t >= x[0] && t < x[0] + 0.25 ? Math.max(m, 1 - (t - x[0]) / 0.25) : m, 0);
@@ -206,8 +191,6 @@
     window.trailer.t = t; window.trailer.shot = SHOTS.indexOf(s);
   }
   window.trailer = { length: LENGTH, shots: SHOTS.length };
-  // It starts once the room is built. With the baked look (?look=baked), it first shows each time of
-  // day once, so the light for the time-lapse is loaded before the film needs it.
   const frame = () => new Promise((r) => requestAnimationFrame(r));
   async function begin() {
     await run.ready();

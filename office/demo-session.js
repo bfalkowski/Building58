@@ -55,7 +55,6 @@
   }
   function demo() {
     return [[0, 'acme-store', 'Discount codes at checkout'], [12, 'billing-api', 'Retrying failed invoices'], [27, 'docs-site', 'Search for the docs']]
-      // Claude Code names a session shortly after its first prompt
       .flatMap(([start, project, title]) => build('demo' + Math.floor(Math.random() * 9000 + 1000), project).map(([at, payload]) => [at + start, at >= 3 ? Object.assign({ title }, payload) : payload]))
       .sort((a, b) => a[0] - b[0]);
   }
