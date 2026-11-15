@@ -49,7 +49,8 @@ test('the Lead\'s brief leaves reviews to the relay and checks that Devs act on 
     const brief = leadBrief(path.join(ROOT, 'relay'), opts);
     assert.doesNotMatch(brief, /Pass reviews/, 'it does not carry reviews: ' + JSON.stringify(opts));
     assert.ok(brief.includes('Pass decisions on.'), 'it still passes decisions on');
-    assert.ok(brief.includes('Task Devs get PR reviews from the relay: check they act.'), 'it says only task Devs get them');
+    assert.ok(brief.includes(' Devs get PR reviews from the relay: check they act.'), 'it says Devs get them');
+    assert.ok(!brief.includes('Task Devs'), 'every Dev, with a task or not (T-293)');
   }
 });
 
@@ -91,7 +92,7 @@ test('the Lead\'s brief', async (t) => {
     await told(a.id, 1);
     const screen = await R.screen(a.id);
     assert.ok(screen.includes('node ' + JSON.stringify(path.join(ROOT, 'relay', 'ticket.js')) + ' list'), 'a path with a space still works');
-    for (const job of ['take no ticket work', 'open PRs', 'Pass decisions on', 'Task Devs get PR reviews from the relay', 'keep tickets moving', 'what is waiting on them', 'against the code and the pipeline', 'Never merge a pull request: merging stays with the person']) assert.ok(screen.includes(job), job);
+    for (const job of ['take no ticket work', 'open PRs', 'Pass decisions on', 'Devs get PR reviews from the relay', 'keep tickets moving', 'what is waiting on them', 'against the code and the pipeline', 'Never merge a pull request: merging stays with the person']) assert.ok(screen.includes(job), job);
     // It is typed in one burst, and Claude Code reads about 1024 bytes at a time (T-34), so the end has to arrive too.
     assert.ok(screen.includes('report in a few lines.]'), 'the whole brief arrived as one line');
     assert.strictEqual((await terminal(a.id)).work.role, 'lead');
