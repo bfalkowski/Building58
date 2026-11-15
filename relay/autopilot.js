@@ -488,7 +488,8 @@ function begin(relayCtx) {
 function deskOf(channel, task) {
   const r = task && task.pr && store[channel] && store[channel].prs[task.pr];
   const v = r ? latest(r) : null;
-  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: (r && r.handedOver) || null };
+  const handed = r && r.handedOver && !handedBack(task, r) ? r.handedOver : null;
+  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed };
 }
 
 const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, and move a task to Done once its PR has merged';

@@ -51,7 +51,7 @@ function taskItem(t, dev) {
   const pr = t.pr || null;
   const item = (kind, line, link) => ({ kind, who, terminal: dev ? dev.terminal : null, task: t.id, ticket: t.ticket || null, pr, line, link });
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
-  if (t.state === 'waiting_on_you' && t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), { url: pr });
+  if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), { url: pr });
   if (t.state === 'waiting_on_you') {
     if (t.reviewRuns || (dev && BUSY.includes(dev.live))) return null;
     const note = oneLine(t.handedOver || t.note, 300);
