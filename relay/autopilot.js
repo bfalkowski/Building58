@@ -313,12 +313,12 @@ async function maybeStart(channel) {
     const wasWaiting = /^Waiting for a free desk/.test(c.idle || '');
     c.idle = null;
     let [status, out] = await tickets.startBy(channel, next, BY, ctx);
-    if (out.error === 'wip_limit') { waitWip(out.message); return; }
     let why = null;
     if (out.error === 'full') {
       why = await freeADesk(channel);
       if (!why) { [status, out] = await tickets.startBy(channel, next, BY, ctx); why = 'a desk was freed, but another session took it first'; }
     }
+    if (out.error === 'wip_limit') { waitWip(out.message); return; }
     if (out.error === 'full') {
       const taken = terminal.all(channel).filter((t) => !t.exited).length;
       c.idle = 'Waiting for a free desk: ' + taken + ' of ' + terminal.DESKS + ' taken, ' + why + '.';
