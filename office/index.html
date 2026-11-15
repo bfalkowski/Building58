@@ -85,8 +85,8 @@
   #relay-status::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; background: var(--err); vertical-align: 1px; }
   #relay-status[data-state="on"]::before { background: var(--ok); }
   #relay-status[data-state="wait"]::before { background: var(--wait); }
-  /* People and Activity each scroll, so neither can push the other out of the panel. The scrollbars stay visible, even where the system hides them. */
-  #people { list-style: none; margin: 0; padding: 4px 0; flex: 0 1 auto; min-height: 104px; max-height: 45%; overflow-y: auto; }
+  /* People take the Floor's free height and scroll, sharing it with a huddle or officer report when one shows. The scrollbars stay visible, even where the system hides them. */
+  #people { list-style: none; margin: 0; padding: 4px 0; flex: 1 1 auto; min-height: 104px; overflow-y: auto; }
   #people::-webkit-scrollbar, .feed-scroll::-webkit-scrollbar { width: 10px; }
   #people::-webkit-scrollbar-track, .feed-scroll::-webkit-scrollbar-track { background: var(--pane-tint); }
   #people::-webkit-scrollbar-thumb, .feed-scroll::-webkit-scrollbar-thumb { background: var(--pane-dim); border: 2px solid transparent; border-radius: 5px; background-clip: padding-box; }
@@ -136,7 +136,9 @@
   #people .desk-stop { flex-basis: 100%; display: flex; align-items: center; gap: 8px; color: var(--ok); }
   #people .desk-stop .btn { font: 600 11.5px/1 var(--sans); padding: 3px 8px; border-color: var(--ok); color: var(--ok); }
   #stop-note[data-bad="1"] { color: var(--err); }
-  .feed-scroll { flex: 1; min-height: 104px; overflow-y: auto; }
+  .feed-scroll { max-height: 320px; overflow-y: auto; }
+  #activity header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  #activity header p { margin: 0; }
   .huddle-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 12px; border-bottom: 1px solid var(--pane-line); color: var(--pane-dim); }
   /* Two things in the bar: the huddle, under its label, and Stop all safe apart on the right. */
   .huddle-group { display: grid; gap: 4px; padding: 5px 8px; border: 1px solid var(--pane-line); border-radius: 6px; }
@@ -159,7 +161,6 @@
   #huddle-rows li[data-needs="1"] { border-left-color: var(--wait); }
   #huddle-rows b { display: block; font-weight: 500; color: var(--wait); }
   #huddle-rows a { color: var(--link); margin-left: 6px; }
-  .floor[data-huddle="1"] #feed-title, .floor[data-huddle="1"] .feed-scroll { display: none; }
   /* Needs you (office/needs-you.js): the count, and one line for each thing that waits on the person. */
   #needs-you { flex: 0 0 auto; border-bottom: 1px solid var(--pane-line); }
   #needs-you h3 { border-top: 0; padding: 8px 12px 4px; align-items: baseline; }
@@ -179,9 +180,9 @@
   .officer-report .btn { font: 600 12px/1 var(--sans); padding: 5px 8px; border-color: var(--link); color: var(--link); }
   #coo-note, #security-note { margin: 0 0 4px; color: var(--pane-dim); }
   #coo-text, #security-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.45 var(--sans); color: var(--pane-strong); }
-  .floor[data-report="1"] #feed-title, .floor[data-report="1"] .feed-scroll, .floor[data-report="1"] #huddle-report { display: none; }
+  .floor[data-report="1"] #huddle-report { display: none; }
   #feed { list-style: none; margin: 0; padding: 0 0 8px; }
-  #feed li { display: grid; grid-template-columns: 4.6em minmax(0, 1fr); gap: 8px; padding: 1px 12px; color: var(--pane-fg); }
+  #feed li { display: grid; grid-template-columns: 4.6em minmax(0, 1fr); gap: 8px; padding: 1px 0; color: var(--pane-fg); }
   #feed li .t { color: var(--pane-dim); text-align: right; font-variant-numeric: tabular-nums; }
   #feed li.err { color: var(--err); }
   #feed li.sys { color: var(--pane-dim); }
@@ -591,10 +592,6 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
             <pre id="security-text"></pre>
           </div>
         </section>
-        <h3 id="feed-title"><span>Activity</span><span class="meta" id="feed-count"></span></h3>
-        <div class="feed-scroll" id="feed-scroll" tabindex="0" aria-label="Activity, newest first">
-          <ol id="feed" aria-live="off"></ol>
-        </div>
       </div>
     </section>
 
@@ -615,6 +612,16 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
       <div id="cc-term" aria-label="Claude Code terminal"></div>
     </section>
   </div>
+
+  <section class="tasks" id="activity" aria-labelledby="activity-title">
+    <header>
+      <h2 id="activity-title">Activity</h2>
+      <p class="meta" id="feed-count"></p>
+    </header>
+    <div class="feed-scroll" id="feed-scroll" tabindex="0" aria-label="Activity, newest first">
+      <ol id="feed" aria-live="off"></ol>
+    </div>
+  </section>
 
   <section class="tasks" id="board" aria-labelledby="board-title">
     <header>
