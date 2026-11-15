@@ -413,6 +413,22 @@ test('a merge review of a newer commit clears a Dev\'s hand-over and merges, and
   assert.strictEqual(merged(), '', 'no merge on the commit the Dev disputed');
   assert.deepStrictEqual(await decisions(), [why], 'Needs you still lists the hand-over');
 
+  // main moves, and the Dev merges it, the one push the push hold allows. A merge review of that merge is of a
+  // newer commit, but nothing in it answers the finding, so the hand-over stays.
+  fs.writeFileSync(path.join(repo, 'b.txt'), 'main moved\n');
+  sh(repo, 'add', 'b.txt');
+  sh(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'main moved');
+  sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/main');
+  sh(wt, 'fetch', '-q', origin, 'main');
+  sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'merge', '-q', '--no-ff', '-m', 'Merge main', 'FETCH_HEAD');
+  pushPr(wt, origin);
+  head = sh(wt, 'rev-parse', 'HEAD'); answer();
+  await review(105);
+  await sleep(1500);
+  assert.strictEqual(merged(), '', 'no merge on a merge of main');
+  assert.ok(!(await R.call('GET', '/autopilot')).body.notes.some((note) => /is back from Waiting on you/.test(note.text)), 'Autopilot did not take it back');
+  assert.deepStrictEqual(await decisions(), [why], 'Needs you still lists the hand-over after a merge of main');
+
   // The person answers on the PR, the Dev pushes the fix, and a review of the new commit says merge.
   await say(dev, 'UserPromptSubmit');
   commit();

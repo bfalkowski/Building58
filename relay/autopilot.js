@@ -128,7 +128,10 @@ async function giveVerdict(channel, agent, kind) {
   const rec = recOf(channel, pr);
   const mine = (v) => v.sessionId === agent.sessionId && !v.posted;
   rec.verdicts = rec.verdicts.filter((v) => !mine(v));
-  rec.verdicts.push({ kind, commit, sessionId: agent.sessionId, at: new Date().toISOString(), posted: (agent.posted && agent.posted.url) || null });
+  const verdict = { kind, commit, sessionId: agent.sessionId, at: new Date().toISOString(), posted: (agent.posted && agent.posted.url) || null };
+  const since = rec.handedOver && handedHeadOf(channel, rec);
+  if (since && since !== commit) verdict.newWork = await git(agent.cwd, ['rev-list', '--first-parent', '--no-merges', '--count', since + '..' + commit]).then((n) => Number(n) > 0, () => false);
+  rec.verdicts.push(verdict);
   save();
   note(channel, 'The review of PR ' + number(pr) + ' at ' + commit.slice(0, 7) + ' says ' + kind + '.');
   return [200, { ok: true, pr, kind, commit, message: 'Verdict kept: ' + kind + ' for ' + commit.slice(0, 7) + '. Now post your review.' }];
@@ -206,17 +209,19 @@ const roundsOf = (rec) => Math.max(0, postedOf(rec).length - (rec.roundsFrom || 
 const mineTask = (task) => task.by === BY;
 const handedBack = (task, rec) => (task.history || []).some((h) => h.type === 'moved' && h.by === 'you' && h.at > rec.handedOverAt);
 const ANSWERED_BY_REVIEW = ['dev-says-bug', 'ci-red'];
-const DEV_SAYS_BUG = /^Its Dev says a finding the review marked non-blocking is a bug/;
-const handedReasonOf = (rec) => rec.handedReason || (DEV_SAYS_BUG.test(rec.handedOver || '') ? 'dev-says-bug' : null);
+const OLD_REASONS = [[/^Its Dev says a finding the review marked non-blocking is a bug/, 'dev-says-bug'], [/^CI failed on the reviewed commit/, 'ci-red']];
+const handedReasonOf = (rec) => rec.handedReason || (OLD_REASONS.find(([text]) => text.test(rec.handedOver || '')) || [])[1] || null;
 function handedHeadOf(channel, rec) {
   if (rec.handedOverHead) return rec.handedOverHead;
   const before = rec.verdicts.filter((v) => Date.parse(v.at) <= Date.parse(rec.handedOverAt) && postOf(channel, v)).pop();
   return before ? before.commit : null;
 }
 function answeredByReview(channel, rec) {
-  if (!ANSWERED_BY_REVIEW.includes(handedReasonOf(rec))) return null;
+  const reason = handedReasonOf(rec);
+  if (!ANSWERED_BY_REVIEW.includes(reason)) return null;
   const v = rec.verdicts.filter((x) => postOf(channel, x)).pop(), head = handedHeadOf(channel, rec);
-  return v && v.kind === 'merge' && v.commit && head && v.commit !== head && Date.parse(v.at) > Date.parse(rec.handedOverAt) ? v : null;
+  if (!v || v.kind !== 'merge' || !v.commit || !head || v.commit === head || Date.parse(v.at) <= Date.parse(rec.handedOverAt)) return null;
+  return reason === 'dev-says-bug' && !v.newWork ? null : v;
 }
 const dropHandOver = (rec) => { rec.handedOver = null; rec.handedOverAt = null; rec.handedOverHead = null; rec.handedReason = null; };
 function held(channel, task) {
@@ -225,7 +230,7 @@ function held(channel, task) {
   if (handedBack(task, rec)) { dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save(); return false; }
   const v = answeredByReview(channel, rec);
   if (!v) return true;
-  dropHandOver(rec); save();
+  dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save();
   const why = 'a review of ' + v.commit.slice(0, 7) + ', a newer commit than the hand-over, says merge';
   if (task.state === 'waiting_on_you') tasks.setState(channel, task, 'in_review', BY, 'Autopilot: ' + why + ', so the task is back.');
   note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
