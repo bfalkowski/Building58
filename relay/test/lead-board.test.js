@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, sleep, until, sessionToken, sessionTokens, ROOT } = require('./helpers.js');
+const { relay, makeRepo, removeDir, sleep, until, sessionToken, sessionTokens, ROOT } = require('./helpers.js');
 
 const tokenFor = (s) => until(() => { try { return { 'X-Office-Token': sessionToken(s.sessionId) }; } catch (e) { return null; } }, 'the session');
 const CLI = path.join(ROOT, 'relay', 'ticket.js');
@@ -32,7 +32,7 @@ test('moving the board', async (t) => {
   const fileAs = async (headers, title) => (await R.call('POST', '/tickets', { title, repo }, headers)).body.ticket;
   const moveTicket = (id, to, headers) => R.call('POST', '/tickets/' + id + '/move', { to }, headers);
   const moveTask = (id, to, headers, extra) => R.call('POST', '/tasks/' + id + '/move', { to, ...extra }, headers);
-  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(gh); });
 
   const lead = await start(), other = await start();
   await talk(lead); await talk(other);
@@ -302,7 +302,7 @@ test('a ticket that changes while the Lead\'s move to Done waits is not marked D
   // Each write takes a second, so the Lead's move, sent 200 ms after the person's, lands inside that write
   // even on a loaded machine.
   const R = await relay({ RELAY_WIP_LIMIT: '5', RELAY_TICKET_STORE: path.join(__dirname, 'slow-store.js'), SLOW_STORE_UPDATE_MS: '1000', GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh });
-  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(gh); });
   const repo = makeRepo(R.home);
   const lead = (await R.call('POST', '/terminals', { cwd: repo })).body;
   await R.hook({ hook_event_name: 'UserPromptSubmit', session_id: lead.sessionId.slice(0, 12), title: '' });
