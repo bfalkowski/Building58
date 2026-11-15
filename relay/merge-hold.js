@@ -2,6 +2,10 @@
 // the Dev's last fixes behind needs another ticket and PR to land them, as T-139, T-144, T-145 and T-186
 // did. So before Autopilot merges (relay/autopilot.js), and on the Floor the Lead reads before its own
 // merge (relay/floor.js), the relay asks:
+//   - Has the comment check (relay/pr-comments.js) looked at the PR since the room's latest review of it
+//     was posted? Until then that review is not news yet, though its verdict may already say merge
+//     (T-229). The poll runs about once a minute and Autopilot looks every 20 s, so without this a merge
+//     verdict could merge before its Dev was told. With the check off, the Dev is never told of reviews.
 //   - Has the Dev been told the latest review? News it was not told yet is still to answer.
 //   - Is the Dev at work, at a question, or told something it has not started on? It may still be
 //     answering the latest review, and its fixes would land after the merge.
@@ -14,6 +18,7 @@
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { livenessOf } = require('./liveness.js');
+const config = require('./config.js');
 
 function unsavedWork(dir) {
   const git = (...args) => execFileSync('git', ['-C', dir].concat(args), { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -24,13 +29,18 @@ function unsavedWork(dir) {
   } catch (e) { return 'git could not say whether its checkout has work that is not pushed'; }
 }
 
+const UNSEEN = 'The comment check has not looked at the PR since the latest review was posted, so its Dev was not told of it yet.';
+const unseen = (r) => !!r.postedAt && config.get('reviewPollSeconds') > 0 && !(Date.parse(r.lookedFrom) >= Date.parse(r.postedAt));
+
 const busy = (lv) => ({ working: 'is working', quiet: 'is in a turn', waiting: 'is at a question',
   stuck: lv.cause === 'told' ? 'has not started on what it was told' : 'is in a turn with no hook' })[lv.state] || null;
 
 function holdOf(task, dev, now, unsaved = unsavedWork) {
   const lv = livenessOf(dev, now);
   const gone = lv.state === 'gone';
-  const news = task.reviews && task.reviews.pending;
+  const r = task.reviews || {};
+  if (unseen(r)) return { act: 'wait', why: UNSEEN };
+  const news = r.pending;
   if (news && !gone) return { act: 'wait', why: 'Its Dev has not been told of the latest review yet.' };
   if (busy(lv)) return { act: 'wait', why: 'Its Dev ' + busy(lv) + ', maybe still answering the latest review, so the PR may not hold every fix yet.' };
   const dir = task.worktree || (dev && dev.cwd);

@@ -6,6 +6,8 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
+process.env.RELAY_SETTINGS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'merge-hold-settings-')), 'settings.json');
+delete process.env.RELAY_REVIEW_POLL_SECONDS;
 const { holdOf, unsavedWork } = require('../merge-hold.js');
 
 const now = 10 * 60 * 60 * 1000;
@@ -66,4 +68,21 @@ test('a checkout that is gone holds nothing, and with no checkout on the task th
   fs.writeFileSync(path.join(dir, 'b.txt'), 'new\n');
   assert.strictEqual(holdOf(task(null), dev('idle', { cwd: dir }), now).act, 'person');
   assert.strictEqual(holdOf(task(null), null, now), null, 'no checkout and no Dev: nothing to look at');
+});
+
+// T-229: a merge verdict is posted, but the comment check has not looked at the PR since, so its Dev was
+// not told yet and task.reviews.pending is still empty. A merge now would leave the Dev's answer out.
+test('a review posted after the comment check last looked: wait until a check has seen it', (t) => {
+  const dir = checkout(t);
+  const at = (s) => new Date(now - s * 1000).toISOString();
+  const unseen = task(dir, { reviews: { pending: null, postedAt: at(30), lookedFrom: at(50) } });
+  const HOLD = { act: 'wait', why: 'The comment check has not looked at the PR since the latest review was posted, so its Dev was not told of it yet.' };
+  assert.deepStrictEqual(holdOf(unseen, dev('idle'), now), HOLD);
+  assert.deepStrictEqual(holdOf(unseen, null, now), HOLD, 'a Dev that has ended too: the check still decides what is left');
+  assert.deepStrictEqual(holdOf(task(dir, { reviews: { pending: null, postedAt: at(30) } }), dev('idle'), now), HOLD, 'never checked');
+  assert.strictEqual(holdOf(task(dir, { reviews: { pending: null, postedAt: at(30), lookedFrom: at(10) } }), dev('idle'), now), null, 'a check began after the post and found nothing to tell');
+  assert.strictEqual(holdOf(task(dir, { reviews: { pending: null, lookedFrom: at(30) } }), dev('idle'), now), null, 'no review posted by the room');
+  process.env.RELAY_REVIEW_POLL_SECONDS = '0';
+  t.after(() => { delete process.env.RELAY_REVIEW_POLL_SECONDS; });
+  assert.strictEqual(holdOf(unseen, dev('idle'), now), null, 'with the comment check off, no check will come, and the Dev is never told of reviews');
 });
