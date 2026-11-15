@@ -84,15 +84,14 @@
     if (!round) return;
     $('game-round-title').textContent = 'Round ' + round.id + ' · ' + nameOf(round.game);
     const about = $('game-round-about');
-    // The relay counts each seat's tokens at API prices, plus what the game reports.
     const spend = '$' + Number(round.spentUsd || 0).toFixed(2) + (round.capUsd != null ? ' of $' + round.capUsd : '') + ' at API prices' + (round.unpriced && round.unpriced.length ? ' (no price for ' + round.unpriced.join(', ') + ')' : '');
     about.textContent = 'started ' + time(round.startedAt) + ' · watch ' + round.watch + ' · ' + spend + ' · ' + (round.isolation === 'sandbox' ? 'each seat in its own sandbox' : 'no boundary: seats can read your files');
     about.dataset.isolation = round.isolation;
     const waiting = round.seats.filter((s) => s.waiting === 'trust');
     trustAll.hidden = !waiting.length;
     trustNote.hidden = !waiting.length;
-    // Every seat has worked and is idle now: the seats said they are done, so the person can finish.
-    doneNote.hidden = !(round.seats.length && round.seats.every((s) => s.worked && (s.state === 'idle' || s.state === 'ended')));
+    const allSeatsDone = round.seats.length > 0 && round.seats.every((s) => s.worked && (s.state === 'idle' || s.state === 'ended'));
+    doneNote.hidden = !allSeatsDone;
     seatRows.textContent = '';
     for (const s of round.seats) {
       const li = el('li'); li.dataset.waiting = s.waiting || ''; li.dataset.state = s.state || ''; li.dataset.worked = s.worked ? '1' : '';
@@ -132,7 +131,6 @@
 
   // ---------- the score and the reveal ----------
   // Any value the relay sends: an object becomes rows of its keys, anything else is shown as text.
-  // meanings: the game's own line for a key, shown under its value.
   function data(value, meanings) {
     if (value === null || value === undefined) return el('p', 'none', 'task-empty');
     if (typeof value !== 'object' || Array.isArray(value)) return el('pre', typeof value === 'string' ? value : JSON.stringify(value, null, 2), 'game-data');
@@ -165,8 +163,6 @@
   }
   const seatButtons = (id, seats) => { const d = el('div'); for (const seat of seats) d.append(button('Steps ' + seat, () => showSteps(id, seat)), ' '); return d; };
 
-  // ---------- what a seat did ----------
-  // One row per step, folded to its first line. The relay reads them from the seat's own transcript.
   const KIND = { brief: 'brief', prompt: 'prompt', says: 'says', runs: 'runs', result: 'got back' };
   let stepsOf = null;
   async function showSteps(id, seat) {

@@ -68,7 +68,7 @@ const SPEND_EVERY = () => (Number(process.env.RELAY_SEAT_SPEND_MS) >= 50 ? Numbe
 const repo = () => process.env.GAMES_REPO || '';
 const seatsDir = roundSeats.dir;
 const rounds = new Map();  // channel: the round that runs
-const past = new Map();    // channel: [{ id, game, time, spentUsd, score, seats }], newest first. seats stay in the relay.
+const past = new Map();
 
 // Every folder in GAMES_REPO with a game.json, with whether the loader can run it and why not.
 function listGames() {
@@ -89,7 +89,6 @@ function readGame(root, folder) {
   if (why) return Object.assign(out, why);
   return Object.assign(out, { ok: true, entry: g.entry });
 }
-// A game's own plain words, when it gives them: about (what the round is) and metrics ({ name: meaning }).
 function words(g) {
   const out = {};
   if (typeof g.about === 'string' && g.about.trim()) out.about = g.about.trim().slice(0, 4000);
@@ -195,15 +194,13 @@ function fromGame(r, line) {
   if (m.type === 'done') { r.result = { score: m.score === undefined ? null : m.score, reveal: m.reveal === undefined ? null : m.reveal }; endRound(r, 'done', r.result.score); }
 }
 
-// The round's spend: what the game reported, and each seat's tokens from its transcript. A transcript is
-// read again only when it has grown. Then the cap, except on the last count, as the round ends.
 function countSpend(r, last) {
   if (r.state !== 'running') return;
   for (const s of r.seats) {
     const file = seatSteps.fileOf(s.dir, s.sessionId, s.configDir);
-    let size = -1;
-    try { size = fs.statSync(file).size; } catch (e) { /* not written yet */ }
-    if (size < 0 || size === s.costSize) continue;
+    let size;
+    try { size = fs.statSync(file).size; } catch (e) { continue; }
+    if (size === s.costSize) continue;
     s.costSize = size;
     s.cost = seatSteps.read(file, { steps: false });
   }
@@ -354,8 +351,6 @@ async function handle(req, res, channel, rest, ctx) {
   return false;
 }
 
-// One seat's steps, read from its transcript now. The round that runs shows them only under Watch all,
-// as it does the seat's screen. They go to the room page and are kept and logged nowhere.
 function steps(channel, id, seat) {
   const r = rounds.get(channel);
   const now = r && r.id === id ? r : null;
