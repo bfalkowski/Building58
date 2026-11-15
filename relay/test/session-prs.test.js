@@ -59,6 +59,19 @@ test('review news reaches a session with no task', async (t) => {
     assert.strictEqual(await told(s), 1);
     assert.strictEqual(posted().length, 1);
   });
+  await t.test('after its session id changes, gh pr create of the same PR keeps the one watch and repeats nothing', async () => {
+    const id = 'cccccccc-cccc-4ccc-8ccc-' + 'c'.repeat(12);
+    await R.hook({ hook_event_name: 'SessionStart', source: 'clear', terminal: s.id, session_id: id.slice(0, 12), full_session_id: id });
+    await until(async () => (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === s.id).sessionId === id, 'the new session id');
+    s.sessionId = id;
+    await until(() => saved().some((w) => w.owner.sessionId === id), 'the watch to follow the new id');
+    await hook(s, 'PostToolUse', { tool_name: 'Bash', pr_url: pr(11) });
+    await idle(s);
+    await checked(11);
+    assert.deepStrictEqual(saved().filter((w) => w.owner.terminal === s.id).map((w) => w.pr), [pr(11)], 'one watch');
+    assert.strictEqual(await told(s), 1);
+    assert.strictEqual(posted().length, 1);
+  });
   await t.test('after a restart, nothing is repeated', async () => {
     await until(() => { const w = saved().find((x) => x.pr === pr(11)); return w && w.reviews && !w.reviews.owesPost && !w.reviews.pending; }, 'the relay to save that the note went out');
     await R.kill();
@@ -80,6 +93,6 @@ test('review news reaches a session with no task', async (t) => {
     await until(() => saved().some((w) => w.pr === pr(12)), 'the watch saved');
     await R.call('POST', '/terminals/' + other.id + '/stop', {});
     await until(() => !saved().some((w) => w.pr === pr(12)), 'the watch to end');
-    assert.match(R.output(), /Stopped watching https:\/\/github\.com\/o\/r\/pull\/12 for session [0-9a-f]{8}: the person stopped the session\./);
+    assert.match(R.output(), /Stopped watching https:\/\/github\.com\/o\/r\/pull\/12 for session [0-9a-f]{8}: the session was stopped\./);
   });
 });

@@ -3,8 +3,8 @@
 // that PR, and tells the Dev about them. See docs/manual/roles.html#findings.
 //
 // A session's watch is shaped like a task, so the code below calls both a task. Only a real task has a
-// card to move, a ticket's chat to tell, or Autopilot to hold. A session's watch ends when the person
-// stops the session, or when gh says the PR is merged or closed.
+// card to move, a ticket's chat to tell, or Autopilot to hold. A session's watch ends when the session is
+// stopped, or when gh says the PR is merged or closed.
 //
 // What it keeps is on the task in tasks.json, as task.reviews, so a restart neither loses nor repeats:
 //   seen      every comment and review it has looked at, by id
@@ -338,7 +338,7 @@ async function poll() {
 setImmediate(() => { for (const channel of allChannels()) for (const task of tasks.list(channel).concat(sessionPrs.list(channel))) if (task.reviews && task.reviews.pending) queue(channel, task); });
 terminal.onEnd((channel, t, code, closing) => {
   if (closing || !t.stopped) return;
-  for (const w of sessionPrs.list(channel).filter((x) => x.owner.terminal === t.id || x.owner.sessionId === t.sessionId)) endSession(channel, w, 'the person stopped the session');
+  for (const w of sessionPrs.list(channel).filter((x) => x.owner.terminal === t.id || x.owner.sessionId === t.sessionId)) endSession(channel, w, 'the session was stopped');
 });
 config.every('reviewPollSeconds', poll, 5000);
 setInterval(tick, TICK).unref();
