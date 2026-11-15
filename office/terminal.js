@@ -114,7 +114,6 @@
 
   // ---------- reviews: another worker reads the work ----------
   const { PR_URL, prBrief, manualReview } = window.OfficeReviews;
-  const READY_MS = 5000;  // how long `claude` takes to be ready for a typed prompt
   async function reviewerStarted(r) {
     if (!r.ok) { tell('Could not start a reviewer: ' + (r.message || 'the relay did not answer.'), 'off'); return false; }
     await sync();
@@ -126,14 +125,10 @@
   async function reviewPr(from, pr) {
     return reviewerStarted(await api('', { from, pr, prompt: prBrief(pr), cols: term.cols, rows: term.rows }, '/checkouts'));
   }
-  // Any other review stays in the session's folder: it has to see the uncommitted work there.
+  // Any other review stays in the session's folder: it has to see the uncommitted work there. The
+  // relay types its brief once claude is ready for it, however long that takes.
   async function addReviewer(cwd, prompt) {
-    const r = await api('', { cwd, title: 'Review', role: 'reviewer', cols: term.cols, rows: term.rows });  // the role keeps it from being made the Lead
-    if (!await reviewerStarted(r)) return;
-    await new Promise((done) => setTimeout(done, READY_MS));
-    await api('/' + r.id + '/input', { data: prompt });
-    await new Promise((done) => setTimeout(done, 300));
-    await api('/' + r.id + '/input', { data: '\r' });
+    return reviewerStarted(await api('', { cwd, title: 'Review', role: 'reviewer', prompt, cols: term.cols, rows: term.rows }));  // the role keeps it from being made the Lead
   }
   const reviewBtn = document.createElement('button');
   reviewBtn.type = 'button'; reviewBtn.className = 'btn'; reviewBtn.id = 'cc-review'; reviewBtn.hidden = true; reviewBtn.textContent = 'Get a review';
@@ -423,13 +418,13 @@
   // Off until you tick it. The box beside it limits it to the tickets you list, such as T-12, or none for all of Ready.
   const apLabel = document.createElement('label'), apBox = document.createElement('input'), apOnly = document.createElement('input'), apSays = document.createElement('span');
   apBox.type = 'checkbox'; apBox.style.flex = 'none'; apBox.disabled = true;
-  apOnly.type = 'text'; apOnly.placeholder = 'only T-12, T-15 (or all Ready)'; apOnly.size = 20; apOnly.setAttribute('aria-label', 'Autopilot starts only these tickets');
+  apOnly.type = 'text'; apOnly.placeholder = 'only T-12, flaky (or all Ready)'; apOnly.size = 20; apOnly.setAttribute('aria-label', 'Autopilot starts only these tickets and labels');
   apSays.setAttribute('aria-live', 'polite');
   apLabel.append(apBox, ' Autopilot');
   const apRow = settingRow('set-autopilot', [apLabel], '');
   apSays.className = 'set-now';
   apRow.what.after(apSays);
-  settingRow('set-autopilot', [apOnly], 'Type the tickets that Autopilot may start, like T-12, T-15. Leave it empty to let it start every Ready ticket that a person approved, in Board order. Type the list before you turn Autopilot on. You cannot change it while Autopilot is on. When you turn Autopilot off, the list is cleared.');
+  settingRow('set-autopilot', [apOnly], 'Type the tickets that Autopilot may start, like T-12, T-15, or labels, like flaky, or both. A label lets in every ticket that has it, also one you label while Autopilot runs. Leave it empty to let it start every Ready ticket that a person approved, in Board order. Type the list before you turn Autopilot on. You cannot change it while Autopilot is on. When you turn Autopilot off, the list is cleared.');
   let apSet = 0;
   apBox.addEventListener('change', async () => {
     apSet++;
@@ -737,6 +732,7 @@
     ask.hidden = true;
     attach(r.id); term.focus();
     await sync();
+    // eslint-disable-next-line no-restricted-syntax -- the check is that no exit came within this time, so the wait is the check
     await new Promise((done) => setTimeout(done, RESUME_CHECK));  // claude exits at once if it cannot find the conversation
     askYes.disabled = false;
     const now = await api('');

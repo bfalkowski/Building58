@@ -20,6 +20,17 @@ if [ "$FAKE_CLAUDE_TRUST" = "arrow" ]; then
   IFS= read -r answer
   case "$answer" in *$'\e[B'*) echo "folder accepted"; printf '=%.0s' $(seq 450); echo;; *) echo "folder refused, exiting"; exit 0;; esac
 fi
+# With FAKE_CLAUDE_SLOW_START=<seconds>, it takes that long to draw its prompt, as a real one can on a
+# busy computer. Keys typed before then are lost, as a real one loses them, and it says EARLY[...] so a
+# test can see that something was typed too soon.
+if [ -n "$FAKE_CLAUDE_SLOW_START" ]; then
+  stty -icanon min 1 time 0 2>/dev/null
+  sleep "$FAKE_CLAUDE_SLOW_START"
+  early=''; piece=''
+  while IFS= read -r -t 1 -n 4096 piece; do early="$early$piece"; piece=''; done
+  early="$early$piece"  # a newer bash keeps what came before the time ran out, with no newline
+  [ -n "$early" ] && echo "EARLY[$early]"
+fi
 printf '\xe2\x9d\xaf \n'
 # With FAKE_CLAUDE_SLOW_EXIT set, it takes a second to end once the relay hangs it up, so a test can see
 # a session that is stopped but still ending.

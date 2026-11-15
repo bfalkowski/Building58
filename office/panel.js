@@ -170,8 +170,9 @@
         return null;
       case 'result': return e.ok ? null : [e.action + ': ' + e.result.message, 'err'];
       case 'office.live': return ['The room is open', 'sys'];
-      case 'manager.arrived': return ['The manager walked in. Everyone looks very busy', 'sys'];
-      case 'manager.left': return ['The manager left', 'sys'];
+      case 'manager.arrived': return ['The manager came out of his office. Everyone looks very busy', 'sys'];
+      case 'manager.left': return ['The manager went back to his office', 'sys'];
+      case 'lead.visit': return ['The Lead went to see the manager', 'sys'];
       case 'party.started': return ['Party! Hats on, and there is cake on the coffee table', 'sys'];
       case 'party.ended': return ['The party is over. Hats off, back to the desks', 'sys'];
       default: return null;

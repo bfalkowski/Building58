@@ -498,9 +498,11 @@ async function handle(req, res, channel, rest, rctx) {
     if (body.on !== undefined && typeof body.on !== 'boolean') { rctx.problem(res, 400, 'bad_param', '"on" is true or false.'); return true; }
     if (body.only !== undefined) {
       const only = Array.isArray(body.only) ? body.only : String(body.only || '').split(/[\s,]+/);
-      const ids = only.map((x) => String(x).trim().toUpperCase()).filter(Boolean);
-      if (ids.some((x) => !/^T-\d{1,6}$/.test(x))) { rctx.problem(res, 400, 'bad_param', '"only" lists ticket ids like T-12.'); return true; }
-      c.only = ids.length ? ids : null;
+      // Ticket ids like T-12, and labels like flaky (relay/tickets.js). A label lets in every ticket that has it,
+      // also one you label while Autopilot runs. Only the person sets labels, so no session can widen the list.
+      const items = only.map((x) => String(x).trim()).filter(Boolean).map((x) => (/^t-\d{1,6}$/i.test(x) ? x.toUpperCase() : x.toLowerCase()));
+      if (items.some((x) => !/^T-\d{1,6}$/.test(x) && !/^[a-z][a-z0-9-]{0,23}$/.test(x))) { rctx.problem(res, 400, 'bad_param', '"only" lists ticket ids like T-12 and labels like flaky.'); return true; }
+      c.only = items.length ? [...new Set(items)] : null;
     }
     if (body.on !== undefined && body.on !== c.on) {
       c.on = body.on;

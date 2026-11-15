@@ -430,3 +430,13 @@ for (const how of ['comment', 'review']) {
     assert.match(now2.history.filter((h) => h.type === 'review').slice(-1)[0].note, /verdict says merge/);
   });
 }
+
+// The person can limit Autopilot to ticket ids, labels, or both. Ids come out as T-12 and labels in lowercase.
+test('Autopilot\'s list takes ticket ids and labels', async (t) => {
+  const R = await relay({ RELAY_AUTOPILOT_TICK_MS: '60000' }); t.after(R.stop);
+  const on = await R.call('POST', '/autopilot', { on: true, only: 't-3, Flaky ci, T-3' });
+  assert.strictEqual(on.status, 200, JSON.stringify(on.body));
+  assert.deepStrictEqual(on.body.only, ['T-3', 'flaky', 'ci']);
+  assert.strictEqual((await R.call('POST', '/autopilot', { only: 'flaky!' })).status, 400, 'not a label');
+  assert.strictEqual((await R.call('POST', '/autopilot', { on: false })).body.only, null, 'off clears it');
+});

@@ -31,5 +31,44 @@ module.exports = [
     // Also loaded with require: by relay/office.js, relay/server.js (the roster), and by the tests.
     files: ['office/demo-session.js', 'office/look.js', 'office/seats.js', 'office/roster.js', 'office/poses.js', 'office/holidays.js', 'office/reviews.js', 'office/board-model.js', 'office/manager-lines.js'],
     languageOptions: { globals: { module: 'writable' } }
+  },
+  {
+    // Relay code cannot switch a rule off for one line, so a copy of clean() fails lint with no way around it.
+    files: ['relay/**/*.js'],
+    ignores: ['relay/test/**'],
+    linterOptions: { noInlineConfig: true, reportUnusedInlineConfigs: 'off' },
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: 'Literal[regex.pattern=/\\\\x[01][0-9a-fA-F]|\\\\x[79][fF]/]',
+        message: 'Use oneLine or keepLines from relay/clean.js. Do not copy the control character regex.'
+      }]
+    }
+  },
+  {
+    // Removing control characters is what clean.js does, and terminal.js reads terminal escape codes.
+    files: ['relay/clean.js', 'relay/terminal.js'],
+    rules: { 'no-control-regex': 'off', 'no-restricted-syntax': 'off' }
+  },
+  {
+    files: ['eslint-local.js'],
+    languageOptions: { sourceType: 'commonjs', globals: globals.node }
+  },
+  {
+    // No new comments in product code. eslint-suppressions.json holds the ones that exist now.
+    files: ['relay/**/*.js', 'office/**/*.js', 'shared/**/*.js'],
+    ignores: ['relay/test/**'],
+    plugins: { local: require('./eslint-local.js') },
+    rules: { 'local/no-comments': 'error' }
+  },
+  {
+    // A fixed wait in the page guesses how long something takes, and a slow computer makes the guess
+    // wrong (T-278). Wait for the event the thing sends, or let the relay type a first prompt.
+    files: ['office/**/*.js', 'shared/**/*.js'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: "NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']",
+        message: 'Wait for the event, or use delivery.promptOnce in the relay. Do not wait a fixed time.'
+      }]
+    }
   }
 ];

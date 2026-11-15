@@ -490,6 +490,7 @@
         const s = (await floor()).find((x) => x.terminal === r.terminal && x.named);
         if (s) { say('The PM is on it, as ' + s.name + ' in the room. Their tickets will wait in Triage for you.'); break; }
       }
+      // eslint-disable-next-line no-restricted-syntax -- polls this page's own state at most 10 times, only to follow the new person; no event says they appeared
       await new Promise((done) => setTimeout(done, 500));
     }
   });
