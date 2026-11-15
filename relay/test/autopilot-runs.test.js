@@ -114,3 +114,21 @@ test('a record holds only ids, times, verdicts and reason words, and is kept for
   assert.strictEqual(runs.prune(store, Date.parse('2026-11-08T12:00:00.000Z')), true);
   assert.deepStrictEqual(Object.keys(store), ['now']);
 });
+
+test('a ticket names a run by its ticket id or its whole PR link, not a longer one', () => {
+  const r = Object.assign(fresh({ ticket: 'T-4' }), { pr: 'https://github.com/acme/widgets/pull/4' });
+  assert.strictEqual(runs.names('Broken since https://github.com/acme/widgets/pull/44 merged', r), false, 'PR 44 is not PR 4');
+  assert.strictEqual(runs.names('See T-40.', r), false, 'T-40 is not T-4');
+  assert.strictEqual(runs.names('Broken since https://github.com/acme/widgets/pull/4 merged', r), true);
+  assert.strictEqual(runs.names('After https://github.com/acme/widgets/pull/44 and https://github.com/acme/widgets/pull/4.', r), true);
+  assert.strictEqual(runs.names('T-4 broke it', r), true);
+});
+
+test('a merge that Autopilot did not make is a person\'s, also when the task reached Done another way', () => {
+  const r = fresh();
+  runs.fromTask(r, { history: [{ type: 'merged', at: at(50) }] }, false);
+  assert.deepStrictEqual([r.mergedAt, r.mergedBy, runs.outcomeOf(r)], [at(50), 'person', 'manual']);
+  const mine = fresh();
+  runs.fromTask(mine, { history: [{ type: 'merged', at: at(50) }] }, true);
+  assert.deepStrictEqual([mine.mergedBy, runs.outcomeOf(mine)], ['Autopilot', 'success']);
+});

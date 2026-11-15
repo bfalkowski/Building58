@@ -82,8 +82,8 @@ const runOf = (channel, task) => (task && runsOf(channel)[task.id]) || null;
 function track(channel, task) {
   const run = runOf(channel, task);
   if (!run) return null;
-  let changed = runs.fromTask(run, task);
   const rec = task.pr && chOf(channel).prs[task.pr];
+  let changed = runs.fromTask(run, task, !!(rec && rec.mergedHead));
   for (const v of rec ? rec.verdicts : []) if (postOf(channel, v)) changed = runs.verdict(run, v) || changed;
   if (changed) save();
   return run;
@@ -188,13 +188,12 @@ prComments.useHolds((channel, task, url) => {
   if (rec.handedOver) return;
   handOver(channel, task, rec, 'Its Dev says a finding the review marked non-blocking is a bug: ' + url, 'dev-says-bug');
 });
-const names = (text, run) => (!!run.ticket && new RegExp('\\b' + run.ticket + '\\b').test(text)) || (!!run.pr && text.includes(run.pr));
-tickets.onFiled((channel, ticket, agent) => {
+tickets.onFiled((channel, ticket, agent, at) => {
   if (!ticket || ticket.kind !== 'bug' || !store[channel] || !store[channel].runs) return;
   const text = String(ticket.title || '') + '\n' + String(ticket.body || '');
   let changed = false;
   for (const run of Object.values(store[channel].runs)) {
-    if (run.mergedAt && run.ticket !== ticket.id && !(agent && agent.task === run.task) && names(text, run)) changed = runs.fixAfter(run, ticket.id, ticket.createdAt || Date.now()) || changed;
+    if (run.mergedAt && run.ticket !== ticket.id && !(agent && agent.task === run.task) && runs.names(text, run)) changed = runs.fixAfter(run, ticket.id, at || Date.now()) || changed;
   }
   if (changed) save();
 });

@@ -7,8 +7,9 @@
 //     answering the latest review, and its fixes would land after the merge.
 //   - Does its checkout hold uncommitted changes, or commits that are on no remote? Then the PR does
 //     not hold them.
-// holdOf(task, dev, now) -> null, or { act, why }. act is 'wait' while the Dev may still push, and
-// 'person' when nothing will: the Dev is idle or gone with work its PR does not hold.
+// holdOf(task, dev, now) -> null, or { act, why }, with a reason word when act is 'person'. act is 'wait'
+// while the Dev may still push, and 'person' when nothing will: the Dev is idle or gone with work its PR
+// does not hold.
 'use strict';
 const fs = require('fs');
 const { execFileSync } = require('child_process');

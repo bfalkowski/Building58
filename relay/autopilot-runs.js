@@ -39,7 +39,7 @@ function once(run, field, value) {
   run[field] = value;
   return true;
 }
-function fromTask(run, task) {
+function fromTask(run, task, byAutopilot) {
   const h = (task && task.history) || [];
   const first = (test) => h.find(test);
   let changed = false;
@@ -48,7 +48,7 @@ function fromTask(run, task) {
   const pr = first((x) => x.type === 'pr');
   if (pr) { changed = once(run, 'prAt', iso(pr.at)) || changed; changed = once(run, 'pr', id(pr.pr)) || changed; }
   const merged = first((x) => x.type === 'merged');
-  if (merged) changed = once(run, 'mergedAt', iso(merged.at)) || changed;
+  if (merged) changed = (byAutopilot === undefined ? once(run, 'mergedAt', iso(merged.at)) : mergedBy(run, merged.at, byAutopilot ? 'Autopilot' : 'person')) || changed;
   const lost = first((x) => x.type === 'note' && /was not delivered/.test(x.note || ''));
   if (lost) changed = block(run, 'brief-not-delivered', lost.at) || changed;
   return changed;
@@ -60,7 +60,7 @@ function verdict(run, v) {
   run.verdicts.push({ kind: v.kind, commit, at });
   return true;
 }
-function merged(run, at, by) {
+function mergedBy(run, at, by) {
   const a = once(run, 'mergedAt', iso(at));
   return once(run, 'mergedBy', by === 'Autopilot' ? 'Autopilot' : 'person') || a;
 }
@@ -74,6 +74,10 @@ function hand(run, reason, at) {
 function fixAfter(run, ticket, at) {
   if (!run.mergedAt || Date.parse(at) < Date.parse(run.mergedAt)) return false;
   return once(run, 'fixAfter', { ticket: id(ticket), at: iso(at) });
+}
+function names(text, run) {
+  if (run.ticket && new RegExp('\\b' + run.ticket + '\\b').test(text)) return true;
+  return !!run.pr && String(text).split(run.pr).slice(1).some((after) => !/^\d/.test(after));
 }
 
 function outcomeOf(run) {
@@ -112,4 +116,4 @@ function prune(store, now) {
 
 const viewOf = (run) => Object.assign({}, run, { outcome: outcomeOf(run) });
 
-module.exports = { start, fromTask, verdict, merged, hand, block, fixAfter, outcomeOf, dayOf, prune, viewOf, minutes, KEEP_DAYS, OUTCOMES, REASONS, BLOCKED, MANUAL, FIELDS };
+module.exports = { start, fromTask, verdict, merged: mergedBy, names, hand, block, fixAfter, outcomeOf, dayOf, prune, viewOf, minutes, KEEP_DAYS, OUTCOMES, REASONS, BLOCKED, MANUAL, FIELDS };
