@@ -357,6 +357,92 @@ test('a Dev reply with the hold mark sends a merge-verdict PR to the person, eve
   assert.deepStrictEqual(await decisions(), []);
 });
 
+// T-303: on PR 45 the Dev held the PR, the person answered, the Dev pushed the fix, and a review of the new
+// commit said merge. The hand-over was never cleared, so Autopilot kept the PR for hours. A merge review of a
+// newer commit than the hand-over answers it. One of the same commit does not.
+test('a merge review of a newer commit clears a Dev\'s hand-over and merges, and one of the same commit does not', async (t) => {
+  const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '0' });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
+  const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
+  sh(R.home, 'init', '-q', '--bare', origin);
+  fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
+  sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+  sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/' + sh(repo, 'symbolic-ref', '--short', 'HEAD'));
+  const merged = () => { try { return fs.readFileSync(path.join(ghDir, 'merged.log'), 'utf8'); } catch (e) { return ''; } };
+  const terminals = async () => (await R.call('GET', '/terminals')).body.terminals;
+  const say = (s, event, extra) => R.hook(Object.assign({ hook_event_name: event, session_id: s.sessionId.slice(0, 12) }, extra));
+  const task = async () => (await R.call('GET', '/tasks')).body.tasks[0];
+  const decisions = async () => (await R.call('GET', '/needs-you')).body.items.filter((i) => i.kind === 'handed-over').map((i) => i.line);
+  const ticket = (await R.call('POST', '/tickets', { title: 'Make a.txt say hello', repo })).body.ticket;
+  await R.call('POST', '/autopilot', { on: true, only: ticket.id });
+  const x = await until(task, 'the task'), wt = x.worktree;
+  const dev = (await terminals()).find((y) => y.id === x.worker.terminal);
+  let head = null, comments = [], n = 0;
+  const answer = () => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: head, mergeStateStatus: 'CLEAN', statusCheckRollup: GREEN } }, api: { 'repos/acme/widgets/pulls/7/files': [{ filename: 'a.txt' }], 'repos/acme/widgets/issues/7/comments': comments } }));
+  const commit = () => {
+    fs.writeFileSync(path.join(wt, 'a.txt'), 'hello ' + (++n) + '\n');
+    sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'hello ' + n);
+    pushPr(wt, origin);
+    head = sh(wt, 'rev-parse', 'HEAD'); answer();
+  };
+  const review = async (id) => {
+    const r = (await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: prBrief(PR) })).body;
+    const token = { 'X-Office-Token': await until(() => { try { return sessionToken(r.sessionId); } catch (e) { return null; } }, 'its token') };
+    assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, token)).status, 200);
+    await say(r, 'UserPromptSubmit');
+    await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-' + id } });
+    await say(r, 'Stop');
+    await until(async () => !(await terminals()).some((y) => y.id === r.id), 'the reviewer to leave');
+  };
+  commit();
+  await say(dev, 'UserPromptSubmit');  // the Dev is in a turn, so the first merge verdict waits for it
+  await say(dev, 'PostToolUse', { pr_url: PR, cwd: wt });
+  await review(101);
+  const held = PR + '#issuecomment-102';
+  comments = [{ id: 102, html_url: held, body: '<!-- office:dev -->\n<!-- office:hold -->\nFinding 2 is a bug.', created_at: new Date().toISOString() }];
+  answer();
+  assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 3600 } })).status, 200);
+  await say(dev, 'Stop');
+  await until(async () => (await task()).state === 'waiting_on_you', 'the hand-over');
+  const why = 'Decide on PR #7 (' + ticket.id + '): Its Dev says a finding the review marked non-blocking is a bug: ' + held;
+
+  // A second review of the same commit says merge: the hand-over is on the current head, so it stays.
+  await review(103);
+  await sleep(1500);
+  assert.strictEqual(merged(), '', 'no merge on the commit the Dev disputed');
+  assert.deepStrictEqual(await decisions(), [why], 'Needs you still lists the hand-over');
+
+  // main moves, and the Dev merges it, the one push the push hold allows. A merge review of that merge is of a
+  // newer commit, but nothing in it answers the finding, so the hand-over stays.
+  fs.writeFileSync(path.join(repo, 'b.txt'), 'main moved\n');
+  sh(repo, 'add', 'b.txt');
+  sh(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'main moved');
+  sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/main');
+  sh(wt, 'fetch', '-q', origin, 'main');
+  sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'merge', '-q', '--no-ff', '-m', 'Merge main', 'FETCH_HEAD');
+  pushPr(wt, origin);
+  head = sh(wt, 'rev-parse', 'HEAD'); answer();
+  await review(105);
+  await sleep(1500);
+  assert.strictEqual(merged(), '', 'no merge on a merge of main');
+  assert.ok(!(await R.call('GET', '/autopilot')).body.notes.some((note) => /is back from Waiting on you/.test(note.text)), 'Autopilot did not take it back');
+  assert.deepStrictEqual(await decisions(), [why], 'Needs you still lists the hand-over after a merge of main');
+
+  // The person answers on the PR, the Dev pushes the fix, and a review of the new commit says merge.
+  await say(dev, 'UserPromptSubmit');
+  commit();
+  await say(dev, 'PostToolUse', { pushed: true });
+  await say(dev, 'Stop');
+  await review(104);
+  comments = comments.concat([{ id: 104, html_url: PR + '#issuecomment-104', body: 'No findings. Verdict: merge.', created_at: new Date().toISOString() }]);
+  answer();
+  assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 1 } })).status, 200);
+  await until(() => merged().includes(PR + ' --merge --match-head-commit ' + head), 'the merge of the new commit');
+  assert.ok((await R.call('GET', '/autopilot')).body.notes.some((note) => /is back from Waiting on you: a review of \w{7}, a newer commit than the hand-over, says merge/.test(note.text)), 'a note says why the hand-over ended');
+  assert.deepStrictEqual(await decisions(), [], 'Needs you no longer lists it');
+});
+
 test('a PR that changes CLAUDE.md waits on the person, and is done once the person merges it', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300' });

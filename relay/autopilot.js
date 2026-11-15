@@ -128,7 +128,10 @@ async function giveVerdict(channel, agent, kind) {
   const rec = recOf(channel, pr);
   const mine = (v) => v.sessionId === agent.sessionId && !v.posted;
   rec.verdicts = rec.verdicts.filter((v) => !mine(v));
-  rec.verdicts.push({ kind, commit, sessionId: agent.sessionId, at: new Date().toISOString(), posted: (agent.posted && agent.posted.url) || null });
+  const verdict = { kind, commit, sessionId: agent.sessionId, at: new Date().toISOString(), posted: (agent.posted && agent.posted.url) || null };
+  const since = rec.handedOver && handedHeadOf(channel, rec);
+  if (since && since !== commit) verdict.newWork = await git(agent.cwd, ['rev-list', '--first-parent', '--no-merges', '--count', since + '..' + commit]).then((n) => Number(n) > 0, () => false);
+  rec.verdicts.push(verdict);
   save();
   note(channel, 'The review of PR ' + number(pr) + ' at ' + commit.slice(0, 7) + ' says ' + kind + '.');
   return [200, { ok: true, pr, kind, commit, message: 'Verdict kept: ' + kind + ' for ' + commit.slice(0, 7) + '. Now post your review.' }];
@@ -189,7 +192,8 @@ prComments.useHolds((channel, task, url) => {
   if (!mineTask(task) || task.state === 'done' || !task.pr) return;
   const rec = recOf(channel, task.pr);
   if (rec.handedOver) return;
-  handOver(channel, task, rec, 'Its Dev says a finding the review marked non-blocking is a bug: ' + url, 'dev-says-bug');
+  const v = rec.verdicts.filter((x) => postOf(channel, x)).pop();
+  handOver(channel, task, rec, 'Its Dev says a finding the review marked non-blocking is a bug: ' + url, 'dev-says-bug', v ? v.commit : null);
 });
 tickets.onFiled((channel, ticket, agent, at) => {
   if (!ticket || ticket.kind !== 'bug' || !store[channel] || !store[channel].runs) return;
@@ -204,11 +208,32 @@ const roundsOf = (rec) => Math.max(0, postedOf(rec).length - (rec.roundsFrom || 
 
 const mineTask = (task) => task.by === BY;
 const handedBack = (task, rec) => (task.history || []).some((h) => h.type === 'moved' && h.by === 'you' && h.at > rec.handedOverAt);
+const ANSWERED_BY_REVIEW = ['dev-says-bug', 'ci-red'];
+const OLD_REASONS = [[/^Its Dev says a finding the review marked non-blocking is a bug/, 'dev-says-bug'], [/^CI failed on the reviewed commit/, 'ci-red']];
+const handedReasonOf = (rec) => rec.handedReason || (OLD_REASONS.find(([text]) => text.test(rec.handedOver || '')) || [])[1] || null;
+function handedHeadOf(channel, rec) {
+  if (rec.handedOverHead) return rec.handedOverHead;
+  const before = rec.verdicts.filter((v) => Date.parse(v.at) <= Date.parse(rec.handedOverAt) && postOf(channel, v)).pop();
+  return before ? before.commit : null;
+}
+function answeredByReview(channel, rec) {
+  const reason = handedReasonOf(rec);
+  if (!ANSWERED_BY_REVIEW.includes(reason)) return null;
+  const v = rec.verdicts.filter((x) => postOf(channel, x)).pop(), head = handedHeadOf(channel, rec);
+  if (!v || v.kind !== 'merge' || !v.commit || !head || v.commit === head || Date.parse(v.at) <= Date.parse(rec.handedOverAt)) return null;
+  return reason === 'dev-says-bug' && !v.newWork ? null : v;
+}
+const dropHandOver = (rec) => { rec.handedOver = null; rec.handedOverAt = null; rec.handedOverHead = null; rec.handedReason = null; };
 function held(channel, task) {
   const rec = task.pr && chOf(channel).prs[task.pr];
   if (!rec || !rec.handedOver) return task.state === 'waiting_on_you';
-  if (!handedBack(task, rec)) return true;
-  rec.handedOver = null; rec.handedOverAt = null; rec.roundsFrom = postedOf(rec).length; save();
+  if (handedBack(task, rec)) { dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save(); return false; }
+  const v = answeredByReview(channel, rec);
+  if (!v) return true;
+  dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save();
+  const why = 'a review of ' + v.commit.slice(0, 7) + ', a newer commit than the hand-over, says merge';
+  if (task.state === 'waiting_on_you') tasks.setState(channel, task, 'in_review', BY, 'Autopilot: ' + why + ', so the task is back.');
+  note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
   return false;
 }
 const open = (channel, task) => mineTask(task) && task.state !== 'done' && !held(channel, task);
@@ -258,7 +283,7 @@ async function lookAt(channel, task) {
       const now = await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid'], task.repo).then(JSON.parse, () => null);
       if (now && now.state === 'MERGED') { counted(channel, task, rec, pr.headRefOid); note(channel, 'Merged PR ' + number(task.pr) + ', though gh said: ' + e.message); return; }
       if (now && now.headRefOid !== pr.headRefOid) { rec.why = 'New commits arrived as it was about to merge, so they get a review first.'; return; }
-      handOver(channel, task, rec, 'gh pr merge failed: ' + e.message, 'merge-failed'); return;
+      handOver(channel, task, rec, 'gh pr merge failed: ' + e.message, 'merge-failed', pr.headRefOid); return;
     }
     counted(channel, task, rec, pr.headRefOid);
     note(channel, 'Merged PR ' + number(task.pr) + ' (' + (task.ticket || task.title) + '): ' + d.why);
@@ -268,7 +293,7 @@ async function lookAt(channel, task) {
     delivery.save(channel, { key: 'autopilot-conflict ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
       text: 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s non-blocking findings. A follow-up review checks how you resolved it.' });
     note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
-  } else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason);
+  } else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason, (v && v.commit) || pr.headRefOid);
 }
 function counted(channel, task, rec, head) {
   const c = chOf(channel), run = runOf(channel, task);
@@ -291,8 +316,8 @@ async function mergedYet(channel, task) {
   try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state'], task.repo)); } catch (e) { return; }
   if (pr.state === 'MERGED') markDone(channel, task);
 }
-function handOver(channel, task, rec, why, reason) {
-  rec.handedOver = why; rec.handedOverAt = new Date().toISOString(); save();
+function handOver(channel, task, rec, why, reason, head) {
+  rec.handedOver = why; rec.handedOverAt = new Date().toISOString(); rec.handedReason = reason; rec.handedOverHead = head || null; save();
   handRun(channel, task, reason);
   tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why);
   note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why);
@@ -418,7 +443,7 @@ function movedAgain(channel) {
     if (!why) continue;
     delete c.stuck[id];
     const rec = task.pr && c.prs[task.pr];
-    if (rec) { rec.handedOver = null; rec.handedOverAt = null; }
+    if (rec) dropHandOver(rec);
     save();
     tasks.setState(channel, task, s.from, BY, 'Autopilot: ' + why + ', so the task is back.');
     note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
