@@ -4,12 +4,8 @@
 // Node 18 or later, no dependencies. See docs/manual/relay.html.
 'use strict';
 
-// The relay runs as a child of a small supervisor, which starts it again after an update.
 if (process.env.RELAY_WORKER !== '1') { require('./supervisor.js').supervise(__filename); return; }
 
-// The key stays in this process. Nothing it starts (git, gh, sessions) needs it, so it leaves the
-// environment before any module can copy it, and a random one stays as private as when it lived
-// only in memory.
 const KEY_GIVEN = process.env.RELAY_KEY_RANDOM === '1' ? '' : process.env.RELAY_KEY || '';
 const KEY_SET = process.env.RELAY_KEY || '';
 delete process.env.RELAY_KEY; delete process.env.RELAY_KEY_RANDOM;
@@ -21,15 +17,9 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(process.env.RELAY_ROOT || path.join(__dirname, '..'));
 
-// ---------- the worlds: pages the relay serves, which it does not know by name ----------
-// A world is a folder under ROOT with a world.json: { name, channel, port, sessions, roster }. name and
-// channel make its link at startup, port is where its own relay listens, and sessions: true says the page
-// runs Claude Code sessions, the Board and Autopilot. roster names the file in its folder that says who
-// works there, which the relay reads to seat its sessions (relay/seats.js). The relay names no world in
-// its code (CLAUDE.md, docs/constitution.md article 13), so a world comes and goes with its folder.
 function worldIn(dir) {
   let w;
-  try { w = JSON.parse(fs.readFileSync(path.join(ROOT, dir, 'world.json'), 'utf8')); } catch { return null; }  // no world.json: not a world
+  try { w = JSON.parse(fs.readFileSync(path.join(ROOT, dir, 'world.json'), 'utf8')); } catch { return null; }
   if (!w || typeof w.name !== 'string' || typeof w.channel !== 'string') return null;
   const roster = typeof w.roster === 'string' && /^[\w-]+\.js$/.test(w.roster) ? w.roster : null;
   return { dir, name: w.name, channel: w.channel, port: Number(w.port) || null, sessions: w.sessions === true, roster };
@@ -39,18 +29,11 @@ function worlds() {
     .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'node_modules')
     .map((d) => worldIn(d.name)).filter(Boolean).sort((a, b) => a.dir.localeCompare(b.dir));
 }
-// RELAY_WORLD names one world's folder: this relay serves that world alone, on its own port and key,
-// so a restart, a crash or a key of one world touches no other. Without it, the relay serves every
-// world, as one relay for all.
-// A trailing slash, as tab completion gives, is dropped. Anything but one folder name is refused.
 const WORLD = (process.env.RELAY_WORLD || '').replace(/\/+$/, '');
 if ((process.env.RELAY_WORLD && !WORLD) || (WORLD && !/^[\w-]+$/.test(WORLD))) { console.error('RELAY_WORLD is ' + process.env.RELAY_WORLD + ', but it must be one folder name, such as the folder of a world in ' + ROOT + '.'); process.exit(1); }
 const ONE = WORLD ? worldIn(WORLD) : null;
 if (WORLD && !ONE) { console.error('RELAY_WORLD is ' + WORLD + ', but ' + path.join(ROOT, WORLD, 'world.json') + ' is missing or has no name and channel.'); process.exit(1); }
 
-// The room's parts: sessions, tasks, tickets, the Board, reviews, Autopilot and the rest. Some of
-// them read the room's saved files and start timers as they load, so a relay for a world without
-// sessions never loads them.
 const SESSIONS = !ONE || ONE.sessions;
 const office = SESSIONS ? {
   terminal: require('./terminal.js'), tasks: require('./tasks.js'), checkouts: require('./checkouts.js'), tickets: require('./tickets.js'),
@@ -59,18 +42,13 @@ const office = SESSIONS ? {
   config: require('./config.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'),
   mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js')
 } : null;
-// Who the sessions are: the roster of the world that runs them, or of the first one that has a roster.
-// It exports { lead, workers }, the Lead's desk first. Without one, sessions have no names.
 if (office) {
   const w = (ONE ? [ONE] : worlds()).find((x) => x.sessions && x.roster);
   if (w) {
     try { office.terminal.setRoster(require(path.join(ROOT, w.dir, w.roster))); } catch (e) { console.error('Could not read the roster ' + path.join(w.dir, w.roster) + ', so sessions have no names: ' + e.message); }
   }
 }
-// The channel of the world that runs the sessions, which gets the relay's own Lead when it starts
-// (relay/sessions.js, startLead).
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
-// In the order they answer routes.
 const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'games'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
@@ -82,7 +60,6 @@ const WEBHOOK_TYPES = (process.env.RELAY_WEBHOOK_TYPES || 'result,run.started,ru
   .split(',').map((s) => s.trim()).filter(Boolean);
 const MAX_EVENTS = 2000, MAX_RESULTS = 500, MAX_BODY = 256 * 1024;
 
-// ---------- channels ----------
 const channels = new Map();
 function channel(name) {
   if (!channels.has(name)) {
@@ -92,7 +69,6 @@ function channel(name) {
 }
 const CHANNEL_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
-// ---------- helpers ----------
 function send(res, status, body, headers) {
   const data = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
   res.writeHead(status, Object.assign({
@@ -110,7 +86,6 @@ function cors() {
   };
 }
 function problem(res, status, error, message, extra) { send(res, status, Object.assign({ ok: false, error, message }, extra || {})); }
-// The key a request sent, as a header or ?key=, or '' when it sent none.
 function givenKey(req, url) {
   const h = req.headers.authorization || '';
   return h.startsWith('Bearer ') ? h.slice(7) : (url.searchParams.get('key') || '');
@@ -137,31 +112,25 @@ function readJson(req) {
 }
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
-// ---------- static files: the relay serves the page too ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.md': 'text/markdown; charset=utf-8', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml' };
 function serveStatic(req, res, url) {
   let rel;
-  try { rel = decodeURIComponent(url.pathname); } catch { send(res, 404, 'Not found'); return; }  // a malformed escape names no file
+  try { rel = decodeURIComponent(url.pathname); } catch { send(res, 404, 'Not found'); return; }
   if (rel.endsWith('/')) rel += 'index.html';
   const file = path.resolve(ROOT, '.' + rel);
-  // node_modules holds what npm ci installed and relay/ holds the relay's source, not pages. macOS file
-  // names ignore case and fold some letters that are not ASCII (a long s is an s), so only ASCII parts
-  // pass, compared in lower case.
   const parts = rel.split('/');
   const refused = (p) => p.startsWith('.') || /[^\x20-\x7e]/.test(p) || ['node_modules', 'relay'].includes(p.toLowerCase());
   if (!file.startsWith(ROOT + path.sep) || parts.some(refused)) {
     send(res, 404, 'Not found'); return;
   }
-  // A relay for one world serves that world's folder, what every page shares, the manual, and the files
-  // at the top of ROOT, such as the README the manual links to. Its root goes to its world.
   if (ONE) {
     if (rel === '/index.html') { res.writeHead(302, { Location: '/' + ONE.dir + '/' + url.search + url.hash }); res.end(); return; }
     if (parts.length > 2 && ![ONE.dir, 'shared', 'docs'].includes(parts[1])) { send(res, 404, 'Not found'); return; }
     if (parts.length === 2 && ![ONE.dir, 'shared', 'docs'].includes(parts[1]) && fs.existsSync(file) && fs.statSync(file).isDirectory()) { send(res, 404, 'Not found'); return; }
   }
   fs.stat(file, (err, st) => {
-    if (!err && st.isDirectory()) {  // /office -> /office/, keeping the query
+    if (!err && st.isDirectory()) {
       res.writeHead(301, { Location: url.pathname + '/' + url.search }); res.end(); return;
     }
     if (err || !st.isFile()) { send(res, 404, 'Not found'); return; }
@@ -170,9 +139,6 @@ function serveStatic(req, res, url) {
   });
 }
 
-// ---------- the page's side ----------
-// Each page reports whether its tab is on screen. The world only runs while it is, so
-// commands go to the newest page that is on screen, or the newest page if none is.
 let pageSeq = 0;
 const visibleCount = (ch) => ch.pages.filter((p) => p.visible).length;
 function openStream(req, res, ch, url) {
@@ -180,7 +146,7 @@ function openStream(req, res, ch, url) {
   res.write('retry: 2000\n\n');
   const page = { id: ++pageSeq, res, since: new Date().toISOString(), visible: true };
   ch.pages.push(page); ch.lastSeen = page.since;
-  const board = !!office && url.searchParams.get('board') === '1' && office.boardPush.sends(req, PORT);  // the room page's Board comes on this stream too (relay/board-push.js)
+  const board = !!office && url.searchParams.get('board') === '1' && office.boardPush.sends(req, PORT);
   res.write('event: hello\ndata: ' + JSON.stringify({ channel: ch.name, page: page.id, tickets: board }) + '\n\n');
   if (board) office.boardPush.watch(req, res, ch.name, log);
   log('page connected to', ch.name, '(' + ch.pages.length + ' open)');
@@ -218,7 +184,6 @@ function addEvents(ch, list) {
   }
 }
 
-// ---------- the caller's side ----------
 function pickPage(ch) {
   const shown = ch.pages.filter((p) => p.visible);
   return shown.length ? shown[shown.length - 1] : ch.pages[ch.pages.length - 1];
@@ -237,22 +202,17 @@ function reply(entry, ch) {
   return Object.assign({ id: entry.id, channel: ch.name, action: entry.command.action }, r);
 }
 
-// ---------- routes ----------
 async function handle(req, res) {
   const url = new URL(req.url, 'http://relay');
   if (req.method === 'OPTIONS') { res.writeHead(204, cors()); res.end(); return; }
 
   if (url.pathname === '/health') {
-    // With the key, from this computer, it also says how bringing back the saved sessions went, for
-    // the supervisor's check (relay/rollback.js).
     const restore = office && authorized(req, url) && !office.terminal.localOnly(req, PORT) ? { restore: office.sessions.restored } : {};
     send(res, 200, Object.assign({ ok: true, world: ONE ? ONE.dir : null, channels: [...channels.values()].map((c) => ({ channel: c.name, pages: c.pages.length, pagesVisible: visibleCount(c) })) }, restore));
     return;
   }
   const m = url.pathname.match(/^\/channels\/([^/]+)(\/[^?]*)?$/);
   if (!m) { if (req.method === 'GET') serveStatic(req, res, url); else problem(res, 404, 'not_found', 'There is nothing here.'); return; }
-  // Until the relay has taken its sessions back, it cannot tell whose a token is, or whose a hook is.
-  // A hook from this computer waits with the queued ones, and is applied with them (replayHooks).
   if (office && !hooksOpen && req.method === 'POST' && m[2] === '/commands') {
     const body = await readJson(req).catch(() => null);
     if (body && body.action === 'hook' && body.event && typeof body.event === 'object' && !office.terminal.localOnly(req, PORT)) {
@@ -264,15 +224,7 @@ async function handle(req, res) {
   }
 
   const agent = authorized(req, url) || !office ? null : office.terminal.agentFor(req);
-  // A session's token lists and files tickets. The Lead's also reads the floor. A Lead allowed to move the board also lists
-  // and moves tasks, moves tickets, and asks to stop a session (relay/floor.js decides, and checks its switch). A Lead
-  // allowed to start tickets also starts them (relay/tickets.js holds it to its limits). Any session but the COO reads the chat
-  // board and posts to it (relay/chat.js keeps making and deleting chat channels for the person). The COO's reads
-  // its measures and saves its report (relay/coo.js), and the security officer's its own (relay/security.js). That is all.
-  // The COO and the security officer propose only, so their tokens list tickets but do not file them.
   const proposer = agent && (agent.role === 'coo' || agent.role === 'security');
-  // A seat in a round of a game plays, sends its own hooks and status line, and reaches nothing else
-  // (relay/games.js). Any other session may ask to play, and is told no there.
   const seat = !!(agent && office.games.isSeat(agent));
   const plays = req.method === 'POST' && m[2] === '/play';
   const tokenMay = agent && agent.channel === m[1] && (plays || (seat ? req.method === 'POST' && (m[2] === '/commands' || m[2] === '/terminals/context') : ((m[2] === '/tickets' && !(proposer && req.method !== 'GET')) || (!proposer && /^\/chat(\/[\w-]{1,64})?$/.test(m[2] || '')) || (agent.lead && req.method === 'GET' && m[2] === '/floor') ||
@@ -280,22 +232,19 @@ async function handle(req, res) {
     (agent.lead && agent.starts > 0 && req.method === 'POST' && /^\/tickets\/[^/]+\/start$/.test(m[2] || '')) ||
     (agent.role === 'coo' && ((req.method === 'GET' && m[2] === '/coo/measures') || (req.method === 'POST' && m[2] === '/coo/report'))) ||
     (agent.role === 'security' && ((req.method === 'GET' && m[2] === '/security/measures') || (req.method === 'POST' && m[2] === '/security/report'))) ||
-    ((agent.role === 'reviewer' || !!agent.reviewOf) && req.method === 'POST' && m[2] === '/autopilot/verdict') ||  // a reviewer gives its verdict (relay/autopilot.js)
-    ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) ||  // relay/tickets.js checks the PM's and the Lead's switch
-    ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) ||  // the PM and the Lead edit a Triage or Ready ticket (relay/tickets.js)
-    (req.method === 'POST' && m[2] === '/terminals/context') ||  // its own status line says how full its context is (relay/terminal.js)
-    (req.method === 'POST' && m[2] === '/commands'))));  // its own hooks, and nothing else (below)
+    ((agent.role === 'reviewer' || !!agent.reviewOf) && req.method === 'POST' && m[2] === '/autopilot/verdict') ||
+    ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) ||
+    ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) ||
+    (req.method === 'POST' && m[2] === '/terminals/context') ||
+    (req.method === 'POST' && m[2] === '/commands'))));
   if (!authorized(req, url) && !tokenMay && (seat || (office && plays))) { problem(res, 403, 'forbidden', seat ? 'A seat in a round only plays, with node "$OFFICE_PLAY".' : 'Only a seat in the round that runs can play.'); return; }
-  // Priority and the work order are the person's, and a PM's or Lead's they allowed: a session's token is known here, so it is told no (403), not asked who it is.
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.'); return; }
-  // Only the person, the PM and the Lead edit a ticket's words (T-90).
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person, the PM and the Lead edit a ticket.'); return; }
-  // The PM never moves, starts or rebases a ticket, even while it may set the order (article 5).
   if (!authorized(req, url) && agent && agent.role === 'pm' && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(move|start|base|kind)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'The PM does not move or start a ticket, or change its base or kind. It edits the title and body of tickets in Triage or Ready, and with Let the PM set the order on, their priority and place.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && m[2] === '/floor') { problem(res, 401, 'unauthorized', 'Only the Lead can read the floor.'); return; }
   if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : (givenKey(req, url) ? 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>.')); return; }
   let name = '';
-  try { name = decodeURIComponent(m[1]); } catch { /* a malformed escape names no channel, so it fails the test below */ }
+  try { name = decodeURIComponent(m[1]); } catch { name = ''; }
   const rest = m[2] || '';
   if (!CHANNEL_RE.test(name)) { problem(res, 400, 'bad_channel', 'A channel name is 1 to 64 letters, numbers, dashes or underscores.'); return; }
   const ch = channel(name);
@@ -343,22 +292,15 @@ async function handle(req, res) {
       delete command.wait; delete command.timeout;
       if (!command.action || typeof command.action !== 'string') { problem(res, 400, 'bad_command', 'The body needs an "action", for example {"action": "add", "thing": "dog"}.'); return; }
       if (agent) {
-        // A session's token sends only the hooks of that session (relay/office-hook.js), at its own desk.
-        // SessionStart may carry a new id, after /clear, and it moves only this session.
         const ev = command.event && typeof command.event === 'object' ? command.event : null, sid = ev ? String(ev.session_id || '') : '';
         if (command.action !== 'hook' || !ev || !sid || (ev.hook_event_name !== 'SessionStart' && !agent.sessionId.startsWith(sid))) { problem(res, 403, 'forbidden', 'A session\'s token sends only the hooks of its own session.'); return; }
         command.event = Object.assign({}, ev, { terminal: agent.id });
       }
-      // A seat's hooks keep their events, but none of the seat's words: its first prompt is its brief.
       if (office && command.action === 'hook' && command.event && typeof command.event === 'object' && office.games.isSeat({ id: command.event.terminal }, name)) {
         command.event = require('./round-seats.js').quiet(command.event);
       }
       if (command.action === 'hook') {
-        // Hooks run on this computer and post to localhost. One from anywhere else, such as a tunnel with
-        // the key, changes nothing the relay keeps, since what it keeps decides when to type into a session.
-        // The page still gets it, as before.
         if (office && !office.terminal.localOnly(req, PORT)) {
-          // A hook that failed just as this relay started may have queued after the first look.
           if (hookQueue.waiting(stateDir())) replayHooks(hookQueue.take(stateDir()));
           noteHook(name, command.event);
         }
@@ -403,16 +345,13 @@ async function handle(req, res) {
   }
 }
 
-// ---------- hooks: applied as they come, and those queued while no relay ran ----------
 const hookQueue = require('./hook-queue.js');
 const stateDir = () => require('./state.js').dir();
-let hooksOpen = false;  // the sessions are back, so a hook can be matched to its session
-const earlyHooks = [];  // hooks that came before that, in the queue's form
+let hooksOpen = false;
+const earlyHooks = [];
 function noteHook(name, event) {
   for (const k of ['terminal', 'tasks', 'prComments', 'huddles', 'reviews', 'coo', 'security', 'chat']) office[k].noteHook(name, event);
 }
-// Applies queued hooks, as the hook route would have: only one for this relay, sent with its key or with
-// the token of a session it runs, for that session. Anything else, such as another room's, is dropped.
 const LOCAL = new Set(['127.0.0.1', 'localhost', '[::1]']);
 function replayHooks(entries) {
   let applied = 0;
@@ -454,12 +393,10 @@ server.listen(PORT, HOST, async () => {
     if (!office) return;
     const { terminal, chat, sessions, reviews, autopilot, checkouts, leadCheck } = office;
     if (terminal.ENABLED) console.log('Claude Code panel: on, for the room page on this computer only.');
-    // Every session the last relay was running, then the checkouts nobody came back to. The sweep
-    // must run after restoreAll, and works only because terminal.start is synchronous: a restored
+    // The sweep must run after restoreAll, and works only because terminal.start is synchronous: a restored
     // session is in runningIn at once, so its checkout is kept. If start ever becomes async, await
     // the restore first, or the sweep removes a checkout a reviewer is coming back to.
     chat.started();
-    // The sessions run in the session host. A restart left them running there, so connect first.
     if (terminal.ENABLED) {
       try { await terminal.connectHost(log); } catch (e) { console.error(e.message); process.exit(1); }
     }
@@ -468,9 +405,7 @@ server.listen(PORT, HOST, async () => {
     reviews.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     autopilot.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.prWatch.begin({ log });
-    // The hooks sent while no relay ran, and those that came while this one started, in the order they
-    // happened. After reviews.begin, or reviews would ignore a queued PR or push. A hook that gave up just
-    // as this relay started may queue a moment later, so it looks again.
+    // Replayed after reviews.begin, or reviews would ignore a queued PR or push.
     hooksOpen = true;
     replayHooks(hookQueue.take(stateDir()).concat(earlyHooks.splice(0)).sort((a, b) => a.event.at - b.event.at));
     setTimeout(() => replayHooks(hookQueue.take(stateDir())), 3000).unref();
@@ -478,10 +413,8 @@ server.listen(PORT, HOST, async () => {
     checkouts.sweep().catch((e) => log('Could not tidy the checkouts: ' + e.message));
   });
 
-// The sessions run on in the session host. Stopping the supervisor stops them (relay/supervisor.js).
 const stopAll = () => { if (office) office.terminal.close(); };
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { stopAll(); process.exit(0); });
 process.on('exit', stopAll);
-// If the supervisor is gone, nothing is left to stop this relay, so it stops itself.
 const supervisor = process.ppid;
 setInterval(() => { if (process.ppid !== supervisor) { log('The supervisor is gone, so the relay stops.'); stopAll(); process.exit(0); } }, 2000).unref();

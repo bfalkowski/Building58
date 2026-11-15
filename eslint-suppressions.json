@@ -149,11 +149,6 @@
       "count": 25
     }
   },
-  "relay/autopilot.js": {
-    "local/no-comments": {
-      "count": 102
-    }
-  },
   "relay/board-push.js": {
     "local/no-comments": {
       "count": 8
@@ -304,11 +299,6 @@
       "count": 16
     }
   },
-  "relay/reviews.js": {
-    "local/no-comments": {
-      "count": 80
-    }
-  },
   "relay/rollback.js": {
     "local/no-comments": {
       "count": 13
@@ -336,7 +326,7 @@
   },
   "relay/server.js": {
     "local/no-comments": {
-      "count": 83
+      "count": 4
     }
   },
   "relay/session-env.js": {
@@ -379,14 +369,9 @@
       "count": 8
     }
   },
-  "relay/tasks.js": {
-    "local/no-comments": {
-      "count": 94
-    }
-  },
   "relay/terminal.js": {
     "local/no-comments": {
-      "count": 270
+      "count": 2
     }
   },
   "relay/ticket-history.js": {
@@ -412,11 +397,6 @@
   "relay/ticket.js": {
     "local/no-comments": {
       "count": 7
-    }
-  },
-  "relay/tickets.js": {
-    "local/no-comments": {
-      "count": 125
     }
   },
   "relay/update.js": {
