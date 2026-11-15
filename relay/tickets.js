@@ -17,7 +17,7 @@ const history = require('./ticket-history.js');
 const config = require('./config.js');
 const pmNotes = require('./pm-notes.js');
 const { boardOrder, lastRank, placeNear } = require('./ticket-order.js');
-const { WORDING_TICKET } = require('./autopilot-plan.js');
+const { WORDING_TICKET, heldBack, MARKS } = require('./autopilot-plan.js');
 
 const STATUSES = ['triage', 'ready', 'started', 'done', 'rejected'];
 const PRIORITIES = ['high', 'normal', 'low'];
@@ -91,7 +91,7 @@ const startedBy = (task) => task.by || ((task.history || []).find((h) => h.type 
 async function view(channel, ticket, all) {
   const task = tasks.ofTicket(channel, ticket);
   const { assignee, history: steps } = history.view(channel, ticket, task);
-  return Object.assign({}, ticket, { assignee, history: steps, approved: personApproved(ticket), waitingFor: waitingFor(ticket, all), rejectedBlockers: blockersOf(ticket, all, ['rejected']), task: task ? { id: task.id, state: task.state, branch: task.branch, pr: task.pr, by: startedBy(task), startedAt: task.createdAt, pipeline: task.pipeline, waitsOn: task.waitsOn || null } : null });
+  return Object.assign({}, ticket, { assignee, history: steps, approved: personApproved(ticket), heldBack: heldBack(ticket, all), waitingFor: waitingFor(ticket, all), rejectedBlockers: blockersOf(ticket, all, ['rejected']), task: task ? { id: task.id, state: task.state, branch: task.branch, pr: task.pr, by: startedBy(task), startedAt: task.createdAt, pipeline: task.pipeline, waitsOn: task.waitsOn || null } : null });
 }
 async function followTasks(channel, list) {
   for (const t of list) {
@@ -125,9 +125,9 @@ async function create(channel, body, agent) {
   }
   const unusable = tasks.baseProblem(base);
   if (unusable) return [400, { ok: false, error: 'bad_base', message: unusable }];
-  return inTurn(channel, () => file(channel, { title, text, priority, repo, base, blockedBy: body.blockedBy, kind: body.kind, labels: body.labels }, agent));
+  return inTurn(channel, () => file(channel, { title, text, priority, repo, base, blockedBy: body.blockedBy, shapes: body.shapes, kind: body.kind, labels: body.labels }, agent));
 }
-async function file(channel, { title, text, priority, repo, base, blockedBy: asked, kind: askedKind, labels: askedLabels }, agent) {
+async function file(channel, { title, text, priority, repo, base, blockedBy: asked, shapes: askedShapes, kind: askedKind, labels: askedLabels }, agent) {
   const all = await listAll(channel);
   const { kind, error } = kindFrom(askedKind, all, agent);
   if (error) return error;
@@ -136,6 +136,10 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   const blockedBy = [...new Set((Array.isArray(asked) ? asked : []).map(String))];
   const unknown = blockedBy.filter((id) => !all.some((t) => t.id === id));
   if (unknown.length) return [400, { ok: false, error: 'bad_blocker', message: 'No such ticket: ' + unknown.join(', ') + '.' }];
+  const { shapes, error: badShapes } = shapesFrom(askedShapes, all, null);
+  if (badShapes) return badShapes;
+  const approvedOnes = agent ? shapes.filter((id) => all.find((t) => t.id === id).status !== 'triage') : [];
+  if (approvedOnes.length) return [403, { ok: false, error: 'bad_shapes', message: 'A session names only tickets in Triage with --shapes. ' + approvedOnes.join(', ') + ' left Triage, so only the person can make ' + (approvedOnes.length > 1 ? 'them' : 'it') + ' wait for a design ticket.' }];
   const live = all.filter((t) => t.status !== 'done' && t.status !== 'rejected');
   const same = (agent ? all.filter((t) => t.status !== 'done') : live).find((t) => t.repo === repo && t.title.toLowerCase() === title.toLowerCase() && (!t.base || t.base === base));
   if (same) return [200, { ok: true, duplicate: true, ticket: await view(channel, same, all) }];
@@ -143,7 +147,7 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
     return [429, { ok: false, error: 'triage_full', message: 'Triage already has ' + MAX_TRIAGE + ' tickets waiting for a person. Stop filing and carry on.' }];
   }
   const rank = lastRank(all, priority, Date.now());
-  const ticket = await store.create(channel, Object.assign({ title, body: text, priority, rank, repo, base, blockedBy }, kind ? { kind } : {}, labels.length ? { labels } : {}, { status: agent ? 'triage' : 'ready', createdBy: agent ? agentName(agent) : 'you' }, agent ? {} : { approvedBy: 'you' }));
+  const ticket = await store.create(channel, Object.assign({ title, body: text, priority, rank, repo, base, blockedBy }, shapes.length ? { shapes } : {}, kind ? { kind } : {}, labels.length ? { labels } : {}, { status: agent ? 'triage' : 'ready', createdBy: agent ? agentName(agent) : 'you' }, agent ? {} : { approvedBy: 'you' }));
   history.add(channel, ticket, { stage: 'filed', by: ticket.createdBy }, agent || null);
   filed(channel, ticket, agent, ticket.createdAt);
   return [201, { ok: true, ticket: await view(channel, ticket, all.concat(ticket)) }];
@@ -241,6 +245,44 @@ function setLabels(channel, ticket, body) {
     const had = Array.isArray(now.labels) ? now.labels : [];
     if (had.join(',') === labels.join(',')) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
     const changed = await store.update(channel, now.id, { labels });
+    return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
+  });
+}
+
+function shapesFrom(value, all, self) {
+  if (value === undefined || value === null) return { shapes: [] };
+  if (!Array.isArray(value) || value.some((x) => typeof x !== 'string' && typeof x !== 'number')) return { error: [400, { ok: false, error: 'bad_shapes', message: '"shapes" is a list of ticket ids.' }] };
+  const shapes = [...new Set(value.map((x) => clean(x)).filter(Boolean))];
+  if (self && shapes.includes(self)) return { error: [400, { ok: false, error: 'bad_shapes', message: 'A ticket cannot shape itself.' }] };
+  const unknown = shapes.filter((id) => !all.some((t) => t.id === id));
+  if (unknown.length) return { error: [400, { ok: false, error: 'bad_shapes', message: 'No such ticket: ' + unknown.join(', ') + '.' }] };
+  return { shapes };
+}
+function setShapes(channel, ticket, body) {
+  return inTurn(channel, async () => {
+    const all = await listAll(channel);
+    if (body.shapes === undefined) return [400, { ok: false, error: 'bad_param', message: 'Give "shapes", a list of the ticket ids this design ticket shapes, or [] for none.' }];
+    const now = all.find((t) => t.id === ticket.id) || ticket;
+    const { shapes, error } = shapesFrom(body.shapes, all, now.id);
+    if (error) return error;
+    const had = Array.isArray(now.shapes) ? now.shapes : [];
+    if (had.join(',') === shapes.join(',')) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
+    const changed = await store.update(channel, now.id, { shapes });
+    return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
+  });
+}
+function setMark(channel, ticket, body) {
+  const mark = body.mark === null || body.mark === '' ? null : String(body.mark || '');
+  if (mark !== null && !MARKS.includes(mark)) return [400, { ok: false, error: 'bad_mark', message: 'A mark is ' + MARKS.join(' or ') + ', or null to clear it.' }];
+  const replacedBy = mark === 'replaced' && body.replacedBy ? clean(body.replacedBy) : null;
+  return inTurn(channel, async () => {
+    const all = await listAll(channel);
+    const now = all.find((t) => t.id === ticket.id) || ticket;
+    const state = starting.has(channel + '/' + now.id) ? 'starting' : now.status;
+    if (mark && !ORDERABLE.includes(state)) return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can be marked. This one is ' + state + '.' }];
+    if (replacedBy && (replacedBy === now.id || !all.some((t) => t.id === replacedBy))) return [400, { ok: false, error: 'bad_mark', message: replacedBy === now.id ? 'A ticket cannot replace itself.' : 'No such ticket: ' + replacedBy + '.' }];
+    if ((now.mark || null) === mark && (now.replacedBy || null) === replacedBy) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
+    const changed = await store.update(channel, now.id, { mark, replacedBy });
     return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
   });
 }
@@ -362,13 +404,15 @@ const leadStarting = new Set();
 const running = (channel, task) => { const w = terminal.find(channel, task.owner && task.owner.terminal); return !!(w && !w.exited); };
 const unbriefedLeadTask = (channel) => tasks.list(channel).find((x) => x.by === 'Lead' && !x.briefed && running(channel, x)) || null;
 function nextForLead(channel, all, self) {
-  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && personApproved(t) && !unsettled(t, all).length && !tasks.ofTicket(channel, t) && (t.id === self || !starting.has(channel + '/' + t.id))))[0] || null;
+  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && personApproved(t) && !unsettled(t, all).length && !heldBack(t, all) && !tasks.ofTicket(channel, t) && (t.id === self || !starting.has(channel + '/' + t.id))))[0] || null;
 }
 function leadMayStart(channel, ticket, all, agent) {
   if (ticket.status !== 'ready') return [409, { ok: false, error: 'not_ready', message: 'You can start only a Ready ticket. This one is ' + ticket.status + '.' }];
   if (!personApproved(ticket)) return [409, { ok: false, error: 'not_approved', message: 'No person approved ' + ticket.id + ' into Ready, so a person starts it.' }];
   const open = waitingFor(ticket, all);
   if (open.length) return [409, { ok: false, error: 'blocked', message: 'Waiting for ' + open.join(', ') + '.' }];
+  const held = heldBack(ticket, all);
+  if (held) return [409, { ok: false, error: 'held_back', message: ticket.id + ': ' + held + ' Only the person starts it.' }];
   const doubtful = unsettled(ticket, all);
   if (doubtful.length) return [409, { ok: false, error: 'blocker_not_done', message: doubtful.join(', ') + ' was rejected or is not on the Board, so a person decides whether ' + ticket.id + ' still goes ahead.' }];
   const unbriefed = unbriefedLeadTask(channel);
@@ -488,7 +532,7 @@ const filed = (channel, ticket, agent, at) => filedWatchers.forEach((fn) => { tr
 const changed = (channel) => changeWatchers.forEach((fn) => fn(channel));
 
 async function handle(req, res, channel, rest, ctx) {
-  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|base|kind|labels|priority|order|edit)|\/([\w-]{1,64}))?$/);
+  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|base|kind|labels|mark|shapes|priority|order|edit)|\/([\w-]{1,64}))?$/);
   if (!route) { if (!/^\/tickets(\/|$)/.test(rest)) return false; ctx.problem(res, 404, 'not_found', 'Unknown ticket route.'); return true; }
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
@@ -526,6 +570,8 @@ async function handle(req, res, channel, rest, ctx) {
       }
       else if (req.method === 'POST' && verb === 'kind') out = await setKind(channel, ticket, body || {});
       else if (req.method === 'POST' && verb === 'labels') out = await setLabels(channel, ticket, body || {});
+      else if (req.method === 'POST' && verb === 'mark') out = await setMark(channel, ticket, body || {});
+      else if (req.method === 'POST' && verb === 'shapes') out = await setShapes(channel, ticket, body || {});
       else if (req.method === 'POST' && (verb === 'priority' || verb === 'order')) {
         const refused = ctx.agent && sessionMayOrder(channel, ctx.agent);
         if (refused) { ctx.problem(res, 403, 'forbidden', refused); return true; }

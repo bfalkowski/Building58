@@ -132,6 +132,18 @@
     f.append(input, save, button('Cancel', false, () => { editingLabels.delete(t.id); last = ''; redraw(); }));
     return f;
   }
+  const markingReplaced = new Map(), editingShapes = new Map();
+  function idsForm(t, edits, label, placeholder, saveText, send) {
+    const f = document.createElement('form'); f.className = 'card-actions';
+    const input = document.createElement('input'); input.type = 'text'; input.className = 'whole'; input.value = edits.get(t.id); input.setAttribute('aria-label', label); input.placeholder = placeholder; input.spellcheck = false;
+    input.addEventListener('input', () => edits.set(t.id, input.value));
+    const save = document.createElement('button'); save.type = 'submit'; save.className = 'btn primary'; save.textContent = saveText;
+    f.addEventListener('submit', (ev) => { ev.preventDefault(); send(input.value.split(',').map((x) => x.trim()).filter(Boolean), () => edits.delete(t.id)); });
+    f.append(input, save, button('Cancel', false, () => { edits.delete(t.id); last = ''; redraw(); }));
+    return f;
+  }
+  const replacedForm = (t) => idsForm(t, markingReplaced, 'Ticket that replaces ' + t.id, 'The ticket that replaces it, like T-12, or leave it empty', 'Mark replaced', (ids, then) => act(t, 'mark', { mark: 'replaced', replacedBy: ids[0] || null }, then));
+  const shapesForm = (t) => idsForm(t, editingShapes, 'Tickets ' + t.id + ' shapes', 'Ids with commas between, like T-7, T-9', 'Save', (ids, then) => act(t, 'shapes', { shapes: ids }, then));
   const markingDone = new Map();
   function doneForm(t) {
     const f = document.createElement('form'); f.className = 'card-actions';
@@ -202,7 +214,7 @@
     const state = t.status === 'started' && t.task ? t.task.state : '';
     const after = finishedBlockers(t, byId);
     const others = M.alsoWith(people, t.assignee);
-    meta.textContent = [(t.priority || 'normal') + ' priority', t.kind ? 'kind ' + t.kind : 'no kind', M.labelsOf(t).length ? 'labels ' + M.labelsOf(t).join(', ') : '', orderedNote(t), t.createdBy, startedNote(t), state ? 'task ' + (STATE_WORDS[state] || state) : '', pipelineNote(t), waitsOnNote(t), window.officeTicketHistory ? window.officeTicketHistory.assigneeText(t) : '', others.length ? 'also with ' + others.join(', ') : '', (t.repo || 'no repo').split('/').pop(), t.base ? 'base ' + t.base : '', t.waitingFor.length ? 'waiting for ' + t.waitingFor.join(', ') : '', t.rejectedBlockers.length ? t.rejectedBlockers.join(', ') + ' was rejected' : '', after.length ? 'after ' + after.join(', ') : '', t.status === 'done' && !t.task && t.pr ? 'merged outside the room' : '', t.status === 'ready' && !t.approved ? 'not approved by you, so nothing starts it by itself' : ''].filter(Boolean).join(' · ');
+    meta.textContent = [(t.priority || 'normal') + ' priority', t.kind ? 'kind ' + t.kind : 'no kind', M.labelsOf(t).length ? 'labels ' + M.labelsOf(t).join(', ') : '', orderedNote(t), t.createdBy, startedNote(t), state ? 'task ' + (STATE_WORDS[state] || state) : '', pipelineNote(t), waitsOnNote(t), window.officeTicketHistory ? window.officeTicketHistory.assigneeText(t) : '', others.length ? 'also with ' + others.join(', ') : '', (t.repo || 'no repo').split('/').pop(), t.base ? 'base ' + t.base : '', t.waitingFor.length ? 'waiting for ' + t.waitingFor.join(', ') : '', t.rejectedBlockers.length ? t.rejectedBlockers.join(', ') + ' was rejected' : '', after.length ? 'after ' + after.join(', ') : '', t.status === 'done' && !t.task && t.pr ? 'merged outside the room' : '', t.status === 'ready' && !t.approved ? 'not approved by you, so nothing starts it by itself' : '', (t.shapes || []).length ? 'shapes ' + t.shapes.join(', ') : '', (t.status === 'triage' || t.status === 'ready') && t.heldBack ? t.heldBack : ''].filter(Boolean).join(' · ');
     li.append(meta);
     const row = document.createElement('div'); row.className = 'card-actions';
     if (t.status === 'started' && !t.task) row.append(button('Start again', true, () => act(t, 'start', {})));
@@ -213,6 +225,10 @@
     if ((t.status === 'triage' || t.status === 'ready') && !editingBase.has(t.id)) row.append(button('Change base', false, () => { editingBase.set(t.id, t.base || ''); last = ''; redraw(); }));
     if ((t.status === 'triage' || t.status === 'ready') && !editingKind.has(t.id)) row.append(button('Change kind', false, () => { editingKind.set(t.id, t.kind || ''); last = ''; redraw(); }));
     if (!editingLabels.has(t.id)) row.append(button('Labels', false, () => { editingLabels.set(t.id, M.labelsOf(t).join(', ')); last = ''; redraw(); }));
+    if ((t.status === 'triage' || t.status === 'ready') && t.mark) row.append(button(t.mark === 'hold' ? 'Take off hold' : 'Not replaced', false, () => act(t, 'mark', { mark: null })));
+    if ((t.status === 'triage' || t.status === 'ready') && !t.mark) row.append(button('Hold', false, () => act(t, 'mark', { mark: 'hold' })));
+    if ((t.status === 'triage' || t.status === 'ready') && !t.mark && !markingReplaced.has(t.id)) row.append(button('Replaced', false, () => { markingReplaced.set(t.id, ''); last = ''; redraw(); }));
+    if (['triage', 'ready', 'started'].includes(t.status) && !editingShapes.has(t.id)) row.append(button('Shapes', false, () => { editingShapes.set(t.id, (t.shapes || []).join(', ')); last = ''; redraw(); }));
     if ((t.status === 'triage' || t.status === 'ready') && !markingDone.has(t.id)) row.append(button('Merged elsewhere', false, () => { markingDone.set(t.id, ''); last = ''; redraw(); }));
     const pr = (t.task && t.task.pr) || t.pr;
     if (pr && /^https:\/\/github\.com\//.test(pr)) { const a = document.createElement('a'); a.href = pr; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'PR #' + pr.split('/').pop(); row.append(a); }
@@ -222,6 +238,8 @@
     if ((t.status === 'triage' || t.status === 'ready') && editingKind.has(t.id)) li.append(kindForm(t));
     if (editingLabels.has(t.id)) li.append(labelsForm(t));
     if ((t.status === 'triage' || t.status === 'ready') && markingDone.has(t.id)) li.append(doneForm(t));
+    if ((t.status === 'triage' || t.status === 'ready') && !t.mark && markingReplaced.has(t.id)) li.append(replacedForm(t));
+    if (['triage', 'ready', 'started'].includes(t.status) && editingShapes.has(t.id)) li.append(shapesForm(t));
     return li;
   }
 

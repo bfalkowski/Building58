@@ -308,3 +308,36 @@ pageTest('a card takes labels, and the tab folds and filters by label', get, asy
   for (const id of ids) await o.R.call('POST', '/tickets/' + id + '/move', { to: 'rejected' });
   assert.deepStrictEqual(p.errors, []);
 });
+
+// A card says why nothing starts it by itself: on hold, replaced, or waiting on a design ticket (T-204).
+pageTest('a card can be put on hold, marked replaced, and shaped by a design ticket, and says why', get, async (p) => {
+  const repo = makeRepo(o.R.home, 'hold-repo');
+  const file = async (title) => (await o.R.call('POST', '/tickets', { title, body: 'x', repo })).body.ticket.id;
+  const [shaped, design] = [await file('Hold test shaped'), await file('Hold test design')];
+  const page = p.page;
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto(o.address.replace('/office/?', '/office/board.html?'));
+  await page.locator('#board-filter-repo option[value="' + repo + '"]').waitFor({ state: 'attached' });
+  await page.selectOption('#board-filter-repo', repo);
+  const card = (id) => page.locator('[data-col="ready"] li[data-ticket="' + id + '"]').first();
+  const says = (id, text) => page.locator('[data-col="ready"] li[data-ticket="' + id + '"] small', { hasText: text }).first().waitFor();
+
+  await card(shaped).getByRole('button', { name: 'Hold', exact: true }).click();
+  await says(shaped, 'On hold. Nothing starts it by itself until you clear the mark.');
+  await card(shaped).getByRole('button', { name: 'Take off hold' }).click();
+  await card(shaped).getByRole('button', { name: 'Replaced' }).click();
+  await page.getByLabel('Ticket that replaces ' + shaped).fill(design);
+  await card(shaped).getByRole('button', { name: 'Mark replaced' }).click();
+  await says(shaped, 'Replaced by ' + design + '.');
+  await card(shaped).getByRole('button', { name: 'Not replaced' }).click();
+  await card(shaped).getByRole('button', { name: 'Hold', exact: true }).waitFor();
+
+  await card(design).getByRole('button', { name: 'Shapes' }).click();
+  await page.getByLabel('Tickets ' + design + ' shapes').fill(shaped);
+  await card(design).getByRole('button', { name: 'Save' }).click();
+  await says(design, 'shapes ' + shaped);
+  await says(shaped, 'Waiting on design ticket ' + design + ', which shapes it.');
+  if (process.env.HOLD_SHOT) await card(shaped).screenshot({ path: process.env.HOLD_SHOT });
+  for (const id of [shaped, design]) await o.R.call('POST', '/tickets/' + id + '/move', { to: 'rejected' });
+  assert.deepStrictEqual(p.errors, []);
+});
