@@ -10,11 +10,9 @@ function dir() {
   const given = process.env.RELAY_STATE_DIR;
   return given ? path.resolve(home(given)) : path.join(os.homedir(), '.office-world');
 }
-// The file's own variable, or the file by that name in the folder.
 function file(name, variable) {
   return (variable && process.env[variable]) || path.join(dir(), name);
 }
-// A path to show a session: under your home folder it starts with ~.
 function shown(p) {
   const h = os.homedir();
   return p === h || p.startsWith(h + path.sep) ? '~' + p.slice(h.length) : p;

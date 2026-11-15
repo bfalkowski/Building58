@@ -36,8 +36,6 @@ async function get(p) {
   catch (e) { return { status: 0, error: e.cause && e.cause.code || e.name }; }
 }
 
-// The demo's relay brings back no session, and keeps any it starts in a list of its own, so it can
-// neither bring back nor overwrite the room's real sessions.
 const DEMO_ENV = { RELAY_RESUME: '0', RELAY_SESSIONS_FILE: path.join(os.tmpdir(), 'office-demo-' + process.pid, 'sessions.json') };
 let child = null;
 function stopRelay() { if (child && !child.killed) { child.kill(); console.log('Stopped the relay this script started.'); } }
@@ -45,7 +43,6 @@ process.on('SIGINT', () => { stopRelay(); process.exit(130); });
 process.on('SIGTERM', () => { stopRelay(); process.exit(143); });
 
 (async () => {
-  // ---------- 1. the relay ----------
   const h = await get('/health');
   if (h.status === 200) console.log('Using the relay that is running at ' + RELAY + '.');
   else if (h.error === 'TimeoutError') {
@@ -65,7 +62,6 @@ process.on('SIGTERM', () => { stopRelay(); process.exit(143); });
   const ch = await get('/channels/' + CHANNEL);
   if (ch.status === 401) { console.log('The relay at ' + RELAY + ' has a different key. Use the key it printed when it started.'); stopRelay(); process.exit(1); }
 
-  // ---------- 2. the page ----------
   if (!(ch.body && ch.body.pagesVisible > 0)) {
     const opener = process.env.OPEN_CMD || (process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open');
     console.log('Opening the office: ' + PAGE);
@@ -79,10 +75,9 @@ process.on('SIGTERM', () => { stopRelay(); process.exit(143); });
   if (!DEMO) {
     console.log('\n' + hookHint(RELAY, state.dir(), CHANNEL));
     if (!child) process.exit(0);
-    return;  // keep the relay this script started running until Ctrl+C
+    return;
   }
 
-  // ---------- 3. the demo session ----------
   const steps = require(path.join(__dirname, '..', 'office', 'demo-session.js'))();
   console.log('\nPlaying a pretend session of ' + steps.length + ' hook events' + (SPEED !== 1 ? ' at ' + SPEED + 'x' : '') + '.');
   const t0 = Date.now();

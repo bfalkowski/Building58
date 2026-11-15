@@ -11,8 +11,6 @@ if (!dir || dir.startsWith('-')) { console.error('Name a world\'s folder, for ex
 const fs = require('fs');
 const path = require('path');
 process.env.RELAY_WORLD = dir;
-// The supervisor's rollback check (relay/rollback.js) reads PORT, so it is set here to the world's,
-// the port the relay picks too.
 if (!process.env.PORT) { try { const w = JSON.parse(fs.readFileSync(path.join(process.env.RELAY_ROOT || path.join(__dirname, '..'), dir.replace(/\/+$/, ''), 'world.json'), 'utf8')); if (Number(w.port)) process.env.PORT = String(w.port); } catch { /* the relay says what is wrong */ } }
 process.argv.splice(2, 1);
 require('./server.js');

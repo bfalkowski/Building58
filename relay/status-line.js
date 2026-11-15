@@ -13,7 +13,6 @@ function line(input) {
   return level ? level.icon + ' context ' + tired.percentOf(input) + '% · ' + level.label : 'context: no reply yet';
 }
 
-// POST /channels/{channel}/terminals/context, beside the /commands the hook sends to.
 async function send(input) {
   const url = process.env.OFFICE_HOOK_URL, token = process.env.OFFICE_TICKET_TOKEN;
   const reading = tired.readingOf(input, Date.now());

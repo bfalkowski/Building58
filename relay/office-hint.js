@@ -15,7 +15,6 @@ function isDefaultOffice(relayUrl, stateDir) {
   return ['localhost', '127.0.0.1'].includes(u.hostname) && (u.port || '80') === DEFAULT_PORT && stateDir === DEFAULT_DIR;
 }
 
-// relayUrl: the relay's address. stateDir: the relay's state folder, as relay/state.js resolves it.
 function hookHint(relayUrl, stateDir, channel) {
   if (!isDefaultOffice(relayUrl, stateDir)) {
     return 'This is a second room. The sessions it starts report here on their own. Do not install\n' +

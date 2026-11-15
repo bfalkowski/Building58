@@ -27,9 +27,9 @@ const os = require('os');
 const path = require('path');
 const jobs = require('./jobs.js');
 
-const KEEP = 256 * 1024;  // output kept for a relay that connects later
+const KEEP = 256 * 1024;
 const BRIDGE = path.join(__dirname, 'pty-bridge.py');
-const ENDING = 3000;  // how long the sessions get to end before they are killed
+const ENDING = 3000;
 
 function serve(socket) {
   const sessions = new Map();
@@ -46,16 +46,13 @@ function serve(socket) {
       while (s.outSize > KEEP && s.out.length > 1) s.outSize -= s.out.shift().length;
       send({ op: 'out', id: s.id, data: buf.toString('base64') });
     };
-    // A bridge can die at any moment. Without these, a late write ends the host.
     child.stdin.on('error', () => {});
     child.stdio[3].on('error', () => {});
     child.stdout.on('data', out);
     child.stderr.on('data', out);
     child.on('error', (err) => out(Buffer.from('\r\nCould not start the terminal: ' + (err.code === 'ENOENT' ? 'python3 was not found.' : err.message) + '\r\n')));
-    // close, not exit: all its output has come by then.
     child.on('close', (code) => {
       s.exited = true; s.code = code;
-      // With no relay to tell, the end waits for the next one's list.
       if (client && !client.destroyed) { send({ op: 'exit', id: s.id, code }); sessions.delete(s.id); }
     });
   }
@@ -73,7 +70,6 @@ function serve(socket) {
     else if (m.op === 'kill') { try { s.child.kill(m.signal || 'SIGTERM'); } catch (e) { /* gone */ } }
   }
 
-  // Every few seconds, which commands each session's claude started still run.
   jobs.watch(() => [...sessions.values()].filter((s) => !s.exited), (s, j) => { s.jobs = j; send({ op: 'jobs', id: s.id, count: j.count, since: j.since }); });
 
   const server = net.createServer((conn) => {
@@ -90,14 +86,13 @@ function serve(socket) {
   });
   server.listen(socket, () => { fs.chmodSync(socket, 0o600); process.stdout.write('ready\n'); });
 
-  // Whoever started it is gone or asks it to stop: the sessions end, then the host.
   let ending = false;
   function end() {
     if (ending) return;
     ending = true;
     server.close();
     const left = () => [...sessions.values()].filter((s) => !s.exited);
-    for (const s of left()) { try { s.child.kill('SIGTERM'); } catch (e) { /* gone */ } }  // the bridge hangs up its claude
+    for (const s of left()) { try { s.child.kill('SIGTERM'); } catch (e) { /* gone */ } }
     const started = Date.now();
     const timer = setInterval(() => {
       if (left().length && Date.now() - started < ENDING) return;
@@ -111,12 +106,9 @@ function serve(socket) {
   for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, end);
 }
 
-// Starts a host as a child of this process, with its socket in a new folder only you can open.
-// stop() ends it and its sessions, and calls back once it has gone.
 function launch() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-host-'));
   const socket = path.join(dir, 'host.sock');
-  // Its own process group, so Ctrl+C reaches the relay first, and the relay can save its sessions.
   const child = spawn(process.execPath, [__filename, socket], { stdio: ['pipe', 'pipe', 'inherit'], detached: true });
   child.stdin.on('error', () => {});
   const ready = new Promise((resolve) => {
