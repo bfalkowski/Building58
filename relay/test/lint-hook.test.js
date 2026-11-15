@@ -1,5 +1,6 @@
 // The pre-commit lint check (.githooks/lint-staged.js), run by real git commits in a throwaway repo
-// with a small ESLint config of its own.
+// with a small ESLint config of its own. ESLint is found the way Node finds it from the repo, so the test
+// also runs in a task worktree that has no node_modules of its own.
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -10,6 +11,7 @@ const { spawnSync, execFileSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const HOOKS = path.join(ROOT, '.githooks');
+const MODULES = path.resolve(require.resolve('eslint/package.json', { paths: [ROOT] }), '..', '..');
 const CONFIG = "module.exports = [{ rules: { 'no-unused-vars': 'error' } }];\n";
 
 function attempt(files, { eslint = true } = {}) {
@@ -22,7 +24,7 @@ function attempt(files, { eslint = true } = {}) {
     run('add', '-A');
     run('commit', '-q', '--no-verify', '-m', 'init');
     run('config', 'core.hooksPath', HOOKS);
-    if (eslint) fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(repo, 'node_modules'));
+    if (eslint) fs.symlinkSync(MODULES, path.join(repo, 'node_modules'));
     for (const [file, text] of Object.entries(files)) fs.writeFileSync(path.join(repo, file), text);
     run('add', '-A');
     const r = run('commit', '-qm', 'try');
