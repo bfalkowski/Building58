@@ -10,11 +10,10 @@ const host = require('./session-host.js');
 const liveness = require('./liveness.js');
 
 let conn = null, ready = false, closing = false;
-const sessions = new Map();  // id -> { handlers: { out, exit } }, for sessions this relay drives
-const live = new Map();      // id -> { meta, cols, rows, out: [Buffer] }, running in the host and not taken back yet
-const jobs = new Map();      // id -> { count, since }: what the host last said of the commands its claude started
+const sessions = new Map();
+const live = new Map();
+const jobs = new Map();
 let lost = () => {};
-// relay/liveness.js asks this for a session's jobs, by its id, which is the terminal's id too.
 liveness.useJobs((id) => jobs.get(id) || null);
 
 const send = (msg) => { if (conn && !conn.destroyed) conn.write(JSON.stringify(msg) + '\n'); };
@@ -59,8 +58,6 @@ function attach(socket) {
   });
 }
 
-// Connects, and resolves once the host has said what is running. Tries for a few seconds, since a
-// host the supervisor just started may not be listening yet.
 async function connect() {
   let socket = process.env.RELAY_HOST_SOCKET;
   if (!socket) {
@@ -76,7 +73,6 @@ async function connect() {
   }
 }
 
-// What a relay drives a session through.
 function io(id) {
   return {
     write: (data) => send({ op: 'write', id, data: Buffer.from(data).toString('base64') }),
@@ -86,8 +82,6 @@ function io(id) {
   };
 }
 
-// Starts a session in the host. handlers.out (Buffer) gets its output, handlers.exit (code) its end.
-// meta comes back with it after a restart. Returns null while there is no host to start it in.
 function spawn(opts, handlers) {
   if (!ready || !conn || conn.destroyed) return null;
   sessions.set(opts.id, { handlers });
@@ -95,7 +89,6 @@ function spawn(opts, handlers) {
   return io(opts.id);
 }
 
-// A session still running in the host from the last relay, or null. Its output so far is in out.
 function peek(id) { return live.get(id) || null; }
 function adopt(id, handlers) {
   const s = live.get(id);
@@ -104,13 +97,11 @@ function adopt(id, handlers) {
   sessions.set(id, { handlers });
   return { io: io(id), out: Buffer.concat(s.out), meta: s.meta, cols: s.cols, rows: s.rows };
 }
-// Running sessions nothing took back have no desk, so they end.
 function dropUnclaimed(log) {
   for (const [id, s] of live) { log('Ended a session nothing took back after the restart, in ' + ((s.meta && s.meta.cwd) || 'an unknown folder') + '.'); io(id).hangup(); }
   live.clear();
 }
 const onLost = (fn) => { lost = fn; };
-// The relay is stopping. Its sessions run on in the host.
 function close() { closing = true; if (conn) conn.end(); }
 
 module.exports = { connect, spawn, peek, adopt, dropUnclaimed, onLost, close, isReady: () => ready && !!conn && !conn.destroyed };

@@ -15,9 +15,6 @@ const TEXT = 'Your task has no PR yet. If a test run was lost, run it again in t
 const keyOf = (task) => 'autopilot-nudge ' + task.id;
 const minutes = (ms) => Math.max(0, Math.round(ms / 60000));
 
-// c is Autopilot's store for the channel, and save writes it. Nudges the Dev of a task with no PR when it
-// is idle (not running a job, not in a turn, not stuck) and was not nudged in this stall. Returns true when
-// it nudged now, so the caller waits another stall time before it parks the task.
 function first(channel, c, task, dev, stallMs, save) {
   if (task.pr || !dev || (c.nudged && c.nudged[task.id])) return false;
   if (livenessOf(dev, Date.now()).state !== 'idle') return false;
@@ -27,9 +24,6 @@ function first(channel, c, task, dev, stallMs, save) {
   return true;
 }
 
-// Why a task with no PR goes to Waiting on you, from what is true now: its Dev's session ended, or its
-// Dev is idle, for as long as since its last hook, or since its session started if it sent none. It
-// forgets the nudge, and drops it if it was never typed, since the task is parked now.
 function noPrWhy(channel, c, task, dev, now) {
   const n = c.nudged && c.nudged[task.id];
   if (n) { delete c.nudged[task.id]; delivery.drop(channel, keyOf(task)); }

@@ -14,8 +14,6 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { livenessOf } = require('./liveness.js');
 
-// Work in a checkout that a stop or a merge would leave behind: uncommitted changes, or commits that are
-// on no remote. Returns the reason, or null. Anything git cannot answer counts as unsaved.
 function unsavedWork(dir) {
   const git = (...args) => execFileSync('git', ['-C', dir].concat(args), { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   try {
@@ -28,14 +26,12 @@ function unsavedWork(dir) {
 const busy = (lv) => ({ working: 'is working', quiet: 'is in a turn', waiting: 'is at a question',
   stuck: lv.cause === 'told' ? 'has not started on what it was told' : 'is in a turn with no hook' })[lv.state] || null;
 
-// dev is the task's Dev session, or null when it has none. unsaved is for the tests.
 function holdOf(task, dev, now, unsaved = unsavedWork) {
   const lv = livenessOf(dev, now);
   const gone = lv.state === 'gone';
   const news = task.reviews && task.reviews.pending;
   if (news && !gone) return { act: 'wait', why: 'Its Dev has not been told of the latest review yet.' };
   if (busy(lv)) return { act: 'wait', why: 'Its Dev ' + busy(lv) + ', maybe still answering the latest review, so the PR may not hold every fix yet.' };
-  // A checkout that is gone holds nothing. Its Dev's own folder counts only when the task has none.
   const dir = task.worktree || (dev && dev.cwd);
   const left = dir && fs.existsSync(dir) ? unsaved(dir) : null;
   if (left) return { act: 'person', why: 'Its Dev ' + (gone ? 'has ended' : 'stopped') + ', but ' + left + ', so the PR does not hold all its work.' };

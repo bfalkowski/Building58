@@ -10,28 +10,22 @@ const fs = require('fs');
 const path = require('path');
 
 const NAME = 'hook-queue.jsonl';
-const MAX_BYTES = 1024 * 1024;  // a relay that stays down does not fill the disk: past this, events are dropped
-const MAX_AGE_MS = 60 * 60 * 1000;  // an event older than an hour is dropped when read
+const MAX_BYTES = 1024 * 1024;
+const MAX_AGE_MS = 60 * 60 * 1000;
 
 const hash = (secret) => crypto.createHash('sha256').update(String(secret)).digest('hex');
 const file = (dir) => path.join(dir, NAME);
 
-// Called by the hook, so it is quick and never throws.
 function append(dir, entry) {
   try {
     const f = file(dir);
     try { if (fs.statSync(f).size > MAX_BYTES) return false; } catch (e) { /* no queue yet */ }
-    // Only a room that has run here has its folder. With none, nothing is kept, so hooks installed
-    // with no room running fill no file.
     if (!fs.existsSync(dir)) return false;
-    // One write of one line: hooks that fail at once each add their own line whole.
     fs.appendFileSync(f, JSON.stringify(entry) + '\n', { mode: 0o600 });
     return true;
   } catch (e) { return false; }
 }
 
-// Every queued entry, oldest event first, and the file gone. It is moved aside before it is read, so a
-// hook that adds a line meanwhile starts a new file, which the next take reads.
 function take(dir, now) {
   const f = file(dir), mine = f + '.' + process.pid + '.taking';
   try { fs.renameSync(f, mine); } catch (e) { return []; }

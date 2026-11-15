@@ -59,7 +59,6 @@ function seatAll(people, sessions, before) {
   const held = new Set(Object.keys(before).filter((id) => !live.has(id)).map((id) => before[id]));
   const left = order.filter((s) => !(s.id in out));
   const others = () => people.filter((p) => !p.lead && !taken.has(p.id));
-  // Every other desk is full for the ones left, so the Lead's desk goes first to the one who had it.
   const keeper = desk && !taken.has(desk.id) && left.length > others().length ? left.find((s) => before[s.id] === desk.id) : null;
   if (keeper) sit(keeper, desk.id);
   for (const s of left) {
@@ -71,7 +70,6 @@ function seatAll(people, sessions, before) {
   return out;
 }
 
-// A name's place in a room's own order: a small hash of the room's word and the name.
 function rank(seed, name) {
   let h = 2166136261;
   for (const c of String(seed) + '\n' + name) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
@@ -106,13 +104,6 @@ function nameAll(people, names, sessions, seats, before, used, seed) {
   return out;
 }
 
-// A name as the relay keeps it: what prints in the Lead's terminal (the Floor, ticket.js stop) and
-// on the page. Control characters become a space. Characters that hide or reorder text in a terminal
-// go: zero-width and invisible ones (U+00AD, U+034F, U+180E, U+200B to U+200D, U+2060 to U+2064,
-// U+FEFF), and bidi marks and controls (U+200E, U+200F, U+061C, U+202A to U+202E, U+2066 to U+2069),
-// so a name cannot hide or flip the text after it. Then spaces collapse, and it keeps 40 characters,
-// counted by code point so the cut never leaves half an emoji (a lone surrogate). Returns '' when nothing is left.
-// U+034F is a combining mark, so it sits outside the brackets, where lint would read it as joined to the one before.
 const HIDDEN = /\u034f|[\u00ad\u180e\u200b-\u200f\u2060-\u2064\u202a-\u202e\u2066-\u2069\u061c\ufeff]/g;
 function plainName(v) {
   const one = oneLine(String(v == null ? '' : v).replace(HIDDEN, ''));

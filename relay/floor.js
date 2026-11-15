@@ -23,21 +23,19 @@ const { tiredOf } = require('./lead-tired.js');
 const { holdOf, unsavedWork } = require('./merge-hold.js');
 
 const config = require('./config.js');
-// Read at each use: the person turns stops on in Settings (or with RELAY_LEAD_STOPS=1), off by default.
 const LEAD_STOPS = () => config.get('leadStops');
-const STOP_LIMIT = () => config.get('leadStopLimit');  // stops an hour, on each channel
+const STOP_LIMIT = () => config.get('leadStopLimit');
 const HOUR = 60 * 60 * 1000;
-const stopsAt = new Map();  // channel -> times of the Lead's stops in the last hour
+const stopsAt = new Map();
 
 const minutes = (ms) => Math.max(0, Math.floor(ms / 60000));
-// What the session is doing, from relay/liveness.js.
 function stateOf(t, now) {
   const lv = livenessOf(t, now);
   if (lv.state === 'waiting') return 'waiting on the person';
   if (lv.state === 'job') return 'job: its turn ended ' + minutes(now - lv.since) + ' min ago, and ' + jobWords(t);
   if (lv.state === 'quiet') return 'quiet: no hook for ' + minutes(now - lv.since) + ' min, its screen still moves';
   if (lv.state === 'stuck' && lv.cause === 'silent') return 'stuck: no hook and no output for ' + minutes(now - lv.since) + ' min';
-  if (lv.state === 'stuck') return 'stuck: told ' + minutes(now - lv.since) + ' min ago and did not start, ' + t.stuck.why;  // relay/delivery.js
+  if (lv.state === 'stuck') return 'stuck: told ' + minutes(now - lv.since) + ' min ago and did not start, ' + t.stuck.why;
   return lv.state;
 }
 function roleOf(t) {
@@ -52,8 +50,6 @@ const nameOf = (t) => t.who || 'Session ' + String(t.sessionId).slice(0, 8);
 
 const merged = (channel, pr) => chat.prMerged(channel, pr) || ((pipeline.of(pr) || {}).prState === 'MERGED');
 
-// The Lead's verdict: { safe, canStop, reason }. safe is the Floor's verdict, and canStop adds which
-// kinds the Lead may stop. Git runs only for a Dev the rest already allows.
 function leadVerdict(channel, t, task, now) {
   const v = stopVerdict(t, task, now, terminal.questionOnScreen(t));
   if (!v.safe) return { safe: false, canStop: false, reason: v.reason };
@@ -63,12 +59,8 @@ function leadVerdict(channel, t, task, now) {
   return { safe: true, canStop: true, reason: kind.why + v.reason };
 }
 
-// What the desk says (relay/desk.js), from what the relay keeps: tasks, the pipeline it polls, reviews
-// and Autopilot. Nothing here asks GitHub. reviews.js and autopilot.js are read when a desk is drawn,
-// since they load after this file.
 function deskFor(channel, t, task, work, verdict, now) {
   const role = roleOf(t), pr = work.pr || (task && task.pr) || t.pr || t.reviewOf || null;
-  // A reviewer's ticket and column are those of the task whose PR it reviews.
   const shown = role === 'reviewer' ? (pr && tasks.list(channel).find((x) => x.pr === pr)) || null : task;
   const lead = terminal.leadOf(channel);
   const pipe = shown && shown.pr === pr ? tasks.pipelineOf(shown) : null;
@@ -86,7 +78,6 @@ function deskFor(channel, t, task, work, verdict, now) {
   });
 }
 
-// Who sits where: the part of a row the Board needs, with no git to run, so the Board can ask often.
 function seatOf(t, task) {
   const work = terminal.workOfTerm(t) || {};
   return { name: nameOf(t), named: !!t.who, role: roleOf(t), ticket: work.ticket || (task && task.ticket) || null };
@@ -105,11 +96,8 @@ function rowOf(channel, t, task, now) {
     pr: work.pr || (task && task.pr) || t.pr || null, state: stateOf(t, now), stuck: t.stuck && t.state === 'idle' ? { minutesAgo: minutes(now - t.stuck.at), why: t.stuck.why } : null, message: t.message || null,
     reviewWaits: !!work.reviewWaits, minutesSinceHook: t.hooked ? minutes(now - t.lastActAt) : null, safe: verdict.safe, canStop: verdict.canStop, why: verdict.reason,
     desk: deskFor(channel, t, task, work, verdict, now),
-    // How full the Lead's context is (relay/lead-tired.js). Only the Lead's, for now.
     tired: t.lead ? tiredOf(t) : null,
-    // For a Dev whose PR is open: why a merge now would leave its work out (relay/merge-hold.js), or null.
     mergeHold: mergeHoldOf(channel, t, task, now),
-    // For a Dev whose task has an open PR, while the PR watch is on: who the PR waits on, and for how long (relay/pr-watch.js).
     waitsOn: roleOf(t) === 'Dev' && task ? require('./pr-watch.js').lineOf(channel, task, now) : null,
   };
 }
@@ -127,8 +115,6 @@ function floorOf(channel, now) {
   return pairReviewers(terminal.all(channel).map((t) => rowOf(channel, t, taskOf(t), now)));
 }
 
-// The one session that `who` names: the name the Floor shows (any case), a task id, or a desk's id.
-// Returns [session] or [null, status, error, message].
 function pick(channel, who) {
   const want = String(who || '').trim().toLowerCase();
   if (!want) return [null, 400, 'bad_param', 'Say who to stop: the name ticket.js floor shows, or a task id.'];
@@ -142,7 +128,6 @@ function pick(channel, who) {
   return [matches[0]];
 }
 
-// The Lead stops one session. Every refusal says why, so the Lead can tell the person.
 function stopOne(channel, who, ctx, now) {
   if (!LEAD_STOPS()) return [403, { ok: false, error: 'lead_stops_off', message: 'The person has not let the Lead stop sessions. They turn it on with Let the Lead stop sessions in Settings. Tell them who could be stopped instead.' }];
   if (!ctx.agent || !ctx.agent.lead || !ctx.agent.board) return [403, { ok: false, error: 'lead_only', message: 'Only a Lead the person let move the board stops sessions this way. The page stops one with Stop this session.' }];
@@ -150,7 +135,6 @@ function stopOne(channel, who, ctx, now) {
   if (!t) return [status, { ok: false, error, message }];
   const task = taskFinder(channel)(t);
   const verdict = leadVerdict(channel, t, task, now);
-  // The session id, so the Lead can tell the person how to bring back one that is not a task's worker (Resume).
   const row = { name: nameOf(t), role: roleOf(t), terminal: t.id, sessionId: t.sessionId, task: task ? task.id : null, pr: (task && task.pr) || t.pr || null };
   if (!verdict.safe) return [409, { ok: false, error: 'not_safe', message: 'Not stopped: ' + verdict.reason + '.', session: row }];
   if (!verdict.canStop) return [403, { ok: false, error: 'not_the_leads', message: 'Not stopped: ' + verdict.reason + '. The Lead stops only an automatic reviewer that has posted, or a Dev whose PR merged or whose task is Done, with all its work pushed. Leave this one to the person.', session: row }];
@@ -164,15 +148,10 @@ function stopOne(channel, who, ctx, now) {
   if (task) { tasks.record(task, { type: 'note', note: 'The Lead stopped its worker: ' + verdict.reason + '.' }); tasks.save(); }
   const named = row.name + ' (' + [row.role, task && 'task ' + task.id, 'session ' + row.sessionId].filter(Boolean).join(', ') + ')';
   ctx.log('The Lead stopped ' + named + ' on ' + channel + ': ' + verdict.reason);
-  chat.announce(channel, 'The Lead stopped ' + named + ': ' + verdict.reason + '.', task && task.ticket);  // so the page shows who
+  chat.announce(channel, 'The Lead stopped ' + named + ': ' + verdict.reason + '.', task && task.ticket);
   return [200, { ok: true, stopped: Object.assign(row, { why: verdict.reason }) }];
 }
 
-// The person stops sessions from the Floor: one desk's Stop ({ who: its terminal id }), or Stop all
-// safe ({ all: true }). It stops only a session its desk calls Safe to stop at this moment: the same
-// verdict and the same two kinds as the Lead's stop, with all its work pushed. The Lead's switch and
-// hourly limit are not asked, since the person is the one stopping. Returns who it stopped, and why
-// it kept each one it was asked to stop.
 function personStop(channel, body, ctx, now) {
   const taskOf = taskFinder(channel);
   const all = terminal.all(channel).filter((t) => !t.exited && !t.stopped);
@@ -192,11 +171,6 @@ function personStop(channel, body, ctx, now) {
   return [200, { ok: true, stopped }];
 }
 
-// Autopilot frees desks before it starts a ticket (relay/autopilot.js): it stops up to need of the
-// sessions that pick allows, (t, task) => boolean, and that the Lead may stop, by the same verdict and
-// the same two kinds, with all their work pushed. The longest idle goes first. The Lead's switch and
-// hourly limit are not asked: they are for the Lead. Like the Lead's stop, it is said in the chat, and
-// Autopilot's note puts it in the relay's log. Returns the sessions it stopped, each with why.
 function freeDesks(channel, need, now, by, pick) {
   const taskOf = taskFinder(channel);
   const free = terminal.all(channel).filter((t) => !t.exited && !t.stopped)
@@ -217,7 +191,6 @@ function freeDesks(channel, need, now, by, pick) {
   return stopped;
 }
 
-// ---------- routes under /channels/{channel}/floor ----------
 async function handle(req, res, channel, rest, ctx) {
   if (!/^\/floor(\/|$)/.test(rest)) return false;
   const isRead = rest === '/floor' && req.method === 'GET', isStop = rest === '/floor/stop' && req.method === 'POST';

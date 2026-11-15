@@ -30,10 +30,8 @@
 // This module only reports it, so there is one place to ask.
 'use strict';
 const config = require('./config.js');
-const STALL = () => config.get('stallMinutes') * 60 * 1000;  // read at each use (Settings)
+const STALL = () => config.get('stallMinutes') * 60 * 1000;
 
-// A session's jobs: { count, since } or null. t.jobs where a test sets it, otherwise what the session host
-// last said for that session, which relay/host-link.js keeps and hands here with useJobs.
 let jobsSource = () => null;
 const useJobs = (fn) => { jobsSource = fn; };
 const jobsOf = (t) => (!t ? null : t.jobs !== undefined ? t.jobs : jobsSource(t.id));
@@ -54,7 +52,6 @@ function livenessOf(t, now, stallMs) {
   return at('stuck', Math.max(hookAt, outAt), 'silent');
 }
 
-// The jobs of a session, in words for the Floor.
 function jobWords(t) {
   const n = (jobsOf(t) || {}).count || 0;
   return n > 1 ? n + ' commands it started still run' : 'a command it started still runs';

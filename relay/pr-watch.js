@@ -39,9 +39,8 @@ const GH = process.env.GH_CMD || 'gh';
 const PR_URL = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/;
 const ON = () => config.get('prWatch');
 const LATE = () => config.get('prWatchWaitMinutes') * 60 * 1000;
-const KEEP = 12 * 60 * 60 * 1000;  // how long a message waits to be typed
+const KEEP = 12 * 60 * 60 * 1000;
 
-// ---------- the store: { channel: { prs: { pr: { head, owner, cause, why, since, seenAt, late, done: { 'head cause': at } } } } } ----------
 const ownsFile = claim(FILE);
 let store = {};
 if (ownsFile) try { store = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch (e) {
@@ -73,8 +72,6 @@ function gh(args, cwd) {
 }
 const git = (cwd, args) => new Promise((resolve, reject) => execFile('git', ['-C', cwd].concat(args), { timeout: 10000 }, (e, out) => (e ? reject(e) : resolve(String(out).trim()))));
 
-// Commits in the Dev's checkout that the PR does not have: past the PR's head when git has that commit, else on
-// no remote. null when there is no checkout, or git cannot say.
 async function unpushedIn(dir, head) {
   if (!dir || !fs.existsSync(dir)) return null;
   try {
@@ -84,7 +81,6 @@ async function unpushedIn(dir, head) {
   } catch (e) { return null; }
 }
 
-// ---------- what it says ----------
 const TEXT = {
   push: (pr, n) => 'Your checkout has ' + n + ' commit' + (n === 1 ? '' : 's') + ' that your PR ' + pr + ' does not have. Push them with a plain git push, so the PR holds all your work and gets its review.',
   conflict: (pr) => 'Your PR ' + pr + ' conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run the tests, and push only that merge.',
@@ -93,7 +89,6 @@ const TEXT = {
   ready: (pr, head, ticket) => 'PR ' + pr + (ticket ? ' (' + ticket + ')' : '') + ' is reviewed at its head ' + head.slice(0, 7) + ' with a merge verdict, its checks are green, and GitHub can merge it cleanly. If you may merge it and the merge conditions hold, merge it; if not, tell the person it is ready. This is from the relay\'s PR watch and grants nothing.',
 };
 
-// ---------- one look ----------
 let looking = false;
 async function tick() {
   if (looking || !ctx || !ON()) return;
@@ -110,7 +105,6 @@ async function look(channel) {
     try { await lookAt(channel, task, Date.now()); } catch (e) { log('Could not look at ' + task.pr + ': ' + e.message); }
   }
 }
-// A PR that merged, closed, or whose task is done needs nothing more.
 function forget(channel, pr) {
   delete chOf(channel).prs[pr];
   delivery.drop(channel, 'pr-watch ' + pr); delivery.drop(channel, 'pr-watch-lead ' + pr);
@@ -138,11 +132,9 @@ async function lookAt(channel, task, now) {
     leadMerges: !!(lead && lead.merge && !autopilot.isOn(channel)),
   });
   const rec = chOf(channel).prs[task.pr] || (chOf(channel).prs[task.pr] = { done: {} });
-  // The wait counts only while the watch looks: after it was off, it starts again from now.
   const unseen = !rec.seenAt || now - rec.seenAt > 3 * config.get('prWatchSeconds') * 1000 + 60000;
   if (unseen || rec.head !== head || rec.owner !== move.owner || rec.cause !== move.cause) Object.assign(rec, { head, owner: move.owner, cause: move.cause, since: now, late: null });
   rec.why = move.why; rec.seenAt = now;
-  // The push is kept by the commit to push too, so new local commits are told again.
   const key = head + ' ' + move.cause + (move.cause === 'push' && unpushed ? ' ' + unpushed.at : '');
   if (move.act && !rec.done[key]) {
     act(channel, task, move, { head, dev, unpushed, review: reviews.stateOf(channel, task.pr) });
@@ -155,7 +147,6 @@ async function lookAt(channel, task, now) {
     chat.announce(channel, 'PR ' + number(task.pr) + (task.ticket ? ' (' + task.ticket + ')' : '') + ' waits on you: ' + late.why, task.ticket);
     log('PR ' + number(task.pr) + ' waits on the person: ' + late.why);
   }
-  // Only this head's actions are kept: a new head starts afresh.
   for (const k of Object.keys(rec.done)) if (!k.startsWith(head + ' ')) delete rec.done[k];
   save();
 }
@@ -165,7 +156,6 @@ function act(channel, task, move, { head, dev, unpushed, review }) {
     const what = reviews.owe(channel, pr, { from: (dev && dev.cwd) || task.worktree || task.repo, dev, head });
     log('PR ' + number(pr) + ' had no review of ' + head.slice(0, 7) + ': ' + what + '.');
   } else if (move.act === 'tell-dev') {
-    // The relay told the Dev of this failed check already, when the PR's review waited on it (relay/reviews.js).
     if (move.cause === 'red' && review && review.red === head) return;
     const text = move.cause === 'push' ? TEXT.push(pr, unpushed.count) : TEXT[move.cause](pr, head);
     delivery.save(channel, { key: 'pr-watch ' + pr, terminal: dev.id, sessionId: dev.sessionId, expiresAt: Date.now() + KEEP, text });
@@ -176,8 +166,6 @@ function act(channel, task, move, { head, dev, unpushed, review }) {
   }
 }
 
-// ---------- what the Floor, the Board and ticket.js floor show ----------
-// One line for a task's PR, from memory only, so drawing a desk or a card asks GitHub nothing.
 function lineOf(channel, task, now) {
   if (!ON() || !task || !task.pr) return null;
   const r = store[channel] && store[channel].prs[task.pr];
@@ -185,7 +173,6 @@ function lineOf(channel, task, now) {
   return plan.lineOf(r.late ? Object.assign({}, r, { owner: 'you', why: r.late, late: true }) : r, now || Date.now());
 }
 
-// ---------- GET /channels/{channel}/pr-watch ----------
 async function handle(req, res, channel, rest, rctx) {
   if (rest !== '/pr-watch') return false;
   const deny = terminal.localOnly(req, rctx.port);
@@ -200,7 +187,7 @@ async function handle(req, res, channel, rest, rctx) {
 
 function begin(relayCtx) {
   ctx = relayCtx;
-  config.every('prWatchSeconds', tick, 5000);  // the first look comes soon after a start, so a restart costs little
+  config.every('prWatchSeconds', tick, 5000);
 }
 
 module.exports = { handle, begin, lineOf, tick };

@@ -14,16 +14,13 @@ const fs = require('fs');
 const path = require('path');
 const sessionEnv = require('./session-env.js');
 
-// A name from a file, such as a host or a profile: letters, digits, dots, dashes and @ only.
 const word = (v) => String(v).replace(/[^\w.@-]/g, '').slice(0, 64);
 const shown = (home, p) => (p === home || p.startsWith(home + path.sep) ? '~' + p.slice(home.length) : p);
 const read = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return null; } };
 const isDir = (f) => { try { return fs.statSync(f).isDirectory(); } catch (e) { return false; } };
 const list = (items) => [...new Set(items.map(word).filter(Boolean))].join(', ');
 
-// Each login: where it lives, and what it says about itself without its secret.
 const LOGINS = [
-  // gh keeps a token per host in hosts.yml, unless it is in the macOS keychain. Only the hosts are read.
   ['gh', (home, env) => path.join(env.GH_CONFIG_DIR || path.join(home, '.config', 'gh'), 'hosts.yml'),
     (text) => { const hosts = list(text.match(/^[^\s#][^:\s]*(?=:\s*$)/gm) || []); return hosts ? 'hosts: ' + hosts : 'no hosts'; }],
   ['git credentials', (home) => path.join(home, '.git-credentials'), () => null],
@@ -53,15 +50,12 @@ function logins(home, env) {
   });
 }
 
-// Where a session runs. A checkout of its own is under a .worktrees folder (relay/checkouts.js).
 function whereOf(cwd, root) {
   if (/[\\/]\.worktrees[\\/]/.test(cwd)) return 'its own checkout';
   if (cwd === root || cwd.startsWith(root + path.sep)) return 'the relay\'s own folder';
   return 'another folder';
 }
 
-// The person's Claude Code permission settings, without the rules' words: a rule can name a command
-// with a key in it.
 function claudeSettings(dir) {
   let s;
   try { s = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')) || {}; } catch (e) { return { read: false }; }
@@ -70,12 +64,10 @@ function claudeSettings(dir) {
   return { read: true, defaultMode: typeof p.defaultMode === 'string' ? word(p.defaultMode) : null, additionalDirectories: Array.isArray(p.additionalDirectories) ? p.additionalDirectories.length : 0, allow: n(p.allow), ask: n(p.ask), deny: n(p.deny) };
 }
 
-// in: { env, home, root, live: [{ who, role, cwd, board, merge, starts }], claude, secretCheck: { hookOn, found } }
 function measure(input) {
   const home = input.home, root = input.root, live = input.live || [];
   const env = sessionEnv.names(input.env || {});
   const all = logins(home, input.env);
-  // A file that holds no login, such as a docker config with no auths, is not one a session can use.
   const found = all.filter((l) => l.found && !/^no /.test(l.detail || ''));
   const sessions = live.map((s) => ({ who: word(s.who || 'a session'), role: s.role || 'session', cwd: shown(home, s.cwd || ''), where: whereOf(s.cwd || '', root) }));
   const claude = input.claude || { read: false };
@@ -84,13 +76,11 @@ function measure(input) {
   const sc = input.secretCheck || {};
   const secretCheck = {
     hookOn: sc.hookOn === undefined ? null : !!sc.hookOn,
-    found: (sc.found || []).slice(0, 20),  // each is a file, a line and a kind, never the value (.githooks/check-secrets.js)
+    found: (sc.found || []).slice(0, 20),
     ci: 'CI runs the check on what each pull request adds, and on every tracked file (Secret scan).',
     caughtNote: 'The relay does not see what the pre-commit hook stopped on a computer, so what it caught before a commit is not counted. Only what the tracked files hold now is.'
   };
 
-  // Article 7: before tickets start by themselves (rung 3) or merge by themselves (rung 4), a session gets
-  // only the access its ticket needs: its own checkout and the logins its ticket uses.
   const gaps = [];
   const gap = (what, rung) => gaps.push({ what, waits: rung });
   if (env.loginLike.length) gap('Every session inherits variables that look like logins: ' + env.loginLike.join(', ') + '. Article 7 asks for only the logins its ticket uses.', 'rungs 3 and 4');

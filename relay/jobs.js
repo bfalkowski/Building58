@@ -27,24 +27,20 @@ const SNAPSHOT = /\/shell-snapshots\/snapshot-/;
 const LONG = 60 * 1000;
 const EVERY = Number(process.env.RELAY_JOB_SCAN_MS) > 0 ? Number(process.env.RELAY_JOB_SCAN_MS) : 5000;
 
-// p: { args, ageMs }. Plain, so the tests can run it on its own.
 function isJob(p) {
   const words = String((p && p.args) || '').trim().split(/\s+/);
   if (!SHELLS.has(path.basename(words[0] || '').replace(/^-/, ''))) return false;
-  // -c among the options before the first word that is not one: -c, -lc, -l -c.
   let withC = false;
   for (const w of words.slice(1)) { if (!/^-[A-Za-z]+$/.test(w)) break; if (w.includes('c')) withC = true; }
   if (!withC) return false;
   return SNAPSHOT.test(p.args) || (p.ageMs || 0) >= LONG;
 }
 
-// ps prints how long a process has run as [[dd-]hh:]mm:ss.
 function parseEtime(s) {
   const m = /^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/.exec(String(s || '').trim());
   if (!m) return 0;
   return ((((Number(m[1] || 0) * 24) + Number(m[2] || 0)) * 60 + Number(m[3])) * 60 + Number(m[4])) * 1000;
 }
-// What `ps -A -ww -o pid=,ppid=,etime=,args=` prints, as [{ pid, ppid, ageMs, args }].
 function parsePs(text) {
   const out = [];
   for (const line of String(text || '').split('\n')) {
@@ -53,7 +49,6 @@ function parsePs(text) {
   }
   return out;
 }
-// The jobs of the claude under a session's bridge: [{ pid, ageMs }]. The bridge's children are its claude.
 function jobsUnder(table, bridgePid) {
   const claudes = new Set(table.filter((p) => p.ppid === bridgePid).map((p) => p.pid));
   return table.filter((p) => claudes.has(p.ppid) && isJob(p)).map((p) => ({ pid: p.pid, ageMs: p.ageMs }));
@@ -63,9 +58,6 @@ function scan(done) {
   execFile('ps', ['-A', '-ww', '-o', 'pid=,ppid=,etime=,args='], { maxBuffer: 64 * 1024 * 1024, timeout: 5000 }, (err, out) => done(err ? null : parsePs(out)));
 }
 
-// For the session host. Every EVERY ms, while list() gives any sessions ({ child } each, the bridge),
-// it reads the process tree once, and calls changed(s, { count, since }) for each session whose jobs
-// changed. since is when the oldest of them started, in ms, or null with none.
 function watch(list, changed) {
   const last = new WeakMap();
   let busy = false;
@@ -75,7 +67,7 @@ function watch(list, changed) {
     busy = true;
     scan((table) => {
       busy = false;
-      if (!table) return;  // ps failed: say nothing new, rather than something wrong
+      if (!table) return;
       const now = Date.now();
       for (const s of sessions) {
         if (!s.child || !s.child.pid) continue;

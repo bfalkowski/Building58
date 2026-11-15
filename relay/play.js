@@ -18,7 +18,6 @@ let args;
 if (rest[0] === '--json') {
   try { args = JSON.parse(rest[1] || '{}'); } catch (e) { console.error('--json needs a JSON object: ' + e.message); process.exit(2); }
 } else args = rest.length ? { text: rest.join(' ') } : {};
-// OFFICE_TICKET_URL is the channel's /tickets route. /play is beside it.
 const to = URL_.replace(/\/tickets\/?$/, '').replace(/\/$/, '') + '/play';
 
 (async () => {

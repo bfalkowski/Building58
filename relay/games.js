@@ -52,12 +52,11 @@ const tickets = require('./tickets.js');
 const sessionEnv = require('./session-env.js');
 
 const API = 1;
-// What a game may ask of the room, and the part of it this version can do.
 const NEEDS = ['privateBriefs', 'ask', 'files', 'transcript', 'chat', 'phases', 'votes', 'turns', 'sandboxRepo', 'personSeat', 'gameMaster'];
 const CAN = ['privateBriefs', 'ask', 'files'];
 const WATCH = ['all', 'none'];
 const TIMEOUT = () => (Number(process.env.RELAY_GAME_TIMEOUT_MS) >= 1 ? Number(process.env.RELAY_GAME_TIMEOUT_MS) : 30000);
-const BRIEF_RETRY = 300, BRIEF_GIVE_UP = 10 * 60 * 1000;  // a seat may wait on a question, such as trusting its folder
+const BRIEF_RETRY = 300, BRIEF_GIVE_UP = 10 * 60 * 1000;
 const KEEP_PAST = 50;
 
 const roundSeats = require('./round-seats.js');
@@ -67,10 +66,9 @@ const SPEND_EVERY = () => (Number(process.env.RELAY_SEAT_SPEND_MS) >= 50 ? Numbe
 
 const repo = () => process.env.GAMES_REPO || '';
 const seatsDir = roundSeats.dir;
-const rounds = new Map();  // channel: the round that runs
+const rounds = new Map();
 const past = new Map();
 
-// Every folder in GAMES_REPO with a game.json, with whether the loader can run it and why not.
 function listGames() {
   const root = repo();
   if (!root) return [];
@@ -113,7 +111,6 @@ function whyNot(root, folder, g) {
   return null;
 }
 
-// What anyone may see of a round while it runs. No brief, no role and no truth are in it.
 function view(r) {
   return { id: r.id, game: r.game, state: r.state, watch: r.watch, isolation: r.isolation, startedAt: r.startedAt, spentUsd: r.spent, capUsd: r.cap,
     unpriced: [...new Set(r.seats.flatMap((s) => (s.cost ? s.cost.unpriced : [])))],
@@ -135,7 +132,6 @@ function startRound(channel, body, ctx) {
   if (!WATCH.includes(watch)) return [400, { ok: false, error: 'bad_watch', message: 'Watch is all or none.' }];
   const cap = body.capUsd === undefined ? null : Number(body.capUsd);
   if (cap !== null && !(cap > 0)) return [400, { ok: false, error: 'bad_cap', message: 'The spend cap is a number of dollars above 0.' }];
-  // Every seat runs inside its own boundary (relay/seat-boundary.js), or the person said to run without.
   const isolation = seatBoundary.mode();
   if (!isolation) return [409, { ok: false, error: 'no_boundary', message: 'Seats need sandbox-exec, which this computer does not have. Set RELAY_SEAT_ISOLATION=off to run rounds without a boundary.' }];
   if (terminal.all(channel).length + n > terminal.DESKS) return [409, { ok: false, error: 'full', message: 'A round of ' + n + ' seats needs ' + n + ' free desks.' }];
@@ -144,11 +140,9 @@ function startRound(channel, body, ctx) {
   const r = { id: crypto.randomBytes(4).toString('hex'), channel, game: game.folder, name: game.name, watch, cap, isolation, spent: 0, gameSpent: 0, state: 'running',
     startedAt: new Date().toISOString(), seats: [], waiting: new Map(), ctx, ready: false, child: null };
   rounds.set(channel, r);
-  // The game gets the relay's environment without its key and settings, as a session does.
   r.child = spawn(process.execPath, [path.join(dir, game.entry)], { cwd: dir, env: sessionEnv.build(process.env, {}), stdio: ['pipe', 'pipe', 'pipe'] });
-  r.child.stderr.on('data', () => {});  // a game's own errors may hold its truth, so they are not logged
+  r.child.stderr.on('data', () => {});
   r.child.on('error', (e) => endRound(r, 'failed', null, 'The game could not start: ' + e.message));
-  // close, not exit: exit can come before the last lines the game wrote are read, such as its done.
   r.child.on('close', (code) => { if (r.state === 'running') endRound(r, 'failed', null, 'The game ended by itself (code ' + code + ').'); });
   r.child.stdin.on('error', () => {});
   readline.createInterface({ input: r.child.stdout }).on('line', (line) => fromGame(r, line));
@@ -208,7 +202,6 @@ function countSpend(r, last) {
   if (!last && r.cap !== null && r.spent >= r.cap) endRound(r, 'stopped', null, 'The round reached its spend cap of $' + r.cap + '.');
 }
 
-// Types a seat's brief as its first prompt, once the session can take it. The text lives only here.
 function brief(r, s, text) {
   const since = Date.now();
   const tryNow = () => {
@@ -238,7 +231,6 @@ function play(channel, agent, body) {
   });
 }
 
-// A second finish while the first waits gets the same answer.
 function finishRound(r) {
   if (r.finishing) return r.finishing;
   r.finishing = new Promise((resolve) => {
@@ -249,8 +241,6 @@ function finishRound(r) {
   return r.finishing;
 }
 
-// Ends a round: answers whatever waits, stops the game and every seat, and keeps only the id, game,
-// time and score. why is said in the relay's log, and never holds the game's words.
 function endRound(r, state, score, why) {
   if (r.state !== 'running') return;
   countSpend(r, true);
@@ -273,15 +263,11 @@ function endRound(r, state, score, why) {
   r.ctx.log('The round of ' + r.name + ' ' + (state === 'done' ? 'is done.' : 'ended: ' + (why || state) + '.'));
   if (r.onDone) r.onDone();
 }
-// A seat's folder goes when its session ends, and the round's folder with its last seat.
 function removeDir(s) {
   try { fs.rmSync(s.dir, { recursive: true, force: true }); } catch (e) { /* already gone */ }
   try { fs.rmdirSync(path.dirname(s.dir)); } catch (e) { /* another seat is still in it */ }
 }
 
-// For relay/server.js: whether a session is a seat in a round. Its token then reaches only /play. A
-// seat stays one after its round ends, while it is still ending, since the session itself says so (its
-// round). channel finds the session when only its id is known, as in a hook.
 function isSeat(t, channel) {
   if (!t) return false;
   if (t.round) return true;
@@ -290,13 +276,10 @@ function isSeat(t, channel) {
   for (const r of rounds.values()) if (r.seats.some((s) => s.terminal === t.id)) return true;
   return false;
 }
-// Whether a seat sits on Claude Code's question about trusting its folder. Nothing is typed into it
-// until the person answers, so that answer is the one thing the person may type into a seat.
 function onTrust(channel, id) {
   const t = terminal.find(channel, id);
   return !!(t && !t.exited && terminal.questionOnScreen(t) === 'trust');
 }
-// For relay/terminal.js: why the person may not open or type into a session now, or null.
 terminal.guard((channel, t, verb) => {
   const r = rounds.get(channel);
   if (!r || !r.seats.some((s) => s.terminal === t.id)) return null;
@@ -304,13 +287,11 @@ terminal.guard((channel, t, verb) => {
   if (verb === 'stream' && r.watch === 'none') return 'This round is Watch none, so seat screens open when it ends.';
   return null;
 });
-// For relay/tickets.js and relay/autopilot.js: new starts wait while a round runs.
 tickets.holdStarts((channel) => (rounds.has(channel) ? 'A round of ' + rounds.get(channel).name + ' is running. New tickets start when it ends.' : null));
 
 const ROUTE = /^\/(games|play|rounds(\/current(\/(finish|stop))?)?|rounds\/[0-9a-f]{8}\/seats\/S\d{1,2}\/steps)$/;
 async function handle(req, res, channel, rest, ctx) {
   if (!ROUTE.test(rest)) return false;
-  // Like every room route, these answer only the room page and the sessions on this computer.
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (rest === '/games') {

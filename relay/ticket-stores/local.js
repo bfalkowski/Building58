@@ -27,7 +27,7 @@ function open(options) {
   const owns = claim(file);
   let data = new Map();
   try { data = new Map(Object.entries(JSON.parse(fs.readFileSync(file, 'utf8')))); } catch (e) {
-    if (e.code !== 'ENOENT') {  // keep a file we cannot read, rather than writing over it
+    if (e.code !== 'ENOENT') {
       const aside = file + '.unreadable-' + Date.now();
       try { fs.renameSync(file, aside); console.error('Could not read ' + file + '. Kept it as ' + aside); } catch (e2) { /* nothing to keep */ }
     }

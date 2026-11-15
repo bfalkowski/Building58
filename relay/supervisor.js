@@ -23,20 +23,16 @@ const RESTART = 75;
 
 function supervise(file) {
   const env = Object.assign({}, process.env, { RELAY_WORKER: '1', RELAY_SUPERVISED: '1' });
-  // A random key must stay the same across a restart, or open pages and session hooks lose the relay.
   if (!env.RELAY_KEY) { env.RELAY_KEY = crypto.randomBytes(12).toString('hex'); env.RELAY_KEY_RANDOM = '1'; }
   const guard = rollback.ON();
   let child = null, stopping = false, host = null;
   const hostGone = () => !host || host.child.exitCode !== null || host.child.signalCode !== null;
-  // The sessions end after the relay, so the relay can save them first.
   const finish = (code) => { if (host) host.stop(() => process.exit(code)); else process.exit(code); };
-  // newCode: this start followed an Update's restart. again: this start is a rollback.
   function run(newCode, again) {
     const commit = guard ? rollback.head() : null;
     if (env.RELAY_TERMINAL === '1' && hostGone()) { host = sessionHost.launch(); env.RELAY_HOST_SOCKET = host.socket; }
-    // Its own process group, so Ctrl+C comes through here and the relay stops its sessions itself.
     const me = child = spawn(process.execPath, [file].concat(process.argv.slice(2)), { env, stdio: 'inherit', detached: true });
-    let checking = guard, back = null;  // back: what to do once this relay has exited, after a failed check
+    let checking = guard, back = null;
     function failed(why) {
       checking = false;
       const p = rollback.plan({ newCode, again, good: rollback.read().commit, head: commit, dirty: rollback.changed() });
@@ -44,8 +40,6 @@ function supervise(file) {
       if (!p.rollback) return;
       const good = rollback.read().commit;
       back = () => {
-        // If git refuses, nothing in the folder changed, so the relay starts again on the same code,
-        // as a rollback that never rolls back again, rather than leaving no relay at all.
         try { rollback.checkout(good); } catch (e) {
           console.error('Could not check out ' + good.slice(0, 7) + ', so the folder is as it was: ' + e.message + '. Starting the relay again on ' + String(commit).slice(0, 7) + '.');
           run(false, true); return;
@@ -54,7 +48,6 @@ function supervise(file) {
         console.error('Rolled back to ' + good.slice(0, 7) + ', the last commit that passed. Starting the relay again.');
         run(false, true);
       };
-      // The relay saves its sessions as it stops, and the exit below goes back.
       if (me.exitCode === null && me.signalCode === null) { me.kill('SIGTERM'); setTimeout(() => { if (me.exitCode === null && me.signalCode === null) me.kill('SIGKILL'); }, 10000).unref(); }
     }
     if (guard) {
