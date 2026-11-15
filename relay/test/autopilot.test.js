@@ -297,8 +297,9 @@ test('a merge verdict waits while the Dev works, and work left unpushed goes to 
 // before it merges, so a reply posted after the last poll still stops the merge.
 test('a Dev reply with the hold mark sends a merge-verdict PR to the person, even between polls', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
-  // Comment checks on, but after the first one (5 seconds in) the next is an hour away.
-  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '3600' });
+  // Comment checks start off. The test turns them on once the task has its PR, so the one check that comes
+  // 5 seconds later sees the PR however slow the start was, and the next is an hour away.
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '0' });
   t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
@@ -330,7 +331,10 @@ test('a Dev reply with the hold mark sends a merge-verdict PR to the person, eve
   await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-101' } });
   await say(r, 'Stop');
   await until(async () => (await ap()).prs.some((p) => p.verdict === 'merge' && /^Its Dev is working/.test(p.why || '')), 'the wait for the Dev');
-  await until(() => asked() >= 1, 'the first comment check', 150);
+  assert.strictEqual(asked(), 0, 'no comment check while they are off');
+  assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 3600 } })).status, 200);
+  await until(async () => ((await task()).reviews || {}).checkedAt, 'the first comment check to end', 150);
+  assert.strictEqual(asked(), 1, 'one comment check read the comments');
   // The Dev's reply, after the last poll: a finding marked non-blocking is a bug. It pushes nothing, and stops.
   const n = asked();
   answer([{ id: 102, html_url: PR + '#issuecomment-102', body: '<!-- office:dev -->\n<!-- office:hold -->\nFinding 2 is a bug.', created_at: new Date().toISOString() }]);
