@@ -1,5 +1,5 @@
 // The officers' buttons on the org chart's officer cards (office/officers.js, relay/test/browser/page.js,
-// WebGL off): Ask security starts its session, its report shows on the Floor in place of Activity, and the
+// WebGL off): Ask security starts its session, its report shows on the Floor under the people, and the
 // COO's report and its own take turns.
 'use strict';
 const assert = require('node:assert');
@@ -24,13 +24,13 @@ pageTest('Ask security starts its session, and its report shows on the Floor', g
   await page.locator('#security-ask', { hasText: 'Security is writing' }).waitFor({ state: 'attached' });
   const officer = await until(async () => (await o.R.call('GET', '/terminals')).body.terminals.find((t) => t.role === 'security'), 'the security session');
 
-  // Its report, saved with its own token, opens by itself in place of Activity.
+  // Its report, saved with its own token, opens by itself on the Floor, under the people.
   const token = { 'X-Office-Token': await until(() => { try { return sessionToken(officer.sessionId); } catch (e) { return null; } }, 'its token') };
   assert.strictEqual((await o.R.call('POST', '/security/report', { text: '# Access\n\nEvery session inherits the gh login.' }, token)).status, 201);
   await page.locator('#security-report:not([hidden])').waitFor();
   assert.match(await page.locator('#security-text').innerText(), /inherits the gh login/);
   assert.match(await page.locator('#security-title').innerText(), /^Security report · /);
-  assert.strictEqual(await page.locator('#feed-title').isVisible(), false, 'the report takes the place of Activity');
+  assert.strictEqual(await page.locator('#people').isVisible(), true, 'the people stay on the Floor next to the report');
 
   // The COO's report and this one take turns: one shows at a time.
   assert.strictEqual((await o.R.call('POST', '/coo/report', { text: 'The room ran alone.' })).status, 201);
@@ -41,7 +41,7 @@ pageTest('Ask security starts its session, and its report shows on the Floor', g
   assert.strictEqual(await page.locator('#security-report').isHidden(), true);
   assert.strictEqual(await page.locator('#coo-report').isVisible(), true);
   await page.click('#coo-close');
-  assert.strictEqual(await page.locator('#feed-title').isVisible(), true, 'Activity is back once no report shows');
+  assert.strictEqual(await page.locator('#coo-report').isHidden(), true, 'Close hides the report');
   await page.click('#org-btn');
   await page.click('#security-last');
   assert.strictEqual(await page.locator('#security-report').isVisible(), true);

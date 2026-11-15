@@ -105,12 +105,17 @@ pageTest('a round starts from the panel, shows its seats, takes the trust answer
   assert.match(await page.innerText('#game-step-rows'), /brief\s*STEP-BRIEF-S1[\s\S]*runs Bash/);
   assert.ok(!/REMINDER-MARK|example\.com/.test(await page.innerText('#game-steps')), 'no system reminder');
   await shot(page, 'steps');
+  // Finish shows the result from its own answer, and the round hides only when the next read of the
+  // current round comes back. That read is slowed here, as on a slow CI computer, so the test always
+  // waits for it instead of reading the round's box before it hides.
+  await page.route(/\/rounds\/current\?/, async (r) => { await new Promise((d) => setTimeout(d, 500)); await r.continue(); });
   await page.click('#game-finish');
   await page.locator('#game-result').waitFor();
   const result = await page.innerText('#game-result');
   assert.match(result, /Score[\s\S]*Metrics[\s\S]*caught\s+1\s+MEANING-MARK: paid seats found\.[\s\S]*falseAccusations\s+0[\s\S]*Seats[\s\S]*S1\s+caught/);
   assert.match(result, /Reveal[\s\S]*member\s+S1[\s\S]*note\s+TRUTH-MARK/);
-  assert.strictEqual(await page.locator('#game-round').isVisible(), false, 'the round is over');
+  await page.locator('#game-round').waitFor({ state: 'hidden' });
+  await page.unroute(/\/rounds\/current\?/);
   await page.locator('#game-past-box summary').click();
   await page.locator('#game-past li', { hasText: 'round ' + round.id }).waitFor();
   assert.match(await page.innerText('#game-past'), /\$0\.13[\s\S]*caught 1, falseAccusations 0/);

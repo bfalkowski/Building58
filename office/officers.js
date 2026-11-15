@@ -1,7 +1,7 @@
 // The buttons that ask an officer for a report, on the officers' cards of the org chart: Ask the COO,
 // which reads how the room runs (relay/coo.js), and Ask security, which reads what access its sessions
 // run with (relay/security.js). Each starts a session that saves a one-page report. The report shows on
-// the Floor in place of Activity, and the report button opens the last one again. A button on the org
+// the Floor under the people, and the report button opens the last one again. A button on the org
 // chart closes the chart first, so you see the report or the new session. Both propose only.
 (function () {
   'use strict';

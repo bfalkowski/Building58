@@ -159,7 +159,7 @@ const useVerdicts = (fn) => { verdictOf = fn; };
 const useHolds = (fn) => { onHold = fn; };
 const FIX = 'Read each one with gh, then fix or dispute each finding, reply on the PR, and push.';
 const MERGE = 'The review\'s verdict says merge, so do not push for its findings. Read each one with gh and reply on the PR. Put the non-blocking findings worth doing into one follow-up ticket for this PR with node ' + path.join(__dirname, 'ticket.js') +
-  ' create "Title" --body - and a quoted heredoc, naming the PR and each finding, then stop. If you think a finding marked non-blocking is really a bug, say so in a reply that starts with ' + DEV_MARK + ' and has ' + HOLD_MARK + ' on its next line, and push no fix: the PR then waits on the person. A failing check and a conflict with main are still yours: fix the check, or merge main, and push only that.';
+  ' create "Title" --body - and a quoted heredoc, naming the PR and each finding, then stop. If you think a finding marked non-blocking is really a bug, say so in a reply that starts with ' + DEV_MARK + ' and has ' + HOLD_MARK + ' on its next line, and push no fix: the PR then waits on the person. A failing check and a conflict with main are still yours: fix the check, or merge main, and push only that. Until a later review says fix or the PR merges, git push in the task\'s checkout refuses any commit but a merge of main.';
 const mergeVerdict = (channel, p) => !p.before && !p.blocks && verdictOf(channel, p.pr, p.links.map((url) => ({ url, at: (p.times || {})[url] || null }))) === 'merge';
 function message(p, merge) {
   const shown = p.links.slice(0, MAX_LINKS), more = p.count - shown.length;
