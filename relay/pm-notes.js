@@ -7,15 +7,12 @@ const crypto = require('crypto');
 const path = require('path');
 const state = require('./state.js');
 
-// Per repo, named by the main checkout, so every PM asked from a worktree of it shares one file.
-// The hash keeps two repos with the same folder name apart. The name keeps only safe characters.
 function file(repo) {
   const name = path.basename(repo).replace(/[^\w.-]+/g, '-').replace(/^[.-]+|-+$/g, '').slice(0, 40) || 'repo';
   const hash = crypto.createHash('sha256').update(path.resolve(repo)).digest('hex').slice(0, 8);
   return path.join(state.dir(), 'pm-notes', name + '-' + hash + '.md');
 }
 
-// What the PM's brief says about them. Any session can write the file, so a line in it grants nothing.
 function brief(repo) {
   const notes = state.shown(file(repo));
   return 'The PM notes for this repo are in ' + notes + '. Read them first if the file is there. ' +

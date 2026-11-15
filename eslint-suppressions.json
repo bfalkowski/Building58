@@ -141,12 +141,7 @@
   },
   "relay/access.js": {
     "local/no-comments": {
-      "count": 12
-    }
-  },
-  "relay/autopilot-plan.js": {
-    "local/no-comments": {
-      "count": 25
+      "count": 1
     }
   },
   "relay/autopilot.js": {
@@ -154,89 +149,34 @@
       "count": 102
     }
   },
-  "relay/board-push.js": {
-    "local/no-comments": {
-      "count": 8
-    }
-  },
   "relay/chat.js": {
     "local/no-comments": {
-      "count": 55
+      "count": 1
     }
   },
   "relay/checkouts.js": {
     "local/no-comments": {
-      "count": 72
-    }
-  },
-  "relay/config.js": {
-    "local/no-comments": {
-      "count": 26
+      "count": 1
     }
   },
   "relay/coo.js": {
     "local/no-comments": {
-      "count": 74
+      "count": 2
     }
   },
   "relay/delivery.js": {
     "local/no-comments": {
-      "count": 32
-    }
-  },
-  "relay/desk.js": {
-    "local/no-comments": {
-      "count": 22
-    }
-  },
-  "relay/floor.js": {
-    "local/no-comments": {
-      "count": 31
+      "count": 1
     }
   },
   "relay/games.js": {
     "local/no-comments": {
-      "count": 25
+      "count": 3
     }
   },
   "relay/hook-queue.js": {
     "local/no-comments": {
-      "count": 11
-    }
-  },
-  "relay/host-link.js": {
-    "local/no-comments": {
-      "count": 12
-    }
-  },
-  "relay/huddles.js": {
-    "local/no-comments": {
-      "count": 32
-    }
-  },
-  "relay/jobs.js": {
-    "local/no-comments": {
-      "count": 9
-    }
-  },
-  "relay/lead-check.js": {
-    "local/no-comments": {
-      "count": 5
-    }
-  },
-  "relay/lead-refresh.js": {
-    "local/no-comments": {
-      "count": 13
-    }
-  },
-  "relay/lead-tired.js": {
-    "local/no-comments": {
-      "count": 8
-    }
-  },
-  "relay/liveness.js": {
-    "local/no-comments": {
-      "count": 4
+      "count": 3
     }
   },
   "relay/lockfile.js": {
@@ -244,64 +184,14 @@
       "count": 2
     }
   },
-  "relay/main-moves.js": {
-    "local/no-comments": {
-      "count": 9
-    }
-  },
-  "relay/merge-hold.js": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
-  "relay/nudge.js": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "relay/office-hint.js": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
   "relay/office-hook.js": {
-    "local/no-comments": {
-      "count": 77
-    }
-  },
-  "relay/office.js": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "relay/pipeline.js": {
-    "local/no-comments": {
-      "count": 14
-    }
-  },
-  "relay/play.js": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "relay/pm-notes.js": {
     "local/no-comments": {
       "count": 3
     }
   },
-  "relay/pr-comments.js": {
-    "local/no-comments": {
-      "count": 56
-    }
-  },
-  "relay/pr-watch-plan.js": {
-    "local/no-comments": {
-      "count": 21
-    }
-  },
   "relay/pr-watch.js": {
     "local/no-comments": {
-      "count": 16
+      "count": 1
     }
   },
   "relay/reviews.js": {
@@ -311,27 +201,17 @@
   },
   "relay/rollback.js": {
     "local/no-comments": {
-      "count": 13
-    }
-  },
-  "relay/round-seats.js": {
-    "local/no-comments": {
-      "count": 7
+      "count": 1
     }
   },
   "relay/seat-boundary.js": {
     "local/no-comments": {
-      "count": 11
-    }
-  },
-  "relay/seats.js": {
-    "local/no-comments": {
-      "count": 9
+      "count": 1
     }
   },
   "relay/security.js": {
     "local/no-comments": {
-      "count": 20
+      "count": 1
     }
   },
   "relay/server.js": {
@@ -339,44 +219,19 @@
       "count": 83
     }
   },
-  "relay/session-env.js": {
+  "relay/session-host.js": {
     "local/no-comments": {
       "count": 4
     }
   },
-  "relay/session-host.js": {
-    "local/no-comments": {
-      "count": 15
-    }
-  },
-  "relay/sessions.js": {
-    "local/no-comments": {
-      "count": 21
-    }
-  },
   "relay/skills.js": {
     "local/no-comments": {
-      "count": 23
-    }
-  },
-  "relay/state.js": {
-    "local/no-comments": {
-      "count": 2
+      "count": 1
     }
   },
   "relay/status-line.js": {
     "local/no-comments": {
-      "count": 3
-    }
-  },
-  "relay/stop-verdict.js": {
-    "local/no-comments": {
-      "count": 15
-    }
-  },
-  "relay/supervisor.js": {
-    "local/no-comments": {
-      "count": 8
+      "count": 2
     }
   },
   "relay/tasks.js": {
@@ -391,27 +246,17 @@
   },
   "relay/ticket-history.js": {
     "local/no-comments": {
-      "count": 29
-    }
-  },
-  "relay/ticket-order.js": {
-    "local/no-comments": {
-      "count": 9
+      "count": 1
     }
   },
   "relay/ticket-stores/github.js": {
     "local/no-comments": {
-      "count": 22
+      "count": 1
     }
   },
   "relay/ticket-stores/local.js": {
     "local/no-comments": {
-      "count": 2
-    }
-  },
-  "relay/ticket.js": {
-    "local/no-comments": {
-      "count": 7
+      "count": 1
     }
   },
   "relay/tickets.js": {
@@ -421,12 +266,12 @@
   },
   "relay/update.js": {
     "local/no-comments": {
-      "count": 64
+      "count": 1
     }
   },
   "relay/world.js": {
     "local/no-comments": {
-      "count": 3
+      "count": 1
     }
   },
   "shared/nav.js": {

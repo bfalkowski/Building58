@@ -23,24 +23,15 @@ function compare(a, b) {
   return closed(a) - closed(b) ||
     (closed(a) ? text(b.updatedAt).localeCompare(text(a.updatedAt)) : PRIORITY_OF(a) - PRIORITY_OF(b) || byPlace(a, b) || text(a.createdAt).localeCompare(text(b.createdAt)));
 }
-// A new list: the one given is left as it was. Ties keep the store's order.
 const boardOrder = (list) => list.map((t, i) => [t, i]).sort(([a, i], [b, j]) => compare(a, b) || i - j).map(([t]) => t);
 
-// The open tickets of one priority, in Board order: the group a ticket moves inside.
 const groupOf = (list, priority) => boardOrder(list.filter((t) => !closed(t) && (t.priority || 'normal') === priority));
 
-// The rank that puts a ticket last in a priority: after every open ticket in it, and never before
-// the time now, so a ticket filed later still goes after it.
 function lastRank(list, priority, now) {
   const places = groupOf(list, priority).map(placeOf).filter(Number.isFinite);
   return Math.max(now, places.length ? Math.max(...places) + 1 : now);
 }
 
-// The ranks that put `moving` just before (or after) `target` in their priority. The work order is
-// the tickets that `movable` lets through (Triage and Ready, in relay/tickets.js), so a Started one
-// is neither a neighbour nor written. Usually that is one write, a rank between two neighbours. When
-// there is no room between them, the movable tickets of that priority are numbered again, a thousand
-// apart, in their new order. Returns [[id, rank]] for what changes.
 const STEP = 1000;
 function placeNear(list, moving, target, after, movable) {
   const group = groupOf(list, moving.priority || 'normal').filter((t) => t.id !== moving.id && (!movable || movable(t)));
