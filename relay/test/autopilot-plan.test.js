@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { forPr, ciOf, nextTicket } = require('../autopilot-plan.js');
+const { forPr, ciOf, nextTicket, heldBack } = require('../autopilot-plan.js');
 
 const HEAD = 'a'.repeat(40);
 const green = [{ name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' }];
@@ -89,4 +89,24 @@ test('the next ticket can come from a label in the allowed list', () => {
   assert.strictEqual(nextTicket(all, (t) => t.id === 'T-2', ['flaky']), null, 'an unapproved ticket stays out, label or not');
   assert.strictEqual(nextTicket(all, none, ['docs', 'T-1']).id, 'T-1', 'ids and labels together, in Board order');
   assert.strictEqual(nextTicket(all, none, ['games']), null);
+});
+test('it skips a ticket on hold, replaced, or shaped by an open design ticket (T-204)', () => {
+  const ready = (id, extra) => Object.assign({ id, status: 'ready', repo: '/r', createdBy: 'you', priority: 'normal', rank: Number(id.slice(2)) }, extra);
+  const none = () => false;
+  const design = ready('T-15', { priority: 'low', shapes: ['T-7', 'T-9'] });
+  const all = [ready('T-7'), ready('T-8', { mark: 'hold' }), ready('T-9'), ready('T-10', { mark: 'replaced', replacedBy: 'T-11' }), design];
+  assert.strictEqual(nextTicket(all, none, null).id, 'T-15', 'T-7 and T-9 wait for the design, T-8 is on hold, T-10 is replaced');
+  assert.strictEqual(nextTicket(all, none, ['T-7', 'T-8', 'T-9', 'T-10']), null, 'the allowed list does not get past a mark');
+  assert.match(heldBack(all[0], all), /design ticket T-15/);
+  assert.match(heldBack(all[1], all), /On hold/);
+  assert.match(heldBack(all[3], all), /Replaced by T-11/);
+  assert.strictEqual(heldBack(design, all), null);
+  for (const status of ['done', 'rejected']) {
+    const settled = all.map((t) => (t.id === 'T-15' ? { ...t, status } : t));
+    assert.strictEqual(nextTicket(settled, none, null).id, 'T-7', 'a design ticket that is ' + status + ' frees what it shapes');
+  }
+  const started = all.map((t) => (t.id === 'T-15' ? { ...t, status: 'started' } : t));
+  assert.strictEqual(nextTicket(started, none, null), null, 'a design ticket being built still holds what it shapes');
+  const cleared = all.map((t) => (t.id === 'T-8' ? { ...t, mark: null } : t));
+  assert.strictEqual(nextTicket(cleared, none, ['T-8']).id, 'T-8', 'clearing the mark lets it start');
 });

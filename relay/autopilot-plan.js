@@ -34,11 +34,23 @@ function forPr(pr, files, verdict, rounds, maxRounds) {
   return { act: 'merge', why: 'Reviewed with no blocking findings, CI is green, and GitHub can merge it.' };
 }
 
+const MARKS = ['hold', 'replaced'];
+const OPEN = ['triage', 'ready', 'started'];
+function heldBack(t, all) {
+  const after = ' Nothing starts it by itself until you clear the mark.';
+  if (t.mark === 'hold') return 'On hold.' + after;
+  if (t.mark === 'replaced') return 'Replaced' + (t.replacedBy ? ' by ' + t.replacedBy : '') + '.' + after;
+  const designs = all.filter((d) => d.id !== t.id && OPEN.includes(d.status) && Array.isArray(d.shapes) && d.shapes.includes(t.id)).map((d) => d.id);
+  if (!designs.length) return null;
+  const them = designs.join(', ');
+  return 'Waiting on design ticket ' + them + ', which shapes it. Nothing starts it by itself until ' + them + (designs.length > 1 ? ' are' : ' is') + ' done or rejected.';
+}
+
 const allowed = (t, only) => !only || only.includes(t.id) || (Array.isArray(t.labels) && t.labels.some((l) => only.includes(l)));
 function nextTicket(all, hasTask, only) {
   const approved = (t) => ('approvedBy' in t ? t.approvedBy === 'you' : t.createdBy === 'you');
   const settled = (t) => (t.blockedBy || []).every((id) => { const b = all.find((x) => x.id === id); return b && b.status === 'done'; });
-  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && settled(t) && !hasTask(t) && allowed(t, only)))[0] || null;
+  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && settled(t) && !heldBack(t, all) && !hasTask(t) && allowed(t, only)))[0] || null;
 }
 
 const HEADING = /^#{1,6}[ \t]+review of[ \t]+`?(?:[0-9a-f]{7,40}\.\.\.?)?([0-9a-f]{7,40})\b/i;
@@ -55,4 +67,4 @@ function reviewPostFor(comments, { login, since, commit }) {
   return found;
 }
 
-module.exports = { forPr, ciOf, nextTicket, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { forPr, ciOf, nextTicket, heldBack, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };

@@ -42,6 +42,8 @@ test('the Lead starts tickets', async (t) => {
   const first = await fileReady('First normal');
   const urgent = await fileReady('Urgent but blocked', { priority: 'high', blockedBy: [first.id] });
   const later = await fileReady('Later low', { priority: 'low' });
+  const held = await fileReady('Urgent but on hold', { priority: 'high' });
+  await R.call('POST', '/tickets/' + held.id + '/mark', { mark: 'hold' });
 
   await t.test('it is off by default, even for a Lead that can move the board', async () => {
     const r = await startAs(first.id, leadToken);
@@ -81,6 +83,12 @@ test('the Lead starts tickets', async (t) => {
     assert.strictEqual(skipped.body.error, 'not_next');
     assert.match(skipped.body.message, new RegExp('Start ' + first.id + ' first'));
     assert.strictEqual((await ticket(later.id)).status, 'ready');
+  });
+  await t.test('it skips a ticket on hold, and never starts it (T-204)', async () => {
+    const r = await startAs(held.id, leadToken);
+    assert.strictEqual(r.body.error, 'held_back');
+    assert.match(r.body.message, /On hold/);
+    assert.strictEqual((await ticket(held.id)).status, 'ready');
   });
   let firstTask;
   await t.test('a burst of starts gets one through', async () => {

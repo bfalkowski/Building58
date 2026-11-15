@@ -2,6 +2,8 @@
 // Files a ticket from inside a session the room started. What it files waits in Triage.
 //   node relay/ticket.js create "Radio clips at high volume" --body "What to do" --priority high --blocked-by T-1,T-2
 //   (blocked-by takes the ids that list and create print: T-1 on the local store, 12 on GitHub issues)
+//   node relay/ticket.js create "Decide the layout" --shapes T-7,T-9 --body - <<'EOF'
+//   (a design ticket: while it is open, Autopilot and the Lead start none of the tickets it shapes)
 //   node relay/ticket.js create "Title" --kind docs --body - <<'EOF'
 //   (kind is docs, tests, bug, feature, or one the person added; ticket.js kinds lists them. Leave it out if unsure)
 //   --label flaky,follow-up adds labels that tickets have already; ticket.js labels lists them
@@ -67,6 +69,7 @@ function flags(args) {
     else if (args[i] === '--kind') out.kind = args[++i];
     else if (args[i] === '--label') out.labels = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else if (args[i] === '--blocked-by') out.blockedBy = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
+    else if (args[i] === '--shapes') out.shapes = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else out.rest.push(args[i]);
   }
   return out;
@@ -105,7 +108,7 @@ async function main() {
   if (cmd === 'list') {
     const r = await (await fetch(URL_, { headers })).json();
     if (!r.ok) { console.error(r.message); return 1; }
-    for (const t of r.tickets) console.log(t.id + '  ' + t.status + '  ' + t.priority + '  ' + t.title + (t.kind ? '  (kind ' + t.kind + ')' : '') + (t.labels && t.labels.length ? '  (labels ' + t.labels.join(', ') + ')' : '') + (t.task ? '  (task ' + t.task.id + ', ' + t.task.state + ')' : '') + (t.orderedBy === 'you' ? '  (set by the person)' : ''));
+    for (const t of r.tickets) console.log(t.id + '  ' + t.status + '  ' + t.priority + '  ' + t.title + (t.kind ? '  (kind ' + t.kind + ')' : '') + (t.labels && t.labels.length ? '  (labels ' + t.labels.join(', ') + ')' : '') + (t.task ? '  (task ' + t.task.id + ', ' + t.task.state + ')' : '') + (t.orderedBy === 'you' ? '  (set by the person)' : '') + (t.heldBack ? '  (' + t.heldBack + ')' : ''));
     return 0;
   }
   if (cmd === 'kinds') {
@@ -129,7 +132,7 @@ async function main() {
   if (cmd === 'create') {
     const f = flags(args);
     if (!(await readBody(f))) return 1;
-    const r = await (await fetch(URL_, { method: 'POST', headers, body: JSON.stringify({ title: f.rest.join(' '), body: f.body, priority: f.priority, blockedBy: f.blockedBy, kind: f.kind, labels: f.labels }) })).json();
+    const r = await (await fetch(URL_, { method: 'POST', headers, body: JSON.stringify({ title: f.rest.join(' '), body: f.body, priority: f.priority, blockedBy: f.blockedBy, shapes: f.shapes, kind: f.kind, labels: f.labels }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log((r.duplicate ? 'Already filed: ' : 'Filed: ') + r.ticket.id + '  ' + r.ticket.title + (r.duplicate ? '  (' + r.ticket.status + ')' : '  (waiting in ' + r.ticket.status + ')'));
     return 0;
@@ -248,7 +251,7 @@ async function main() {
     console.log('Moved: ' + moved.id + '  ' + (r.ticket ? moved.status : moved.state) + (r.ticket && r.ticket.pr ? '  ' + r.ticket.pr : ''));
     return 0;
   }
-  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID], or: ticket.js list, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
+  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
   return 1;
 }
 main().then((code) => { process.exitCode = code; }, (e) => { console.error('The relay did not answer: ' + e.message); process.exitCode = 1; });
