@@ -317,8 +317,8 @@ for sessions with only the access they need (article 7).
 because reviewed and green pull requests sat waiting only on them. The person chose to turn it on
 before the preconditions of rungs 3 and 4 are met: there are no hidden checks (article 4), and the
 Lead runs `gh pr merge` with the person's full GitHub login, not with only the access it needs
-(article 7). It covers every pull request except one that changes this file or `CLAUDE.md`, not
-one kind of ticket. The Lead may merge a pull request when all of these hold:
+(article 7). It covers every pull request except one that changes this file, `CLAUDE.md` or the lint rules
+(`eslint.config.js`, `eslint-local.js`), not one kind of ticket. The Lead may merge a pull request when all of these hold:
 
 1. A review of the current head is posted. If commits land after the review, the Lead asks for a
    follow-up review first.
@@ -330,7 +330,8 @@ one kind of ticket. The Lead may merge a pull request when all of these hold:
 
 The Lead uses a merge commit (`gh pr merge --merge`). It says on the pull request why it merged and
 which hand checks are still open, and it tells the person. It does not merge a pull request that
-changes this file or `CLAUDE.md` (see "Changing this file"). Workers and reviewers are still
+changes this file, `CLAUDE.md` or the lint rules (see "Changing this file"). The lint rules are
+how many of these rules are checked, so loosening one is a rule change too. Workers and reviewers are still
 told not to merge, and the PM opens no pull request. Restarting the relay after a merge stays with
 the person.
 
@@ -444,7 +445,7 @@ start. The relay, not a brief, holds it to these:
   passed, and GitHub can merge it. It names that commit to GitHub, which refuses the merge if
   the PR moved since. A branch behind main merges as it is, since main does not ask
   for branches to be up to date.
-- It works only on tasks it started. It never merges a change to this file or `CLAUDE.md`. Its loop is limited: after 2 review rounds
+- It works only on tasks it started. It never merges a change to this file, `CLAUDE.md` or the lint rules. Its loop is limited: after 2 review rounds
   that still say fix, a failed check, a closed pull request or a failed merge, the task goes to
   Waiting on you with the reason, and it leaves it alone. It merges at most 10 pull requests a day.
 - After a merge it pulls main into the relay's own folder, as **Update** does, and starts nothing

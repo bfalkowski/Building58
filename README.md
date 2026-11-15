@@ -116,6 +116,10 @@ down:
 - Never run `--suppress-all` to make a new comment pass. Run it only after a change to
   `eslint.config.js` or a merge that leaves the counts wrong, and check that no count went up.
 
+`relay/test/lint-ratchet.test.js` fails when a count is higher than at the merge base with main,
+so a `--suppress-all` that hides a new comment fails `npm test`. Only a person merges a change to
+`eslint.config.js` or `eslint-local.js`: Autopilot and the Lead leave it to you.
+
 Your editor's ESLint may not read the suppressions file, so it can show every old comment.
 
 ## The manual

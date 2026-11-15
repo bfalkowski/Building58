@@ -961,6 +961,7 @@ test('a repo with no remote gets the plain brief', async (t) => {
   assert.strictEqual(task.baseNote, null);
   assert.match(await briefOf(R, task), /pull request against main\. Start the PR title with T-1 and a colon, as in "T-1: No remote"\. Do not merge it\.\]?/);
   assert.match(await briefOf(R, task), /Then run gh pr checks --watch on it\. If a check fails, fix it on this branch, push, and watch again\. Say the work is ready only once every check passes/, 'no review or merge before a green pipeline (T-11)');
+  assert.match(await briefOf(R, task), /Run npm run lint before you push, and do what its messages say\. Never change eslint\.config\.js, eslint-local\.js or eslint-suppressions\.json to pass it\./, 'the brief names the lint rules');
 });
 test('a reset store does not match old tasks', async (t) => {
   const R = await relay(); t.after(R.stop);

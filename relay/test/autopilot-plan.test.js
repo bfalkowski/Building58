@@ -34,6 +34,8 @@ test('fixes get one more round, then the person decides', () => {
 });
 test('the person merges CLAUDE.md and the constitution, and a failed or closed PR', () => {
   assert.strictEqual(act(pr(), merge, 1, 2, ['CLAUDE.md']), 'person');
+  assert.strictEqual(act(pr(), merge, 1, 2, ['a.js', 'eslint.config.js']), 'person', 'the lint rules are the person\'s too');
+  assert.strictEqual(act(pr(), merge, 1, 2, ['eslint-local.js']), 'person');
   assert.strictEqual(act(pr(), merge, 1, 2, ['a.js', 'docs/constitution.md']), 'person');
   assert.strictEqual(act(pr(), merge, 1, 2, ['docs/rules.md', 'docs/constitution.md']), 'person', 'a rename lists the old name too');
   assert.strictEqual(act(pr(), merge, 1, 2, null), 'wait', 'no list of files, no merge');
