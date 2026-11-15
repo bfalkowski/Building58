@@ -576,6 +576,42 @@ test('a review of a PR the clone names another way (T-8)', async (t) => {
   });
 });
 
+test('a PR an outside session opened from another project\'s folder (T-266)', async (t) => {
+  const R = await relay(), repo = makeRepo(R.home), { stop, gone } = helpers(R);
+  t.after(R.stop);
+  // acme/widgets is the room's project, and repo is the room's clone of it. elsewhere is another
+  // project, a clone of me/notes, where an outside session ran gh pr create for acme/widgets#7.
+  const upstream = path.join(R.home, 'upstream.git'), notes = path.join(R.home, 'notes.git');
+  for (const bare of [upstream, notes]) sh(R.home, 'init', '-q', '--bare', bare);
+  fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + upstream + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n[url "' + notes + '"]\n\tinsteadOf = https://github.com/me/notes.git\n');
+  sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+  sh(repo, 'checkout', '-q', '-b', 'feature');
+  const tip = commit(repo, 'pr.txt', 'the pr\n');
+  sh(repo, 'push', '-q', upstream, 'HEAD:refs/pull/7/head');
+  sh(repo, 'checkout', '-q', '-');
+  const elsewhere = path.join(R.home, 'elsewhere');
+  fs.mkdirSync(elsewhere); sh(elsewhere, 'init', '-q');
+  commit(elsewhere, 'x.txt', 'another project\n');
+  sh(elsewhere, 'remote', 'add', 'origin', 'https://github.com/me/notes.git');
+  const pr = 'https://github.com/acme/widgets/pull/7';
+  const review = () => R.call('POST', '/checkouts', { from: elsewhere, pr });
+
+  await t.test('with no clone of the PR\'s repo in the room, it is refused as before', async () => {
+    const r = await review();
+    assert.strictEqual(r.body.error, 'unrelated', JSON.stringify(r.body));
+  });
+  await t.test('once a ticket names the room\'s clone, the review is made from that clone', async () => {
+    assert.strictEqual((await R.call('POST', '/tickets', { title: 'Something in widgets', repo })).status, 201);
+    const r = await review();
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(path.dirname(r.body.cwd), path.join(repo, '.worktrees'));
+    assert.strictEqual(sh(r.body.cwd, 'rev-parse', 'HEAD'), tip);
+    assert.strictEqual(sh(elsewhere, 'for-each-ref', 'refs/office'), '', 'nothing was fetched into the other project');
+    await until(() => R.output().includes(elsewhere + ' is not a clone of acme/widgets'), 'the log line');
+    await stop(r.body.id); await gone(r.body.checkout.id);
+  });
+});
+
 test('a relay restart', async (t) => {
   let R = await relay();
   const home = R.home, repo = makeRepo(home), origin = path.join(home, 'origin.git');

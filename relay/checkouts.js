@@ -156,6 +156,21 @@ function quietEnv(env) {
 }
 const NO_PROMPT = { timeout: 30000, env: quietEnv(process.env) };
 const unsecret = (text) => String(text).replace(/(\/\/)[^/@\s]+@/g, '$1');
+const ROOM_ROOT = path.join(__dirname, '..');
+async function roomCloneOf(channel, owner, name) {
+  const want = (owner + '/' + name).toLowerCase();
+  const tickets = await require('./tickets.js').listAll(channel).catch(() => []);
+  const folders = [...new Set(tickets.map((t) => t.repo).concat(tasks.list(channel).map((t) => t.repo), ROOM_ROOT).filter((f) => f && fs.existsSync(f)))];
+  for (const folder of folders) {
+    if ((await githubRemotes(folder)).some((r) => r.repo.toLowerCase() === want)) return folder;
+  }
+  return null;
+}
+async function folderForReview(channel, top, pr) {
+  const [, owner, name] = pr.match(PR_URL), want = (owner + '/' + name).toLowerCase();
+  if ((await githubRemotes(top)).some((r) => r.repo.toLowerCase() === want)) return top;
+  return (await roomCloneOf(channel, owner, name)) || top;
+}
 const hasCommits = (top) => git(top, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).then(() => true, () => false);
 async function forReview(c, top, pr, unlessAt) {
   const [, owner, name, number] = pr.match(PR_URL);
@@ -203,15 +218,20 @@ async function create(channel, body, ctx) {
   try { return await make(channel, body, ctx); } finally { making--; }
 }
 async function make(channel, body, ctx) {
-  const from = terminal.expand(body.from), pr = body.pr ? String(body.pr) : null;
+  let from = terminal.expand(body.from);
+  const pr = body.pr ? String(body.pr) : null;
   const prompt = body.prompt ? String(body.prompt) + (pr ? require('./skills.js').brief('reviewer').trimEnd() : '') : '';
   const unlessAt = /^[0-9a-f]{40}$/.test(String(body.unlessAt || '')) ? String(body.unlessAt) : null;
   if (pr && !PR_URL.test(pr)) return [400, { ok: false, error: 'bad_pr', message: 'A PR link looks like https://github.com/owner/repo/pull/1.' }];
   if (prompt.length > MAX_PROMPT) return [400, { ok: false, error: 'bad_prompt', message: 'Keep the prompt to ' + MAX_PROMPT + ' characters.' }];
   const size = { cols: body.cols, rows: body.rows };
-  const top = await git(from, ['rev-parse', '--show-toplevel']).catch(() => null);
+  let top = await git(from, ['rev-parse', '--show-toplevel']).catch(() => null);
   if (!top && pr) return [400, { ok: false, error: 'no_repo', message: 'Need a git repo to review a PR: ' + from }];
   if (!top) { const r = terminal.start(channel, Object.assign({ cwd: from }, size), ctx); return [r.status, r.body]; }
+  if (pr) {
+    const clone = await folderForReview(channel, top, pr);
+    if (clone !== top) { ctx.log(top + ' is not a clone of ' + pr.split('/').slice(3, 5).join('/') + ', so the review of ' + pr + ' is made from ' + clone + '.'); top = clone; from = clone; }
+  }
 
   const repo = await mainCheckout(top), id = crypto.randomBytes(3).toString('hex'), kind = pr ? 'reviewer' : 'worker';
   const name = (pr ? 'review-' : 'worker-') + id;
