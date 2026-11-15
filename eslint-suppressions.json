@@ -49,11 +49,6 @@
       "count": 45
     }
   },
-  "office/office.js": {
-    "local/no-comments": {
-      "count": 249
-    }
-  },
   "office/officers.js": {
     "local/no-comments": {
       "count": 7
@@ -111,7 +106,7 @@
   },
   "office/terminal.js": {
     "local/no-comments": {
-      "count": 103
+      "count": 1
     }
   },
   "office/ticket-history.js": {
@@ -121,7 +116,7 @@
   },
   "office/tickets.js": {
     "local/no-comments": {
-      "count": 77
+      "count": 1
     }
   },
   "office/trailer-music.js": {
