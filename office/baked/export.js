@@ -31,7 +31,7 @@ const TYPES = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/cs
   await page.route('**/*', (route) => {
     const url = route.request().url();
     if (LOCAL[url]) return route.fulfill({ path: path.join(MODULES, LOCAL[url]), contentType: TYPES['.js'] });
-    if (!url.startsWith(ORIGIN)) return route.fulfill({ status: 200, body: '', contentType: 'text/css' });  // fonts: answered empty
+    if (!url.startsWith(ORIGIN)) return route.fulfill({ status: 200, body: '', contentType: 'text/css' });
     let p = decodeURIComponent(new URL(url).pathname);
     if (p.endsWith('/')) p += 'index.html';
     const file = path.join(ROOT, p);
@@ -48,7 +48,7 @@ const TYPES = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/cs
     const parts = L.liveParts();
     const count = {};
     for (const m of parts) { const k = L.meshKey(m); count[k] = (count[k] || 0) + 1; }
-    const unique = parts.filter((m) => count[L.meshKey(m)] === 1);  // two parts with one key cannot be told apart
+    const unique = parts.filter((m) => count[L.meshKey(m)] === 1);
     const copy = new THREE.Scene(), names = new Map(), keys = [];
     for (const m of unique) {
       const key = L.meshKey(m);

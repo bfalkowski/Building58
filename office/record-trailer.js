@@ -57,28 +57,24 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.error('page error:', e.message));
   await page.clock.install({ time: new Date('2026-11-13T21:30:00') });
-  // The room picks spots and moves with Math.random. A fixed seed makes every run the same film,
-  // so the stills you check are the frames you get.
   await page.addInitScript((seed) => {
     let a = seed >>> 0;
     Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }, SEED);
   const url = 'http://127.0.0.1:' + server.address().port + '/office/?trailer&look=' + encodeURIComponent(LOOK);
   await page.goto(url, { waitUntil: 'load' });
-  // Let the room build and the baked look load, on the page's clock, until the film starts.
   for (let i = 0; ; i++) {
     const state = await page.evaluate(() => document.documentElement.dataset.trailer);
     if (state === 'playing') break;
     if (i > 1200) throw new Error('The trailer did not start. Is the page showing its fallback (no WebGL)?');
     await page.clock.runFor(50);
     // eslint-disable-next-line no-restricted-syntax -- a Node script that looks at the page's state each loop; this gives real time to files the page clock does not move
-    await new Promise((r) => setTimeout(r, 20));  // real time for the model and textures to arrive
+    await new Promise((r) => setTimeout(r, 20));
   }
   const length = await page.evaluate(() => window.trailer.length);
   const frames = Math.ceil(length * FPS);
   let ffmpeg = null, musicFile = null;
   if (!STILLS) {
-    // The music: your file, or the trailer's own tune (office/trailer-music.js), written to a temporary file.
     let sound = [];
     if (AUDIO) {
       sound = ['-ss', String(AUDIO_START), '-i', path.resolve(AUDIO), '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '256k',
@@ -95,8 +91,6 @@ async function main() {
   let shown = 0, next = 0;
   for (let f = 0; f < frames; f++) {
     const t = f / FPS;
-    // the film's time is this frame's, and the page's clock moves on by one frame (in whole
-    // milliseconds that add up exactly), so the room draws it
     await page.evaluate((v) => { window.trailer.clock = v; }, t);
     await page.clock.runFor(Math.round((f + 1) * 1000 / FPS) - Math.round(f * 1000 / FPS));
     if (STILLS) {

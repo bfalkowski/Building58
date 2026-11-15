@@ -18,7 +18,6 @@
     neon: '#ff5fa2',
     startWith: 3,
 
-    // The names sessions are called by, half for each kind of desk.
     names: {
       woman: ['Ada', 'Amara', 'Bea', 'Camila', 'Clara', 'Elena', 'Farah', 'Freya', 'Greta', 'Hana', 'Iris', 'Jade', 'Leila',
         'Lucia', 'Maya', 'Mei', 'Nadia', 'Olivia', 'Rosa', 'Sofia', 'Tara', 'Uma', 'Vera', 'Yara', 'Zoe'],
@@ -26,10 +25,6 @@
         'Nico', 'Omar', 'Oscar', 'Pablo', 'Rafael', 'Ravi', 'Simon', 'Tomas', 'Victor', 'Wes', 'Yusuf', 'Zane']
     },
 
-    // Works in the glass office off the back wall, and walks the floor every so often. Anyone
-    // without real work sits down and looks busy until he is back in his office. `everyMinutes` is
-    // the shortest and longest gap between rounds. Take it out and he only comes out when sent with
-    // the "manager" action. `title` is the name on his door.
     manager: {
       title: 'Manager',
       everyMinutes: [6, 15],
@@ -69,12 +64,8 @@
         look: { skin: '#9a6648', hair: '#140f0c', hairStyle: 'long', shirt: '#7a3b5c', pants: '#1f2430', shoes: '#e8e4dc', mug: '#ffa8c5', height: 0.95 } }
     ]
   };
-  // The page reads it as window.OFFICE_ROSTER. The relay reads it too, named in world.json, to seat its sessions.
   if (typeof module !== 'undefined') module.exports = roster;
   else {
-    // ?name=Room%20B in the page's address shows that name instead of `company`, on the sign on the
-    // back wall and in the page title, so two rooms side by side can be told apart. Only this page
-    // sees it: the relay keeps `company`.
     const name = String(new URLSearchParams(location.search).get('name') || '').trim().slice(0, 40);
     if (name) roster.company = name;
     window.OFFICE_ROSTER = roster;

@@ -27,7 +27,7 @@
       for (const s of r.sessions) if (s.desk) next[s.terminal] = Object.assign({ name: s.name, lead: s.role === 'Lead', tired: s.tired || null }, s.desk);
       desks = next;
       publish();
-    } catch (e) { /* the relay is away: keep the last desks */ }
+    } catch (e) { return; }
   }
   async function stop(body, what) {
     if (busy) return;

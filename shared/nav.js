@@ -10,9 +10,9 @@
 // and it tells the controls a move started, so the world stops its opening glide or a follow.
 (function () {
   'use strict';
-  const TURN = 1.4;   // radians a second while held
-  const ZOOM = 1.9;   // times closer a second while held
-  const STEP = 0.18;  // one press of a key or a click from the keyboard, in seconds of holding
+  const TURN_PER_SECOND = 1.4;
+  const ZOOM_PER_SECOND = 1.9;
+  const KEY_PRESS_SECONDS = 0.18;
 
   const CSS = `
 .navpad { position: absolute; right: 12px; bottom: 12px; z-index: 5; display: grid; gap: 4px;
@@ -44,7 +44,7 @@
   };
   const HIDDEN_KEY = 'navpad-hidden';
   function keptHidden() { try { return localStorage.getItem(HIDDEN_KEY) === '1'; } catch (e) { return false; } }
-  function keepHidden(on) { try { if (on) localStorage.setItem(HIDDEN_KEY, '1'); else localStorage.removeItem(HIDDEN_KEY); } catch (e) { /* the choice lasts until the page closes */ } }
+  function keepHidden(on) { try { if (on) localStorage.setItem(HIDDEN_KEY, '1'); else localStorage.removeItem(HIDDEN_KEY); return true; } catch (e) { return false; } }
   const BUTTONS = [
     ['up', 'Look from higher up'], ['left', 'Go around to the left'], ['home', 'Back to the first view'],
     ['right', 'Go around to the right'], ['down', 'Look from lower down'], ['out', 'Zoom out'], ['in', 'Zoom in']
@@ -52,7 +52,6 @@
   const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', '+': 'in', '=': 'in', '-': 'out', _: 'out', Home: 'home', 0: 'home' };
   const pads = [];
 
-  // opts: stage (the element to sit in), canvas, controls, camera, home (a function that goes back).
   function attach(opts) {
     const { stage, canvas, controls, camera, home } = opts;
     if (!stage || !controls || !camera || !window.THREE) return null;
@@ -63,28 +62,27 @@
     pad.className = 'navpad'; pad.setAttribute('role', 'group'); pad.setAttribute('aria-label', 'Move the view');
     const offset = new THREE.Vector3(), sph = new THREE.Spherical();
 
-    // Turn, tilt or zoom by an amount of holding, in seconds.
     function move(dir, secs) {
       if (dir === 'home') { home(); controls.dispatchEvent({ type: 'start' }); controls.dispatchEvent({ type: 'end' }); return; }
       offset.copy(camera.position).sub(controls.target);
       sph.setFromVector3(offset);
-      if (dir === 'left') sph.theta -= TURN * secs;
-      if (dir === 'right') sph.theta += TURN * secs;
-      if (dir === 'up') sph.phi -= TURN * 0.6 * secs;
-      if (dir === 'down') sph.phi += TURN * 0.6 * secs;
-      if (dir === 'in') sph.radius /= Math.pow(ZOOM, secs);
-      if (dir === 'out') sph.radius *= Math.pow(ZOOM, secs);
+      if (dir === 'left') sph.theta -= TURN_PER_SECOND * secs;
+      if (dir === 'right') sph.theta += TURN_PER_SECOND * secs;
+      if (dir === 'up') sph.phi -= TURN_PER_SECOND * 0.6 * secs;
+      if (dir === 'down') sph.phi += TURN_PER_SECOND * 0.6 * secs;
+      if (dir === 'in') sph.radius /= Math.pow(ZOOM_PER_SECOND, secs);
+      if (dir === 'out') sph.radius *= Math.pow(ZOOM_PER_SECOND, secs);
       sph.makeSafe();
       offset.setFromSpherical(sph);
       camera.position.copy(controls.target).add(offset);
       camera.lookAt(controls.target);
-      controls.update();  // the world's limits on angle and distance
+      controls.update();
     }
 
     let held = null, last = 0, raf = 0;
     function tick(now) {
       if (!held) return;
-      move(held.dir, Math.min(0.25, (now - last) / 1000)); last = now;  // a slow frame catches up, a stalled tab does not jump
+      move(held.dir, Math.min(0.25, (now - last) / 1000)); last = now;
       raf = requestAnimationFrame(tick);
     }
     function start(btn, dir) {
@@ -97,8 +95,6 @@
     }
     function stop() {
       if (!held) return;
-      // Letting go moves for the time since the last frame, so on a slow page a hold still turns
-      // as far as its length says, even when no frame came while it was held.
       if (held.dir !== 'home') move(held.dir, Math.min(0.5, (performance.now() - last) / 1000));
       held.btn.classList.remove('held'); held = null; cancelAnimationFrame(raf);
       controls.dispatchEvent({ type: 'end' });
@@ -112,12 +108,10 @@
       b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[dir] + '</svg>';
       b.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; e.preventDefault(); b.setPointerCapture && b.setPointerCapture(e.pointerId); start(b, dir); });
       ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((t) => b.addEventListener(t, stop));
-      // Enter or Space on a focused button: one step
-      b.addEventListener('click', (e) => { if (e.detail === 0) { controls.dispatchEvent({ type: 'start' }); move(dir, STEP); controls.dispatchEvent({ type: 'end' }); } });
+      b.addEventListener('click', (e) => { if (e.detail === 0) { controls.dispatchEvent({ type: 'start' }); move(dir, KEY_PRESS_SECONDS); controls.dispatchEvent({ type: 'end' }); } });
       b.addEventListener('contextmenu', (e) => e.preventDefault());
       byDir[dir] = b; pad.appendChild(b);
     });
-    // Hide and show the pad. One button does both, and it is the only one left while the pad is hidden.
     const toggle = document.createElement('button');
     toggle.type = 'button'; toggle.dataset.pad = 'toggle'; toggle.style.gridArea = 'toggle';
     function setHidden(on, keep) {
@@ -131,7 +125,6 @@
     toggle.addEventListener('click', () => setHidden(!pad.classList.contains('navpad-hidden'), true));
     pad.appendChild(toggle);
     setHidden(keptHidden(), false);
-    // Keep the scene's own clicks and drags off the pad.
     ['pointerdown', 'pointerup', 'click', 'wheel'].forEach((t) => pad.addEventListener(t, (e) => e.stopPropagation()));
     stage.appendChild(pad);
 
@@ -141,7 +134,7 @@
       if (!dir) return;
       e.preventDefault();
       controls.dispatchEvent({ type: 'start' });
-      move(dir, STEP);
+      move(dir, KEY_PRESS_SECONDS);
       controls.dispatchEvent({ type: 'end' });
     }
     pad.addEventListener('keydown', (e) => { if (e.key !== 'Enter' && e.key !== ' ') onKey(e); });
@@ -150,9 +143,8 @@
       canvas.addEventListener('keydown', onKey);
     }
 
-    // For tests and the console: where the camera is, as angles around what it looks at.
     const handle = {
-      el: pad, press: (dir, secs) => move(dir, secs === undefined ? STEP : secs),
+      el: pad, press: (dir, secs) => move(dir, secs === undefined ? KEY_PRESS_SECONDS : secs),
       hidden: () => pad.classList.contains('navpad-hidden'), setHidden: (on) => setHidden(!!on, true),
       angles: () => { offset.copy(camera.position).sub(controls.target); sph.setFromVector3(offset); return { theta: sph.theta, phi: sph.phi, radius: sph.radius }; }
     };

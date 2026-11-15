@@ -16,11 +16,9 @@
   ];
   const KEYS = HOLIDAYS.map((h) => h.key);
   const DAY = 86400000;
-  // A calendar day as a whole number, so adding days never meets a change of clocks.
   const dayNum = (y, m, d) => Math.round(Date.UTC(y, m - 1, d) / DAY);
   const ymd = (n) => { const t = new Date(n * DAY); return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() }; };
 
-  // Easter Sunday in the Gregorian calendar (the anonymous computus, as in Meeus).
   function easter(y) {
     const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
     const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
@@ -28,12 +26,10 @@
     const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
     return { y, m: month, d: day };
   }
-  // The fourth Thursday of November.
   function thanksgiving(y) {
-    const first = new Date(Date.UTC(y, 10, 1)).getUTCDay();  // 0 is Sunday, 4 is Thursday
-    return { y, m: 11, d: 1 + ((4 - first + 7) % 7) + 21 };
+    const THURSDAY = 4, first = new Date(Date.UTC(y, 10, 1)).getUTCDay();
+    return { y, m: 11, d: 1 + ((THURSDAY - first + 7) % 7) + 21 };
   }
-  // The holiday's own day in year y.
   function dayOf(key, y) {
     switch (key) {
       case 'newyear': return { y, m: 1, d: 1 };
@@ -45,7 +41,6 @@
       default: return null;
     }
   }
-  // The first and last day the decorations show, as day numbers, for the holiday in year y.
   function windowOf(key, y) {
     const h = dayOf(key, y), n = dayNum(h.y, h.m, h.d);
     if (key === 'newyear') return { from: dayNum(y - 1, 12, 26), to: n };
@@ -55,10 +50,6 @@
   const pad = (n) => String(n).padStart(2, '0');
   const iso = (o) => o.y + '-' + pad(o.m) + '-' + pad(o.d);
 
-  // For a date (a Date, read in local time, or { y, m, d }): the next holiday whose decorations have
-  // not come down yet, its day, and whether they are up today.
-  //   { key, name, day: 'YYYY-MM-DD', year, showing, from, to }
-  // year is the holiday's own year, so New Year's on Dec 26, 2026 is 2027.
   function holidayOn(date) {
     const t = date instanceof Date ? { y: date.getFullYear(), m: date.getMonth() + 1, d: date.getDate() } : date;
     const today = dayNum(t.y, t.m, t.d);
@@ -73,8 +64,6 @@
     const day = dayOf(best.h.key, best.y);
     return { key: best.h.key, name: best.h.name, day: iso(day), year: best.y, showing: today >= best.w.from, from: iso(ymd(best.w.from)), to: iso(ymd(best.w.to)) };
   }
-  // What a person sees: their preview, if they picked one, wins. Otherwise the date's holiday while
-  // the switch is on and the decorations are up. null means no decorations.
   function shown(date, on, preview) {
     if (KEYS.includes(preview)) {
       const now = holidayOn(date), y = now.key === preview ? now.year : (date instanceof Date ? date.getFullYear() : date.y) + (preview === 'newyear' ? 1 : 0);

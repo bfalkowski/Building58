@@ -19,7 +19,6 @@
   function system() {
     try { return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) { return 'light'; }
   }
-  // What the page shows now: the choice, or the computer's setting.
   function current() { return root.getAttribute('data-theme') || system(); }
   function show() {
     var on = current(), buttons = document.querySelectorAll('[data-page-theme]');
@@ -30,9 +29,12 @@
     if (v) root.setAttribute('data-theme', v); else root.removeAttribute('data-theme');
     show();
   }
+  function keep(v) {
+    try { window.localStorage.setItem(KEY, v); return true; } catch (e) { return false; }
+  }
   function choose(v) {
     if (fixed || (v !== 'light' && v !== 'dark')) return;
-    try { window.localStorage.setItem(KEY, v); } catch (e) { /* no storage: the choice lasts for this page */ }
+    keep(v);
     apply(v);
   }
 
@@ -43,7 +45,10 @@
     if (b) choose(b.getAttribute('data-page-theme'));
   });
   window.addEventListener('storage', function (e) { if (e.key === KEY || e.key === null) apply(stored()); });
-  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', show); } catch (e) { /* old browser */ }
+  function followSystem() {
+    try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', show); return true; } catch (e) { return false; }
+  }
+  followSystem();
 
   window.pageTheme = { current: current, choose: choose, key: KEY };
 })();

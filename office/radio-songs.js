@@ -6,7 +6,6 @@ window.OFFICE_SONGS = (() => {
 
   function record(title, bpm, swing, write) {
     const spb = 60 / bpm, ev = [];
-    // swing moves the off-beat eighth later; 0.5 leaves it straight
     const sw = (b) => { const i = Math.floor(b), f = b - i; return i + (f < 0.5 ? f / 0.5 * swing : swing + (f - 0.5) / 0.5 * (1 - swing)); };
     let shape = (b) => b;
     const at = (b) => shape(sw(b)) * spb;
@@ -18,8 +17,6 @@ window.OFFICE_SONGS = (() => {
     return { title, ev, len: last + 3.5 };
   }
 
-  // Two passes of a 16-bar tune: the vibraphone sings it, then a clarinet takes over with the
-  // vibraphone rolling chords behind it.
   const ballad = record('Leave the Porch Light On', 66, 2 / 3, ({ add, chord }) => {
     const CH = { F: [53, 57, 60, 64], Dm: [50, 53, 57, 60], Gm: [55, 58, 62, 65], C7: [52, 55, 58, 60], Am: [57, 60, 64, 67],
       D7: [54, 57, 60, 62], F6: [53, 57, 60, 62], Bb: [50, 53, 57, 58], Bbm: [49, 53, 55, 58] };
@@ -66,8 +63,6 @@ window.OFFICE_SONGS = (() => {
     chord(128, 4, 'vibes', [65, 69, 72, 74, 77], 0.2, 0.3);
   });
 
-  // A fast 12-bar blues, three times through: the horns play a riff, the vibraphone solos over
-  // the band, then the riff returns and the band stops on one last chord.
   const swing = record('Fifth Floor Jump', 168, 0.62, ({ add, chord }) => {
     const BARS = ['Bb7', 'Eb7', 'Bb7', 'Bb7', 'Eb7', 'Eb7', 'Bb7', 'G7', 'Cm7', 'F7', 'Bb7', 'F7'];
     const CH = { Bb7: [58, 62, 65, 68], Eb7: [55, 58, 61, 63], G7: [59, 62, 65, 67], Cm7: [58, 60, 63, 67], F7: [57, 60, 63, 65] };
@@ -130,8 +125,6 @@ window.OFFICE_SONGS = (() => {
     add(end, 1, 'ride', 0, 0.16);
   });
 
-  // Solo piano, slow, in three: a left hand that barely moves and a tune with plenty of space,
-  // slowing down at the end.
   const piano = record('After the Last Train', 54, 0.5, ({ add, chord, tempoShape }) => {
     const ROOT = { Dm: 38, Bb: 46, Gm: 43, A7: 45, C7: 48, F: 41 };
     const SHELL = { Dm: [53, 57, 62], Bb: [53, 58, 62], Gm: [55, 58, 62], A7: [55, 61, 64], C7: [55, 58, 64], F: [53, 57, 60] };
@@ -171,8 +164,6 @@ window.OFFICE_SONGS = (() => {
     chord(end, 6, 'piano', [50, 57, 62, 65, 69, 74], 0.1, 0.12);
   });
 
-  // A slow croon over a guitar rolling in triplets: the guitar starts alone, a clarinet sings the
-  // tune, the vibraphone takes the second verse, and they share the last one.
   const croon = record('Nobody Waiting Up', 63, 0.5, ({ add, chord }) => {
     const CH = { Eb: [51, 55, 58, 63], Cm: [48, 55, 60, 63], Fm: [53, 56, 60, 65], Bb7: [50, 56, 58, 65], Ab: [51, 56, 60, 63], Abm: [51, 56, 59, 63],
       C7: [52, 55, 58, 64], Eb7: [51, 55, 58, 61], F7: [51, 57, 60, 65], Eb6: [51, 55, 58, 60] };
@@ -227,8 +218,6 @@ window.OFFICE_SONGS = (() => {
     chord(b + 1, 3, 'vibes', [67, 70, 72, 75], 0.2, 1 / 3);
   });
 
-  // Boogie-woogie, three times through a 12-bar blues: the left hand never stops. The right hand
-  // has the riff, the horns stab behind block chords, then the riff returns an octave up.
   const boogie = record('Dime Store Boogie', 150, 0.64, ({ add, chord }) => {
     const BARS = ['G', 'G', 'G', 'G', 'C', 'C', 'G', 'G', 'D', 'C', 'G', 'D'];
     const ROOT = { G: 43, C: 48, D: 50 };
@@ -270,8 +259,6 @@ window.OFFICE_SONGS = (() => {
     add(end, 1, 'ride', 0, 0.14);
   });
 
-  // A rumba in A minor, straight rather than swung: claves and maracas over a bass in 3-3-2. The
-  // clarinet has the first verse and the vibraphone the second.
   const rumba = record('Blue Awning', 104, 0.5, ({ add, chord }) => {
     const CH = { Am: [57, 60, 64], E7: [56, 59, 62, 64], Dm: [57, 62, 65], C: [55, 60, 64], G7: [55, 59, 65] };
     const ROOT = { Am: 45, E7: 52, Dm: 50, C: 48, G7: 43 };

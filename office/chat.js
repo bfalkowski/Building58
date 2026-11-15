@@ -21,13 +21,13 @@
   const BY = { relay: 'the relay', person: 'you', session: 'a session' };
 
   let current = 'office';
-  try { current = localStorage.getItem('office.chatRoom') || 'office'; } catch (e) { /* no storage */ }
+  try { current = localStorage.getItem('office.chatRoom') || 'office'; } catch (e) { current = 'office'; }
   let rooms = [], shown = '', shownAt = '', lastN = 0, armed = null;
 
   let drawnRooms = '';
   function drawRooms() {
     const state = JSON.stringify([current, rooms]);
-    if (state === drawnRooms) return;  // a redraw would take focus off a chat channel
+    if (state === drawnRooms) return;
     drawnRooms = state;
     roomsList.textContent = '';
     for (const r of rooms) {
@@ -50,9 +50,10 @@
     li.append(t, body);
     return li;
   }
+  function remember(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
   function pick(name) {
     current = name; shown = ''; lastN = 0; armed = null; del.textContent = 'Delete';
-    try { localStorage.setItem('office.chatRoom', name); } catch (e) { /* no storage */ }
+    remember('office.chatRoom', name);
     drawRooms(); loadPosts();
   }
   async function loadPosts() {
@@ -61,7 +62,6 @@
     const r = await api('/' + encodeURIComponent(want) + (fresh ? '' : '?since=' + lastN));
     if (want !== current) return;
     if (!r.ok) { if (r.error === 'no_chat' && current !== 'office') pick('office'); return; }
-    // Deleted and made again between two looks: its posts are numbered from 1 again, so start over.
     if (!fresh && r.room.createdAt !== shownAt) { shown = ''; return loadPosts(); }
     shownAt = r.room.createdAt;
     title.textContent = '#' + r.room.name;
@@ -99,7 +99,6 @@
     say(''); newName.value = '';
     await loadRooms(); pick(r.room.name);
   });
-  // Two presses, so one slip deletes nothing. A ticket's chat channel leaves a short summary on the ticket.
   del.addEventListener('click', async () => {
     if (armed !== current) {
       armed = current;
@@ -114,7 +113,6 @@
     refresh();
   });
 
-  // The terminal has to be on, and only the page on this computer gets an answer.
   loadRooms().then((ok) => {
     if (!ok) return;
     section.hidden = false;
