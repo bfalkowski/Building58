@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, sleep, until, sessionToken, ROOT } = require('./helpers.js');
+const { relay, makeRepo, removeDir, sleep, until, sessionToken, ROOT } = require('./helpers.js');
 const { leadBrief, AUTOPILOT } = require('../lead-brief.js');
 
 const CLI = path.join(ROOT, 'relay', 'ticket.js');
@@ -31,7 +31,7 @@ test('the brief under Autopilot names the two rights and never merging, whatever
 test('at level 5 the Lead keeps stops and moving merged tasks to Done, and nothing else', async (t) => {
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const R = await relay({ RELAY_WIP_LIMIT: '8', RELAY_LEAD_STOPS: '1', RELAY_REVIEW_GRACE_MS: '600000', RELAY_CHAT_POLL_SECONDS: '1', GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh });
-  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); fs.rmSync(gh, { recursive: true, force: true }); });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(gh); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t'].concat(args), { cwd, encoding: 'utf8' }).trim();
   git(R.home, 'init', '-q', '--bare', origin);

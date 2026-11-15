@@ -10,7 +10,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, until, sleep, sessionToken, ROOT } = require('./helpers.js');
+const { relay, makeRepo, removeDir, until, sleep, sessionToken, ROOT } = require('./helpers.js');
 
 const CLI = path.join(ROOT, 'relay', 'ticket.js');
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -25,7 +25,7 @@ async function office(t, env, home) {
   const ghDir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const o = { ghDir, files: ['a.txt'] };
   o.R = await relay(Object.assign({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir }, ENV, env), home, { autoReview: true });
-  t.after(async () => { await o.R.kill().catch(() => {}); await o.R.remove(); fs.rmSync(ghDir, { recursive: true, force: true }); });
+  t.after(async () => { await o.R.kill().catch(() => {}); await o.R.remove(); removeDir(ghDir); });
   const R = o.R;
   o.repo = makeRepo(R.home); o.origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', o.origin);

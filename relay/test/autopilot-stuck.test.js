@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, until, sleep, sessionToken } = require('./helpers.js');
+const { relay, makeRepo, removeDir, until, sleep, sessionToken } = require('./helpers.js');
 
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const commit = (cwd, file, text, message) => {
@@ -33,7 +33,7 @@ function helpers(R) {
 test('a Dev at a question past the stuck time: its task waits on you, the session stays, and the next ticket starts', async (t) => {
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: '3000', RELAY_WIP_LIMIT: '1' });
-  t.after(async () => { await R.stop(); fs.rmSync(gh, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(gh); });
   const { terminals, say, taskOf, ap } = helpers(R);
   const repo = makeRepo(R.home);
   const first = (await R.call('POST', '/tickets', { title: 'First one', repo })).body.ticket;
@@ -87,7 +87,7 @@ test('an update waits on a session in a turn, and Autopilot still starts and mer
   sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
   sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/main');
   const R = await relay({ RELAY_UPDATE_DIR: dir, GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' }, home, { autoReview: true });
-  t.after(async () => { await R.kill(); await R.remove(); fs.rmSync(gh, { recursive: true, force: true }); });
+  t.after(async () => { await R.kill(); await R.remove(); removeDir(gh); });
   await R.call('POST', '/reviews', { auto: true });  // the first relay in this home turned it off
   const { terminals, say, taskOf, ap } = helpers(R);
   const merged = () => { try { return fs.readFileSync(path.join(gh, 'merged.log'), 'utf8'); } catch (e) { return ''; } };

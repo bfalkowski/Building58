@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, until, sleep, ROOT } = require('./helpers.js');
+const { relay, makeRepo, removeDir, until, sleep, ROOT } = require('./helpers.js');
 
 const GRACE = 1500;
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -17,7 +17,7 @@ const COMMENTED = { stdout: 'https://github.com/acme/widgets/pull/7#issuecomment
 test('a reviewer that has posted ends by itself', async (t) => {
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));  // the fake gh a huddle runs keeps its log here
   const R = await relay({ RELAY_REVIEW_GRACE_MS: String(GRACE), GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh }), repo = makeRepo(R.home);
-  t.after(R.stop); t.after(() => fs.rmSync(gh, { recursive: true, force: true }));
+  t.after(R.stop); t.after(() => removeDir(gh));
   const origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
   fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');

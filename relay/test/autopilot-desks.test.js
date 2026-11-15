@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, sleep, until } = require('./helpers.js');
+const { relay, makeRepo, removeDir, sleep, until } = require('./helpers.js');
 
 const DESKS = 9;
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t'].concat(args), { cwd, encoding: 'utf8' }).trim();
@@ -17,7 +17,7 @@ const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'u
 async function office(t, env) {
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const R = await relay({ RELAY_WIP_LIMIT: '8', RELAY_AUTOPILOT_TICK_MS: '300', GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, ...env });
-  t.after(async () => { await R.stop(); fs.rmSync(gh, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(gh); });
   // An origin that main is pushed to, so a Dev's checkout has nothing unpushed.
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   git(R.home, 'init', '-q', '--bare', origin);

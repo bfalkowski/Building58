@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, until, sleep, sessionToken } = require('./helpers.js');
+const { relay, makeRepo, removeDir, until, sleep, sessionToken } = require('./helpers.js');
 const { prBrief } = require('../../office/reviews.js');
 
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -20,7 +20,7 @@ const pushPr = (wt, origin) => { sh(wt, 'push', '-qf', origin, 'HEAD:refs/pull/7
 test('Autopilot runs a ticket from Ready to merged', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' }, null, { autoReview: true });
-  t.after(async () => { await R.stop(); fs.rmSync(ghDir, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
   fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
@@ -142,7 +142,7 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
 test('Get a review asks for a verdict, and its merge verdict merges, while one with no verdict does not count', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' });  // no automatic reviews
-  t.after(async () => { await R.stop(); fs.rmSync(ghDir, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
   fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
@@ -204,7 +204,7 @@ test('Get a review asks for a verdict, and its merge verdict merges, while one w
 test('a merge verdict waits while the Dev works, and work left unpushed goes to the person', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' });  // no automatic reviews
-  t.after(async () => { await R.stop(); fs.rmSync(ghDir, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
   fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
@@ -257,7 +257,7 @@ test('a Dev reply with the hold mark sends a merge-verdict PR to the person, eve
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   // Comment checks on, but after the first one (5 seconds in) the next is an hour away.
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '3600' });
-  t.after(async () => { await R.stop(); fs.rmSync(ghDir, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
   fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
@@ -303,7 +303,7 @@ test('a Dev reply with the hold mark sends a merge-verdict PR to the person, eve
 test('a PR that changes CLAUDE.md waits on the person, and is done once the person merges it', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300' });
-  t.after(async () => { await R.stop(); fs.rmSync(ghDir, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home);
   const ticket = (await R.call('POST', '/tickets', { title: 'Change the rules', repo })).body.ticket;
   await R.call('POST', '/autopilot', { on: true, only: [ticket.id] });
@@ -326,7 +326,7 @@ test('a PR that changes CLAUDE.md waits on the person, and is done once the pers
 test('two rounds that say fix hand the task to the person, and a later merge verdict does not merge it', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' }, null, { autoReview: true });
-  t.after(async () => { await R.stop(); fs.rmSync(ghDir, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
   fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
@@ -384,7 +384,7 @@ for (const how of ['comment', 'review']) {
   test('a merge review posted with gh pr ' + how + ' leaves the card, even before its reviewer has left', async (t) => {
     const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
     const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '60000', RELAY_REVIEW_POLL_SECONDS: '1' }, null, { autoReview: true });
-    t.after(async () => { await R.stop(); fs.rmSync(ghDir, { recursive: true, force: true }); });
+    t.after(async () => { await R.stop(); removeDir(ghDir); });
     const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
     sh(R.home, 'init', '-q', '--bare', origin);
     fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
