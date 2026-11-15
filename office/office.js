@@ -10,10 +10,14 @@
   const ROSTER = window.OFFICE_ROSTER;
   const canvas = $('world'), stage = $('stage'), tagLayer = $('tags');
   const params = new URLSearchParams(location.search);
+  const storage = {
+    get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
+    remove: (k) => { try { localStorage.removeItem(k); return true; } catch (e) { return false; } }
+  };
   const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   if (!window.THREE || !ROSTER) { $('fallback').hidden = false; return; }
 
-  // ---------- renderer, scene, camera ----------
   let renderer = null;
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); } catch (e) { renderer = null; }
   if (!renderer) { canvas.hidden = true; $('fallback').hidden = false; }
@@ -48,12 +52,8 @@
     coffee: [new THREE.Vector3(5.6, 2.4, 0.6), new THREE.Vector3(5.0, 1.0, -3.6)],
     lounge: [new THREE.Vector3(6.0, 2.5, 5.9), new THREE.Vector3(5.2, 0.7, 1.5)],
     board: [new THREE.Vector3(0.6, 2.4, -0.6), new THREE.Vector3(-0.95, 1.8, -4.9)],
-    office: [new THREE.Vector3(2.04, 1.95, -9.42), new THREE.Vector3(2.04, 1.2, -7.6)]  // behind the manager at his desk, over his head and out through the glass
+    office: [new THREE.Vector3(2.04, 1.95, -9.42), new THREE.Vector3(2.04, 1.2, -7.6)]
   };
-  // How the camera may move. In the room it circles a point on the floor. In the manager's office it
-  // stands behind him at his desk and circles a point on his desk, with a wider lens, so his head sits low
-  // in view and the room shows through the glass above it. It turns about 70 degrees each way and
-  // stays in front of the pin board, so it never reaches the office's walls.
   const LIMITS = {
     room: { fov: 34, minDistance: 3, maxDistance: 26, minPolarAngle: 0.3, maxPolarAngle: 1.4, minAzimuthAngle: -0.15, maxAzimuthAngle: 1.6, enablePan: true },
     desk: { fov: 60, minDistance: 1.7, maxDistance: 2.0, minPolarAngle: 0.95, maxPolarAngle: 1.2, minAzimuthAngle: Math.PI - 1.25, maxAzimuthAngle: -(Math.PI - 1.25), enablePan: false }
@@ -65,9 +65,7 @@
     if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
   }
   limits('room');
-  // How low the camera may go: with its pivot in the manager's office, it stays high, over the office's walls.
   function highFor(t) { return t.z < MO.z0 ? 0.9 : 1.4; }
-  // The button at the bottom left of the scene goes into the manager's office, and back to the first view.
   const officeBtn = $('view-office');
   function setView(name) {
     const v = VIEWS[name] || VIEWS.home; introCam = false; follow = null;
@@ -79,10 +77,8 @@
   }
   if (controls && officeBtn) { officeBtn.hidden = false; officeBtn.addEventListener('click', () => setView(officeBtn.getAttribute('aria-pressed') === 'true' ? 'home' : 'office')); }
   if (controls) controls.addEventListener('start', () => { introCam = false; follow = null; });
-  // The on-screen pad for turning and zooming (shared/nav.js). Home is the same as the home view.
   if (controls && window.NavPad) window.NavPad.attach({ stage, canvas, controls, camera, home: () => setView('home') });
 
-  // ---------- helpers ----------
   const C = (hex) => new THREE.Color(hex).convertSRGBToLinear();
   const std = (hex, o) => new THREE.MeshStandardMaterial(Object.assign({ color: C(hex), roughness: 0.7, metalness: 0 }, o || {}));
   const metal = (hex, r) => std(hex, { metalness: 0.75, roughness: r == null ? 0.35 : r });
@@ -125,7 +121,6 @@
   function angDiff(a, b) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; }
   const hexRGB = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 
-  // ---------- time of day: from the real clock, or ?time=day|evening|night ----------
   const PARTS = {
     day:     { sky: ['#8fbfe6', '#e2eef5'], haze: '#c9dbe6', hemi: [0xf2f5ff, 0x8a7560, 1.25], sun: [0xfff3df, 2.0], fill: 0.75, amb: 0.35, lamps: 0.15, exposure: 1.0, lit: 0.06, bldg: ['#7d8da0', '#5f6f82', '#3f4a58'] },
     evening: { sky: ['#283a6e', '#f0955a'], haze: '#d58a6a', hemi: [0xffe0c4, 0x5a4636, 0.8], sun: [0xffa45c, 1.6], fill: 0.45, amb: 0.25, lamps: 1.0, exposure: 1.05, lit: 0.45, bldg: ['#5b4f66', '#3f3a52', '#262636'] },
@@ -139,7 +134,6 @@
   }
   let part = partNow();
 
-  // ---------- lights ----------
   const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6); scene.add(hemi);
   const amb = new THREE.AmbientLight(0xfff4e6, 0.3); scene.add(amb);
   const sun = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -152,11 +146,9 @@
   const lamps = [];
   function lampLight(x, y, z, dist) { const l = new THREE.PointLight(C(0xffc98a), 1, dist || 7, 2); l.position.set(x, y, z); scene.add(l); lamps.push(l); return l; }
 
-  // ---------- the void under the loft ----------
   const grid = new THREE.GridHelper(80, 160, C(0x1d4357), C(0x14232d)); grid.position.y = -0.3; scene.add(grid);
-  const slab = block(scene, std(0x1d1a18, { roughness: 0.95 }), [0, -0.165, 0], [14.6, 0.3, 10.6]); slab.castShadow = false;  // top just under the floor, so the two never fight
+  const slab = block(scene, std(0x1d1a18, { roughness: 0.95 }), [0, -0.165, 0], [14.6, 0.3, 10.6]); slab.castShadow = false;
 
-  // ---------- textures ----------
   function brickCanvases() {
     const W = 768, H = 240, BW = 64, BH = 24, M = 4, r = rnd(7);
     const c = makeCanvas(W, H), x = c.getContext('2d'), b = makeCanvas(W, H), y = b.getContext('2d');
@@ -170,11 +162,11 @@
         if (r() < 0.05) tone = '#b8866a';
         if (r() < 0.04) tone = '#5a271c';
         x.fillStyle = tone; x.fillRect(bx + M / 2, by + M / 2, BW - M, BH - M);
-        for (let k = 0; k < 26; k++) {  // speckles and wear
+        for (let k = 0; k < 26; k++) {
           x.fillStyle = r() < 0.5 ? 'rgba(0,0,0,0.12)' : 'rgba(255,230,210,0.08)';
           x.fillRect(bx + M / 2 + r() * (BW - M - 3), by + M / 2 + r() * (BH - M - 2), 1 + r() * 4, 1 + r() * 2);
         }
-        if (r() < 0.12) { x.fillStyle = 'rgba(240,235,225,0.18)'; x.fillRect(bx + M / 2, by + M / 2, (BW - M) * r(), BH - M); }  // old paint
+        if (r() < 0.12) { x.fillStyle = 'rgba(240,235,225,0.18)'; x.fillRect(bx + M / 2, by + M / 2, (BW - M) * r(), BH - M); }
         y.fillStyle = '#fff'; y.fillRect(bx + M / 2 + 1, by + M / 2 + 1, BW - M - 2, BH - M - 2);
       }
     }
@@ -208,7 +200,6 @@
     return tex(c, [14 / 2.4, 10 / 2.4]);
   }
 
-  // ---------- the room: 14 x 10 m, back wall at z = -5, windows on the left at x = -7 ----------
   const ROOM = { x0: -7, x1: 7, z0: -5, z1: 5, h: 4.6 };
   const floor = mesh(new THREE.PlaneGeometry(14, 10), new THREE.MeshStandardMaterial({ map: floorTex(), roughness: 0.62 }), scene, false);
   floor.rotation.x = -Math.PI / 2;
@@ -218,16 +209,12 @@
     const b = mesh(G.box, [m, m, capMat, capMat, m, m], scene);
     b.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); b.scale.set(x1 - x0, y1 - y0, z1 - z0); return b;
   }
-  // The back wall has an opening for the manager's office: a glass door with a glass pane on each
-  // side, centred in the brick between the board and the coffee counter, with the clock above it.
-  // The office behind it is wider than the opening, a room of its own off the loft.
   const BOARD_EDGE = -0.95 + 3.3 / 2, COUNTER_EDGE = 3.38;
   const MO = { mid: (BOARD_EDGE + COUNTER_EDGE) / 2, half: 1.09, top: 2.25, x0: -1.0, x1: 5.0, z0: -5.3, z1: -9.6 };
   MO.open0 = MO.mid - MO.half; MO.open1 = MO.mid + MO.half;
-  wallBox(-7.3, MO.open0, 0, ROOM.h, -5.3, -5.0, MO.open0 + 7.3, ROOM.h);  // back wall, left of the opening
-  wallBox(MO.open1, 7.0, 0, ROOM.h, -5.3, -5.0, 7.0 - MO.open1, ROOM.h);    // and right of it
+  wallBox(-7.3, MO.open0, 0, ROOM.h, -5.3, -5.0, MO.open0 + 7.3, ROOM.h);
+  wallBox(MO.open1, 7.0, 0, ROOM.h, -5.3, -5.0, 7.0 - MO.open1, ROOM.h);
   wallBox(MO.open0, MO.open1, MO.top, ROOM.h, -5.3, -5.0, MO.open1 - MO.open0, ROOM.h - MO.top);
-  // the office's own walls, left, right and back, and its floor
   const moD = MO.z0 - MO.z1;
   wallBox(MO.x0 - 0.3, MO.x0, 0, ROOM.h, MO.z1 - 0.3, MO.z0, moD, ROOM.h);
   wallBox(MO.x1, MO.x1 + 0.3, 0, ROOM.h, MO.z1 - 0.3, MO.z0, moD, ROOM.h);
@@ -238,10 +225,8 @@
   wallBox(-7.3, -7.0, 0, WY0, -5.3, 5.0, 10.3, WY0);
   wallBox(-7.3, -7.0, WY1, ROOM.h, -5.3, 5.0, 10.3, ROOM.h - WY1);
   [[-5.3, -4.1], [-1.9, -1.1], [1.1, 1.9], [4.1, 5.0]].forEach(([a, b]) => wallBox(-7.3, -7.0, WY0, WY1, a, b, b - a, WY1 - WY0));
-  // baseboard on the back wall
   block(scene, std(0x2b2724), [(-6.95 + MO.open0) / 2, 0.06, -4.985], [MO.open0 + 6.95, 0.12, 0.03]); block(scene, std(0x2b2724), [(MO.open1 + 6.95) / 2, 0.06, -4.985], [6.95 - MO.open1, 0.12, 0.03]);
 
-  // steel factory windows, sills and old radiators
   const steel = std(0x15181b, { roughness: 0.5, metalness: 0.5 });
   const glass = new THREE.MeshStandardMaterial({ color: C(0xbfd8ea), transparent: true, opacity: 0.1, roughness: 0.05, metalness: 0.1, depthWrite: false });
   const sillMat = std(0x8a6a4a, { roughness: 0.6 }), radMat = metal(0xc9c4ba, 0.5);
@@ -256,7 +241,6 @@
     block(rad, radMat, [0, 0.12, 0], [0.12, 0.05, 0.92]); block(rad, radMat, [0, 0.73, 0], [0.12, 0.04, 0.92]);
   });
 
-  // the city outside: a painted backdrop past the windows
   const sky = makeCanvas(2048, 680), skyTex = tex(sky);
   function drawSkyline() {
     const P = PARTS[part], x = sky.getContext('2d'), W = sky.width, H = sky.height, r = rnd(99);
@@ -271,14 +255,12 @@
         const bw = minW * 3 + r() * maxW * 1.6, bh = H * (lo + r() * (hi - lo));
         const by = H - bh;
         x.fillStyle = P.bldg[li]; x.fillRect(px, by, bw, bh);
-        if (li === 0 && r() < 0.18) { x.fillRect(px + bw / 2 - 6, by - 60, 12, 60); x.fillRect(px + bw / 2 - 2, by - 110, 4, 50); }  // a spire
-        // windows
+        if (li === 0 && r() < 0.18) { x.fillRect(px + bw / 2 - 6, by - 60, 12, 60); x.fillRect(px + bw / 2 - 2, by - 110, 4, 50); }
         const lit = P.lit * (li === 2 ? 1 : 0.8);
         for (let wy = by + 10; wy < H - 10; wy += 16) for (let wx = px + 6; wx < px + bw - 8; wx += 12) {
           if (r() < lit) { x.fillStyle = r() < 0.7 ? 'rgba(255,214,140,0.9)' : 'rgba(200,225,255,0.8)'; x.fillRect(wx, wy, 6, 8); }
           else if (part === 'day' && r() < 0.5) { x.fillStyle = 'rgba(255,255,255,0.10)'; x.fillRect(wx, wy, 6, 8); }
         }
-        // water towers on the nearest roofs
         if (li === 2 && r() < 0.55) {
           const tx = px + 20 + r() * (bw - 70), ty = by;
           x.fillStyle = part === 'night' ? '#0a0e17' : part === 'evening' ? '#1d1a24' : '#4a3a2e';
@@ -295,7 +277,6 @@
   const backdrop = mesh(new THREE.PlaneGeometry(10.3, 4.3), new THREE.MeshBasicMaterial({ map: skyTex, fog: false, toneMapped: false }), scene, false);
   backdrop.position.set(-8.4, 1.95, -0.15); backdrop.rotation.y = Math.PI / 2;
 
-  // cast iron columns
   const colMat = std(0xe8e2d6, { roughness: 0.5 });
   const COLUMNS = [[-4.45, -3.5], [-4.45, 2.8], [3.05, -3.5], [3.05, 2.8]];
   COLUMNS.forEach(([cx, cz]) => {
@@ -304,7 +285,6 @@
     cyl(scene, colMat, [cx, ROOM.h - 0.2, cz], 0.13, 0.25, 0.26);
   });
 
-  // exposed ductwork, a sprinkler pipe and Edison pendants
   const ductMat = metal(0xb9bec4, 0.42);
   const duct = new THREE.Group(); scene.add(duct);
   rod(duct, ductMat, [-6.95, 4.28, -3.4], [6.95, 4.28, -3.4], 0.22);
@@ -325,14 +305,12 @@
   pendant(-6.1, -0.6, 2.35); pendant(4.4, -3.9, 2.4); pendant(5.6, -3.9, 2.4);
   lampLight(-0.6, 2.4, -2.4, 8); lampLight(-0.6, 2.4, 0.6, 8); lampLight(5.0, 2.3, -3.6, 6); lampLight(-6.0, 2.2, -0.6, 5);
 
-  // neon sign, a bike on the wall and a wall clock
   const neonC = makeCanvas(1024, 256), neonTex = tex(neonC);
   function drawNeon() {
     const x = neonC.getContext('2d'), col = ROSTER.neon || '#ff5fa2';
     x.clearRect(0, 0, 1024, 256);
     x.font = 'italic 600 150px "Source Sans 3", "Source Sans Pro", system-ui, sans-serif';
     x.textAlign = 'center'; x.textBaseline = 'middle';
-    // A long name (?name=, office/roster.js) is drawn narrower so it still fits on the sign.
     const sign = ROSTER.company || 'Building58', fit = Math.min(1, 940 / x.measureText(sign).width);
     x.setTransform(fit, 0, 0, 1, 512 * (1 - fit), 0);
     for (const [blur, alpha] of [[44, 0.55], [22, 0.75], [8, 1]]) { x.shadowColor = col; x.shadowBlur = blur; x.fillStyle = col; x.globalAlpha = alpha; x.fillText(sign, 512, 130); }
@@ -370,11 +348,10 @@
     clockTex.needsUpdate = true;
   }
   const clockFace = mesh(new THREE.CircleGeometry(0.42, 48), new THREE.MeshStandardMaterial({ map: clockTex, roughness: 0.5 }), scene, false);
-  clockFace.position.set(MO.mid, 2.85, -4.94);  // above the manager's door, in the middle of the brick
+  clockFace.position.set(MO.mid, 2.85, -4.94);
   const rim = mesh(new THREE.TorusGeometry(0.43, 0.03, 10, 48), metal(0x222222), scene); rim.position.copy(clockFace.position);
   drawClock();
 
-  // the kanban board: what each person is doing, what waits on you, and what got done
   const boardC = makeCanvas(1024, 512), boardTex = tex(boardC);
   const board = new THREE.Group(); board.position.set(-0.95, 1.7, -4.95); scene.add(board);
   block(board, metal(0xd5d8dc, 0.35), [0, 0, 0], [3.3, 1.7, 0.04]);
@@ -382,13 +359,12 @@
   block(board, metal(0xb0b4b8), [0, -0.86, 0.06], [3.2, 0.03, 0.08]);
   [0x2e74d1, 0xd13a2e, 0x2e9f5a].forEach((c, i) => cyl(board, std(c), [-0.3 + i * 0.12, -0.83, 0.07], 0.012, 0.13));
 
-  // ---------- furniture ----------
   const wood = std(0xb08a5f, { roughness: 0.55 }), darkWood = std(0x5c4030, { roughness: 0.6 }), blackMetal = std(0x1c1c1e, { roughness: 0.45, metalness: 0.4 });
   const OBST = { rects: [], circles: [] };
   const solid = (x0, x1, z0, z1) => OBST.rects.push([x0, x1, z0, z1]);
   const solidC = (x, z, r) => OBST.circles.push([x, z, r]);
-  solid(-7.3, -6.7, -5.3, 5); solid(-7.3, MO.mid - 0.5, -5.3, -4.95); solid(MO.mid + 0.5, 7, -5.3, -4.95);  // the back wall, open only at the glass door
-  solid(-7.3, MO.x0, -9.95, -5.3); solid(MO.x1, 7.3, -9.95, -5.3); solid(-7.3, 7.3, -9.95, MO.z1);  // round the manager's office
+  solid(-7.3, -6.7, -5.3, 5); solid(-7.3, MO.mid - 0.5, -5.3, -4.95); solid(MO.mid + 0.5, 7, -5.3, -4.95);
+  solid(-7.3, MO.x0, -9.95, -5.3); solid(MO.x1, 7.3, -9.95, -5.3); solid(-7.3, 7.3, -9.95, MO.z1);
   COLUMNS.forEach(([x, z]) => solidC(x, z, 0.2));
 
   function bench(cx, cz, len) {
@@ -410,7 +386,7 @@
     const seat = std(color || 0x2a2d33, { roughness: 0.8 });
     for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; block(g, blackMetal, [Math.sin(a) * 0.15, 0.06, -0.05 + Math.cos(a) * 0.15], [0.04, 0.03, 0.3], [0, a, 0]); }
     cyl(g, metal(0x888888), [0, 0.24, -0.05], 0.025, 0.36);
-    const top = new THREE.Group(); top.position.set(0, 0, -0.05); g.add(top);  // what swivels, about the column
+    const top = new THREE.Group(); top.position.set(0, 0, -0.05); g.add(top);
     block(top, seat, [0, 0.44, 0.01], [0.46, 0.07, 0.44]);
     block(top, seat, [0, 0.78, -0.25], [0.42, 0.46, 0.06], [-0.12, 0, 0]);
     rod(top, blackMetal, [0, 0.46, -0.19], [0, 0.6, -0.25], 0.018);
@@ -452,8 +428,6 @@
     for (let i = 0; i < 6; i++) { const l = block(g, std(0x4f8a3c), [Math.sin(i) * 0.015, 0.16, Math.cos(i) * 0.015], [0.018, 0.2, 0.006]); l.rotation.set(Math.sin(i * 2) * 0.25, i, Math.cos(i * 3) * 0.25); }
   }
 
-  // ---------- desks and seats ----------
-  // Each desk: where the person sits (pelvis), facing yaw, the monitor and the desk mug.
   const DESKS = {};
   function desk(key, x, z, yaw, opts) {
     const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), side = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
@@ -479,7 +453,6 @@
   seatX.forEach((x, i) => desk('a' + i, x, -1.7, Math.PI, { plant: i % 2 ? 0.45 : null, lamp: i === 2 }));
   seatX.forEach((x, i) => desk('b' + i, x, 1.3, Math.PI, { plant: i % 2 ? null : -0.5 }));
 
-  // coffee bar with an espresso machine, open shelves and a fridge
   const counter = new THREE.Group(); scene.add(counter);
   block(counter, std(0x253447, { roughness: 0.55 }), [4.8, 0.44, -4.64], [2.8, 0.88, 0.62]);
   for (let i = 0; i < 4; i++) { block(counter, std(0x2c3e55, { roughness: 0.5 }), [3.75 + i * 0.7, 0.46, -4.325], [0.64, 0.74, 0.02]); block(counter, metal(0xc9b37a, 0.3), [3.75 + i * 0.7 + 0.22, 0.7, -4.31], [0.02, 0.14, 0.02]); }
@@ -516,12 +489,10 @@
   const steamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
   for (let i = 0; i < 8; i++) { const p = mesh(G.sph, steamMat.clone(), scene, false); p.castShadow = false; p.scale.setScalar(0.04); p.visible = false; steam.push({ m: p, t: i / 8 }); }
 
-  // a high table for chats
   const bar = new THREE.Group(); bar.position.set(5.0, 0, -2.25); scene.add(bar);
   cyl(bar, darkWood, [0, 1.05, 0], 0.36, 0.04); cyl(bar, blackMetal, [0, 0.53, 0], 0.03, 1.02); cyl(bar, blackMetal, [0, 0.02, 0], 0.26, 0.03);
   solidC(5.0, -2.25, 0.4);
 
-  // the lounge: rug, couch, coffee table, armchair, arc lamp
   const rugC = makeCanvas(512, 512); (function () {
     const x = rugC.getContext('2d'); x.fillStyle = '#8c3b2f'; x.fillRect(0, 0, 512, 512);
     x.strokeStyle = '#e6d3b1'; x.lineWidth = 10; x.strokeRect(24, 24, 464, 464); x.strokeStyle = '#1f3b4d'; x.lineWidth = 16; x.strokeRect(52, 52, 408, 408);
@@ -547,8 +518,6 @@
   block(arm, leather, [0, 0.24, 0], [0.82, 0.3, 0.8]); block(arm, leather, [0, 0.62, -0.32], [0.82, 0.5, 0.18]);
   block(arm, leather, [-0.36, 0.48, 0.02], [0.12, 0.3, 0.78]); block(arm, leather, [0.36, 0.48, 0.02], [0.12, 0.3, 0.78]);
   solid(3.44, 4.26, 2.8, 3.6);
-  // The arc lamp stands at the couch's right end, and its shade hangs over the arm, high, so it lights
-  // the couch without hiding the head of someone sitting there.
   const LAMP = { x: 6.72, z: 0.5 }, REACH = { x: -0.3, z: 0.44 };
   const lampG = new THREE.Group(); lampG.position.set(LAMP.x, 0, LAMP.z); scene.add(lampG);
   block(lampG, std(0xe8e4dc, { roughness: 0.3 }), [0, 0.05, 0], [0.28, 0.1, 0.28]);
@@ -559,7 +528,6 @@
   lampLight(LAMP.x + shade[0], shade[1] - 0.25, LAMP.z + shade[2], 5);
   solidC(LAMP.x, LAMP.z, 0.25);
 
-  // a ping pong table
   const ppC = makeCanvas(548, 305); (function () { const x = ppC.getContext('2d'); x.fillStyle = '#1f4f7a'; x.fillRect(0, 0, 548, 305); x.strokeStyle = '#f2f2f2'; x.lineWidth = 6; x.strokeRect(3, 3, 542, 299); x.lineWidth = 2; x.beginPath(); x.moveTo(0, 152.5); x.lineTo(548, 152.5); x.stroke(); })();
   const pp = new THREE.Group(); pp.position.set(-0.6, 0, 3.4); scene.add(pp);
   block(pp, std(0x1f4f7a, { roughness: 0.4 }), [0, 0.74, 0], [2.74, 0.03, 1.525]);
@@ -575,26 +543,21 @@
   const tablePaddles = [paddleMesh(0xc0392b), paddleMesh(0x222222)];
   tablePaddles.forEach((p, i) => { p.position.set(-0.6 + (i ? 0.9 : -0.9), 0.77, 3.2 + i * 0.3); p.rotation.set(0, 0.6 + i, Math.PI / 2); scene.add(p); });
 
-  // plants and the window seats
   plant(-6.45, -4.45, 1.25, 0xe9e4da); plant(-6.45, 4.45, 1.1, 0xb8735a); plant(6.6, 4.55, 1.2, 0x2b2b2b); plant(-3.8, 4.5, 0.9);
 
-  // ---------- the manager's office ----------
-  // His desk faces the glass door, so the room sees him at work. Guest chairs, a sofa, shelves,
-  // filing cabinets and plants give him places to go between rounds.
-  const MD = { x: MO.mid, z: -8.0 };  // the desk's middle
+  const MD = { x: MO.mid, z: -8.0 };
   block(scene, darkWood, [MD.x, 0.74, MD.z], [1.6, 0.05, 0.75]);
   for (const sx of [-0.75, 0.75]) for (const sz of [-0.32, 0.32]) block(scene, blackMetal, [MD.x + sx, 0.36, MD.z + sz], [0.04, 0.72, 0.04]);
-  block(scene, darkWood, [MD.x, 0.42, MD.z + 0.36], [1.5, 0.6, 0.03]);  // the front panel
-  monitor(scene, [MD.x - 0.5, 0.765, MD.z], Math.PI - 0.5);  // to his left, so the room sees his face
+  block(scene, darkWood, [MD.x, 0.42, MD.z + 0.36], [1.5, 0.6, 0.03]);
+  monitor(scene, [MD.x - 0.5, 0.765, MD.z], Math.PI - 0.5);
   { const lp = [MD.x + 0.6, 0.765, MD.z + 0.15]; cyl(scene, blackMetal, lp, 0.06, 0.02); rod(scene, blackMetal, lp, [lp[0], lp[1] + 0.38, lp[2]], 0.01); const sh = cyl(scene, std(0x7a2a24), [lp[0], lp[1] + 0.4, lp[2]], 0.09, 0.1, 0.04); sh.rotation.x = -0.3; }
   block(scene, std(0xe9e2cf, { roughness: 0.8 }), [MD.x + 0.2, 0.775, MD.z - 0.05], [0.3, 0.02, 0.22]);
-  block(scene, std(0x2b2e33, { roughness: 0.5 }), [MD.x - 0.16, 0.774, MD.z - 0.2], [0.4, 0.018, 0.13]);  // his keyboard, under his hands
+  block(scene, std(0x2b2e33, { roughness: 0.5 }), [MD.x - 0.16, 0.774, MD.z - 0.2], [0.4, 0.018, 0.13]);
   ball(scene, std(0x2b2e33, { roughness: 0.4 }), [MD.x + 0.14, 0.778, MD.z - 0.25], 0.03, [0.7, 0.35, 1]);
   const moMug = mugMesh('#7a2a24'); moMug.position.set(MD.x + 0.35, 0.765, MD.z + 0.2); scene.add(moMug);
   chair(MD.x, MD.z - 0.72, 0, 0x3a2a24);
   for (const dx of [-0.5, 0.5]) chair(MD.x + dx, MD.z + 0.85, Math.PI, 0x2a2d33);
   solid(MD.x - 0.8, MD.x + 0.8, MD.z - 0.38, MD.z + 0.38);
-  // a pin board on the back wall behind him, cork with a few quiet notes on it
   { const c = makeCanvas(512, 288), x = c.getContext('2d'), r = rnd(58);
     x.fillStyle = '#b8936a'; x.fillRect(0, 0, 512, 288);
     for (let i = 0; i < 2600; i++) { x.fillStyle = 'rgba(' + (r() < 0.5 ? '90,60,35' : '230,200,160') + ',' + (0.1 + r() * 0.15) + ')'; x.fillRect(r() * 512, r() * 288, 2, 2); }
@@ -606,7 +569,6 @@
     }
     block(scene, darkWood, [MD.x, 1.7, MO.z1 + 0.03], [2.1, 1.22, 0.05]);
     const face = mesh(new THREE.PlaneGeometry(2.0, 1.12), new THREE.MeshStandardMaterial({ map: tex(c), roughness: 0.9 }), scene, false); face.position.set(MD.x, 1.7, MO.z1 + 0.06); }
-  // a sofa against the left wall, with a low table
   const moSofa = new THREE.Group(); moSofa.position.set(MO.x0 + 0.5, 0, -7.4); moSofa.rotation.y = Math.PI / 2; scene.add(moSofa);
   const sofaLeather = std(0x5a3a2a, { roughness: 0.6 });
   block(moSofa, sofaLeather, [0, 0.23, 0], [1.6, 0.3, 0.9]); block(moSofa, sofaLeather, [0, 0.62, -0.33], [1.6, 0.55, 0.24]);
@@ -615,24 +577,18 @@
   solid(MO.x0, MO.x0 + 0.95, -8.2, -6.6);
   block(scene, wood, [MO.x0 + 1.55, 0.36, -7.4], [0.5, 0.04, 0.9]); for (const sz of [-0.38, 0.38]) block(scene, blackMetal, [MO.x0 + 1.55, 0.18, -7.4 + sz], [0.4, 0.34, 0.03]);
   solid(MO.x0 + 1.3, MO.x0 + 1.8, -7.85, -6.95);
-  // filing cabinets on the right wall
   for (const dz of [-0.55, 0]) block(scene, std(0x3c4148, { roughness: 0.5, metalness: 0.3 }), [MO.x1 - 0.28, 0.6, -8.0 + dz], [0.5, 1.2, 0.5]);
   solid(MO.x1 - 0.55, MO.x1, -8.3, -7.75);
-  // a frame on the left wall, plants in the corners, and two lamps overhead
   block(scene, darkWood, [MO.x0 + 0.02, 1.75, -7.4], [0.03, 0.7, 1.0]); block(scene, std(0x3d6f8f, { roughness: 0.6 }), [MO.x0 + 0.04, 1.75, -7.4], [0.01, 0.58, 0.88]);
   plant(MO.x0 + 0.35, MO.z1 + 0.35, 1.1, 0xb8735a); plant(MO.x1 - 0.35, MO.z0 - 0.35, 0.95, 0xb8735a); plant(MO.x1 - 0.35, MO.z1 + 0.35, 1.0, 0x2b2b2b);
   pendant(MD.x, MD.z + 0.6, 2.45);
-  // The office has no windows of its own, so its lamps set its light, by the room's Light: a floor
-  // lamp by the sofa, the desk lamp and the light over the desk. By day they are nearly off and the
-  // light comes in from above; in the evening they glow warm; at night, warmer and brighter. The
-  // manager never leaves, so his lamps never go out.
   const MO_LIGHT = {
     day:     { floor: 0, desk: 0, ceiling: 0.5, glow: 0.05, color: 0xfff1de },
     evening: { floor: 4.0, desk: 1.8, ceiling: 0.9, glow: 3.0, color: 0xffad60 },
     night:   { floor: 6.0, desk: 2.4, ceiling: 0.4, glow: 4.5, color: 0xff9a4a }
   };
   const moLamps = {};
-  { // the floor lamp: a black stand, a brass stem and a linen drum shade that glows
+  {
     const fx = MO.x0 + 0.38, fz = -6.3;
     cyl(scene, blackMetal, [fx, 0.02, fz], 0.17, 0.04); rod(scene, metal(0xc9a46a, 0.3), [fx, 0.04, fz], [fx, 1.5, fz], 0.014);
     moLamps.shadeMat = new THREE.MeshStandardMaterial({ color: C(0xf3e6cc), emissive: C(0xffc27a), emissiveIntensity: 0.15, roughness: 0.9, side: THREE.DoubleSide });
@@ -649,22 +605,18 @@
     moLamps.shadeMat.emissiveIntensity = L.glow;
   }
 
-  // ---------- spots people go to ----------
   spot('espresso', 4.3, -3.85, Math.PI, { label: 'Making coffee' });
   spot('fridge', 6.45, -3.75, Math.PI, { label: 'At the fridge' });
   spot('shelf', 5.3, -3.85, Math.PI, { label: 'Getting a snack' });
   spot('bar-w', 4.42, -2.25, Math.PI / 2, { group: 'bar' }); spot('bar-e', 5.58, -2.25, -Math.PI / 2, { group: 'bar' }); spot('bar-s', 5.0, -1.65, Math.PI, { group: 'bar' });
-  // seat: the height of the cushion's top, which the pose sits on (seatOn in office/poses.js)
   [4.6, 5.25, 5.9].forEach((x, i) => spot('couch-' + i, x, 0.98, 0, { sit: 'couch', seat: 0.47, approach: new THREE.Vector3(x, 0, 1.62) }));
   spot('armchair', 3.92, 3.2, Math.PI / 2, { sit: 'couch', seat: 0.39, approach: new THREE.Vector3(4.55, 0, 3.2) });
   spot('win-0', -6.3, -3.0, -Math.PI / 2, { label: 'At the window' }); spot('win-1', -6.3, 2.4, -Math.PI / 2, { label: 'At the window' }); spot('win-2', -6.3, 3.5, -Math.PI / 2, { label: 'At the window' });
   spot('board-0', -1.35, -3.75, Math.PI, { label: 'At the board' }); spot('board-1', -0.35, -3.75, Math.PI, { label: 'At the board' });
   spot('pp-w', -2.42, 3.4, Math.PI / 2); spot('pp-e', 1.22, 3.4, -Math.PI / 2);
-  // where the manager stands: inside the door, behind each person's chair, and places to look around from
   spot('boss-door', MO.mid, -4.2, 0);
-  // in his office: his desk, inside the door, the guest chairs, and the places he goes between rounds
   spot('boss-desk', MD.x, MD.z - 0.7, 0, { sit: 'chair', approach: new THREE.Vector3(MD.x + 0.35, 0, MD.z - 0.78), label: 'At his desk' });
-  spot('boss-in', MO.mid, -5.85, 0); spot('boss-door-in', MO.mid, -4.2, Math.PI);  // just inside the office door, and outside it facing in
+  spot('boss-in', MO.mid, -5.85, 0); spot('boss-door-in', MO.mid, -4.2, Math.PI);
   [-0.5, 0.5].forEach((dx, i) => spot('boss-guest-' + i, MD.x + dx, MD.z + 0.83, Math.PI, { sit: 'chair', approach: new THREE.Vector3(MD.x + dx * 1.9, 0, MD.z + 1.0), label: "In the manager's office" }));
   spot('boss-glass-0', MO.open0 + 0.35, -5.6, 0, { label: 'Looking out at the floor' }); spot('boss-glass-1', MO.open1 - 0.35, -5.6, 0, { label: 'Looking out at the floor' });
   spot('boss-sofa', MO.x0 + 0.63, -7.05, Math.PI / 2, { sit: 'couch', seat: 0.47, approach: new THREE.Vector3(MO.x0 + 1.05, 0, -7.05), label: 'On a call' });
@@ -673,8 +625,8 @@
   for (const k in DESKS) { const d = DESKS[k]; spot('boss-behind-' + k, d.x - Math.sin(d.yaw) * 0.78, d.z - Math.cos(d.yaw) * 0.78, d.yaw); }
   for (const k in SPOTS) { const s = SPOTS[k]; if (!s.approach) s.approach = s.pos.clone(); s.by = null; }
 
-  // ---------- walking: a grid over the floor and A* ----------
-  const CELL = 0.15, GZ0 = -9.9, GX = Math.round(14 / CELL), GZ = Math.round((ROOM.z1 - GZ0) / CELL), BODY = 0.24;  // the loft and the manager's office
+  const CELL = 0.15, GZ0 = -9.9, GX = Math.round(14 / CELL), GZ = Math.round((ROOM.z1 - GZ0) / CELL), BODY = 0.24;
+  const RUSH_SPEED = 3.2;
   const blocked = new Uint8Array(GX * GZ);
   const cellX = (x) => clamp(Math.floor((x - ROOM.x0) / CELL), 0, GX - 1), cellZ = (z) => clamp(Math.floor((z - GZ0) / CELL), 0, GZ - 1);
   const cx = (i) => ROOM.x0 + (i + 0.5) * CELL, cz = (j) => GZ0 + (j + 0.5) * CELL;
@@ -685,7 +637,6 @@
     if (!b) for (const [ox, oz, r] of OBST.circles) if ((x - ox) ** 2 + (z - oz) ** 2 < (r + BODY) ** 2) { b = 1; break; }
     blocked[j * GX + i] = b;
   }
-  // The manager and the Lead walk into the manager's office. Nobody else does.
   const officeGrid = blocked.slice();
   for (let j = 0; j < GZ; j++) if (cz(j) < -4.95) for (let i = 0; i < GX; i++) blocked[j * GX + i] = 1;
   function freeCellNear(i, j, grid) {
@@ -737,8 +688,6 @@
     return out.length ? out : [to.clone()];
   }
 
-  // ---------- people ----------
-  // Poses and the arm routes at a desk are in office/poses.js.
   const { POSE, RIG, typePoseFor, aimArms, seatOn, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE } = window.OfficePoses;
 
   function buildPerson(look) {
@@ -763,7 +712,7 @@
       block(spine, tie, [0, 0.45, 0.112], [0.045, 0.035, 0.016]); block(spine, tie, [0, 0.31, 0.11], [0.034, 0.25, 0.012]);
       const lapel = std(L.lapel || L.shirt, { roughness: 0.6 });
       for (const s of [-1, 1]) block(spine, lapel, [0.062 * s, 0.37, 0.108], [0.04, 0.2, 0.014], [0, 0, 0.42 * s]);
-      ball(spine, shirt, [0, -0.05, 0], 0.165, [1.02, 0.5, 0.72]);  // the jacket hangs past the waist
+      ball(spine, shirt, [0, -0.05, 0], 0.165, [1.02, 0.5, 0.72]);
     }
     const neck = new THREE.Group(); spine.add(neck); neck.position.y = 0.48;
     cyl(neck, skin, [0, 0.04, 0], 0.045, 0.1);
@@ -842,11 +791,10 @@
 
   const deskOrder = ['a1', 'a2', 'b1', 'a0', 'b2', 'a3', 'b0', 'b3'];
   const lead = makeWorker(ROSTER.lead, 'lead', true);
-  lead.grid = officeGrid;  // the Lead may walk into the manager's office
+  lead.grid = officeGrid;
   (ROSTER.workers || []).slice(0, deskOrder.length).forEach((def, i) => makeWorker(def, deskOrder[i]));
   people.forEach((w) => placeFigure(w));
 
-  // ---------- events and the run API's plumbing ----------
   const events = []; let seq = 0; const listeners = new Map();
   let worldT = 0, speed = 1;
   const clockText = () => new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
@@ -858,7 +806,6 @@
   }
   function on(type, cb) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(cb); return () => { const l = listeners.get(type); const i = l.indexOf(cb); if (i >= 0) l.splice(i, 1); }; }
 
-  // ---------- plans: what a person does, step by step ----------
   function reserve(key, w) { const s = SPOTS[key]; if (s) s.by = w.id; }
   function release(w) { if (w.spot && SPOTS[w.spot] && SPOTS[w.spot].by === w.id && w.spot !== w.desk) SPOTS[w.spot].by = null; }
   const free = (key) => SPOTS[key] && !SPOTS[key].by;
@@ -874,7 +821,7 @@
   function act(o) { return Object.assign({ t: 'act', dur: 20, pose: 'stand' }, o); }
   function chooseIdle(w) {
     if (w.mode === 'work') return;
-    if (w.waiting && w.seated && w.spot === w.desk) { w.steps.push(act({ dur: 5, pose: 'sit' })); return; }  // they stay until you answer
+    if (w.waiting && w.seated && w.spot === w.desk) { w.steps.push(act({ dur: 5, pose: 'sit' })); return; }
     if (boss.present) { looksBusy(w); return; }
     if (party.on && !party.ending && !reduce && joinParty(w)) return;
     const opts = [];
@@ -891,7 +838,7 @@
     if (boards.length) add(0.6, () => goTo(w, pick(boards), act({ dur: rand(8, 16), pose: 'pockets', board: true, label: 'Reading the board' }), 'Going to the board'));
     if (w.lead && !boss.present) add(0.5, () => leadVisit('world'));
     if (free('fridge')) add(0.4, () => goTo(w, 'fridge', act({ dur: 4, pose: 'fridge', fridge: true, label: 'At the fridge' }), 'Going to the fridge'));
-    if (!reduce && !party.on && free('pp-w') && free('pp-e') && !w.lead) {  // no new game during a party
+    if (!reduce && !party.on && free('pp-w') && free('pp-e') && !w.lead) {
       const partner = people.find((p) => p !== w && p.present && !p.lead && p.mode === 'idle' && !p.pingpong && p.step && p.step.t === 'act' && p.seated);
       if (partner) add(1.0, () => startPingPong(w, partner));
     }
@@ -911,7 +858,6 @@
     else if (bars.length || wins.length) { const k = pick(bars.concat(wins)); goTo(w, k, act({ dur: rand(14, 26), pose: 'stand', label: 'Having a coffee' }), 'Having a coffee'); }
     else w.steps.push(act({ dur: rand(10, 20), pose: 'stand', label: 'Having a coffee' }));
   }
-  // ping pong: two idle people, one at each end
   const game = { a: null, b: null, live: false, t: 0, until: 0, hits: 0 };
   function startPingPong(a, b) {
     game.a = a; game.b = b; game.live = false; game.hits = 0; a.pingpong = b.pingpong = true;
@@ -927,10 +873,8 @@
     pl.forEach((p) => { p.pingpong = false; p.paddle.visible = false; if (p.step && p.step.paddle) p.step.end = true; });
   }
 
-  // ---------- who is in the room ----------
-  // The first few people are always here. The rest come in for a session and leave after it.
   const STANDING = ['win-0', 'win-1', 'win-2', 'bar-w', 'bar-e', 'bar-s', 'board-0', 'board-1'];
-  function placeAway(w) {  // somewhere in the room, on their feet, without the walk
+  function placeAway(w) {
     const k = pick(STANDING.filter(free));
     if (!k) return;
     if (w.spot !== w.desk) release(w);
@@ -940,7 +884,7 @@
     w.steps = [act({ dur: rand(8, 20), pose: 'pockets', label: 'Looking around' })]; w.step = null; w.doing = 'Looking around';
     placeFigure(w);
   }
-  function placeAtDesk(w) {  // already at work: a page that was just opened or reloaded
+  function placeAtDesk(w) {
     if (w.spot !== w.desk) release(w);
     const sp = SPOTS[w.desk];
     w.spot = w.desk; w.seated = true; w.pos.copy(sp.pos); w.yaw = sp.yaw;
@@ -958,7 +902,6 @@
     markScreen(w);
   }
 
-  // ---------- work ----------
   function assign(w, task, src) {
     if (!w.present) showPerson(w);
     if (w.pingpong) endPingPong();
@@ -1006,22 +949,15 @@
   function setWaiting(w, message) {
     w.waiting = message ? { message: String(message).slice(0, 100), since: Date.now(), startT: null } : null;
     if (!w.waiting && w.step) delete w.step.waveUntil;
-    if (w.waiting) { bubble(w, 'Needs your OK', 4); if (w.step && w.step.t === 'act' && w.seated && w.spot !== w.desk) { w.step.waveUntil = worldT + 4; } }  // at the desk, fidgetOf starts with the wave
+    if (w.waiting) { bubble(w, 'Needs your OK', 4); if (w.step && w.step.t === 'act' && w.seated && w.spot !== w.desk) { w.step.waveUntil = worldT + 4; } }
     emit(w.waiting ? 'lead.waiting' : 'lead.unblocked', w.waiting ? { who: w.id, message: w.waiting.message } : { who: w.id });
     boardDirty = true; markScreen(w);
   }
 
-  // ---------- the manager ----------
-  // Works in his glass office off the back wall, and now and then comes out through its door, looks
-  // around and over shoulders, then goes back in. Not one of `people`: no session or desk on the
-  // floor, not on the Floor list, and cannot be clicked. While he is out on the floor, anyone
-  // without real work sits at their desk and looks busy. Real work is never touched, so what a
-  // session is doing and showing stays true throughout.
   const M = ROSTER.manager || {};
   const DOOR = { x: MO.mid, width: 1.0 };
   const moGlass = new THREE.MeshStandardMaterial({ color: C(0xcfe3ef), transparent: true, opacity: 0.16, roughness: 0.05, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide });
   const moFrame = std(0x1c1c1e, { roughness: 0.45, metalness: 0.4 });
-  // the steel frame: a head, a post at each side and each side of the door, and a pane each side
   block(scene, moFrame, [MO.mid, MO.top - 0.03, -5.0], [MO.open1 - MO.open0, 0.06, 0.08]);
   const posts = [MO.open0 + 0.03, DOOR.x - DOOR.width / 2 - 0.03, DOOR.x + DOOR.width / 2 + 0.03, MO.open1 - 0.03];
   for (const x of posts) block(scene, moFrame, [x, MO.top / 2, -5.0], [0.06, MO.top, 0.08]);
@@ -1029,18 +965,16 @@
     const g = mesh(new THREE.PlaneGeometry(b - a, MO.top - 0.06), moGlass, scene, false); g.position.set((a + b) / 2, (MO.top - 0.06) / 2, -5.0); g.renderOrder = 2;
     block(scene, moFrame, [(a + b) / 2, 0.03, -5.0], [b - a, 0.06, 0.06]);
   }
-  // the door, hung on its left side, with a steel handle and his title on it
   const door = new THREE.Group(); door.position.set(DOOR.x - DOOR.width / 2, 0, -5.0); scene.add(door);
   const doorH = MO.top - 0.08;
   { const g = mesh(new THREE.PlaneGeometry(DOOR.width, doorH), moGlass, door, false); g.position.set(DOOR.width / 2, doorH / 2, 0); g.renderOrder = 2; }
   for (const [p, sz] of [[[DOOR.width / 2, 0.02, 0], [DOOR.width, 0.04, 0.04]], [[DOOR.width / 2, doorH, 0], [DOOR.width, 0.04, 0.04]], [[0.02, doorH / 2, 0], [0.04, doorH, 0.04]], [[DOOR.width - 0.02, doorH / 2, 0], [0.04, doorH, 0.04]]]) block(door, moFrame, p, sz);
   const steelBright = metal(0xd8d8d8, 0.2);
-  for (const s of [-1, 1]) block(door, steelBright, [DOOR.width - 0.1, 1.05, s * 0.045], [0.025, 0.6, 0.025]);  // a pull on each side
-  for (const y of [0.83, 1.27]) block(door, steelBright, [DOOR.width - 0.1, y, 0], [0.018, 0.018, 0.1]);       // through the glass, holding both
+  for (const s of [-1, 1]) block(door, steelBright, [DOOR.width - 0.1, 1.05, s * 0.045], [0.025, 0.6, 0.025]);
+  for (const y of [0.83, 1.27]) block(door, steelBright, [DOOR.width - 0.1, y, 0], [0.018, 0.018, 0.1]);
   { const c = makeCanvas(256, 64), x = c.getContext('2d'); x.fillStyle = '#e8e2d4'; x.font = '600 34px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(M.title || 'Manager', 128, 34);
     const n = mesh(new THREE.PlaneGeometry(0.4, 0.1), new THREE.MeshBasicMaterial({ map: tex(c), transparent: true }), door, false); n.position.set(DOOR.width / 2, 1.5, 0.004); n.renderOrder = 3; }
   const bossSpots = ['boss-aisle', 'boss-lounge', 'boss-board'];
-  // the manager walks around the people sitting at desks, not through them
   const bossGrid = officeGrid.slice();
   for (const k in DESKS) for (let j = 0; j < GZ; j++) for (let i = 0; i < GX; i++) if (Math.hypot(cx(i) - DESKS[k].x, cz(j) - DESKS[k].z) < 0.55) bossGrid[j * GX + i] = 1;
   const bossFig = buildPerson(M.look); scene.add(bossFig.root);
@@ -1052,11 +986,10 @@
   };
   boss.phone = block(bossFig.hands.R, std(0x15171a, { roughness: 0.3 }), [0, -0.03, 0.03], [0.07, 0.14, 0.012]); boss.phone.visible = false;
   reserve('boss-desk', boss);
-  boss.steps.push(act({ dur: rand(20, 40), pose: 'type', work: true, label: 'At his desk' }));  // the room opens with him at work
+  boss.steps.push(act({ dur: rand(20, 40), pose: 'type', work: true, label: 'At his desk' }));
   { const bub = document.createElement('div'); bub.className = 'bubble'; bub.hidden = true; tagLayer.appendChild(bub); tagFor[boss.id] = { bub }; }
   const bossGap = (share) => { const [a, b] = M.everyMinutes || []; return a > 0 ? worldT + rand(a, b || a) * 60 * share : Infinity; };
   let bossDue = bossGap(0.5);
-  // Someone who was up to something leaves it as they would have found it.
   function leaveAppliance(w) {
     const s = w.step; if (!s) return;
     if (s.fridge) fridgeDoor.rotation.y = 0;
@@ -1072,14 +1005,13 @@
     return true;
   }
   function bossStop(key, pose, dur, extra) { return [{ t: 'walk', key }, { t: 'face', key }, act(Object.assign({ dur, pose }, extra))]; }
-  // The manager's lines (office/manager-lines.js), in a shuffled deck: each is said once before any comes round again.
   const bossLines = window.MANAGER_LINES || ['Hm.'];
   let bossDeck = [];
   function bossRemark() {
     if (Math.random() >= 0.75) return;
     if (!bossDeck.length) bossDeck = bossLines.slice().sort(() => Math.random() - 0.5);
     const line = bossDeck.pop();
-    bubble(boss, line, Math.min(6, 2 + line.length / 15));  // long enough to read
+    bubble(boss, line, Math.min(6, 2 + line.length / 15));
   }
   function bossVisit(src) {
     boss.present = true; boss.step = null; boss.phone.visible = false; release(boss);
@@ -1087,7 +1019,7 @@
     const looks = bossSpots.slice().sort(() => Math.random() - 0.5);
     boss.steps = [
       ...(boss.seated ? [{ t: 'stand' }, act({ dur: 0.6, pose: 'stand' })] : []),
-      { t: 'walk', key: 'boss-in' }, { t: 'face', key: 'boss-in' }, act({ dur: 0.9, pose: 'stand', label: 'Opening the door' }),  // he opens the door, and people get a moment to scatter
+      { t: 'walk', key: 'boss-in' }, { t: 'face', key: 'boss-in' }, act({ dur: 0.9, pose: 'stand', label: 'Opening the door' }),
       { t: 'walk', key: 'boss-door' },
       ...bossStop(looks[0], 'behindBack', rand(3, 6), { scan: true })
     ];
@@ -1098,10 +1030,7 @@
     if (startled.length) bubble(pick(startled), pick(['Manager!', 'Look busy!', 'Heads up']), 1.8);
     emit('manager.arrived', {}, src);
   }
-  // After a round, and when the room opens, he sits down at his desk and works a while before
-  // anything else.
   function backToDesk() { reserve('boss-desk', boss); return [{ t: 'walk', key: 'boss-desk' }, { t: 'face', key: 'boss-desk' }, { t: 'sit', key: 'boss-desk' }, act({ dur: rand(20, 40), pose: 'type', work: true, label: 'At his desk' })]; }
-  // Puts the manager at his desk at once, sitting, with nothing left to do.
   function bossHome() {
     const sp = SPOTS['boss-desk'];
     boss.steps = []; boss.step = null; boss.moving = false; boss.rush = false; boss.phone.visible = false; release(boss);
@@ -1113,13 +1042,11 @@
     bossDue = bossGap(1);
     for (const p of people) {
       if (!p.busyAct) continue;
-      if (!p.task) { p.rush = false; p.busyAct.dur = (p.busyAct.el || 0) + rand(1, 6); }  // they wait a moment to be sure
+      if (!p.task) { p.rush = false; p.busyAct.dur = (p.busyAct.el || 0) + rand(1, 6); }
       p.busyAct = null;
     }
     emit('manager.left', {});
   }
-  // Between rounds the manager keeps busy in his office, in the same steps a worker takes. Real
-  // work comes first: with a task (one day, a session of his own) he stays at his desk on it.
   function managerIdle(w) {
     if (w.task) { goTo(w, 'boss-desk', act({ dur: Infinity, pose: 'type', work: true, label: 'Working' }), 'Going to his desk'); return; }
     const atDesk = w.spot === 'boss-desk' && w.seated;
@@ -1138,9 +1065,6 @@
     for (const [weight, fn] of opts) { if ((r -= weight) <= 0) { fn(); return; } }
     opts[0][1]();
   }
-  // The glass door opens only for the manager or the Lead on their way through it, not for him
-  // standing at the glass. It opens as they come up to it and stays open until they are clear of
-  // its swing on the other side.
   const BACK_Z = -5;
   function goingThrough(w) {
     const s = w.step; if (!s) return false;
@@ -1160,12 +1084,10 @@
     door.rotation.y += (open - door.rotation.y) * Math.min(1, dt * 4);
     if (!boss.present) {
       if (!boss.step && !boss.steps.length) managerIdle(boss);
-      // He goes on his rounds from wherever he is in the office, but not mid-walk, not into a party, and not in the trailer.
       if (worldT >= bossDue && !party.on && !directed && !boss.moving) bossVisit('world');
     }
     tickWorker(boss, dt);
   }
-  // The Lead goes to the manager's office now and then: in through the door, a sit in a guest chair, and back.
   function leadVisit(src) {
     const seat = ['boss-guest-1', 'boss-guest-0'].find(free);
     if (lead.task || lead.waiting || !lead.present || !seat) return false;
@@ -1174,8 +1096,6 @@
     return true;
   }
 
-  // Sends people with no real work to these spots, one each, to do actFor(spot) there. Someone
-  // working, waiting on you or playing ping pong stays where they are. The huddle and the party use it.
   function gather(keys, actFor, label, skip) {
     const spots = keys.filter(free), gathered = [];
     for (const w of people) {
@@ -1189,17 +1109,10 @@
     return gathered;
   }
 
-  // ---------- the party ----------
-  // Only a view: no session is stopped, paused or sent text, and tags, the Floor and the boards keep
-  // the real state. Everyone, the manager too, wears a hat on their head, so it turns and sits with
-  // them. A cake stands on the coffee table and people with no real work gather round it. After a
-  // minute, or when the button is pressed again, the candles go out, the hats come off and everyone
-  // goes back to their desk. Someone working or waiting on you stays at their desk, in a hat.
   const PARTY_SECONDS = 60, BLOW_SECONDS = 2.5;
   const party = { on: false, ending: false, until: 0, endAt: 0 };
-  const CAKE_AT = new THREE.Vector3(5.305, 0.425, 2.2);  // on the coffee table, between the book and the mug
+  const CAKE_AT = new THREE.Vector3(5.305, 0.425, 2.2);
   const towardCake = (x, z) => Math.atan2(CAKE_AT.x - x, CAKE_AT.z - z);
-  // Standing places round the coffee table, clear of the couch, the armchair and the table itself.
   [[4.95, 2.95], [5.6, 2.95], [4.3, 2.1], [6.3, 2.35], [5.25, 3.35], [4.6, 3.3], [5.95, 3.3], [6.3, 1.85]].forEach(([x, z], i) => {
     spot('party-' + i, x, z, towardCake(x, z), { label: 'At the party' }); SPOTS['party-' + i].approach = SPOTS['party-' + i].pos.clone(); SPOTS['party-' + i].by = null;
   });
@@ -1217,7 +1130,7 @@
   const hatMats = HAT_COLORS.map(([a, b]) => {
     const c = makeCanvas(64, 64), x = c.getContext('2d');
     x.fillStyle = a; x.fillRect(0, 0, 64, 64); x.strokeStyle = b; x.lineWidth = 7;
-    for (let i = -64; i < 128; i += 21) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 40, 64); x.stroke(); }  // stripes that wind round the cone
+    for (let i = -64; i < 128; i += 21) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 40, 64); x.stroke(); }
     return { cone: new THREE.MeshStandardMaterial({ map: tex(c), roughness: 0.6 }), pom: std(b, { roughness: 0.9 }) };
   });
   const hatGeo = new THREE.ConeGeometry(0.064, 0.19, 20);
@@ -1258,17 +1171,16 @@
     let gathered = [];
     if (!reduce && !boss.present) {
       for (const w of people) if (w.pingpong && !w.task && !w.waiting) { endPingPong(); break; }
-      for (const w of people) {  // someone already on the couch or in the armchair stays there for the party
+      for (const w of people) {
         if (!w.present || w.task || w.waiting || w.mode === 'work' || !w.seated || w.spot === w.desk || !PARTY_SPOTS.includes(w.spot) || atParty(w) || (w.step && w.step.t !== 'act')) continue;
         w.steps = [partyAct(w.spot)]; w.step = null; gathered.push(w.id);
       }
-      gathered = gathered.concat(gather(PARTY_SPOTS, partyAct, 'Going to the party', atParty));  // pressed again while it ends, the guests stay put
+      gathered = gathered.concat(gather(PARTY_SPOTS, partyAct, 'Going to the party', atParty));
     }
     const host = people.find((w) => gathered.includes(w.id)) || people.find((w) => w.present);
     if (host) bubble(host, pick(['Party!', 'Cake!', 'Hats on, everyone']), 2.6);
     emit('party.started', { gathered, seconds }, src);
   }
-  // The candles go out first, and a moment later the hats come off and everyone goes back.
   function endParty(src) {
     party.ending = true; party.endAt = worldT + BLOW_SECONDS;
     candles.forEach((c) => { c.flame.visible = false; c.smoke.visible = true; c.smoke.position.set(c.x, 0.19, c.z); });
@@ -1304,17 +1216,14 @@
     return { on: party.on, ending: party.ending, secondsLeft: party.on && !party.ending ? Math.max(0, Math.ceil(party.until - worldT)) : 0, guests: people.filter((w) => w.present && atParty(w)).map((w) => w.id) };
   }
 
-  // ---------- each frame: plans, walking and poses ----------
-  // Waiting for your OK at their desk: they stay in the chair and pass the time. The hand goes up
-  // first and comes back round, so someone on their phone can still be spotted.
   const FIDGETS = [['phone', 8], ['swivel', 7], ['wave', 2.5], ['leanback', 6], ['look', 5], ['wave', 2.5]];
   const FIDGET_LOOP = FIDGETS.reduce((n, f) => n + f[1], 0), FIRST_WAVE = 4;
   const FIDGET_POSE = { phone: 'phoneSit', swivel: 'sit', wave: 'wave', leanback: 'leanback', look: 'sit' };
   function fidgetOf(w) {
-    if (w.waiting.startT === null) w.waiting.startT = worldT;  // the wait starts showing once they are in the chair
+    if (w.waiting.startT === null) w.waiting.startT = worldT;
     const t = worldT - w.waiting.startT;
     if (t < FIRST_WAVE) return 'wave';
-    let at = (t - FIRST_WAVE + w.walkPhase * 7) % FIDGET_LOOP;  // people waiting together do not move as one
+    let at = (t - FIRST_WAVE + w.walkPhase * 7) % FIDGET_LOOP;
     for (const [name, dur] of FIDGETS) { if (at < dur) return name; at -= dur; }
     return 'wave';
   }
@@ -1342,7 +1251,7 @@
         const target = s.path[0];
         if (!target) { nextStep(w); break; }
         tmp.subVectors(target, w.pos); tmp.y = 0;
-        const d = tmp.length(), v = w.speed * (w.rush ? 3.2 : 1) * dt;  // a turn can be over in seconds
+        const d = tmp.length(), v = w.speed * (w.rush ? RUSH_SPEED : 1) * dt;
         if (d < 0.02 || d <= v) { w.pos.copy(target); w.pos.y = 0; s.path.shift(); if (!s.path.length) { w.moving = false; nextStep(w); } }
         else { w.pos.addScaledVector(tmp.normalize(), v); w.moving = true; w.walkPhase += (v / 1.15) * Math.PI * 2; turnTo(w, Math.atan2(tmp.x, tmp.z), dt, 9); }
         w.target = POSE.stand;
@@ -1369,7 +1278,7 @@
           if (!reduce && w.fidget === 'swivel') w.swivelTo = Math.sin(worldT * 0.9 + w.walkPhase) * 0.55;
           if (!reduce && w.fidget === 'look') w.gazeTo = Math.sin(worldT * 0.7 + w.walkPhase) * 0.7;
         } else {
-          if (fidgeting) w.phone.visible = phoneWanted(w, s);  // however the wait ended
+          if (fidgeting) w.phone.visible = phoneWanted(w, s);
           if (w.waiting && w.seated && Math.sin(worldT * 0.9) > 0.3) pose = POSE.wave;
         }
         if (s.board && Math.sin(s.el * 0.7 + 1) > 0.55) pose = POSE.point;
@@ -1441,7 +1350,7 @@
     const p = w.pose, t = w.target, k = Math.min(1, dt * (w.moving ? 10 : 7));
     w.swivel += (w.swivelTo - w.swivel) * Math.min(1, dt * 3);
     w.gaze += (w.gazeTo - w.gaze) * Math.min(1, dt * 3);
-    if (w.desk) DESKS[w.desk].chair.rotation.y = w.swivel;  // the manager has no desk
+    if (w.desk) DESKS[w.desk].chair.rotation.y = w.swivel;
     let armR = null;
     if (w.carry === 'mug' && !(w.step && w.step.brew)) {
       armR = w.seated ? ARM_CARRY_SIT : ARM_CARRY;
@@ -1451,9 +1360,9 @@
     if (w.paddle.visible) armR = ARM_PADDLE;
     let aim = armR ? Object.assign({}, t, armR) : t;
     const seat = w.seated && SPOTS[w.spot] && SPOTS[w.spot].seat;
-    if (seat) aim = Object.assign({}, aim, seatOn(aim, seat, (w.look || {}).height));  // on the couch or the armchair, not in it
+    if (seat) aim = Object.assign({}, aim, seatOn(aim, seat, (w.look || {}).height));
     const ahead = w.desk && w.spot === w.desk && !w.moving ? w.pos.distanceTo(SPOTS[w.desk].pos) : Infinity;
-    if (w.seated ? ahead < Infinity : ahead < 0.03) aim = aimArms(w.route, p, aim, w.look.height || 1, ahead);  // in the chair, or sitting down
+    if (w.seated ? ahead < Infinity : ahead < 0.03) aim = aimArms(w.route, p, aim, w.look.height || 1, ahead);
     else if (w.route.L || w.route.R) w.route = {};
     towards(p, aim, k);
     const f = w.fig, tt = worldT;
@@ -1467,7 +1376,7 @@
     } else {
       py += Math.sin(tt * 1.6 + w.walkPhase) * 0.004;
       const s = w.step;
-      if (s && s.t === 'act' && s.work && w.seated && !w.fidget) {  // typing: the hands only lift, so they never sink into the desk
+      if (s && s.t === 'act' && s.work && w.seated && !w.fidget) {
         eL -= Math.abs(Math.sin(tt * 8.5 + w.walkPhase)) * 0.07; eR -= Math.abs(Math.sin(tt * 9.75)) * 0.07;
         sLx -= (1 + Math.sin(tt * 6.1)) * 0.015; sRx -= (1 + Math.cos(tt * 5.3)) * 0.015;
         hy += Math.sin(tt * 0.4 + w.walkPhase) * 0.12;
@@ -1488,7 +1397,6 @@
     f.arms.R.sh.rotation.set(sRx, 0, -sRz); f.arms.R.el.rotation.x = eR;
     f.legs.L.hip.rotation.x = hipL; f.legs.L.knee.rotation.x = kL; f.legs.R.hip.rotation.x = hipR; f.legs.R.knee.rotation.x = kR;
     placeFigure(w);
-    // a mug stays upright in the hand; while sipping it tips toward the mouth
     w.mug.visible = w.carry === 'mug';
     if (w.mug.visible) {
       f.root.updateMatrixWorld(true);
@@ -1501,7 +1409,6 @@
     if (w.phone.visible) { w.phone.rotation.set(-1.1, 0, 0); w.phone.position.set(-0.03, -0.04, 0.04); }
   }
 
-  // ---------- monitors ----------
   const screenDirty = new Set();
   function markScreen(w) { screenDirty.add(w.desk); }
   const MONO = '"Roboto Mono", ui-monospace, monospace';
@@ -1586,12 +1493,11 @@
       x.font = '17px "Source Sans 3", system-ui, sans-serif'; x.fillStyle = '#333';
       wrap(x, sub, 132, 2).forEach((t, k) => x.fillText(t, -64, 8 + k * 19)); x.restore();
     };
-    if (taskList.length) {  // the tasks are the board: one note for each, in its column
+    if (taskList.length) {
       const column = { building: 0, changes_requested: 0, in_review: 1, waiting_on_you: 2, done: 3 }, count = [0, 0, 0, 0];
       const put = (col, color, title, sub) => { const i = count[col]++; if (i < 4) sticky(cols[col][1], 70 + i * 104, color, title, sub, i + col); };
       taskList.forEach((t) => {
         const w = t.who && byId[t.who];
-        // A task in review or waiting on you with a running or failed pipeline waits on the pipeline (relay/tasks.js).
         put(t.pipeline ? 0 : column[t.state] ?? 0, t.state === 'done' ? '#b5b5b5' : w ? w.color : '#8fb0e3', t.title, (t.pipeline ? (t.pipeline === 'red' ? 'Pipeline failed · ' : 'Pipeline · ') : t.state === 'changes_requested' ? 'Changes · ' : '') + (w ? w.name : 'No worker'));
       });
       people.filter((p) => p.waiting).forEach((p) => put(2, '#f0c25e', p.name + ' needs you', p.waiting.message));
@@ -1606,7 +1512,6 @@
   }
   let boardDirty = true, taskList = [];
 
-  // ---------- name tags and speech bubbles ----------
   let showTags = true;
   const proj = new THREE.Vector3();
   function bubble(w, text, secs) { const b = tagFor[w.id].bub; b.textContent = text; b.classList.toggle('long', text.length > 28); b.hidden = false; w.bubbleUntil = performance.now() + (secs || 2.5) * 1000; }
@@ -1621,12 +1526,12 @@
       if (T.tag.dataset.state !== state) T.tag.dataset.state = state;
       const seated = w.sessionId && sessions.get(w.sessionId);
       const said = w.task ? w.task.label : seated ? seated.title || seated.project || seated.id : '';
-      const what = seated && seated.customTitle && said === seated.customTitle ? seated.project || '' : said;  // not twice beside the name
+      const what = seated && seated.customTitle && said === seated.customTitle ? seated.project || '' : said;
       const sub = w.waiting ? 'needs you' + (what ? ' · ' + what : '') : what;
       if (T.span.textContent !== sub) { T.span.textContent = sub; T.span.title = sub; T.w = 0; }
-      const named = window.OfficeSeats.titleBeside(seated && seated.customTitle);  // the title you gave it with /rename
+      const named = window.OfficeSeats.titleBeside(seated && seated.customTitle);
       if (T.named.textContent !== named.text) { T.named.textContent = named.text; T.named.title = named.full; T.w = 0; }
-      const inOffice = w.pos.z < MO.z0;  // from the manager's desk, only tags of people in his office show, not ones out on the floor
+      const inOffice = w.pos.z < MO.z0;
       T.tag.hidden = !showTags || !vis || !w.present || (lookFrom === 'desk' && !inOffice);
       if (!w.present) continue;
       if (!T.bub.hidden) {
@@ -1650,11 +1555,6 @@
     }
   }
   function placeAt(el, x, y) { el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%, -100%)'; }
-  // Neighbouring desks land on almost the same spot, so a tag that would cover another moves up
-  // above it, and the tag nearest the bottom of the screen stays on its person. If that pushes
-  // any tag off the top of the stage, they stack downward from the top instead.
-  // A tag's y is its bottom edge. Each move lands exactly on the limit it was tested against and
-  // only goes one way, so a tag passes each neighbour once and the loop always ends.
   function stackTags(tags) {
     const clear = (t, placed, up) => {
       for (let moved = true; moved;) {
@@ -1673,29 +1573,16 @@
     tags.sort((a, b) => a.y - b.y);
     tags.forEach((t, i) => { t.y = Math.max(t.y, t.h); clear(t, i, false); });
   }
-  // sizes are measured when a tag's text changes, and again once the web fonts have loaded
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { Object.values(tagFor).forEach((T) => { T.w = 0; }); });
 
-  // ---------- Claude Code hooks ----------
-  // The hook script (relay/office-hook.js) sends each hook event, trimmed, as {"action": "hook"}.
-  // Fields: hook_event_name, session_id, project, tool_name, tool_input (short summary),
-  // agent_id, agent_type, message, notification_type, title (what the session is about, once
-  // Claude Code has named it), prompt (only if the user turned it on).
   const sessions = new Map();
   function session(id) {
     const key = String(id || 'session').slice(0, 8);
     if (!sessions.has(key)) sessions.set(key, { id: key, project: '', title: '', who: null, terminal: null, synced: false, lastAt: Date.now() });
     const s = sessions.get(key); s.lastAt = Date.now(); return s;
   }
-  // Who sits where is the relay's (relay/seats.js): each session it runs comes with its person, by
-  // terminal id, and every page and tab draws the same. A session from your own terminal, seen only
-  // through its hooks, is not the relay's, so the page gives it the first person the relay has given
-  // nobody, the Lead's desk last. If the relay then gives that person to a session of its own, the one
-  // from your terminal moves to another person, or leaves the room if nobody is free.
-  const relaySeats = new Map();  // terminal id -> person id, from the relay's last list
-  try { localStorage.removeItem('office.seats'); } catch (e) { /* what pages kept before the relay seated sessions */ }
-  // A desk is a look. The relay gives each of its sessions a name from the roster's pool too
-  // (relay/seats.js), and the person at the desk goes by it while that session sits there.
+  const relaySeats = new Map();
+  storage.remove('office.seats');
   function callAs(w, name) {
     name = name || w.deskName;
     if (w.name === name) return;
@@ -1712,7 +1599,7 @@
       const free = people.filter((p) => !p.sessionId && !given.has(p.id));
       w = free.find((p) => !p.lead) || free[0] || null;
     }
-    if (!w && S.terminal) {  // sessions you can type into come before ones you can only watch
+    if (!w && S.terminal) {
       const watched = [...sessions.values()].filter((o) => !o.terminal && o.who).sort((a, b) => a.lastAt - b.lastAt)[0];
       if (watched) { w = byId[watched.who]; if (w.waiting) setWaiting(w, null); finish(w, 'made room', 'world'); unseat(watched); }
     }
@@ -1723,7 +1610,6 @@
     if (other && !other.terminal && !seat(other)) unseat(other);
     return w;
   }
-  // A session gives up its person and keeps going, to be seated again.
   function leaveDesk(S, why) {
     const w = S.who && byId[S.who];
     if (w) {
@@ -1738,7 +1624,6 @@
     if (w) { w.sessionId = null; boardDirty = true; callAs(w, null); markScreen(w); if (w.extra && !w.task) hidePerson(w); }
     S.who = null; sessions.delete(S.id);
   }
-  // /clear and /resume give a terminal a new session id. Its person stays the same.
   function takeOver(S, terminal) {
     const old = [...sessions.values()].find((o) => o !== S && o.terminal === terminal);
     if (old) {
@@ -1774,7 +1659,6 @@
     if (!w.task) assign(w, { label: S.title || S.project || ('session ' + S.id), session: S.id, first: first || ('session ' + S.id) }, src);
   }
   function relabel(w, label) { w.task.label = label; w.doing = 'Working on ' + label; boardDirty = true; markScreen(w); }
-  // A task sent with the work action keeps its own label: only the session's own task takes the title.
   function setTitle(S, title) {
     title = String(title).slice(0, 60);
     if (S.title === title) return;
@@ -1799,7 +1683,6 @@
     if (!HOOK_EVENTS.has(ev)) { if (!S.who) sessions.delete(S.id); return handled(null, { ignored: ev || 'no hook_event_name' }); }
     if (ev === 'SessionStart' && p.terminal && p.source && p.source !== 'startup') takeOver(S, String(p.terminal));
     const w = seat(S);
-    // With no desk, a PR it opened still goes out, so Get a review knows the session's PR (office/terminal.js).
     if (!w) { leadLine('no free desk for session ' + S.id, 'fail'); sessions.delete(S.id); return handled(null, Object.assign({ overflow: true }, ev === 'PostToolUse' && p.pr_url ? { prUrl: String(p.pr_url) } : {})); }
     if (p.title && !S.tasked) setTitle(S, p.title);
     const agent = p.agent_id ? String(p.agent_id) : null;
@@ -1843,7 +1726,7 @@
         return handled(w, { tool });
       }
       case 'PostToolUse':
-        if (w.waiting) setWaiting(w, null);  // you answered, and the tool ran
+        if (w.waiting) setWaiting(w, null);
         if (p.pr_url) { line(w, 'opened ' + String(p.pr_url).replace('https://github.com/', ''), 'web'); leadLine(w.name + ': opened a PR', 'web'); }
         return handled(w, Object.assign(p.pr_url ? { prUrl: String(p.pr_url) } : {}, p.pushed ? { pushed: true } : {}));
       case 'PostToolUseFailure':
@@ -1862,15 +1745,13 @@
         setWaiting(w, msg); leadLine(w.name + ': ? ' + msg, 'wait');
         return handled(w, { waiting: true });
       }
-      default:  // Stop, StopFailure
+      default:
         if (w.waiting) setWaiting(w, null);
         finish(w, ev === 'StopFailure' ? 'stopped' : 'done', src);
         leadLine(w.name + ': turn finished', 'done');
         return handled(w);
     }
   }
-  // The relay's list of the sessions it runs, each with its person. The panel sends it every few
-  // seconds, so a page that was just opened or reloaded seats them, in the state the relay last heard.
   function syncSessions(list, src) {
     const live = new Set(), mine = [];
     relaySeats.clear();
@@ -1885,21 +1766,17 @@
       S.customTitle = t.customTitle ? String(t.customTitle) : null;
       mine.push([S, t]);
     }
-    // Sessions the relay no longer runs leave first, so their people are free.
     for (const S of [...sessions.values()]) {
       if (!S.terminal || live.has(S.terminal)) continue;
       const w = S.who ? byId[S.who] : null;
       if (w) { if (w.waiting) setWaiting(w, null); finish(w, 'session ended', src); }
       unseat(S);
     }
-    // Anyone the relay moved, such as to or off the Lead's desk, leaves the person they had, so nobody is
-    // drawn twice.
     for (const [S, t] of mine) { const want = relaySeats.get(String(t.id)); if (S.who && want && S.who !== want) leaveDesk(S, 'moved desks'); }
     for (const [S, t] of mine) {
       const w = seat(S);
       if (!w) { sessions.delete(S.id); continue; }
       callAs(w, t.who ? String(t.who).slice(0, 40) : null);
-      // a task's title is the label for as long as the task lasts; Claude's own title does not replace it
       window.OfficeSeats.noteWork(S, t, setTitle);
       if (!S.synced) {
         S.synced = true;
@@ -1909,7 +1786,6 @@
     }
   }
 
-  // ---------- actions ----------
   function findWorker(c) {
     if (c.who) return byId[String(c.who).toLowerCase()] || people.find((p) => p.name.toLowerCase() === String(c.who).toLowerCase()) || null;
     if (c.skill) { const s = normSkill(c.skill); return people.find((p) => p.task && p.task.skill === s) || workerForSkill(s); }
@@ -2019,15 +1895,14 @@
     };
   }
 
-  // ---------- clicking a person ----------
-  // The panels listen for this: the floor board selects them and the terminal shows their session.
   function pickWorker(w) { window.dispatchEvent(new CustomEvent('office:pick', { detail: { who: w.id } })); }
   if (renderer) {
     const ray = new THREE.Raycaster(), at = new THREE.Vector2();
     let down = null;
+    const DRAG_PX = 5;
     canvas.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
     canvas.addEventListener('click', (e) => {
-      if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;  // a drag moved the camera
+      if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > DRAG_PX) return;
       const r = canvas.getBoundingClientRect();
       at.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(at, camera);
@@ -2036,21 +1911,13 @@
     });
   }
 
-  // ---------- holiday decorations ----------
-  // office/holidays.js picks the holiday from this browser's date. Only that holiday's decorations
-  // are built, and they come down when it ends. They go only where nothing they could cover stands
-  // between them and the camera: high on the back and window walls (never on the board, the neon or the
-  // clock), the window sills, the coffee counter, two floor corners by the back wall that nobody walks
-  // through, and flat on the desk tops between the seats. The switch is kept in this browser; a
-  // preview is not.
   const HOL = window.OfficeHolidays;
   const DECOR_KEY = 'office.decorations';
   let decorOn = true, decorPreview = '';
-  try { decorOn = localStorage.getItem(DECOR_KEY) !== 'off'; } catch (e) { /* no storage */ }
+  decorOn = storage.get(DECOR_KEY) !== 'off';
   if (HOL && HOL.KEYS.includes(params.get('holiday'))) decorPreview = params.get('holiday');
-  if (params.get('holiday') === 'off') decorOn = false;  // for this page only, not kept
+  if (params.get('holiday') === 'off') decorOn = false;
   const decor = { group: null, key: null, year: null, anims: [], cells: [], confetti: null, confettiUntil: 0, checkedAt: 0 };
-  // Each wall run: two ends of a line that dips by sag in the middle, and the way the wall faces.
   const DECOR_RUNS = [
     { a: [-6.9, 3.5, -4.93], b: [-2.65, 3.5, -4.93], sag: 0.18, yaw: 0 },
     { a: [0.6, 3.5, -4.93], b: [6.95, 3.5, -4.93], sag: 0.22, yaw: 0 },
@@ -2059,45 +1926,40 @@
   const SILLS = [[-6.92, 0.905, -3.0], [-6.92, 0.905, 0.0], [-6.92, 0.905, 3.0]];
   const COUNTER = [[5.0, 0.93, -4.5], [5.55, 0.93, -4.52], [6.05, 0.93, -4.5]];
   const CORNER = { bike: [-5.55, -4.45], board: [-3.5, -4.5] };
-  const FACE = Math.atan2(HOME.x, HOME.z);  // things with a front turn it to the camera's usual place
+  const FACE = Math.atan2(HOME.x, HOME.z);
   const glow = (hex) => new THREE.MeshBasicMaterial({ color: C(hex), toneMapped: false });
   const along = (run, k) => { const [a, b] = [run.a, run.b]; return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k - run.sag * 4 * k * (1 - k), a[2] + (b[2] - a[2]) * k]; };
   const runLength = (run) => Math.hypot(run.b[0] - run.a[0], run.b[2] - run.a[2]);
   const dummy = new THREE.Object3D();
-  // One draw call for many copies of a shape: each entry of at is [position, rotation, scale].
   function many(parent, geo, mat, at) {
     const m = new THREE.InstancedMesh(geo, mat, Math.max(1, at.length)); m.count = at.length;
     at.forEach(([p, r, s], i) => { dummy.position.set(p[0], p[1], p[2]); dummy.rotation.set(r ? r[0] : 0, r ? r[1] : 0, r ? r[2] : 0); dummy.scale.setScalar(s || 1); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); });
     m.instanceMatrix.needsUpdate = true; m.frustumCulled = false; parent.add(m); return m;
   }
-  // A wire along each wall run, and a thing every gap metres along it, by colour.
   function wallLine(g, color, r, runs) {
     const mat = std(color, { roughness: 0.6 });
     for (const run of runs || DECOR_RUNS) { const pts = []; for (let i = 0; i <= 24; i++) pts.push(new THREE.Vector3(...along(run, i / 24))); mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, r || 0.008, 5), mat, g); }
   }
+  const overClock = (x) => x > 1.45 && x < 2.65;
   function alongWalls(gap, colors, fn, runs) {
     const by = colors.map(() => []); let n = 0;
     for (const run of runs || DECOR_RUNS) {
       const count = Math.floor(runLength(run) / gap);
-      for (let i = 1; i < count; i++) { const p = along(run, i / count); if (!run.yaw && p[0] > 1.45 && p[0] < 2.65) continue; by[n % colors.length].push(fn(p, run, n)); n++; }  // nothing hangs over the clock
+      for (let i = 1; i < count; i++) { const p = along(run, i / count); if (!run.yaw && overClock(p[0])) continue; by[n % colors.length].push(fn(p, run, n)); n++; }
     }
     return by;
   }
-  // Nobody walks into a decoration on the floor while it is up: not the people, and not the manager,
-  // who walks on a grid of their own.
   function blockFloor(x, z, r) {
     for (let j = cellZ(z - r - BODY); j <= cellZ(z + r + BODY); j++) for (let i = cellX(x - r - BODY); i <= cellX(x + r + BODY); i++) {
       if ((cx(i) - x) ** 2 + (cz(j) - z) ** 2 > (r + BODY) ** 2) continue;
       for (const grid of [blocked, bossGrid]) if (!grid[j * GX + i]) { grid[j * GX + i] = 1; decor.cells.push([grid, j * GX + i]); }
     }
   }
-  // Someone already walking plans the rest of the way again on the grid as it is now.
   function replanWalks() {
     for (const w of people.concat(boss)) if (w.step && w.step.t === 'walk' && w.step.path && SPOTS[w.step.key]) w.step.path = findPath(w.pos, SPOTS[w.step.key].approach, w.grid);
   }
   function groupAt(parent, p, yaw, s) { const g = new THREE.Group(); g.position.set(p[0], p[1], p[2]); g.rotation.y = yaw || 0; if (s) g.scale.setScalar(s); parent.add(g); return g; }
 
-  // pieces several holidays share
   const faceC = makeCanvas(128, 128); (function () {
     const x = faceC.getContext('2d'); x.lineJoin = 'round';
     const shapes = [
@@ -2106,7 +1968,7 @@
       () => { x.moveTo(56, 70); x.lineTo(72, 70); x.lineTo(64, 84); },
       () => { x.moveTo(16, 84); x.quadraticCurveTo(64, 132, 112, 84); x.lineTo(96, 90); x.lineTo(88, 102); x.lineTo(78, 94); x.lineTo(64, 106); x.lineTo(50, 94); x.lineTo(40, 102); x.lineTo(32, 90); }
     ];
-    for (const [stroke, fill, w] of [['#3b1a06', '#3b1a06', 10], [null, '#ffc23a', 0]]) for (const s of shapes) {  // a dark cut edge, and the candle's light inside
+    for (const [stroke, fill, w] of [['#3b1a06', '#3b1a06', 10], [null, '#ffc23a', 0]]) for (const s of shapes) {
       x.beginPath(); s(); x.closePath(); x.fillStyle = fill; x.fill(); if (stroke) { x.strokeStyle = stroke; x.lineWidth = w; x.stroke(); }
     }
   })();
@@ -2136,7 +1998,7 @@
     block(g, rib, [0, h / 2, 0], [w + 0.006, h + 0.006, Math.min(0.05, d * 0.18)]); block(g, rib, [0, h / 2, 0], [Math.min(0.05, w * 0.18), h + 0.006, d + 0.006]);
     ball(g, rib, [-0.03, h + 0.02, 0], 0.04, [1, 0.6, 0.6]).rotation.z = 0.5; ball(g, rib, [0.03, h + 0.02, 0], 0.04, [1, 0.6, 0.6]).rotation.z = -0.5;
   }
-  function flag(parent, p, h) {  // a little flag on a stick
+  function flag(parent, p, h) {
     const g = groupAt(parent, p, FACE + 0.5);
     rod(g, std(0xd8c8a0), [0, 0, 0], [0, h, 0], 0.004);
     if (!decor.flagMat) decor.flagMat = flagMaterial();
@@ -2145,7 +2007,6 @@
 
   const BUILD = {
     newyear(g, year) {
-      // a banner above the windows, and streamers along the walls
       const c = makeCanvas(1024, 160), x = c.getContext('2d');
       x.fillStyle = '#16203a'; x.fillRect(0, 0, 1024, 160); x.strokeStyle = '#e8c45a'; x.lineWidth = 8; x.strokeRect(8, 8, 1008, 144);
       x.font = '700 92px "Source Sans 3", "Source Sans Pro", system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
@@ -2158,7 +2019,6 @@
       const colors = [0xe8c45a, 0xc0c6cf, 0xd2407a, 0x2bb3a8, 0x6a5acd];
       alongWalls(0.22, colors, (p, run, n) => [[p[0] + (run.yaw ? 0.02 : 0), p[1], p[2] + (run.yaw ? 0 : 0.02)], [Math.sin(n) * 0.15, run.yaw + Math.cos(n * 1.7) * 0.6, Math.sin(n * 2.3) * 0.12], 0.7 + (n % 3) * 0.2], runs)
         .forEach((at, k) => many(g, strip, std(colors[k], { roughness: 0.3, metalness: 0.4, side: THREE.DoubleSide }), at));
-      // confetti, kept ready for midnight
       const n = 300, m = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.05, 0.03), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, toneMapped: false }), n);
       const bits = [];
       for (let i = 0; i < n; i++) { m.setColorAt(i, C(pick(colors.concat([0xffffff])))); bits.push({ p: new THREE.Vector3(), v: 0, lie: 0, spin: new THREE.Vector3(rand(-4, 4), rand(-4, 4), rand(-4, 4)), r: new THREE.Euler(), live: false }); }
@@ -2167,7 +2027,6 @@
     },
     easter(g) {
       SILLS.forEach((p, i) => eggs(g, p, 3, 0.14, 11 + i));
-      // a basket of eggs by the board, more eggs on the counter, and two bunnies
       const basket = groupAt(g, [CORNER.board[0], 0, CORNER.board[1]], 0.3);
       cyl(basket, std(0xb9874f, { roughness: 0.9 }), [0, 0.11, 0], 0.22, 0.22, 0.25);
       const handle = mesh(new THREE.TorusGeometry(0.22, 0.015, 6, 20, Math.PI), std(0xb9874f, { roughness: 0.9 }), basket); handle.position.y = 0.22;
@@ -2188,14 +2047,12 @@
       SILLS.forEach((p) => { flag(g, [p[0], p[1], p[2] - 0.05], 0.28); flag(g, [p[0], p[1], p[2] + 0.07], 0.24); });
       const cup = groupAt(g, COUNTER[1], 0); cyl(cup, std(0x1f3a93), [0, 0.06, 0], 0.05, 0.12, 0.06);
       [-0.03, 0, 0.03].forEach((dx, i) => flag(g, [COUNTER[1][0] + dx, COUNTER[1][1] + 0.02, COUNTER[1][2]], 0.34 + i * 0.03));
-      // a star-spangled pail of flags at the bike corner
       const pail = groupAt(g, [CORNER.bike[0], 0, CORNER.bike[1]], 0); cyl(pail, std(0xc8102e), [0, 0.13, 0], 0.13, 0.26, 0.16);
       for (let i = 0; i < 5; i++) flag(g, [CORNER.bike[0] + (i - 2) * 0.04, 0.2, CORNER.bike[1] + (i % 2) * 0.03], 0.55 + (i % 3) * 0.06);
       blockFloor(CORNER.bike[0], CORNER.bike[1], 0.25);
     },
     halloween(g) {
-      // jack-o'-lanterns that glow, cobwebs in the corners and two bats
-      SILLS.forEach((p) => pumpkin(g, p, 0.1, true, 1.2));  // facing the room
+      SILLS.forEach((p) => pumpkin(g, p, 0.1, true, 1.2));
       pumpkin(g, COUNTER[1], 0.15, true);
       pumpkin(g, [CORNER.board[0], 0, CORNER.board[1]], 0.25, true); pumpkin(g, [CORNER.board[0] + 0.42, 0, CORNER.board[1] + 0.12], 0.16, true);
       pumpkin(g, [CORNER.bike[0], 0, CORNER.bike[1]], 0.24, true); pumpkin(g, [CORNER.bike[0] + 0.42, 0, CORNER.bike[1] + 0.1], 0.15, false);
@@ -2206,10 +2063,10 @@
       for (let k = 1; k <= 6; k++) { x.beginPath(); for (let i = 0; i <= 8; i++) { const a = (i / 8) * Math.PI / 2, rr = k * 40 - (i % 2) * 6; if (i) x.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); else x.moveTo(rr, 0); } x.stroke(); }
       const webMat = new THREE.MeshBasicMaterial({ map: tex(web), transparent: true, depthWrite: false, side: THREE.DoubleSide });
       const webAt = (p, rot, s) => { const m = mesh(new THREE.PlaneGeometry(s, s), webMat, g, false); m.geometry.translate(s / 2, -s / 2, 0); m.position.set(p[0], p[1], p[2]); m.rotation.set(rot[0], rot[1], rot[2]); };
-      webAt([-4.32, 4.06, -3.15], [0, 0, 0], 0.62);  // where a column meets the duct
+      webAt([-4.32, 4.06, -3.15], [0, 0, 0], 0.62);
       webAt([3.18, 4.06, -3.15], [0, 0, 0], 0.62);
-      webAt([-6.98, 3.55, -4.3], [0, Math.PI / 4, 0], 0.75);  // the corner by the windows
-      webAt([-6.98, 3.9, 4.0], [0, Math.PI / 2, 0], 0.5);  // over the last window
+      webAt([-6.98, 3.55, -4.3], [0, Math.PI / 4, 0], 0.75);
+      webAt([-6.98, 3.9, 4.0], [0, Math.PI / 2, 0], 0.5);
       const batMat = std(0x16131a, { roughness: 0.8 }), wingGeo = new THREE.BufferGeometry();
       wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.22, 0.05, 0, 0.17, -0.02, 0, 0, 0, 0, 0.17, -0.02, 0, 0.1, -0.05, 0, 0, 0, 0, 0.1, -0.05, 0, 0.03, -0.06, 0], 3)); wingGeo.computeVertexNormals();
       [[-5.8, 3.1, -4.45, 0], [5.2, 2.9, -4.5, 2]].forEach(([bx, by, bz, phase]) => {
@@ -2226,7 +2083,6 @@
       decor.anims.push((t) => { if (faceMat) faceMat.color.setScalar(0.82 + Math.sin(t * 9) * 0.06 + Math.sin(t * 23) * 0.06); });
     },
     thanksgiving(g) {
-      // a cornucopia on the counter, pumpkins, and autumn leaves on the desks
       const horn = groupAt(g, COUNTER[1], FACE - Math.PI / 2 + 0.4), wicker = std(0xb8874a, { roughness: 0.9 });
       const pts = []; for (let i = 0; i <= 12; i++) { const k = i / 12; pts.push([-0.28 + k * 0.5, 0.11 - k * 0.02 + Math.sin(k * Math.PI * 1.2) * 0.04 + (k > 0.8 ? (k - 0.8) * 0.5 : 0), -Math.sin(k * 2.4) * 0.04]); }
       for (let i = 0; i < 12; i++) { const r = 0.1 * (1 - i / 12) + 0.008; rod(horn, wicker, pts[i], pts[i + 1], r); }
@@ -2246,8 +2102,6 @@
       leafColors.forEach((c, k) => many(g, leafGeo, std(c, { roughness: 0.8, side: THREE.DoubleSide }), at.filter((_, i) => i % leafColors.length === k)));
     },
     christmas(g) {
-      // a tree with lights and a star in the corner by the bike, presents under it and by the board,
-      // and string lights on the walls
       const [tx, tz] = CORNER.bike, tree = groupAt(g, [tx, 0, tz], FACE);
       cyl(tree, std(0x5a3a22), [0, 0.12, 0], 0.07, 0.24); cyl(tree, std(0x8c2f2f, { roughness: 0.6 }), [0, 0.08, 0], 0.2, 0.16, 0.22);
       const needles = std(0x1f5a32, { roughness: 0.8 });
@@ -2278,7 +2132,6 @@
       });
     }
   };
-  // a bunny, sitting: body, head, long ears and a tail
   function bunny(parent, p, s) {
     const g = groupAt(parent, p, FACE + 0.6, s), fur = std(0xf1ece4, { roughness: 0.9 }), pink = std(0xf2a7b8, { roughness: 0.7 });
     ball(g, fur, [0, 0.16, 0], 0.15, [1, 1.05, 1.15]); ball(g, fur, [0, 0.34, 0.08], 0.1);
@@ -2311,7 +2164,6 @@
     Object.assign(decor, { group: g, key: h.key, year: h.year });
     if (h.key === 'newyear' && h.preview) previewConfetti();
   }
-  // A preview of New Year's drops the midnight confetti for half a minute, also when New Year's is up already.
   function previewConfetti() { if (decor.key === 'newyear') decor.confettiUntil = performance.now() + 30000; }
   function flagMaterial() {
     const c = makeCanvas(152, 80), x = c.getContext('2d');
@@ -2329,9 +2181,8 @@
   function decorState() {
     return { on: decorOn, preview: decorPreview || null, showing: decor.key, year: decor.key === 'newyear' ? decor.year : null, next: HOL ? HOL.holidayOn(new Date()) : null, confetti: !!(decor.confetti && decor.confetti.m.visible) };
   }
-  // The switch, kept in this browser: 'on' or 'off'. A preview: a holiday's key, or 'auto' for the date.
   function setHoliday(v) {
-    if (v === 'on' || v === 'off') { decorOn = v === 'on'; try { localStorage.setItem(DECOR_KEY, v); } catch (e) { /* no storage */ } }
+    if (v === 'on' || v === 'off') { decorOn = v === 'on'; storage.set(DECOR_KEY, v); }
     else if (v === 'auto' || v === '' || v === null) decorPreview = '';
     else if (HOL && HOL.KEYS.includes(v)) decorPreview = v;
     else if (v !== undefined) return Object.assign({ ok: false, error: 'bad_param', message: 'Send on, off, auto or one of ' + (HOL ? HOL.KEYS.join(', ') : '') + '.' }, decorState());
@@ -2339,7 +2190,6 @@
     if (v === 'newyear') previewConfetti();
     return decorState();
   }
-  // Confetti falls for ten minutes from midnight on New Year's Day, and for half a minute in a preview.
   function tickDecor(real, nowMs) {
     if (nowMs - decor.checkedAt > 20000) { decor.checkedAt = nowMs; applyDecor(); }
     if (!decor.group) return;
@@ -2351,13 +2201,13 @@
     if (!falling && !cf.m.visible) return;
     let live = 0;
     cf.bits.forEach((b, i) => {
-      if (!b.live && falling && (reduce || Math.random() < real * 0.3)) {  // under reduced motion it lies still on the floor
+      if (!b.live && falling && (reduce || Math.random() < real * 0.3)) {
         b.live = true; b.lie = 0; b.v = rand(0.35, 0.6);
         b.p.set(rand(-6.5, 6.5), reduce ? 0.004 : rand(3.9, 4.4), rand(-4.6, 4.6)); b.r.set(reduce ? -Math.PI / 2 : rand(0, 6), 0, rand(0, 6));
       }
       if (b.live && !reduce) {
         if (b.p.y > 0.01) { b.p.y = Math.max(0.01, b.p.y - b.v * real); b.p.x += Math.sin(t * 2 + i) * 0.15 * real; b.r.x += b.spin.x * real; b.r.y += b.spin.y * real; b.r.z += b.spin.z * real; if (b.p.y === 0.01) b.r.set(-Math.PI / 2, 0, b.r.z); }
-        else if ((b.lie += real) > 6) b.live = false;  // a bit on the floor goes after a while, and falls again
+        else if ((b.lie += real) > 6) b.live = false;
       }
       if (b.live && !falling && (reduce || b.p.y <= 0.01)) b.live = false;
       dummy.position.copy(b.p); dummy.rotation.copy(b.r); dummy.scale.setScalar(b.live ? 1 : 0); dummy.updateMatrix();
@@ -2367,7 +2217,6 @@
   }
   applyDecor();
 
-  // ---------- the loop ----------
   function resize() {
     if (!renderer) return;
     const r = stage.getBoundingClientRect(); const w = Math.max(1, Math.floor(r.width)), h = Math.max(1, Math.floor(r.height));
@@ -2388,7 +2237,6 @@
   }
   applyPart();
   function setTime(p) { part = PARTS[p] ? p : partNow(); applyPart(); if (window.OfficeLook) window.OfficeLook.part(part); emit('time', { time: part }); return part; }
-  // The baked look, with ?look=baked (office/look.js). It needs to know what moves, so it never bakes it.
   if (window.OfficeLook && renderer) {
     window.OfficeLook.attach({
       scene, camera, renderer, sun, hemi, amb, fill, part: () => part,
@@ -2398,10 +2246,6 @@
 
   let last = performance.now(), introT = 0, built = false;
   const camGoal = new THREE.Vector3();
-  // ---------- the director: the trailer (office/trailer.js) moves the camera itself ----------
-  // direct({ pos, target, fov }) holds the camera there and turns the mouse off; direct(null) gives
-  // it back. where(name) says where a thing is, so a shot can point at it while it moves.
-  // A key light rides with the camera, for close-ups of faces lit from behind: key is how bright.
   let directed = false, filmAt = null, filmDrawn = null;
   const lookAt = new THREE.Vector3();
   const keyLight = new THREE.PointLight(C(0xffe6cc), 0, 4, 2); scene.add(keyLight);
@@ -2417,7 +2261,7 @@
   const xyz = (v) => [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)];
   function where(name) {
     const v = new THREE.Vector3(), n = String(name || '');
-    if (n.startsWith('screen:')) {  // the middle of a person's first monitor, and the way it faces
+    if (n.startsWith('screen:')) {
       const w = byId[n.slice(7)], d = w && DESKS[w.desk]; if (!d) return null;
       const g = d.screens[0].group; g.updateMatrixWorld(); g.localToWorld(v.set(0, 0.38, 0.01));
       const f = new THREE.Vector3(0, 0, 1).applyQuaternion(g.getWorldQuaternion(new THREE.Quaternion()));
@@ -2425,54 +2269,47 @@
     }
     const fixed = { neon: neon.position, cake: CAKE_AT, espresso: espresso.getWorldPosition(v.clone()), pingpong: pp.position, city: backdrop.position, clock: clockFace.position };
     if (fixed[n]) return { at: xyz(fixed[n]) };
-    const w = n === 'manager' ? boss : byId[n];  // a person: their head, and the way they face
+    const w = n === 'manager' ? boss : byId[n];
     if (!w || !w.present) return null;
     w.fig.head.getWorldPosition(v);
     return { at: xyz(v), facing: [+Math.sin(w.yaw).toFixed(3), 0, +Math.cos(w.yaw).toFixed(3)] };
   }
+  const STALE_WORK_MS = 15 * 60 * 1000, OTHER_TERMINAL_IDLE_MS = 30 * 60 * 1000;
   function tick(dt) {
     worldT += dt;
     for (const w of people) if (w.present) tickWorker(w, dt);
     tickBoss(dt);
     tickSteam(dt); tickGame(dt); tickParty();
-    // stale work: nothing for 15 minutes means the hook missed the end
     const now = Date.now();
-    if (now - lastStale > 5000) { lastStale = now; for (const w of people) if (w.task && !w.waiting && now - w.task.lastAt > 15 * 60 * 1000) finish(w, 'quiet', 'world');
-      // a session in another terminal can close without saying so; give its person back
-      for (const S of [...sessions.values()]) if (!S.terminal && now - S.lastAt > 30 * 60 * 1000 && !(S.who && (byId[S.who].task || byId[S.who].waiting))) unseat(S); }
+    if (now - lastStale > 5000) { lastStale = now; for (const w of people) if (w.task && !w.waiting && now - w.task.lastAt > STALE_WORK_MS) finish(w, 'quiet', 'world');
+      for (const S of [...sessions.values()]) if (!S.terminal && now - S.lastAt > OTHER_TERMINAL_IDLE_MS && !(S.who && (byId[S.who].task || byId[S.who].waiting))) unseat(S); }
   }
   let lastStale = 0;
   let lastFrameAt = 0;
   function frame(nowMs) {
     requestAnimationFrame(frame);
     lastFrameAt = performance.now();
-    // While the trailer's recorder sets the film's time (run.clock), the room moves by exactly that.
     const real = filmAt != null ? Math.min(0.1, Math.max(0, filmAt - filmDrawn)) : Math.min(0.1, (nowMs - last) / 1000); last = nowMs; filmDrawn = filmAt;
     const dt = real * speed;
     if (dt > 0) tick(dt);
     for (const w of people) applyPose(w, dt);
-    applyPose(boss, dt);  // in his office or out on the floor, he is always in the room
+    applyPose(boss, dt);
     if (!built && !renderer) { built = true; emit('office.live', {}); readyWaiters.splice(0).forEach((r) => r(snapshot())); }
     if (!renderer) return;
     if (introCam) { introT += real / 3.2; const k = 1 - Math.pow(1 - Math.min(1, introT), 3); camera.position.lerpVectors(START, HOME, k); if (introT >= 1) introCam = false; }
-    if (follow && lookFrom === 'desk') { const who = follow; setView('home'); follow = who; }  // following someone leaves the desk view
+    if (follow && lookFrom === 'desk') { const who = follow; setView('home'); follow = who; }
     if (follow && controls && !directed) { follow.fig.root.getWorldPosition(camGoal); camGoal.y = 0.9; controls.target.lerp(camGoal, Math.min(1, real * 3)); }
     if (controls && !directed && lookFrom === 'desk') controls.update();
     else if (controls && !directed) { controls.update(); const t = controls.target; t.x = clamp(t.x, -6.5, 6.5); t.z = clamp(t.z, t.x > MO.x0 + 0.3 && t.x < MO.x1 - 0.3 ? MO.z1 + 0.3 : -4.5, 4.5); t.y = clamp(t.y, 0, 2.5);
-      // The view's pivot stays in the room, or in the manager's office behind it. While it is in the
-      // office, the camera stays high, so it looks down over the office walls and never into them.
       controls.maxPolarAngle = highFor(t); }
     { const before = clockMin; drawClock(); if (clockMin !== before && before !== -1) clockMinChanged = true; }
     if (boardDirty) { drawBoard(); boardDirty = false; }
     tickScreens();
     tickTags();
     tickDecor(real, nowMs);
-    if (!(window.OfficeLook && window.OfficeLook.render(renderer))) renderer.render(scene, camera);  // the baked look's effects draw it
+    if (!(window.OfficeLook && window.OfficeLook.render(renderer))) renderer.render(scene, camera);
     if (!built) { built = true; emit('office.live', {}); readyWaiters.splice(0).forEach((r) => r(snapshot())); }
   }
-  // While the page is not drawn (a hidden tab, a hidden side panel, a covered window) the
-  // browser stops calling frame(), but hooks keep arriving. Keep the room's plans moving
-  // in the background so people are in the right place when it shows again.
   setInterval(() => {
     if (performance.now() - lastFrameAt < 900) return;
     const nowMs = performance.now(), real = Math.min(2, (nowMs - last) / 1000); last = nowMs;
@@ -2482,7 +2319,6 @@
   const readyWaiters = [];
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { drawNeon(); boardDirty = true; clockMin = -1; drawClock(); people.forEach(markScreen); });
 
-  // ---------- window.run ----------
   const run = {
     version: '0.1.0', world: 'office',
     do: doAction,
@@ -2496,12 +2332,8 @@
     view: (name) => setView(name),
     direct,
     where,
-    // The film's time in seconds, set for each frame by the trailer's recorder. From then on the room
-    // moves by the film's time, not the browser's, so a slow frame never makes people hurry.
     clock: (t) => { if (filmDrawn == null) filmDrawn = t; filmAt = t; return t; },
-    // Brings the whole roster into the room at once, for the trailer.
     cast: () => { people.forEach((w) => { w.extra = false; if (!w.present) { w.present = true; w.fig.root.visible = true; placeAway(w); } }); return people.length; },
-    // Ends the manager's round at once, for the trailer: its cut to night finds him back at his desk.
     managerGone: () => { if (boss.present) bossLeft(); bossHome(); return true; },
     tags: (on) => { showTags = on == null ? !showTags : !!on; return showTags; },
     time: setTime,
@@ -2511,7 +2343,6 @@
   ACTIONS.ready.run = () => run.ready().then((s) => ({ ok: true, people: s.people, busy: s.busy }));
   Object.keys(ACTIONS).forEach((k) => { if (!run[k]) run[k] = (o) => doAction(Object.assign({ action: k }, o || {})); });
   window.run = run;
-  // nobody starts at a computer, and only the first few are here
   people.forEach((w, i) => { w.extra = i >= (ROSTER.startWith || 3); w.present = !w.extra; w.fig.root.visible = w.present; if (w.present) placeAway(w); });
   emit('office.started', { people: people.length, time: part });
   requestAnimationFrame(frame);
