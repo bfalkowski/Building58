@@ -46,16 +46,16 @@ test('review news the Dev was not told yet: wait, or the person once its session
   const dir = checkout(t);
   const told = task(dir, { reviews: { pending: { links: ['x'], count: 1 } } });
   assert.deepStrictEqual(holdOf(told, dev('idle'), now), { act: 'wait', why: 'Its Dev has not been told of the latest review yet.' });
-  assert.deepStrictEqual(holdOf(told, null, now), { act: 'person', why: 'There is review news its Dev was never told, and its session has ended.' });
+  assert.deepStrictEqual(holdOf(told, null, now), { act: 'person', reason: 'news-untold', why: 'There is review news its Dev was never told, and its session has ended.' });
 });
 
 test('uncommitted changes or unpushed commits with the Dev idle or gone go to the person', (t) => {
   const dir = checkout(t);
   fs.writeFileSync(path.join(dir, 'a.txt'), 'two\n');
-  assert.deepStrictEqual(holdOf(task(dir), dev('idle'), now), { act: 'person', why: 'Its Dev stopped, but its checkout has uncommitted changes, so the PR does not hold all its work.' });
+  assert.deepStrictEqual(holdOf(task(dir), dev('idle'), now), { act: 'person', reason: 'work-left-out', why: 'Its Dev stopped, but its checkout has uncommitted changes, so the PR does not hold all its work.' });
   assert.match(holdOf(task(dir), null, now).why, /^Its Dev has ended, but its checkout has uncommitted changes/);
   sh(dir, 'commit', '-qam', 'two');
-  assert.deepStrictEqual(holdOf(task(dir), dev('idle'), now), { act: 'person', why: 'Its Dev stopped, but its checkout has 1 commit that is not pushed, so the PR does not hold all its work.' });
+  assert.deepStrictEqual(holdOf(task(dir), dev('idle'), now), { act: 'person', reason: 'work-left-out', why: 'Its Dev stopped, but its checkout has 1 commit that is not pushed, so the PR does not hold all its work.' });
   sh(dir, 'update-ref', 'refs/remotes/origin/pr', 'HEAD');
   assert.strictEqual(holdOf(task(dir), dev('idle'), now), null, 'pushed now');
 });

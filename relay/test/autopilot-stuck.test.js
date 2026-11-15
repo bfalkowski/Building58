@@ -56,6 +56,8 @@ test('a Dev at a question past the stuck time: its task waits on you, the sessio
   assert.ok(desk && desk.running, 'the stuck session still runs');
   assert.strictEqual(desk.state, 'waiting');
   assert.ok((await ap()).notes.some((n) => /^T-\d+ waits on you: Its Dev/.test(n.text)));
+  const run = (await ap()).runs.recent.find((x) => x.task === task.id);
+  assert.deepStrictEqual([run.blocked && run.blocked.reason, run.handed, run.outcome], ['question', null, 'blocked'], 'stuck at a question, not handed over by rule');
 
   // Out of Autopilot's count and the WIP limit of 1, so the next ticket starts.
   const next = await until(() => taskOf(second), 'the next Ready ticket to start');
