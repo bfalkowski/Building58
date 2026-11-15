@@ -184,3 +184,30 @@ test('the WIP limit is full with a task Autopilot did not start: it waits, then 
   assert.strictEqual((await o.started(next)).by, 'Autopilot');
   assert.strictEqual((await o.ap()).idle, null, 'the wait is over');
 });
+
+// The WIP limit can fill while Autopilot frees a desk: it stops its own Done Dev and waits for it to
+// end, and in that second a person's task moves back into building. The start after the freed desk
+// is then refused for the WIP limit. That is the same wait as before the desk was freed, not a failure.
+test('a task fills the WIP limit while Autopilot frees a desk: it waits, then starts the ticket', async (t) => {
+  const o = await office(t, { RELAY_WIP_LIMIT: '1', FAKE_CLAUDE_SLOW_EXIT: '1' });
+  const mine = await o.doneDev(true);
+  const theirs = (await o.R.call('POST', '/tasks', { title: 'The person\'s own work', repo: o.repo })).body.task;
+  assert.strictEqual((await o.R.call('POST', '/tasks/' + theirs.id + '/move', { to: 'in_review' })).status, 200);
+  for (let i = 0; i < DESKS - 2; i++) await o.plain();
+  assert.strictEqual((await o.terminals()).length, DESKS, 'every desk is taken');
+  const next = await o.ticket('Next one');
+  await o.R.call('POST', '/autopilot', { on: true, only: next.id });
+  // Its Dev takes a second to end, so the move lands before the start after the freed desk.
+  await until(async () => (await o.ap()).notes.some((x) => /^Stopped .* to free a desk/.test(x.text)), 'Autopilot to stop its Done Dev', 400);
+  assert.strictEqual((await o.R.call('POST', '/tasks/' + theirs.id + '/move', { to: 'building' })).status, 200);
+  await until(async () => /^Waiting for room under the WIP limit/.test((await o.ap()).idle || '') || (await o.ap()).on === false, 'Autopilot to wait or give up');
+  let a = await o.ap();
+  assert.strictEqual(a.on, true, 'Autopilot stayed on: ' + JSON.stringify(a.notes.slice(-3)));
+  assert.ok(!a.notes.some((x) => /Could not start|turned itself off/.test(x.text)), JSON.stringify(a.notes));
+  assert.ok(!(await o.terminals()).some((x) => x.id === mine.id), 'its own Done Dev was stopped');
+  assert.ok(!(await o.R.call('GET', '/tasks')).body.tasks.some((x) => x.ticket === next.id), 'nothing started past the limit');
+  assert.strictEqual((await o.R.call('POST', '/tasks/' + theirs.id + '/move', { to: 'done' })).status, 200);
+  assert.strictEqual((await o.started(next)).by, 'Autopilot');
+  a = await o.ap();
+  assert.strictEqual(a.idle, null, 'the wait is over');
+});

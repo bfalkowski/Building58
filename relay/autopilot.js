@@ -23,7 +23,8 @@
 // at its desk, and comes back to Autopilot by itself once that session moves again. One that nothing
 // moved comes back once something does: a PR, a hook from its Dev, or a posted verdict (movedAgain).
 //
-// What it keeps (the switch, the verdicts, the day's merges) is in RELAY_AUTOPILOT_FILE, so a restart keeps it.
+// What it keeps (the switch, the verdicts, the day's merges, and one run record for each ticket it starts,
+// relay/autopilot-runs.js) is in RELAY_AUTOPILOT_FILE, so a restart keeps it.
 'use strict';
 const { execFile } = require('child_process');
 const fs = require('fs');
@@ -43,6 +44,7 @@ const chat = require('./chat.js');
 const { livenessOf } = require('./liveness.js');
 const nudge = require('./nudge.js');
 const { holdOf } = require('./merge-hold.js');
+const runs = require('./autopilot-runs.js');
 
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const GH = process.env.GH_CMD || 'gh';
@@ -75,6 +77,21 @@ const chOf = (channel) => store[channel] || (store[channel] = { on: false, only:
 const isOn = (channel) => !!(store[channel] && store[channel].on);
 const recOf = (channel, pr) => { const c = chOf(channel); return c.prs[pr] || (c.prs[pr] = { verdicts: [], conflictAt: null, handedOver: null }); };
 const today = () => new Date().toISOString().slice(0, 10);
+const runsOf = (channel) => { const c = chOf(channel); return c.runs || (c.runs = {}); };
+const runOf = (channel, task) => (task && runsOf(channel)[task.id]) || null;
+function track(channel, task) {
+  const run = runOf(channel, task);
+  if (!run) return null;
+  const rec = task.pr && chOf(channel).prs[task.pr];
+  let changed = runs.fromTask(run, task, !!(rec && rec.mergedHead));
+  for (const v of rec ? rec.verdicts : []) if (postOf(channel, v)) changed = runs.verdict(run, v) || changed;
+  if (changed) save();
+  return run;
+}
+function handRun(channel, task, reason) {
+  const run = runOf(channel, task);
+  if (run && runs.hand(run, reason, Date.now())) save();
+}
 const number = (pr) => '#' + pr.split('/').pop();
 let ctx = null;
 function note(channel, text) {
@@ -169,7 +186,16 @@ prComments.useHolds((channel, task, url) => {
   if (!mineTask(task) || task.state === 'done' || !task.pr) return;
   const rec = recOf(channel, task.pr);
   if (rec.handedOver) return;
-  handOver(channel, task, rec, 'Its Dev says a finding the review marked non-blocking is a bug: ' + url);
+  handOver(channel, task, rec, 'Its Dev says a finding the review marked non-blocking is a bug: ' + url, 'dev-says-bug');
+});
+tickets.onFiled((channel, ticket, agent, at) => {
+  if (!ticket || ticket.kind !== 'bug' || !store[channel] || !store[channel].runs) return;
+  const text = String(ticket.title || '') + '\n' + String(ticket.body || '');
+  let changed = false;
+  for (const run of Object.values(store[channel].runs)) {
+    if (run.mergedAt && run.ticket !== ticket.id && !(agent && agent.task === run.task) && runs.names(text, run)) changed = runs.fixAfter(run, ticket.id, at || Date.now()) || changed;
+  }
+  if (changed) save();
 });
 const roundsOf = (rec) => Math.max(0, postedOf(rec).length - (rec.roundsFrom || 0));
 
@@ -193,9 +219,10 @@ async function tick() {
 }
 async function look(channel) {
   const c = chOf(channel);
-  if (c.day !== today()) { c.day = today(); c.merged = 0; save(); }
+  if (c.day !== today()) { c.day = today(); c.merged = 0; runs.prune(runsOf(channel), Date.now()); save(); }
   if (update.restarting()) return;
   movedAgain(channel);
+  for (const task of tasks.list(channel).filter(mineTask)) track(channel, task);
   for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done')) {
     if (held(channel, task)) await mergedYet(channel, task); else await lookAt(channel, task);
   }
@@ -225,11 +252,11 @@ async function lookAt(channel, task) {
     if (task.reviews && task.reviews.pending) { rec.why = 'New review news came in as it was about to merge, so its Dev hears it first.'; rec.act = 'wait'; return; }
     try { await gh(['pr', 'merge', task.pr, '--merge', '--match-head-commit', pr.headRefOid], task.repo); } catch (e) {
       const now = await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid'], task.repo).then(JSON.parse, () => null);
-      if (now && now.state === 'MERGED') { counted(c, rec, pr.headRefOid); note(channel, 'Merged PR ' + number(task.pr) + ', though gh said: ' + e.message); return; }
+      if (now && now.state === 'MERGED') { counted(channel, task, rec, pr.headRefOid); note(channel, 'Merged PR ' + number(task.pr) + ', though gh said: ' + e.message); return; }
       if (now && now.headRefOid !== pr.headRefOid) { rec.why = 'New commits arrived as it was about to merge, so they get a review first.'; return; }
-      handOver(channel, task, rec, 'gh pr merge failed: ' + e.message); return;
+      handOver(channel, task, rec, 'gh pr merge failed: ' + e.message, 'merge-failed'); return;
     }
-    counted(c, rec, pr.headRefOid);
+    counted(channel, task, rec, pr.headRefOid);
     note(channel, 'Merged PR ' + number(task.pr) + ' (' + (task.ticket || task.title) + '): ' + d.why);
   } else if (d.act === 'conflict') {
     if (rec.conflictAt === pr.headRefOid) return;
@@ -237,11 +264,18 @@ async function lookAt(channel, task) {
     delivery.save(channel, { key: 'autopilot-conflict ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
       text: 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s non-blocking findings. A follow-up review checks how you resolved it.' });
     note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
-  } else if (d.act === 'person') handOver(channel, task, rec, d.why);
+  } else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason);
 }
-function counted(c, rec, head) { rec.mergedHead = head; c.merged++; save(); }
+function counted(channel, task, rec, head) {
+  const c = chOf(channel), run = runOf(channel, task);
+  rec.mergedHead = head; c.merged++;
+  if (run) runs.merged(run, Date.now(), BY);
+  save();
+}
 function markDone(channel, task) {
   tasks.noteMerged(task);
+  const run = track(channel, task), rec = task.pr && chOf(channel).prs[task.pr];
+  if (run && runs.merged(run, Date.now(), rec && rec.mergedHead ? BY : 'you')) save();
   tasks.setState(channel, task, 'done', BY, 'PR ' + number(task.pr) + ' merged.');
   const w = terminal.find(channel, task.owner && task.owner.terminal);
   if (w && !w.exited && w.state !== 'working' && w.state !== 'waiting') terminal.stop(w);
@@ -253,8 +287,9 @@ async function mergedYet(channel, task) {
   try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state'], task.repo)); } catch (e) { return; }
   if (pr.state === 'MERGED') markDone(channel, task);
 }
-function handOver(channel, task, rec, why) {
+function handOver(channel, task, rec, why, reason) {
   rec.handedOver = why; rec.handedOverAt = new Date().toISOString(); save();
+  handRun(channel, task, reason);
   tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why);
   note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why);
 }
@@ -278,18 +313,19 @@ async function maybeStart(channel) {
     const wasWaiting = /^Waiting for a free desk/.test(c.idle || '');
     c.idle = null;
     let [status, out] = await tickets.startBy(channel, next, BY, ctx);
-    if (out.error === 'wip_limit') { waitWip(out.message); return; }
     let why = null;
     if (out.error === 'full') {
       why = await freeADesk(channel);
       if (!why) { [status, out] = await tickets.startBy(channel, next, BY, ctx); why = 'a desk was freed, but another session took it first'; }
     }
+    if (out.error === 'wip_limit') { waitWip(out.message); return; }
     if (out.error === 'full') {
       const taken = terminal.all(channel).filter((t) => !t.exited).length;
       c.idle = 'Waiting for a free desk: ' + taken + ' of ' + terminal.DESKS + ' taken, ' + why + '.';
       if (!wasWaiting) note(channel, c.idle + ' ' + next.id + ' starts once one is free.');
       return;
     }
+    if (out.task) runsOf(channel)[out.task.id] = runs.start({ task: out.task.id, ticket: next.id, kind: next.kind, at: out.task.createdAt || Date.now() });
     if (status >= 400) { note(channel, 'Could not start ' + next.id + ': ' + out.message); c.on = false; save(); terminal.rebriefLead(channel); note(channel, 'Autopilot turned itself off. Turn it on again once that is fixed.'); return; }
     note(channel, 'Started ' + next.id + ': ' + next.title);
   } finally { starting = false; }
@@ -352,8 +388,8 @@ function stalled(channel) {
     const why = 'Nothing moved it for ' + Math.round(STALL_MS() / 60000) + ' minutes' + (rec && rec.why ? ' (' + rec.why + ')' : task.pr ? '' : ': ' + nudge.noPrWhy(channel, chOf(channel), task, dev, Date.now())) + '.';
     const c = chOf(channel);
     (c.stuck || (c.stuck = {}))[task.id] = { stall: true, sessionId: dev ? dev.sessionId : null, from: task.state, pr: task.pr || null, at: new Date().toISOString() };
-    if (rec) handOver(channel, task, rec, why);
-    else { tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why); save(); note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why); }
+    if (rec) handOver(channel, task, rec, why, 'stalled');
+    else { handRun(channel, task, 'stalled'); tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why); save(); note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why); }
   }
 }
 const stuckSince = new Map();
@@ -364,8 +400,9 @@ function park(channel, task, rec, on) {
       ' A relay restart keeps it at its question, but if the relay is stopped first, its question is gone: tell it to go on, or move the card.');
   const c = chOf(channel);
   (c.stuck || (c.stuck = {}))[task.id] = { sessionId: on.t.sessionId, from: task.state, brief: !!on.brief, at: new Date().toISOString() };
-  if (rec) handOver(channel, task, rec, why);
-  else { tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why); save(); note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why); }
+  const reason = on.brief ? 'reviewer-not-started' : on.silent ? 'silent' : 'question';
+  if (rec) handOver(channel, task, rec, why, reason);
+  else { handRun(channel, task, reason); tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why); save(); note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why); }
 }
 function movedAgain(channel) {
   const c = chOf(channel);
@@ -403,7 +440,9 @@ function view(channel) {
     const r = c.prs[t.pr];
     return { pr: t.pr, ticket: t.ticket, task: t.id, state: t.state, rounds: roundsOf(r), verdict: (latest(r) || {}).kind || null, act: r.act || null, why: r.handedOver || r.why || null };
   });
-  return { ok: true, on: !!c.on, only: c.only, atOnce: AT_ONCE(), maxRounds: MAX_ROUNDS(), maxMerges: MAX_MERGES_A_DAY(), mergedToday: c.day === today() ? c.merged : 0, idle: c.idle || null, paused: update.restarting(), prs, notes: c.notes.slice(-10) };
+  const all = Object.values(c.runs || {}).sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1));
+  const record = { today: runs.dayOf(all, today()), keptDays: runs.KEEP_DAYS, recent: all.slice(-10).map(runs.viewOf) };
+  return { ok: true, on: !!c.on, only: c.only, atOnce: AT_ONCE(), maxRounds: MAX_ROUNDS(), maxMerges: MAX_MERGES_A_DAY(), mergedToday: c.day === today() ? c.merged : 0, idle: c.idle || null, paused: update.restarting(), prs, notes: c.notes.slice(-10), runs: record };
 }
 async function handle(req, res, channel, rest, rctx) {
   if (!/^\/autopilot(\/|$)/.test(rest)) return false;

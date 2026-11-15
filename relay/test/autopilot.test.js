@@ -19,8 +19,10 @@ const pushPr = (wt, origin) => { sh(wt, 'push', '-qf', origin, 'HEAD:refs/pull/7
 
 test('Autopilot runs a ticket from Ready to merged', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
-  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' }, null, { autoReview: true });
-  t.after(async () => { await R.stop(); removeDir(ghDir); });
+  const env = { GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' };
+  let R = await relay(env, null, { autoReview: true });
+  const first = R;
+  t.after(async () => { await R.stop(); await first.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
   fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
@@ -53,7 +55,8 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
     await until(async () => !(await terminals()).some((x) => x.id === r.id), 'the reviewer to leave');
   };
 
-  const ticket = (await R.call('POST', '/tickets', { title: 'Make a.txt say hello', body: 'Change a.txt.', repo })).body.ticket;
+  const ticket = (await R.call('POST', '/tickets', { title: 'Make a.txt say hello', body: 'Change a.txt, said only in the body.', repo, kind: 'feature' })).body.ticket;
+  const run = async () => (await ap()).runs.recent.find((x) => x.ticket === ticket.id);
   await R.call('POST', '/tickets', { title: 'Not this one', repo });
 
   await t.test('it is off until the person turns it on, and sessions cannot turn it on', async () => {
@@ -79,6 +82,8 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
     const x = await until(task, 'the task');
     assert.strictEqual(x.ticket, ticket.id);
     assert.strictEqual(x.by, 'Autopilot');
+    const started = await until(run, 'its run record');
+    assert.deepStrictEqual([started.task, started.kind, started.startedAt, started.outcome], [x.id, 'feature', x.createdAt, null]);
     wt = x.worktree;
     await sleep(1000);
     assert.strictEqual((await R.call('GET', '/tasks')).body.tasks.length, 1, 'one at a time, and only the allowed ticket');
@@ -99,6 +104,10 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
     assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, devToken)).status, 401, 'a Dev cannot give its own PR a verdict');
     await review(r1, 'fix');
     await until(async () => (await ap()).prs.some((p) => p.verdict === 'fix' && p.rounds === 1), 'the fix verdict to count');
+    const fixed = await until(async () => { const y = await run(); return y.verdicts.length && y; }, 'the fix verdict in the run record');
+    assert.deepStrictEqual([fixed.prAt, fixed.pr], [(await task()).history.find((y) => y.type === 'pr').at, PR]);
+    assert.deepStrictEqual(fixed.verdicts.map((y) => [y.kind, y.commit]), [['fix', h1.slice(0, 12)]]);
+    assert.strictEqual(fixed.outcome, 'flawed', 'a review round said fix');
     await sleep(800);
     assert.strictEqual(merged(), '', 'no merge on a fix verdict');
   });
@@ -134,6 +143,39 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
     await sleep(1000);
     assert.strictEqual((await R.call('GET', '/tasks')).body.tasks.filter((y) => y.state !== 'done').length, 0, 'the other ticket was not allowed, so nothing starts');
     assert.strictEqual(merged().split('\n').filter(Boolean).length, 1, 'merged once');
+  });
+
+  let kept;
+  await t.test('the run record has each step once, and the view counts the day', async () => {
+    kept = await run();
+    assert.deepStrictEqual(kept.verdicts.map((y) => y.kind), ['fix', 'merge'], 'each review once, in order');
+    assert.strictEqual(kept.mergedBy, 'Autopilot');
+    const history = (await task()).history, at = (type) => history.find((y) => y.type === type).at;
+    assert.deepStrictEqual([kept.startedAt, kept.briefedAt, kept.prAt], [at('created'), at('briefed'), at('pr')], 'each step at its own time, from the task history');
+    assert.ok(kept.prAt <= kept.mergedAt && kept.mergedAt <= at('merged'), JSON.stringify(kept));
+    assert.deepStrictEqual([kept.handed, kept.blocked, kept.fixAfter, kept.outcome], [null, null, null, 'flawed']);
+    const d = (await ap()).runs.today;
+    assert.deepStrictEqual([d.runs, d.byOutcome, d.byKind], [1, { success: 0, flawed: 1, blocked: 0, manual: 0, open: 0 }, { feature: { success: 0, flawed: 1, blocked: 0, manual: 0, open: 0 } }]);
+    assert.strictEqual(d.medianStartToMergeMinutes, Math.round((Date.parse(kept.mergedAt) - Date.parse(kept.startedAt)) / 60000));
+    await sleep(1000);
+    assert.deepStrictEqual(await run(), kept, 'later looks add nothing');
+  });
+
+  await t.test('a relay restart keeps the record, which holds no ticket words, prompt or key', async () => {
+    await R.call('POST', '/autopilot', { on: false });
+    await R.kill();
+    R = await relay(env, first.home, { autoReview: true });
+    assert.deepStrictEqual(await run(), kept);
+    const file = fs.readFileSync(path.join(R.home, '.office-world', 'autopilot.json'), 'utf8');
+    const record = JSON.stringify(JSON.parse(file).t.runs);
+    assert.doesNotMatch(record, /said only in the body|test-key|Make a\.txt|Review|verdict merge/);
+  });
+
+  await t.test('a bug ticket filed after the merge that names the ticket marks a fix after the merge', async () => {
+    await R.call('POST', '/tickets', { title: 'Unrelated bug', body: 'Not ' + ticket.id + '0.', repo, kind: 'bug' });
+    assert.strictEqual((await run()).fixAfter, null, 'a ticket that does not name it');
+    const fix = (await R.call('POST', '/tickets', { title: 'a.txt says hello twice', body: 'Since ' + ticket.id + ' merged, a.txt is wrong.', repo, kind: 'bug' })).body.ticket;
+    assert.deepStrictEqual((await run()).fixAfter, { ticket: fix.id, at: fix.createdAt });
   });
 });
 
@@ -255,8 +297,9 @@ test('a merge verdict waits while the Dev works, and work left unpushed goes to 
 // before it merges, so a reply posted after the last poll still stops the merge.
 test('a Dev reply with the hold mark sends a merge-verdict PR to the person, even between polls', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
-  // Comment checks on, but after the first one (5 seconds in) the next is an hour away.
-  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '3600' });
+  // Comment checks start off. The test turns them on once the task has its PR, so the one check that comes
+  // 5 seconds later sees the PR however slow the start was, and the next is an hour away.
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '0' });
   t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
@@ -288,7 +331,10 @@ test('a Dev reply with the hold mark sends a merge-verdict PR to the person, eve
   await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-101' } });
   await say(r, 'Stop');
   await until(async () => (await ap()).prs.some((p) => p.verdict === 'merge' && /^Its Dev is working/.test(p.why || '')), 'the wait for the Dev');
-  await until(() => asked() >= 1, 'the first comment check', 150);
+  assert.strictEqual(asked(), 0, 'no comment check while they are off');
+  assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 3600 } })).status, 200);
+  await until(async () => ((await task()).reviews || {}).checkedAt, 'the first comment check to end', 150);
+  assert.strictEqual(asked(), 1, 'one comment check read the comments');
   // The Dev's reply, after the last poll: a finding marked non-blocking is a bug. It pushes nothing, and stops.
   const n = asked();
   answer([{ id: 102, html_url: PR + '#issuecomment-102', body: '<!-- office:dev -->\n<!-- office:hold -->\nFinding 2 is a bug.', created_at: new Date().toISOString() }]);
@@ -321,6 +367,8 @@ test('a PR that changes CLAUDE.md waits on the person, and is done once the pers
   await until(async () => (await R.call('GET', '/tasks/' + x.id)).body.task.state === 'done', 'the handed-over task to be done once its PR merged');
   await until(async () => !(await R.call('GET', '/terminals')).body.terminals.some((y) => y.id === dev.id), 'the Dev\'s desk to be free');
   assert.strictEqual(fs.readFileSync(path.join(ghDir, 'calls.log'), 'utf8').includes('pr merge'), false, 'Autopilot did not merge it');
+  const run = (await R.call('GET', '/autopilot')).body.runs.recent.find((y) => y.task === x.id);
+  assert.deepStrictEqual([run.handed && run.handed.reason, run.mergedBy, run.outcome], ['protected-file', 'person', 'manual'], 'handed to the person by rule');
 });
 
 test('two rounds that say fix hand the task to the person, and a later merge verdict does not merge it', async (t) => {

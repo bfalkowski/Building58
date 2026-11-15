@@ -40,7 +40,7 @@ const office = SESSIONS ? {
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
   config: require('./config.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'),
-  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js')
+  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js')
 } : null;
 if (office) {
   const w = (ONE ? [ONE] : worlds()).find((x) => x.sessions && x.roster);
@@ -49,7 +49,7 @@ if (office) {
   }
 }
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
-const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'games'].map((k) => office[k]) : [];
+const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'games', 'needsYou'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';

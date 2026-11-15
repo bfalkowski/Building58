@@ -90,7 +90,9 @@ A pre-commit hook stops commits that add keys or passwords. `npm ci` turns it on
 `npm run hooks` once, which needs no install. For a false alarm, put `secret-check: allow` on
 that line. It looks for known patterns, so it can miss a secret, and `--no-verify` skips it. CI runs
 the same check on what each pull request adds, so a secret that gets past the hook still fails the
-`pipeline` check. See [Guards at each boundary](docs/manual/how-it-works.html#guards).
+`pipeline` check. The same hook then runs lint on the JavaScript files the commit changes, and stops
+the commit when lint fails. In a Dev's worktree it finds ESLint in the main checkout. With no ESLint
+installed, it lets the commit through and says so. See [Guards at each boundary](docs/manual/how-it-works.html#guards).
 
 ### Comments in product code
 

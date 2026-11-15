@@ -15,20 +15,20 @@ function ciOf(rollup) {
 function forPr(pr, files, verdict, rounds, maxRounds) {
   if (!pr) return { act: 'wait', why: 'GitHub has not answered about the PR yet.' };
   if (pr.state === 'MERGED') return { act: 'done', why: 'The PR merged.' };
-  if (pr.state === 'CLOSED') return { act: 'person', why: 'The PR was closed without merging.' };
+  if (pr.state === 'CLOSED') return { act: 'person', reason: 'pr-closed', why: 'The PR was closed without merging.' };
   if (!files) return { act: 'wait', why: 'Waiting for the list of files the PR changes.' };
   const locked = [...new Set(files.filter((f) => PROTECTED.includes(f)))];
-  if (locked.length) return { act: 'person', why: 'It changes ' + locked.join(' and ') + ', which only a person merges.' };
+  if (locked.length) return { act: 'person', reason: 'protected-file', why: 'It changes ' + locked.join(' and ') + ', which only a person merges.' };
   if (!verdict) return { act: 'wait', why: 'Waiting for the review.' };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
-    if (rounds >= maxRounds) return { act: 'person', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };
+    if (rounds >= maxRounds) return { act: 'person', reason: 'rounds', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };
     return { act: 'wait', why: 'The Dev is fixing what the last review found. A follow-up review checks the fixes after the push.' };
   }
   if (verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review said merge, so a follow-up review checks them first.' };
   if (pr.mergeStateStatus === 'DIRTY') return { act: 'conflict', why: 'It conflicts with main.' };
   const ci = ciOf(pr.statusCheckRollup);
-  if (ci === 'red') return { act: 'person', why: 'CI failed on the reviewed commit.' };
+  if (ci === 'red') return { act: 'person', reason: 'ci-red', why: 'CI failed on the reviewed commit.' };
   if (ci === 'pending') return { act: 'wait', why: 'Waiting for CI.' };
   if (!['CLEAN', 'BEHIND', 'HAS_HOOKS'].includes(pr.mergeStateStatus)) return { act: 'wait', why: 'GitHub says the PR is ' + String(pr.mergeStateStatus || 'not ready').toLowerCase() + '.' };
   return { act: 'merge', why: 'Reviewed with no blocking findings, CI is green, and GitHub can merge it.' };

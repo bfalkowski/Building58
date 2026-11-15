@@ -160,6 +160,19 @@
   #huddle-rows b { display: block; font-weight: 500; color: var(--wait); }
   #huddle-rows a { color: var(--link); margin-left: 6px; }
   .floor[data-huddle="1"] #feed-title, .floor[data-huddle="1"] .feed-scroll { display: none; }
+  /* Needs you (office/needs-you.js): the count, and one line for each thing that waits on the person. */
+  #needs-you { flex: 0 0 auto; border-bottom: 1px solid var(--pane-line); }
+  #needs-you h3 { border-top: 0; padding: 8px 12px 4px; align-items: baseline; }
+  #needs-you-count { font-weight: 600; color: var(--pane-dim); }
+  #needs-you:not([data-count="0"]) #needs-you-count { color: var(--wait); }
+  #needs-you-empty { margin: 0; padding: 0 12px 8px; color: var(--pane-dim); }
+  #needs-you-list { list-style: none; margin: 0; padding: 0 12px 8px; display: grid; gap: 4px; max-height: 108px; overflow-y: auto; }
+  #needs-you-list li { display: flex; align-items: baseline; gap: 6px; padding: 1px 0 1px 8px; border-left: 3px solid var(--wait); overflow-wrap: anywhere; }
+  #needs-you-list .needs-line { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; background: none; font: inherit; color: var(--pane-strong); text-align: left; }
+  #needs-you-list button.needs-line { cursor: pointer; }
+  #needs-you-list button.needs-line:hover { color: var(--link); text-decoration: underline; }
+  #needs-you-list button.needs-line:focus-visible { outline: 2px solid var(--pane-dim); }
+  #needs-you-list a { color: var(--link); }
   .officer-report { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .officer-report[hidden] { display: none; }
   .officer-report h3 { align-items: center; }
@@ -550,6 +563,11 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
             <span id="stop-note" role="status" hidden></span>
           </div>
         </div>
+        <section id="needs-you" aria-labelledby="needs-you-title" hidden>
+          <h3><span id="needs-you-title">Needs you</span><span id="needs-you-count" role="status">0</span></h3>
+          <p id="needs-you-empty">Nothing needs you now.</p>
+          <ol id="needs-you-list" aria-label="What needs you, most urgent first"></ol>
+        </section>
         <ol id="people" aria-label="People, busy first"></ol>
         <section id="huddle-report" aria-labelledby="huddle-title" hidden>
           <h3><span id="huddle-title">Huddle</span><button class="btn" id="huddle-close" type="button">Close</button></h3>
@@ -843,6 +861,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
 <script src="board-model.js"></script>
 <script src="tickets.js"></script>
 <script src="huddle.js"></script>
+<script src="needs-you.js"></script>
 <script src="chat.js"></script>
 <script src="fold.js"></script>
 <script src="officers.js"></script>
