@@ -186,10 +186,10 @@ test('the WIP limit is full with a task Autopilot did not start: it waits, then 
 });
 
 // The WIP limit can fill while Autopilot frees a desk: it stops its own Done Dev and waits for it to
-// end, and in that second a person's task moves back into building. The start after the freed desk
+// end, and in those seconds a person's task moves back into building. The start after the freed desk
 // is then refused for the WIP limit. That is the same wait as before the desk was freed, not a failure.
 test('a task fills the WIP limit while Autopilot frees a desk: it waits, then starts the ticket', async (t) => {
-  const o = await office(t, { RELAY_WIP_LIMIT: '1', FAKE_CLAUDE_SLOW_EXIT: '1' });
+  const o = await office(t, { RELAY_WIP_LIMIT: '1', FAKE_CLAUDE_SLOW_EXIT: '3' });
   const mine = await o.doneDev(true);
   const theirs = (await o.R.call('POST', '/tasks', { title: 'The person\'s own work', repo: o.repo })).body.task;
   assert.strictEqual((await o.R.call('POST', '/tasks/' + theirs.id + '/move', { to: 'in_review' })).status, 200);
@@ -197,7 +197,8 @@ test('a task fills the WIP limit while Autopilot frees a desk: it waits, then st
   assert.strictEqual((await o.terminals()).length, DESKS, 'every desk is taken');
   const next = await o.ticket('Next one');
   await o.R.call('POST', '/autopilot', { on: true, only: next.id });
-  // Its Dev takes a second to end, so the move lands before the start after the freed desk.
+  // Its Dev takes 3 seconds to end, under Autopilot's 5-second wait, so the move lands before the start
+  // after the freed desk even on a busy computer.
   await until(async () => (await o.ap()).notes.some((x) => /^Stopped .* to free a desk/.test(x.text)), 'Autopilot to stop its Done Dev', 400);
   assert.strictEqual((await o.R.call('POST', '/tasks/' + theirs.id + '/move', { to: 'building' })).status, 200);
   await until(async () => /^Waiting for room under the WIP limit/.test((await o.ap()).idle || '') || (await o.ap()).on === false, 'Autopilot to wait or give up');
