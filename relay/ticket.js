@@ -3,7 +3,7 @@
 //   node relay/ticket.js create "Radio clips at high volume" --body "What to do" --priority high --blocked-by T-1,T-2
 //   (blocked-by takes the ids that list and create print: T-1 on the local store, 12 on GitHub issues)
 //   node relay/ticket.js create "Decide the layout" --shapes T-7,T-9 --body - <<'EOF'
-//   (a design ticket: while it is open, Autopilot and the Lead start none of the tickets it shapes)
+//   (a design ticket: while it is open, Autopilot and the Lead start none of the tickets it shapes, which must be in Triage)
 //   node relay/ticket.js create "Title" --kind docs --body - <<'EOF'
 //   (kind is docs, tests, bug, feature, or one the person added; ticket.js kinds lists them. Leave it out if unsure)
 //   --label flaky,follow-up adds labels that tickets have already; ticket.js labels lists them

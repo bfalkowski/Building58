@@ -138,6 +138,8 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   if (unknown.length) return [400, { ok: false, error: 'bad_blocker', message: 'No such ticket: ' + unknown.join(', ') + '.' }];
   const { shapes, error: badShapes } = shapesFrom(askedShapes, all, null);
   if (badShapes) return badShapes;
+  const approvedOnes = agent ? shapes.filter((id) => all.find((t) => t.id === id).status !== 'triage') : [];
+  if (approvedOnes.length) return [403, { ok: false, error: 'bad_shapes', message: 'A session names only tickets in Triage with --shapes. ' + approvedOnes.join(', ') + ' left Triage, so only the person can make ' + (approvedOnes.length > 1 ? 'them' : 'it') + ' wait for a design ticket.' }];
   const live = all.filter((t) => t.status !== 'done' && t.status !== 'rejected');
   const same = (agent ? all.filter((t) => t.status !== 'done') : live).find((t) => t.repo === repo && t.title.toLowerCase() === title.toLowerCase() && (!t.base || t.base === base));
   if (same) return [200, { ok: true, duplicate: true, ticket: await view(channel, same, all) }];

@@ -121,7 +121,7 @@
   <ul>
     <li><span class="ui">Hold</span> on a card in Triage or Ready puts it on hold. <span class="ui">Take off hold</span> clears it.</li>
     <li><span class="ui">Replaced</span> asks for the ticket that replaces it, which you can leave empty, and <span class="ui">Mark replaced</span> saves it. <span class="ui">Not replaced</span> clears it. Both go through <code>POST /tickets/{id}/mark</code>, and only you can set or clear a mark.</li>
-    <li><span class="ui">Shapes</span> on a card in Triage, Ready or Started makes it a design ticket: type the ids of the tickets it shapes, with commas between, and press <span class="ui">Save</span> (<code>POST /tickets/{id}/shapes</code>). The card then says <i>shapes T-7, T-9</i>. While it is in Triage, Ready or Started, those tickets wait. An empty box takes the list away. A worker or the PM can name them when they file a design ticket, with <code>--shapes T-7,T-9</code>, but cannot change the list after.</li>
+    <li><span class="ui">Shapes</span> on a card in Triage, Ready or Started makes it a design ticket: type the ids of the tickets it shapes, with commas between, and press <span class="ui">Save</span> (<code>POST /tickets/{id}/shapes</code>). The card then says <i>shapes T-7, T-9</i>. While it is in Triage, Ready or Started, those tickets wait. An empty box takes the list away. A worker or the PM can name them when they file a design ticket, with <code>--shapes T-7,T-9</code>, but only tickets still in Triage, so a ticket you approved never waits because a session said so. The relay refuses the whole filing if one named ticket has left Triage. They cannot change the list after.</li>
   </ul>
 
   <h2 id="assign">How assignment really works</h2>

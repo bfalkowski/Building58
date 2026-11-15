@@ -230,6 +230,15 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       assert.match(replaced.heldBack, new RegExp('Replaced by ' + a.id));
       assert.strictEqual((await call('POST', '/tickets/' + b.id + '/mark', { mark: 'hold' }, agent)).status, 401, 'only the person marks a ticket');
       assert.strictEqual((await call('POST', '/tickets/' + a.id + '/shapes', { shapes: [] }, agent)).status, 401);
+      const ready = await call('POST', '/tickets', { title: 'Agent design on Ready', shapes: [a.id] }, agent);
+      assert.strictEqual(ready.status, 403, 'a session cannot make a ticket the person approved wait');
+      assert.strictEqual(ready.body.error, 'bad_shapes');
+      assert.match(ready.body.message, new RegExp(a.id + ' left Triage'));
+      const triaged = (await call('POST', '/tickets', { title: 'Agent idea in Triage', body: 'x' }, agent)).body.ticket;
+      const design = await call('POST', '/tickets', { title: 'Agent design on Triage', shapes: [triaged.id] }, agent);
+      assert.strictEqual(design.status, 201, 'a session may name a ticket still in Triage');
+      assert.deepStrictEqual(design.body.ticket.shapes, [triaged.id]);
+      for (const x of [triaged, design.body.ticket]) await call('POST', '/tickets/' + x.id + '/move', { to: 'rejected' });
       const cleared = (await call('POST', '/tickets/' + b.id + '/mark', { mark: null })).body.ticket;
       assert.strictEqual(cleared.heldBack, null);
       assert.strictEqual(cleared.mark, null);
