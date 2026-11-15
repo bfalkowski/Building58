@@ -738,6 +738,29 @@ that the relay's startup links come from the `world.json` files alone.
 *Check:* a new world adds only its own folder. A change to `relay/`, `office/` or `shared/` makes
 sense with every other world deleted.
 
+### 14. The code says what it does
+
+Product code in `relay/`, `office/` and `shared/` has no comments outside the header block at
+the top of a file. Comments go stale, they repeat the manual, and a session can use one to excuse a
+workaround. A rule goes in a test or a lint rule, behavior in `docs/manual/` (article 10), and
+history in the pull request. Text from a session, a person or GitHub goes through `oneLine` or
+`keepLines` in `relay/clean.js`, so there is one way to clean it. Code waits for the event it
+needs, not a fixed time, because a fixed wait is too short on a slow computer and too long on a
+fast one.
+
+A session learns these rules here and from lint, not after its pull request fails. The pre-commit
+hook runs lint on the JavaScript files a commit changes, and stops the commit when lint fails.
+
+*Enforced by:* lint (`eslint.config.js`, `eslint-local.js`): `local/no-comments`, a rule against
+copies of the control character pattern in `relay/`, and a rule against a `setTimeout` inside a
+`new Promise` in `office/` and `shared/`. The comments from before the rule are counted in
+`eslint-suppressions.json`, and `relay/test/lint-ratchet.test.js` fails when a count goes up.
+The pre-commit check is `.githooks/lint-staged.js`, tested in `relay/test/lint-hook.test.js`.
+`--no-verify` skips it, but CI runs lint on every pull request. A fixed wait in `relay/` is
+left to review.
+
+*Check:* lint passes with no change to the lint config or the suppressions file.
+
 ## Open questions
 
 These are not decided. Do not settle them in passing. Settle each one with a ticket that a person
