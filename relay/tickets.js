@@ -145,6 +145,7 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   const rank = lastRank(all, priority, Date.now());
   const ticket = await store.create(channel, Object.assign({ title, body: text, priority, rank, repo, base, blockedBy }, kind ? { kind } : {}, labels.length ? { labels } : {}, { status: agent ? 'triage' : 'ready', createdBy: agent ? agentName(agent) : 'you' }, agent ? {} : { approvedBy: 'you' }));
   history.add(channel, ticket, { stage: 'filed', by: ticket.createdBy }, agent || null);
+  filed(channel, ticket, agent);
   return [201, { ok: true, ticket: await view(channel, ticket, all.concat(ticket)) }];
 }
 const agentName = (t) => (t.role === 'pm' ? 'PM' : t.role === 'coo' ? 'COO' : t.lead ? 'Lead' : t.title ? 'Worker on ' + t.title : 'Session ' + t.sessionId.slice(0, 8)).slice(0, 60);
@@ -225,6 +226,7 @@ function setKind(channel, ticket, body) {
     if (state !== 'triage' && state !== 'ready') return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can change its kind. This one is ' + state + '.' }];
     if ((now.kind || null) === kind) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
     const changed = await store.update(channel, now.id, { kind });
+    filed(channel, changed, null);
     return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
   });
 }
@@ -480,6 +482,9 @@ async function board(channel) {
 }
 const changeWatchers = [];
 const onChange = (fn) => changeWatchers.push(fn);
+const filedWatchers = [];
+const onFiled = (fn) => filedWatchers.push(fn);
+const filed = (channel, ticket, agent) => filedWatchers.forEach((fn) => { try { fn(channel, ticket, agent || null); } catch (e) { console.error('A watcher of filed tickets failed: ' + e.message); } });
 const changed = (channel) => changeWatchers.forEach((fn) => fn(channel));
 
 async function handle(req, res, channel, rest, ctx) {
@@ -540,4 +545,4 @@ async function handle(req, res, channel, rest, ctx) {
 
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { handle, listAll, board, onChange, startBy, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { handle, listAll, board, onChange, onFiled, startBy, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };

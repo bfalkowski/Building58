@@ -391,6 +391,14 @@
     else tell(r.on ? 'Autopilot is on' + (r.only ? ' for ' + r.only.join(', ') : ' for every Ready ticket a person approved') + '. It starts, reviews, merges and moves cards by itself.' : 'Autopilot is off. Work under way stays where it is.', r.on ? '' : 'off');
     drawAutopilot(r.ok ? r : await api('', undefined, '/autopilot'));
   });
+  const OUTCOMES = ['success', 'flawed', 'blocked', 'manual', 'open'];
+  const countsOf = (o) => OUTCOMES.filter((k) => o[k]).map((k) => o[k] + ' ' + k).join(', ');
+  function runsLine(x) {
+    const d = x && x.today;
+    if (!d || !d.runs) return '';
+    const kinds = Object.entries(d.byKind).map(([k, o]) => k + ': ' + countsOf(o)).join('; ');
+    return 'runs started today: ' + countsOf(d.byOutcome) + ' (' + kinds + ')' + (d.medianStartToMergeMinutes === null ? '' : ', median ' + d.medianStartToMergeMinutes + ' min from start to merge');
+  }
   function drawAutopilot(r) {
     if (!r.ok) return;
     trust.autopilot = r; drawLevels();
@@ -398,7 +406,7 @@
     if (!apSet) { apBox.checked = r.on; if (document.activeElement !== apOnly) apOnly.value = (r.only || []).join(', '); }
     apOnly.disabled = r.on;
     const now = (r.prs || []).filter((p) => p.state !== 'done').map((p) => (p.ticket || p.pr.split('/').pop()) + ': ' + (p.why || p.act || ''));
-    apSays.textContent = r.on ? ([...now, r.idle].filter(Boolean).join(' · ') || 'Starting the next ticket.') + ' · merged today: ' + r.mergedToday + ' of ' + r.maxMerges : '';
+    apSays.textContent = [r.on ? ([...now, r.idle].filter(Boolean).join(' · ') || 'Starting the next ticket.') + ' · merged today: ' + r.mergedToday + ' of ' + r.maxMerges : '', runsLine(r.runs)].filter(Boolean).join(' · ');
     apRow.what.textContent = 'The relay starts the next approved Ready ticket, one at a time. Each push to its PR gets a review, and the findings go to the Dev. When the review says merge and all checks pass, the relay merges the PR and starts the next ticket. After ' + r.maxRounds + ' review rounds that still ask for fixes, the task goes to Waiting on you. It merges at most ' + r.maxMerges + ' PRs a day. It never merges a change to CLAUDE.md or the constitution. It needs Review PRs automatically on. When you turn it off, work already started stays where it is.';
     summaryOn.autopilot = !!r.on;
     summary.autopilot = r.on ? 'Autopilot on' + (r.only && r.only.length ? ' for ' + r.only.join(', ') : '') : 'Autopilot off';

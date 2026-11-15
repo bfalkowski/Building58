@@ -34,8 +34,8 @@ function holdOf(task, dev, now, unsaved = unsavedWork) {
   if (busy(lv)) return { act: 'wait', why: 'Its Dev ' + busy(lv) + ', maybe still answering the latest review, so the PR may not hold every fix yet.' };
   const dir = task.worktree || (dev && dev.cwd);
   const left = dir && fs.existsSync(dir) ? unsaved(dir) : null;
-  if (left) return { act: 'person', why: 'Its Dev ' + (gone ? 'has ended' : 'stopped') + ', but ' + left + ', so the PR does not hold all its work.' };
-  if (news) return { act: 'person', why: 'There is review news its Dev was never told, and its session has ended.' };
+  if (left) return { act: 'person', reason: 'work-left-out', why: 'Its Dev ' + (gone ? 'has ended' : 'stopped') + ', but ' + left + ', so the PR does not hold all its work.' };
+  if (news) return { act: 'person', reason: 'news-untold', why: 'There is review news its Dev was never told, and its session has ended.' };
   return null;
 }
 
