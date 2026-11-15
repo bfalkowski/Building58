@@ -73,6 +73,36 @@ test('a Dev at a question past the stuck time: its task waits on you, the sessio
   assert.ok((await ap()).notes.some((n) => /is back from Waiting on you/.test(n.text)));
 });
 
+// T-250: the return is over the WIP limit on purpose. The Dev never left its desk and is at work again,
+// so its card goes back to Building, and the limit holds only the next start.
+test('a stuck task comes back even over the WIP limit, and Autopilot starts nothing new until there is room', async (t) => {
+  const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: '3000', RELAY_WIP_LIMIT: '1', RELAY_AUTOPILOT_AT_ONCE: '3' });
+  t.after(async () => { await R.stop(); removeDir(gh); });
+  const { say, taskOf, ap } = helpers(R);
+  const repo = makeRepo(R.home);
+  const made = [];
+  for (const title of ['First one', 'Second one', 'Third one']) made.push((await R.call('POST', '/tickets', { title, repo })).body.ticket);
+  await R.call('POST', '/autopilot', { on: true, only: made.map((x) => x.id) });
+
+  const dev = (await until(() => taskOf(made[0]), 'the first ticket to start')).owner.sessionId;
+  await say(dev, 'UserPromptSubmit');
+  await say(dev, 'Notification', { message: ASKS });
+  await until(async () => (await taskOf(made[0])).state === 'waiting_on_you', 'the stuck task to wait on you');
+  const next = await until(() => taskOf(made[1]), 'the second ticket to start in the freed place');
+  await say(next.owner.sessionId, 'UserPromptSubmit');
+  await until(async () => /^Waiting for room under the WIP limit: 1 tasks are being built, and the limit is 1\.$/.test((await ap()).idle || ''), 'Autopilot to wait at the WIP limit');
+
+  await say(next.owner.sessionId, 'PreToolUse', { tool_name: 'Bash' });
+  await say(dev, 'PostToolUse', { tool_name: 'Bash' });
+  await say(dev, 'PreToolUse', { tool_name: 'Bash' });
+  await until(async () => (await taskOf(made[0])).state === 'building', 'the stuck task to come back');
+  await until(async () => /^Waiting for room under the WIP limit: 2 tasks are being built, and the limit is 1\.$/.test((await ap()).idle || ''), 'Autopilot to look again, over the limit');
+  const building = (await R.call('GET', '/tasks')).body.tasks.filter((x) => x.state === 'building').map((x) => x.ticket);
+  assert.deepStrictEqual(building.sort(), [made[0].id, made[1].id].sort(), 'both count, one over the limit');
+  assert.strictEqual(await taskOf(made[2]), undefined, 'the third waits for room under the limit');
+});
+
 test('an update waits on a session in a turn, and Autopilot still starts and merges other tasks', async (t) => {
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const R0 = await relay({});
