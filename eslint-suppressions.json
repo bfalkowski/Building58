@@ -144,11 +144,6 @@
       "count": 1
     }
   },
-  "relay/autopilot.js": {
-    "local/no-comments": {
-      "count": 102
-    }
-  },
   "relay/chat.js": {
     "local/no-comments": {
       "count": 1
@@ -194,11 +189,6 @@
       "count": 1
     }
   },
-  "relay/reviews.js": {
-    "local/no-comments": {
-      "count": 80
-    }
-  },
   "relay/rollback.js": {
     "local/no-comments": {
       "count": 1
@@ -216,7 +206,7 @@
   },
   "relay/server.js": {
     "local/no-comments": {
-      "count": 83
+      "count": 4
     }
   },
   "relay/session-host.js": {
@@ -234,14 +224,9 @@
       "count": 2
     }
   },
-  "relay/tasks.js": {
-    "local/no-comments": {
-      "count": 94
-    }
-  },
   "relay/terminal.js": {
     "local/no-comments": {
-      "count": 270
+      "count": 2
     }
   },
   "relay/ticket-history.js": {
@@ -257,11 +242,6 @@
   "relay/ticket-stores/local.js": {
     "local/no-comments": {
       "count": 1
-    }
-  },
-  "relay/tickets.js": {
-    "local/no-comments": {
-      "count": 125
     }
   },
   "relay/update.js": {

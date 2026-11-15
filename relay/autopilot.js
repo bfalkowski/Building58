@@ -47,19 +47,19 @@ const { holdOf } = require('./merge-hold.js');
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const GH = process.env.GH_CMD || 'gh';
 const config = require('./config.js');
-// Read at each use, so a change in Settings (relay/config.js) applies at once.
 const AT_ONCE = () => config.get('autopilotAtOnce');
 const MAX_ROUNDS = () => config.get('autopilotRounds'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges');
 const NOTES_KEPT = 30;
 const BY = 'Autopilot';
 
-// ---------- the store: { channel: { on, only, day, merged, prs: { pr: { verdicts, conflictAt, handedOver, mergedHead } }, stuck: { task id: { sessionId, from, at, stall, pr } }, notes } } ----------
 const ownsFile = claim(FILE);
 let store = {};
 if (ownsFile) try { store = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch (e) {
   if (e.code !== 'ENOENT') {
     const aside = FILE + '.unreadable-' + Date.now();
-    try { fs.renameSync(FILE, aside); console.error('Could not read ' + FILE + '. Kept it as ' + aside); } catch (e2) { /* nothing to keep */ }
+    let kept = true;
+    try { fs.renameSync(FILE, aside); } catch (e2) { kept = false; }
+    if (kept) console.error('Could not read ' + FILE + '. Kept it as ' + aside);
   }
 }
 function save() {
@@ -94,17 +94,11 @@ function gh(args, cwd) {
 }
 const git = (cwd, args) => new Promise((resolve, reject) => execFile('git', args, { cwd, timeout: 10000 }, (e, out) => (e ? reject(e) : resolve(out.trim()))));
 
-// ---------- the reviews ----------
-// What every review Autopilot gets asks for, after its own brief. The CLI path is quoted, as it can have spaces.
 const verdictAsk = () => ' Mark each finding blocking or not: only a bug, or something that does not do what the PR says, blocks. Before you post, run node ' +
   JSON.stringify(tickets.CLI) + ' verdict merge if nothing blocks, or verdict fix if something does. Then post.';
-// A follow-up reviews only what came after the last posted verdict: code no verdict covered gets the whole review again.
-// Every review of a PR asks for a verdict, Autopilot on or not, automatic or from Get a review (relay/checkouts.js):
-// relay/pr-comments.js reads it to leave the card alone after a review that blocks nothing.
 reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(),
   since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; } });
 
-// A reviewer's verdict on the PR it reviews, for the commit its checkout is at.
 async function giveVerdict(channel, agent, kind) {
   const pr = agent.reviewOf || agent.pr;
   if (!pr) return [409, { ok: false, error: 'no_pr', message: 'Only a reviewer of a PR gives a verdict.' }];
@@ -113,16 +107,13 @@ async function giveVerdict(channel, agent, kind) {
   let commit;
   try { commit = await git(agent.cwd, ['rev-parse', 'HEAD']); } catch (e) { return [409, { ok: false, error: 'no_commit', message: 'Could not read the commit of this checkout: ' + e.message }]; }
   const rec = recOf(channel, pr);
-  const mine = (v) => v.sessionId === agent.sessionId && !v.posted;  // a reviewer that changes its mind before it posts keeps one verdict
+  const mine = (v) => v.sessionId === agent.sessionId && !v.posted;
   rec.verdicts = rec.verdicts.filter((v) => !mine(v));
-  // By session id, which a relay restart keeps, as it brings the reviewer back with its conversation.
   rec.verdicts.push({ kind, commit, sessionId: agent.sessionId, at: new Date().toISOString(), posted: (agent.posted && agent.posted.url) || null });
   save();
   note(channel, 'The review of PR ' + number(pr) + ' at ' + commit.slice(0, 7) + ' says ' + kind + '.');
   return [200, { ok: true, pr, kind, commit, message: 'Verdict kept: ' + kind + ' for ' + commit.slice(0, 7) + '. Now post your review.' }];
 }
-// A verdict counts once its review is on the PR. It is linked as the hook reports the post, so a prompt
-// after it, which keeps the reviewer at its desk, does not lose it (T-230).
 const unposted = (rec, t) => rec && rec.verdicts.find((x) => x.sessionId === t.sessionId && !x.posted);
 terminal.onReviewPosted((channel, t) => {
   const v = unposted(chOf(channel).prs[t.reviewOf], t);
@@ -133,20 +124,17 @@ terminal.onReviewDone((channel, t) => {
   if (rec && rec.verdicts.some((x) => x.sessionId === t.sessionId && x.posted)) return;
   if (isOn(channel) && t.reviewOf) note(channel, 'The review of PR ' + number(t.reviewOf) + ' was posted without a verdict, so it does not count. The next push brings another review.');
 });
-// A safety net for a post the hook never reported: when a reviewer's turn ends with its verdict kept but not
-// linked, the relay looks on the PR for the review (relay/autopilot-plan.js, reviewPostFor). It counts from
-// when the review started, or the verdict if that is earlier, as after a relay restart, less a minute for
-// clocks that differ.
 const looking = new Set();
+const CLOCK_SKEW_MS = 60 * 1000;
 terminal.onReviewTurnEnd(async (channel, t) => {
   const rec = chOf(channel).prs[t.reviewOf], v = unposted(rec, t);
   const m = String(t.reviewOf).match(/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/);
   if (!v || !m || looking.has(t.sessionId)) return;
   looking.add(t.sessionId);
   try {
-    const login = JSON.parse(await gh(['api', 'user'])).login || null;  // each time, so gh auth switch applies at once
+    const login = JSON.parse(await gh(['api', 'user'])).login || null;
     const comments = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/issues/' + m[2] + '/comments?per_page=100'])).flat();
-    const since = Math.min(Date.parse(t.startedAt) || Infinity, Date.parse(v.at) || Infinity) - 60 * 1000;
+    const since = Math.min(Date.parse(t.startedAt) || Infinity, Date.parse(v.at) || Infinity) - CLOCK_SKEW_MS;
     const url = plan.reviewPostFor(comments, { login, since, commit: v.commit });
     if (!url || v.posted || rec.verdicts.some((x) => x.posted === url)) return;
     v.posted = url; save();
@@ -157,13 +145,6 @@ terminal.onReviewTurnEnd(async (channel, t) => {
 });
 const postedOf = (rec) => rec.verdicts.filter((v) => v.posted);
 const latest = (rec) => postedOf(rec).slice(-1)[0] || rec.verdicts.slice(-1)[0] || null;
-// For relay/pr-comments.js: 'merge' only when every item in the news ({ url, at }) is a review posted with a
-// merge verdict. A verdict speaks only for its own review, so an older one never covers a newer comment:
-// - gh pr comment prints the comment's link, so the verdict's post is that link.
-// - gh pr review prints nothing, so its post is the PR's own link. It covers a review, or an inline comment,
-//   on GitHub that came after the verdict and within REVIEW_WINDOW of it.
-// A reviewer's post counts from the moment its hook says so (t.posted), not only once its session has ended
-// (onReviewDone, REVIEW_GRACE later), since the comment check can deliver the news in between.
 const REVIEW_WINDOW = 15 * 60 * 1000;
 const REVIEW_PART = /#(pullrequestreview-|discussion_r)\d+$/;
 function postOf(channel, v) {
@@ -181,25 +162,17 @@ prComments.useVerdicts((channel, pr, items) => {
     const given = Date.parse(v.at);
     return post === pr && REVIEW_PART.test(item.url) && item.at !== null && item.at >= given - 5000 && item.at - given <= REVIEW_WINDOW;
   };
-  // The newest verdict that covers each item speaks for it.
   const kindOf = (item) => { const v = r.verdicts.slice().reverse().find((x) => covers(x, item)); return v ? v.kind : null; };
   return items.every((item) => kindOf(item) === 'merge') ? 'merge' : null;
 });
-// The Dev says a finding the review marked non-blocking is really a bug (relay/pr-comments.js HOLD_MARK):
-// the PR goes to the person rather than merging on that verdict.
 prComments.useHolds((channel, task, url) => {
   if (!mineTask(task) || task.state === 'done' || !task.pr) return;
   const rec = recOf(channel, task.pr);
   if (rec.handedOver) return;
   handOver(channel, task, rec, 'Its Dev says a finding the review marked non-blocking is a bug: ' + url);
 });
-// Rounds count from the last time the person gave the task back, so they get the full number again.
 const roundsOf = (rec) => Math.max(0, postedOf(rec).length - (rec.roundsFrom || 0));
 
-// ---------- one look ----------
-// Only tasks Autopilot started are its own. One it handed to the person stays with them, even when the
-// relay moves its card for a review comment, until the person moves the card themselves. Only a merge
-// of its PR is still seen: the task is done, as for any other.
 const mineTask = (task) => task.by === BY;
 const handedBack = (task, rec) => (task.history || []).some((h) => h.type === 'moved' && h.by === 'you' && h.at > rec.handedOverAt);
 function held(channel, task) {
@@ -221,7 +194,7 @@ async function tick() {
 async function look(channel) {
   const c = chOf(channel);
   if (c.day !== today()) { c.day = today(); c.merged = 0; save(); }
-  if (update.restarting()) return;  // the relay is about to restart: nothing new now
+  if (update.restarting()) return;
   movedAgain(channel);
   for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done')) {
     if (held(channel, task)) await mergedYet(channel, task); else await lookAt(channel, task);
@@ -233,18 +206,13 @@ async function lookAt(channel, task) {
   const rec = recOf(channel, task.pr);
   let pr = null, files = null;
   try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid,mergeStateStatus,statusCheckRollup'], task.repo)); } catch (e) { rec.why = 'gh pr view failed: ' + e.message; return; }
-  // GitHub can show a PR open for a while after it merged, with any merge state as it settles. A look in that
-  // time does nothing: no second merge or count, no conflict for the Dev. If GitHub never shows it merged,
-  // the stall check hands the task to the person.
   if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
-  // Every file, past the first 100 that gh pr view lists, and the old name of each one renamed.
   if (pr.state === 'OPEN') {
     const m = task.pr.match(/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/);
     try { files = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/pulls/' + m[2] + '/files?per_page=100'], task.repo)).flat().flatMap((f) => [f.filename, f.previous_filename]).filter(Boolean); } catch (e) { rec.why = 'Could not list the PR\'s files: ' + e.message; return; }
   }
   const v = latest(rec);
   let d = plan.forPr(pr, files, v, roundsOf(rec), MAX_ROUNDS());
-  // The PR must hold all its Dev's work first: nothing left in its checkout, and no answer to the latest review under way (T-203).
   const hold = d.act === 'merge' ? holdOf(task, terminal.find(channel, task.owner && task.owner.terminal), Date.now()) : null;
   if (hold) d = hold;
   rec.why = d.why; rec.act = d.act;
@@ -252,14 +220,12 @@ async function lookAt(channel, task) {
   else if (d.act === 'merge') {
     const c = chOf(channel);
     if (c.merged >= MAX_MERGES_A_DAY()) { rec.why = 'Ready to merge, but Autopilot has merged ' + MAX_MERGES_A_DAY() + ' PRs today, its limit. Merge it yourself, or wait for tomorrow.'; return; }
-    // The PR's comments once more, so a Dev's hold posted since the last poll stops this merge.
     if (!(await prComments.checkNow(channel, task))) { rec.why = 'Ready to merge, but its comments could not be read, so it waits for the next look.'; return; }
     if (rec.handedOver) return;
     if (task.reviews && task.reviews.pending) { rec.why = 'New review news came in as it was about to merge, so its Dev hears it first.'; rec.act = 'wait'; return; }
-    // --match-head-commit: GitHub refuses if the Dev pushed after this look, so only the reviewed commit merges.
     try { await gh(['pr', 'merge', task.pr, '--merge', '--match-head-commit', pr.headRefOid], task.repo); } catch (e) {
       const now = await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid'], task.repo).then(JSON.parse, () => null);
-      if (now && now.state === 'MERGED') { counted(c, rec, pr.headRefOid); note(channel, 'Merged PR ' + number(task.pr) + ', though gh said: ' + e.message); return; }  // the next look marks it done
+      if (now && now.state === 'MERGED') { counted(c, rec, pr.headRefOid); note(channel, 'Merged PR ' + number(task.pr) + ', though gh said: ' + e.message); return; }
       if (now && now.headRefOid !== pr.headRefOid) { rec.why = 'New commits arrived as it was about to merge, so they get a review first.'; return; }
       handOver(channel, task, rec, 'gh pr merge failed: ' + e.message); return;
     }
@@ -273,29 +239,25 @@ async function lookAt(channel, task) {
     note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
   } else if (d.act === 'person') handOver(channel, task, rec, d.why);
 }
-// One merge of a PR's head counts once toward the day's limit.
 function counted(c, rec, head) { rec.mergedHead = head; c.merged++; save(); }
 function markDone(channel, task) {
   tasks.noteMerged(task);
   tasks.setState(channel, task, 'done', BY, 'PR ' + number(task.pr) + ' merged.');
   const w = terminal.find(channel, task.owner && task.owner.terminal);
-  if (w && !w.exited && w.state !== 'working' && w.state !== 'waiting') terminal.stop(w);  // its work is merged, so its desk is free
+  if (w && !w.exited && w.state !== 'working' && w.state !== 'waiting') terminal.stop(w);
   note(channel, (task.ticket || 'Task ' + task.id) + ' is done: PR ' + number(task.pr) + ' merged.');
   pullMain(channel);
 }
-// A task with the person is theirs, but once they merge its PR, it is done and its desk is free.
 async function mergedYet(channel, task) {
   let pr;
   try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state'], task.repo)); } catch (e) { return; }
   if (pr.state === 'MERGED') markDone(channel, task);
 }
-// Autopilot leaves it alone from here: the card says why.
 function handOver(channel, task, rec, why) {
   rec.handedOver = why; rec.handedOverAt = new Date().toISOString(); save();
   tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why);
   note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why);
 }
-// The relay's folder gets the merged main, and restarts if its own files changed (relay/update.js).
 function pullMain(channel) {
   update.run(ctx).then(([status, out]) => { if (status >= 400 || out.restart === false) note(channel, (status >= 400 ? 'Could not pull main into the relay\'s folder: ' : '') + out.message); })
     .catch((e) => note(channel, 'Could not pull main into the relay\'s folder: ' + e.message));
@@ -311,22 +273,17 @@ async function maybeStart(channel) {
     const all = await tickets.listAll(channel);
     const next = plan.nextTicket(all, (t) => !!tasks.ofTicket(channel, t), c.only);
     if (!next) { c.idle = c.only ? 'Every ticket you allowed is started or done.' : 'Nothing in Ready that a person approved and that is not blocked.'; return; }
-    // The WIP limit counts every task being built, also ones Autopilot did not start, so it can be full
-    // while Autopilot has room of its own. That is a wait, not a failure: the next tick tries again.
     const waitWip = (message) => { c.idle = 'Waiting for room under the WIP limit: ' + message; };
     if (tasks.building(channel) >= tasks.wipLimit()) { waitWip(tasks.building(channel) + ' tasks are being built, and the limit is ' + tasks.wipLimit() + '.'); return; }
     const wasWaiting = /^Waiting for a free desk/.test(c.idle || '');
     c.idle = null;
     let [status, out] = await tickets.startBy(channel, next, BY, ctx);
-    if (out.error === 'wip_limit') { waitWip(out.message); return; }  // another start took the last slot first
-    // A desk is freed only when a full Floor is what stops the start. A failed start leaves nothing behind.
+    if (out.error === 'wip_limit') { waitWip(out.message); return; }
     let why = null;
     if (out.error === 'full') {
       why = await freeADesk(channel);
       if (!why) { [status, out] = await tickets.startBy(channel, next, BY, ctx); why = 'a desk was freed, but another session took it first'; }
     }
-    // A full Floor is a wait too: sessions end by themselves, and the next look tries again. The note
-    // comes once, when the wait starts, and the idle line says it at every look.
     if (out.error === 'full') {
       const taken = terminal.all(channel).filter((t) => !t.exited).length;
       c.idle = 'Waiting for a free desk: ' + taken + ' of ' + terminal.DESKS + ' taken, ' + why + '.';
@@ -338,13 +295,6 @@ async function maybeStart(channel) {
   } finally { starting = false; }
 }
 
-// A start needs one desk. When every desk is taken, Autopilot waits for a session that is already
-// ending. If none ends, it stops the longest idle of its own sessions that the Lead may stop
-// (relay/floor.js freeDesks): the Dev of a task it started, whose PR merged or whose task is Done,
-// with all its work pushed, or a reviewer of such a task's PR that has posted. So a Dev still busy
-// when its PR merged is stopped here, later. It works only on tasks it started (article 5), so every
-// other session stays the person's. Each wait is up to STOP_WAIT. Returns null once a desk is free,
-// or why none is, for the line that says Autopilot waits for a desk.
 const STOP_WAIT = 5000;
 function itsOwn(channel, t, task) {
   if (t.reviewOf) return tasks.list(channel).some((x) => mineTask(x) && x.pr === t.reviewOf);
@@ -364,23 +314,10 @@ async function freeADesk(channel) {
   return 'Autopilot stopped ' + stopped[0].name + ' to free a desk, but it did not end within ' + STOP_WAIT / 1000 + ' seconds';
 }
 
-// A task that is stuck for STALL_MS goes to the person, so one stuck task does not hold its slot for good:
-// - its Dev or a reviewer of its PR has been at a question or a permission prompt that long, or stuck in
-//   a turn with no hook and no output that long (relay/liveness.js), or a reviewer never got its brief in
-//   that time (stuckOn). That session is left running at its desk, and the task comes back once it moves
-//   again (movedAgain). A quiet session, whose hooks are silent but whose screen still moves, is not stuck:
-//   it may be thinking, and its task stays;
-// - or nothing running could move it: no PR yet and its Dev idle or gone, or a PR with no reviewer running,
-//   its Dev idle or gone, and no verdict on its current state, such as a review posted with none. An idle
-//   Dev with no PR is nudged once first (relay/nudge.js). A Dev running a job (relay/liveness.js) is busy.
-//   The task comes back once something moves it (movedAgain).
-// In Waiting on you it no longer counts toward Autopilot's tasks at once or the WIP limit, so the next
-// ticket can start. Desks stay the limit: the stuck session keeps its own.
 const STALL_MS = () => config.get('autopilotStallMinutes') * 60 * 1000;
 function stuckOn(channel, task, dev) {
   const found = [], now = Date.now();
   const asked = (t) => 'at a question' + (t.message ? ' (' + String(t.message).slice(0, 120) + ')' : '');
-  // At a question, or stuck in a turn: the session itself holds the task.
   const held = (t, role) => {
     const lv = livenessOf(t, now);
     if (lv.state === 'waiting') return { t, role, since: lv.since || now, why: asked(t) };
@@ -392,8 +329,6 @@ function stuckOn(channel, task, dev) {
   for (const r of task.pr ? terminal.all(channel).filter((x) => x.reviewOf === task.pr && !x.exited && !x.stopped) : []) {
     const h = held(r, 'reviewer');
     if (h) found.push(h);
-    // A first prompt is held only while the relay restarts, so a brief held by that does not count.
-    // A reviewer typed into whose hooks never reach the relay may be at work, so only talked or that counts.
     else if (!r.talked && !(r.spoke && !r.hooked) && !update.restarting()) found.push({ t: r, role: 'reviewer', since: Date.parse(r.startedAt) || Date.now(), why: 'has not started on its brief', brief: true });
   }
   return found.filter((x) => Date.now() - x.since >= STALL_MS()).sort((a, b) => a.since - b.since)[0] || null;
@@ -404,10 +339,9 @@ function stalled(channel) {
     const dev = terminal.find(channel, task.owner && task.owner.terminal);
     const on = stuckOn(channel, task, dev);
     if (on) { stuckSince.delete(channel + ' ' + task.id); park(channel, task, rec, on); continue; }
-    // Working, quiet or at a question: it may still move the task. Stuck ones are stuckOn's.
     const devBusy = dev && ['working', 'quiet', 'waiting', 'job'].includes(livenessOf(dev, Date.now()).state);
     const reviewing = task.pr && terminal.all(channel).some((t) => t.reviewOf === task.pr && livenessOf(t, Date.now()).state !== 'gone');
-    const waitsOnCi = rec && /CI|GitHub says|PRs today/.test(rec.why || '');  // CI, GitHub or the day's limit will move it
+    const waitsOnCi = rec && /CI|GitHub says|PRs today/.test(rec.why || '');
     const stuck = !devBusy && !reviewing && !waitsOnCi;
     const key = channel + ' ' + task.id;
     if (!stuck) { stuckSince.delete(key); continue; }
@@ -416,7 +350,6 @@ function stalled(channel) {
     if (nudge.first(channel, chOf(channel), task, dev, STALL_MS(), save)) { stuckSince.set(key, Date.now()); note(channel, (task.ticket || 'Task ' + task.id) + ': Autopilot nudged its Dev, which stopped without a PR.'); continue; }
     stuckSince.delete(key);
     const why = 'Nothing moved it for ' + Math.round(STALL_MS() / 60000) + ' minutes' + (rec && rec.why ? ' (' + rec.why + ')' : task.pr ? '' : ': ' + nudge.noPrWhy(channel, chOf(channel), task, dev, Date.now())) + '.';
-    // Kept so the task comes back by itself once it moves again (movedAgain).
     const c = chOf(channel);
     (c.stuck || (c.stuck = {}))[task.id] = { stall: true, sessionId: dev ? dev.sessionId : null, from: task.state, pr: task.pr || null, at: new Date().toISOString() };
     if (rec) handOver(channel, task, rec, why);
@@ -424,7 +357,6 @@ function stalled(channel) {
   }
 }
 const stuckSince = new Map();
-// The stuck session stays at its desk for the person to read and answer.
 function park(channel, task, rec, on) {
   const name = chat.nameOf(on.t), mins = Math.round((Date.now() - on.since) / 60000);
   const why = 'Its ' + on.role + ' ' + name + ' ' + on.why + ' for ' + mins + ' minutes. The session is still open at its desk' +
@@ -435,10 +367,6 @@ function park(channel, task, rec, on) {
   if (rec) handOver(channel, task, rec, why);
   else { tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why); save(); note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why); }
 }
-// A task parked for a stuck session goes back where it was once that session moves again: a hook since
-// the park says it did something, and it is not at a question. A task parked because nothing moved it
-// (stalled) goes back once anything moves it: its Dev opens a PR, its Dev sends a hook, or a review of
-// its PR is posted with a verdict, each after the park. A card the person moved is theirs as before.
 function movedAgain(channel) {
   const c = chOf(channel);
   for (const [id, s] of Object.entries(c.stuck || {})) {
@@ -455,13 +383,11 @@ function movedAgain(channel) {
     note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
   }
 }
-// A hook since the park, not at a question. A session brought back after a stop starts idle, so only a hook counts.
 const hookedSince = (t, at) => !!t && !t.exited && t.state !== 'waiting' && (t.movedAt || 0) > Date.parse(at);
 function stuckMoved(channel, s) {
   const t = terminal.all(channel).find((x) => x.sessionId === s.sessionId && !x.exited);
   return hookedSince(t, s.at) ? chat.nameOf(t) + ' moved again' : null;
 }
-// Its Dev is the one at its desk now, which can be a session brought back after the park.
 function movedSinceStall(channel, task, s) {
   if (task.pr && !s.pr) return 'its Dev opened PR ' + number(task.pr);
   const dev = terminal.find(channel, task.owner && task.owner.terminal);
@@ -471,7 +397,6 @@ function movedSinceStall(channel, task, s) {
   return v ? 'a review of PR ' + number(task.pr) + ' was posted with the verdict ' + v.kind : null;
 }
 
-// ---------- routes under /channels/{channel}/autopilot ----------
 function view(channel) {
   const c = chOf(channel);
   const prs = tasks.list(channel).filter((t) => mineTask(t) && t.pr && c.prs[t.pr]).map((t) => {
@@ -498,20 +423,16 @@ async function handle(req, res, channel, rest, rctx) {
     if (body.on !== undefined && typeof body.on !== 'boolean') { rctx.problem(res, 400, 'bad_param', '"on" is true or false.'); return true; }
     if (body.only !== undefined) {
       const only = Array.isArray(body.only) ? body.only : String(body.only || '').split(/[\s,]+/);
-      // Ticket ids like T-12, and labels like flaky (relay/tickets.js). A label lets in every ticket that has it,
-      // also one you label while Autopilot runs. Only the person sets labels, so no session can widen the list.
       const items = only.map((x) => String(x).trim()).filter(Boolean).map((x) => (/^t-\d{1,6}$/i.test(x) ? x.toUpperCase() : x.toLowerCase()));
       if (items.some((x) => !/^T-\d{1,6}$/.test(x) && !/^[a-z][a-z0-9-]{0,23}$/.test(x))) { rctx.problem(res, 400, 'bad_param', '"only" lists ticket ids like T-12 and labels like flaky.'); return true; }
       c.only = items.length ? [...new Set(items)] : null;
     }
     if (body.on !== undefined && body.on !== c.on) {
       c.on = body.on;
-      c.idle = null;  // a new run says again what it waits for
-      terminal.rebriefLead(channel);  // the Lead's brief says whether Autopilot is on (relay/lead-brief.js)
+      c.idle = null;
+      terminal.rebriefLead(channel);
       note(channel, 'Turned ' + (c.on ? 'on' : 'off') + ' by the person' + (c.on && c.only ? ', for ' + c.only.join(', ') + ' only' : '') + '.');
     }
-    // A list belongs to one run. Off clears it, so the next time on means every approved Ready ticket
-    // unless the person types a new list. The page refills its box from here every 2 seconds.
     if (!c.on) c.only = null;
     save();
     if (c.on) setImmediate(tick);
@@ -522,22 +443,15 @@ async function handle(req, res, channel, rest, rctx) {
 
 function begin(relayCtx) {
   ctx = relayCtx;
-  config.every('autopilotTickSeconds', tick);  // reads the interval each time, and sets the timer again when it changes
+  config.every('autopilotTickSeconds', tick);
 }
 
-// What a desk on the Floor shows about a task's PR (relay/desk.js): what Autopilot last decided at
-// its last look, from memory only, so drawing a desk asks GitHub nothing.
 function deskOf(channel, task) {
   const r = task && task.pr && store[channel] && store[channel].prs[task.pr];
   const v = r ? latest(r) : null;
   return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: (r && r.handedOver) || null };
 }
 
-// While Autopilot is on (level 5, T-161), only the relay starts and merges work, and the Lead keeps two
-// rights. One is its stop (relay/floor.js), with the same verdict, switch and hourly limit. The other is
-// below: a task to Done once its PR has merged. Every other move and every start the Lead asks for is
-// refused here, with the same words as the level on the page, article 5 and the Lead's brief.
-// to is the column, or 'start'. merged says whether the relay has seen the PR merge. Returns a refusal or null.
 const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, and move a task to Done once its PR has merged';
 function leadRefusal(channel, to, merged) {
   if (!isOn(channel) || (to === 'done' && merged)) return null;
@@ -545,8 +459,6 @@ function leadRefusal(channel, to, merged) {
     (to === 'done' ? 'The relay has not seen this PR merge, so it stays where it is.' : 'Leave this to Autopilot, or tell the person.') }];
 }
 
-// For the PR watch (relay/pr-watch.js): the latest verdict a reviewer gave on a PR, Autopilot on or not, since every
-// review asks for one, and whether Autopilot moves a task, which the watch then leaves to it.
 function verdictOf(channel, pr) {
   const r = store[channel] && store[channel].prs[pr], v = r && latest(r);
   return v ? { kind: v.kind, commit: v.commit, posted: postOf(channel, v) } : null;
