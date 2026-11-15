@@ -9,16 +9,14 @@
 // conversation by itself, which is when a long-running Lead forgets decisions.
 'use strict';
 
-const TIRED_AT = 50;    // getting tired from here
-const REFRESH_AT = 70;  // needs a refresh from here
+const TIRED_AT = 50;
+const REFRESH_AT = 70;
 const LEVELS = {
   fresh: { key: 'fresh', icon: '○', label: 'fresh' },
   tired: { key: 'tired', icon: '◑', label: 'getting tired' },
   refresh: { key: 'refresh', icon: '●', label: 'needs a refresh' },
 };
 
-// The part of its context window a session has used, 0 to 100, from what Claude Code hands its
-// status line, or null before its first reply, when Claude Code sends none.
 function percentOf(input) {
   const cw = input && input.context_window;
   if (!cw || typeof cw !== 'object') return null;
@@ -35,7 +33,6 @@ function levelOf(percent) {
   return percent >= REFRESH_AT ? LEVELS.refresh : percent >= TIRED_AT ? LEVELS.tired : LEVELS.fresh;
 }
 
-// What the relay keeps from one status line: { percent, size, sessionId, at }, or null when it gave no number.
 function readingOf(input, now) {
   const percent = percentOf(input);
   if (percent === null) return null;
@@ -43,8 +40,6 @@ function readingOf(input, now) {
   return { percent, size, sessionId: String(input.session_id || ''), at: now };
 }
 
-// How tired the session t is: { percent, size, key, icon, label, at }, or null when the relay has no
-// number for the conversation it is in now. A number from before a /clear is the old conversation's.
 function tiredOf(t) {
   const c = t && t.context;
   if (!c || !t.sessionId || c.sessionId !== t.sessionId) return null;
@@ -52,7 +47,6 @@ function tiredOf(t) {
   return Object.assign({ percent: c.percent, size: c.size, at: new Date(c.at).toISOString() }, level);
 }
 
-// In words, for the Floor and ticket.js: "context 62% used, getting tired".
 const words = (x) => x ? 'context ' + x.percent + '% used, ' + x.label : 'context use not known yet';
 
 module.exports = { TIRED_AT, REFRESH_AT, LEVELS, percentOf, levelOf, readingOf, tiredOf, words };

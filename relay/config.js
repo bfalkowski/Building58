@@ -1,14 +1,4 @@
 'use strict';
-// Limits and timings the person changes in Settings while the relay runs (GET and POST /settings).
-// Each is read where it is used, so a change applies at once, with no restart. A value set on the page
-// wins over its environment variable, which wins over the default. The page's values are kept in
-// RELAY_SETTINGS_FILE (settings.json in the state folder, relay/state.js). Reset takes a value back to the variable or
-// the default.
-//
-// What stays at startup, and why: the port and the key (the page needs them to connect), where state
-// is kept (the *_FILE settings, RELAY_TICKET_*), whether the terminal is on and which claude runs
-// (a page must not be able to turn on running shells), the webhook's address and secret, and the
-// supervisor's own flags.
 const fs = require('fs');
 const path = require('path');
 const state = require('./state.js');
@@ -16,8 +6,6 @@ const skills = require('./skills.js');
 
 const FILE = state.file('settings.json', 'RELAY_SETTINGS_FILE');
 
-// scale turns the variable's unit into the setting's: a variable in ms for a setting in seconds is 1/1000.
-// zero: 0 is a value of its own (it turns something off), not "use the default".
 const SETTINGS = [
   { name: 'wipLimit', group: 'Work', label: 'WIP limit', unit: 'tasks', env: 'RELAY_WIP_LIMIT', def: 3, min: 1, max: 10,
     what: 'The most tasks that can be building at the same time. When this many are building, the relay refuses Start, Bring back, the Lead\'s starts and Autopilot\'s starts.' },
@@ -31,7 +19,6 @@ const SETTINGS = [
     what: 'The Lead can stop a session that is done or idle, with ticket.js stop. The relay first checks that the session is safe to stop. The Lead must also have Let the Lead move the board. Unlike the Lead\'s other switches, this one stays on when you make a different session the Lead.' },
   { name: 'leadStopLimit', group: 'The Lead', label: 'Lead stops an hour', unit: 'stops', env: 'RELAY_LEAD_STOP_LIMIT', def: 6, min: 1, max: 60,
     what: 'The most sessions that the Lead can stop in one hour, on each channel. After that, the Lead gives the other sessions to you to stop.' },
-  // No variable: it is on only if you turned it on in Settings, so a restart keeps it off until you do (T-128).
   { name: 'leadOrder', group: 'The Lead', label: 'Let the Lead set priority', kind: 'bool', def: false,
     what: 'The Lead can set the priority and the place in the work order of tickets in Triage or Ready, with ticket.js priority and ticket.js order. It is apart from Let the Lead move the board, and does not let the Lead start a ticket or change a status. The Board shows who last set each ticket\'s priority or place, and your change wins.' },
   { name: 'maxAutoReviews', group: 'Reviews', label: 'Automatic reviews per PR', unit: 'reviews', def: 3, min: 1, max: 10,
@@ -56,7 +43,6 @@ const SETTINGS = [
     what: 'If an Autopilot task is stuck this long, Autopilot puts it in Waiting on you and can start the next ticket. Stuck means its Dev or a reviewer is at a question, a reviewer never started, or nothing running could move it.' },
   { name: 'autopilotTickSeconds', group: 'Autopilot', label: 'Check every', unit: 'seconds', env: 'RELAY_AUTOPILOT_TICK_MS', scale: 1 / 1000, def: 20, min: 5, max: 600,
     what: 'How often Autopilot checks its PRs and the Ready column.' },
-  // No variable for the switch: it is on only if you turned it on in Settings, so a restart keeps it off until you do.
   { name: 'prWatch', group: 'PR watch', label: 'Watch each open PR', kind: 'bool', def: false,
     what: 'Every few minutes the relay reads each open task PR from GitHub and its Dev\'s session and checkout, and moves it to its next step: it asks for a review of a head no review read, tells the Dev once about blocking findings, a conflict with main, a failed check or commits it has not pushed, and tells the Lead when a PR is reviewed, green and clean. It merges nothing.' },
   { name: 'prWatchSeconds', group: 'PR watch', label: 'Watch PRs every', unit: 'seconds', env: 'RELAY_PR_WATCH_SECONDS', def: 120, min: 30, max: 3600,
@@ -79,12 +65,10 @@ const SETTINGS = [
     what: 'After the COO saves its report and its turn ends, the relay waits this long, then ends the COO\'s session.' },
   { name: 'securityGraceSeconds', group: 'COO and PM', label: 'The security officer leaves after', unit: 'seconds', env: 'RELAY_SECURITY_GRACE_MS', scale: 1 / 1000, def: 10, min: 1, max: 600,
     what: 'After the security officer saves its report and its turn ends, the relay waits this long, then ends its session.' },
-  // No variable: it is on only if you turned it on in Settings, so a restart keeps it off until you do (T-45).
   { name: 'pmOrder', group: 'COO and PM', label: 'Let the PM set the order', kind: 'bool', def: false,
     what: 'The PM can set the priority and the place in the work order of tickets in Triage or Ready, with ticket.js priority and ticket.js order. It cannot move, start or change any other ticket. If more than one PM is running, only the newest can. The Board shows who last set each ticket\'s priority or place, and your change wins.' },
   { name: 'pmTalkMinutes', group: 'COO and PM', label: 'Keep the PM after you type for', unit: 'minutes', env: 'RELAY_PM_TALK_MINUTES', def: 30, min: 1, max: 600,
     what: 'After you type to the PM, nobody can stop the PM as idle for this long.' },
-  // Each role's model and skills (relay/skills.js). No variables. A model starts empty, so nothing changes until you set one.
   ...[['lead', 'The Lead', 'pstack:recall'],
     ['dev', 'Devs', 'mattpocock-skills:tdd, mattpocock-skills:diagnosing-bugs, mattpocock-skills:codebase-design, pstack:blast-radius, pstack:principle-prove-it-works, mattpocock-skills:pr'],
     ['reviewer', 'Reviewers', 'mattpocock-skills:code-review, pstack:blast-radius'],
@@ -108,18 +92,15 @@ function save() {
   } catch (e) { console.error('Could not save the settings to ' + FILE + ': ' + e.message); }
 }
 
-// A value the page may set: in range, and an integer except for timings that tests set below a unit.
 function valid(s, v) {
   if (s.check) return s.check(v);
   if (s.kind === 'bool') return typeof v === 'boolean';
   return typeof v === 'number' && Number.isInteger(v) && v >= s.min && v <= s.max;
 }
-// The variable, read as the code read it before: any number above 0, or 0 where 0 means off. It is
-// not held to the page's range, so a test can still set a short timing.
 function fromEnv(s) {
   const raw = s.env ? process.env[s.env] : undefined;
   if (raw === undefined) return undefined;
-  if (raw === '') return s.zero ? 0 : undefined;  // Number('') was 0, which turned these polls off
+  if (raw === '') return s.zero ? 0 : undefined;
   if (s.kind === 'bool') return raw === '1';
   const n = Number(raw) * (s.scale || 1);
   return Number.isFinite(n) && (n > 0 || (s.zero && n === 0)) ? n : undefined;
@@ -139,7 +120,6 @@ const list = () => SETTINGS.map((s) => ({ name: s.name, group: s.group, label: s
 
 const listeners = [];
 const onChange = (fn) => listeners.push(fn);
-// { values: { name: value }, reset: [name] }. All or nothing: one bad value changes none.
 function set(body) {
   const values = body && typeof body.values === 'object' && body.values ? body.values : {};
   const reset = Array.isArray(body && body.reset) ? body.reset : [];
@@ -161,7 +141,6 @@ function set(body) {
   return [200, { ok: true, changed, settings: list() }];
 }
 
-// GET /settings and POST /settings: only the room page on this computer, with the key. No session's token.
 async function handle(req, res, channel, rest, rctx) {
   if (rest !== '/settings') return false;
   const deny = require('./terminal').localOnly(req, rctx.port);
@@ -174,10 +153,6 @@ async function handle(req, res, channel, rest, rctx) {
   return true;
 }
 
-// Runs fn every setting seconds (or unitMs, for a setting in minutes), reading the setting each time, so a change applies from the next run.
-// While it is 0 (off) nothing runs, and it looks again every 5 seconds, so turning it on needs no restart.
-// The first run comes after at most firstMs, as the timers before this did.
-// A change on the page sets the timer again at once, so a shorter interval does not wait out the old one.
 function every(name, fn, firstMs, unitMs = 1000) {
   let first = true, timer = null;
   const next = () => {

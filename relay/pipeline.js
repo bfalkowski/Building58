@@ -22,7 +22,6 @@ const GH = process.env.GH_CMD || 'gh';
 const OK = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 const NOT_DONE = ['PENDING', 'EXPECTED', 'QUEUED', 'IN_PROGRESS', 'WAITING', 'REQUESTED'];
 
-// A check run has a status and, once it is done, a conclusion. A commit status has only a state.
 function stateOf(rollup) {
   const checks = Array.isArray(rollup) ? rollup : [];
   if (!checks.length) return 'none';
@@ -32,12 +31,6 @@ function stateOf(rollup) {
   return 'green';
 }
 
-// Whether a review that waits on the pipeline can start. p is what the relay last heard about the PR,
-// or null. heldAt is when the review began to wait. lastHead is the commit the PR's last review read,
-// for a review after a push: until GitHub has a newer one, the push has not reached it, and what it
-// says is about the old commit. grace is pipelineNoChecksSeconds in ms.
-// Returns { go: true, why? } or { go: false, red?, why }.
-// A PR that merged or closed gives { go: false, gone: true }, and its review stops waiting.
 function gate(p, { heldAt, lastHead, now, grace }) {
   const waited = (since) => now - Math.max(since || 0, heldAt || 0) >= grace;
   if (!p) return { go: false, why: 'Asking GitHub about its checks.' };
@@ -50,9 +43,8 @@ function gate(p, { heldAt, lastHead, now, grace }) {
   return waited(p.since) ? { go: true, why: 'It has no checks, so the review starts with no pipeline.' } : { go: false, why: 'No checks have started yet.' };
 }
 
-// ---------- asking gh ----------
-const seen = new Map();  // PR link -> { state, head, since, at, error }
-const sources = [];  // each returns [{ pr, cwd }]: the PRs to ask about, and a folder to ask from
+const seen = new Map();
+const sources = [];
 const watch = (fn) => sources.push(fn);
 const on = () => config.get('pipelinePollSeconds') > 0;
 const of = (pr) => (pr && seen.get(pr)) || null;
@@ -65,7 +57,6 @@ function view(pr, cwd) {
     });
   });
 }
-// since is when this answer, for this commit, was first heard, so a wait for checks to appear has a start.
 const asking = new Map();
 function ask(pr, cwd) {
   if (asking.has(pr)) return asking.get(pr);
@@ -85,13 +76,11 @@ async function poll() {
   try {
     const wanted = new Map();
     for (const fn of sources) { try { for (const w of fn()) if (w && w.pr && !wanted.has(w.pr)) wanted.set(w.pr, w.cwd); } catch (e) { console.error('Pipeline: ' + e.message); } }
-    for (const pr of seen.keys()) if (!wanted.has(pr)) seen.delete(pr);  // nobody watches it now
+    for (const pr of seen.keys()) if (!wanted.has(pr)) seen.delete(pr);
     for (const [pr, cwd] of wanted) await ask(pr, cwd);
   } finally { polling = false; }
 }
-// A PR just opened or pushed is asked about now, rather than at the next poll.
 const soon = (pr, cwd) => { if (on()) ask(pr, cwd).catch(() => {}); };
-// What the Board shows. Only what is worth seeing: a state, and the commit it is about.
 const summary = (pr) => { const p = of(pr); return p ? { state: p.state, head: p.head, open: p.open !== false, at: new Date(p.at).toISOString(), error: p.error || null } : null; };
 
 let begun = false;

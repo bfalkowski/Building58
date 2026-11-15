@@ -11,7 +11,6 @@ const minutes = (ms) => Math.max(0, Math.floor(ms / 60000));
 const numberOf = (pr) => (pr ? '#' + String(pr).split('/').pop() : null);
 const CI_WORDS = { green: 'CI green', red: 'CI failed', pending: 'CI running', none: 'no CI', unknown: 'CI unknown' };
 
-// The column a task's card is in on the Board (office/board-model.js), or null with no task.
 function columnOfTask(task) {
   if (!task || !task.state) return null;
   const id = columnOf({ status: 'started', task: { state: task.state, pipeline: task.pipeline || null } });
@@ -19,7 +18,6 @@ function columnOfTask(task) {
   return col ? { id: col.id, label: col.label } : null;
 }
 
-// Why a task is Waiting on you: Autopilot's reason, or the note on the move that put it there.
 function waitingWhy(task, autopilot) {
   if (autopilot && autopilot.handedOver) return autopilot.handedOver;
   const moved = (task.history || []).filter((h) => h.type === 'moved' && h.to === 'waiting_on_you').slice(-1)[0];
@@ -27,7 +25,6 @@ function waitingWhy(task, autopilot) {
   return note || 'its task is in Waiting on you';
 }
 
-// What it is doing, from relay/liveness.js: working, quiet, stuck, waiting, job, idle, or gone while it ends.
 function doingOf(t, now, lv) {
   if (lv.state === 'gone') return { state: 'gone', words: 'gone' };
   if (lv.state === 'working') return { state: 'working', words: 'working' };
@@ -35,7 +32,6 @@ function doingOf(t, now, lv) {
   if (lv.state === 'job') return { state: 'job', words: 'running a job: ' + jobWords(t) };
   if (lv.state === 'quiet') return { state: 'quiet', words: 'quiet: no hook for ' + minutes(now - lv.since) + ' min, output still moving' };
   if (lv.state === 'stuck' && lv.cause === 'silent') return { state: 'stuck', words: 'stuck: no hook or output for ' + minutes(now - lv.since) + ' min' };
-  // Told something, and no turn began after it, nor after the relay's second try (relay/delivery.js).
   if (lv.state === 'stuck') return { state: 'stuck', words: 'stuck: told ' + minutes(now - lv.since) + ' min ago, did not start' };
   return { state: 'idle', words: t.hooked && t.lastActAt ? 'idle ' + minutes(now - t.lastActAt) + ' min' : 'idle' };
 }
@@ -52,7 +48,6 @@ function reviewWords(review, autopilot, reviewing) {
   return 'no review yet';
 }
 
-// The next step on a Dev's PR once it is built, and who owns it.
 function prStep(d, pr) {
   const n = numberOf(pr);
   if (d.ci === 'red') return ['The Dev fixes the failed CI on PR ' + n, 'Dev'];
@@ -72,9 +67,6 @@ function prStep(d, pr) {
   return ['Waiting on you: review and merge PR ' + n, 'you'];
 }
 
-// The status icon on a Dev's desk: where its PR stands, as an icon with a short label, so it reads
-// without knowing the icons. The first that holds wins. A verdict counts only for the commit CI is on:
-// after a push, the PR waits for its next review.
 const STATUS = {
   merged: '\u2705', done: '\u2705', waiting_on_you: '\u270b', building: '\ud83d\udd28', reviewing: '\ud83d\udd0d',
   ci_failed: '\u274c', ci_running: '\u23f3', fix: '\ud83d\udd27', merge: '\ud83d\udc4d', review_waits: '\ud83d\udd52',
@@ -95,14 +87,6 @@ function statusOf(d, task, pr, ci, p) {
   return s('review_waits', 'waiting for a review');
 }
 
-// d: { t, role, work, task, pipeline, review, reviewing, reviewer, autopilot, leadMerges, merged, verdict, now }.
-//   t is the relay terminal, role what relay/floor.js calls it (Lead, Dev, reviewer, PM, COO, Security, session),
-//   work what workOf says, task the task it works on or reviews (or null), pipeline pipeline.summary
-//   of its PR, review what relay/reviews.js keeps for that PR ({ count, waits, held, desk, failed }),
-//   reviewing whether a reviewer is on that PR now, reviewer that reviewer's name if it has one,
-//   autopilot what Autopilot keeps for it ({ on, mine, act, why, verdict, verdictAt, handedOver }),
-//   leadMerges whether a Lead may merge, merged whether its PR merged, and verdict the Floor's
-//   { safe, canStop, reason }.
 function deskOf(d) {
   const { t, role, task, now } = d, work = d.work || {};
   const pr = work.pr || (task && task.pr) || t.pr || t.reviewOf || null;
@@ -128,7 +112,6 @@ function deskOf(d) {
   const step = (text, owner) => { desk.next = { text, owner }; return desk; };
   if (t.state === 'waiting') return step('Waiting on you: ' + (t.message || 'it asked you something'), 'you');
   if (lv.state === 'stuck' && lv.cause === 'silent') return step('Waiting on you: it has sent no hook and printed nothing for ' + minutes(now - lv.since) + ' min. Open its session, or stop it and Bring it back', 'you');
-  // A first prompt (relay/delivery.js, promptOnce) has no task to Bring back, and stopping its session drops it.
   if (lv.state === 'stuck' && /^first-prompt /.test(t.stuck.key || '')) return step('Waiting on you: it did not start on its first prompt, ' + t.stuck.why + '. Open its session and press Enter if the prompt is still in its box, or answer what is on its screen. Stopping it drops the prompt', 'you');
   if (lv.state === 'stuck') return step('Waiting on you: it did not start on what it was told, ' + t.stuck.why + '. Open its session, or stop it and Bring it back', 'you');
   if (role === 'Lead') return step('The Lead keeps tickets moving', 'Lead');
@@ -143,7 +126,6 @@ function deskOf(d) {
   if (role === 'Dev' && task) {
     if (task.state === 'done' || d.merged) {
       if (safe) return step('Done, safe to stop', 'you');
-      // Not one of the kinds that may be stopped, such as work not pushed, or not safe at this moment, such as still working.
       return verdict.safe ? step('Done, but ' + verdict.reason.replace(/^not one the Lead may stop: /, ''), 'you') : step('Done, not safe to stop yet: ' + verdict.reason, 'you');
     }
     if (task.state === 'waiting_on_you') return step('Waiting on you: ' + waitingWhy(task, d.autopilot), 'you');
@@ -155,10 +137,6 @@ function deskOf(d) {
   return t.state === 'working' ? step('Works on your prompt', 'session') : step('Waiting on you: give it a prompt, or stop it', 'you');
 }
 
-// Who reviews whom, so the page can draw each reviewer right under the Dev whose PR it reviews. rows
-// are the Floor's rows ({ terminal, name, role, desk }). A reviewer's desk gets reviewing: { pr,
-// prNumber, dev }, with dev { terminal, name } or null when no Dev on the Floor has that PR. A Dev's
-// desk with a PR gets reviewedBy: the reviewers on its PR, as { terminal, name }.
 function pairReviewers(rows) {
   const devs = rows.filter((r) => r.role === 'Dev' && r.desk && r.desk.pr);
   for (const d of devs) d.desk.reviewedBy = [];
