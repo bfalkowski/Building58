@@ -1,0 +1,4 @@
+#!/bin/sh
+mark="$(git rev-parse --absolute-git-dir)/office-push-hold.json"
+[ -f "$mark" ] || exit 0
+exec node "$(dirname "$0")/../relay/push-hold.js" --pre-push "$1"

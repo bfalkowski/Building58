@@ -9,12 +9,14 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { relay, makeRepo, removeDir, until, sleep, sessionToken } = require('./helpers.js');
 const { prBrief } = require('../../office/reviews.js');
+const pushHold = require('../push-hold.js');
 
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 const PR = 'https://github.com/acme/widgets/pull/7';
 const GREEN = [{ name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' }];
 // The Dev's push: GitHub gets the commit as the PR's head, and the checkout has a remote branch that holds
 // it, as a real push does, so nothing in it is unpushed (relay/merge-hold.js).
+const markOf = (wt) => { try { return JSON.parse(fs.readFileSync(path.join(pushHold.gitDirOf(wt), pushHold.MARK), 'utf8')); } catch (e) { return null; } };
 const pushPr = (wt, origin) => { sh(wt, 'push', '-qf', origin, 'HEAD:refs/pull/7/head'); sh(wt, 'update-ref', 'refs/remotes/origin/pr', 'HEAD'); };
 
 test('Autopilot runs a ticket from Ready to merged', async (t) => {
@@ -110,6 +112,7 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
     assert.strictEqual(fixed.outcome, 'flawed', 'a review round said fix');
     await sleep(800);
     assert.strictEqual(merged(), '', 'no merge on a fix verdict');
+    assert.strictEqual(markOf(wt), null, 'a fix verdict leaves the Dev free to push');
   });
 
   await t.test('a push brings one follow-up that reviews only the new commits, and merge merges', async () => {
@@ -140,6 +143,7 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
     const a = await ap();
     assert.strictEqual(a.mergedToday, 1);
     assert.ok(a.notes.some((x) => /Merged PR #7/.test(x.text)), JSON.stringify(a.notes));
+    assert.strictEqual(markOf(wt), null, 'the push hold goes once the task is Done');
     await sleep(1000);
     assert.strictEqual((await R.call('GET', '/tasks')).body.tasks.filter((y) => y.state !== 'done').length, 0, 'the other ticket was not allowed, so nothing starts');
     assert.strictEqual(merged().split('\n').filter(Boolean).length, 1, 'merged once');
@@ -279,6 +283,7 @@ test('a merge verdict waits while the Dev works, and work left unpushed goes to 
     await until(async () => (await ap()).prs.some((p) => p.verdict === 'merge' && /^Its Dev is working, maybe still answering the latest review/.test(p.why || '')), 'the wait for the Dev');
     await sleep(1000);
     assert.strictEqual(merged(), '', 'no merge while the Dev may still push');
+    assert.deepStrictEqual(await until(() => markOf(wt), 'the push hold on the Dev\'s checkout'), { pr: PR, commit: head, base: 'main' });
     assert.strictEqual((await task()).state !== 'waiting_on_you', true, 'a working Dev is waited for, not handed over');
   });
 
