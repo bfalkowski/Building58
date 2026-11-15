@@ -6,7 +6,8 @@
 // The reviewer stays a minute after its turn (REVIEW_GRACE), so the hold must start when the verdict
 // counts, as the post is seen (T-230), not when the reviewer's session ends.
 // The comment check reads the PR's reviews, and Autopilot's look for a post the hook never reported does
-// not, so failing that one list stops every check while that look still works.
+// not, so failing that one list stops every check while that look still works. GitHub may also list a
+// new comment late: then the checks work but do not list the review, and the hold must stay until one does.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -18,7 +19,7 @@ const { relay, makeRepo, until, sleep, sessionToken, removeDir } = require('./he
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 const PR = 'https://github.com/acme/widgets/pull/7';
 const GREEN = [{ name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' }];
-const HOLD = 'The comment check has not looked at the PR since the latest review was posted, so its Dev was not told of it yet.';
+const HOLD = 'No comment check has listed the latest posted review on the PR yet, so its Dev was not told of it.';
 const REVIEWS = 'repos/acme/widgets/pulls/7/reviews';
 
 async function ready(t) {
@@ -59,6 +60,7 @@ async function ready(t) {
   assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, token)).status, 200);
   c.failApi = { [REVIEWS]: 'HTTP 502' };
   c.api['repos/acme/widgets/issues/7/comments'] = [{ id: 201, html_url: PR + '#issuecomment-201', user: { login: 'office-bot' }, body: '## Review of ' + c.head.slice(0, 7) + '\n\nNot blocking: rename b. **Verdict: merge.**', created_at: new Date(Date.now() + 1000).toISOString() }];
+  c.review = c.api['repos/acme/widgets/issues/7/comments'];
   c.answer();
   c.asked = c.checks();
   await c.say(c.r, 'UserPromptSubmit');
@@ -89,6 +91,19 @@ test('a merge verdict does not merge before the comment check has told the Dev o
     await until(() => c.merged().includes(PR + ' --merge --match-head-commit ' + c.head), 'the merge', 200);
     assert.ok((await c.task()).history.some((h) => h.type === 'review' && /^Told the Dev/.test(h.note || '')), 'the Dev was told before the merge');
   });
+});
+
+test('a review GitHub lists late holds the merge until a check lists it', async (t) => {
+  const c = await ready(t);
+  c.failApi = null; delete c.api['repos/acme/widgets/issues/7/comments']; c.answer();
+  await c.say(c.r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-201' } });
+  await c.say(c.r, 'Stop');
+  await until(async () => (await c.ap()).prs.some((p) => p.verdict === 'merge'), 'the merge verdict to count');
+  await held(c);
+  c.api['repos/acme/widgets/issues/7/comments'] = c.review; c.answer();
+  assert.strictEqual((await c.R.call('POST', '/settings', { values: { reviewPollSeconds: 1 } })).status, 200);
+  await until(() => c.merged().includes(PR + ' --merge --match-head-commit ' + c.head), 'the merge', 200);
+  assert.ok((await c.task()).history.some((h) => h.type === 'review' && /^Told the Dev/.test(h.note || '')), 'the Dev was told before the merge');
 });
 
 test('a post the hook never reported holds the merge from when Autopilot finds it on the PR', async (t) => {

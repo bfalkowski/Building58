@@ -72,16 +72,15 @@ test('a checkout that is gone holds nothing, and with no checkout on the task th
 
 // T-229: a merge verdict is posted, but the comment check has not looked at the PR since, so its Dev was
 // not told yet and task.reviews.pending is still empty. A merge now would leave the Dev's answer out.
-test('a review posted after the comment check last looked: wait until a check has seen it', (t) => {
+test('a review posted that no comment check has listed yet: wait until one has', (t) => {
   const dir = checkout(t);
-  const at = (s) => new Date(now - s * 1000).toISOString();
-  const unseen = task(dir, { reviews: { pending: null, postedAt: at(30), lookedFrom: at(50) } });
-  const HOLD = { act: 'wait', why: 'The comment check has not looked at the PR since the latest review was posted, so its Dev was not told of it yet.' };
+  const posted = (seen) => ({ url: 'https://github.com/a/b/pull/1#issuecomment-9', at: new Date(now - 30 * 1000).toISOString(), seen });
+  const unseen = task(dir, { reviews: { pending: null, posted: posted(false), checkedAt: new Date(now - 10 * 1000).toISOString() } });
+  const HOLD = { act: 'wait', why: 'No comment check has listed the latest posted review on the PR yet, so its Dev was not told of it.' };
   assert.deepStrictEqual(holdOf(unseen, dev('idle'), now), HOLD);
   assert.deepStrictEqual(holdOf(unseen, null, now), HOLD, 'a Dev that has ended too: the check still decides what is left');
-  assert.deepStrictEqual(holdOf(task(dir, { reviews: { pending: null, postedAt: at(30) } }), dev('idle'), now), HOLD, 'never checked');
-  assert.strictEqual(holdOf(task(dir, { reviews: { pending: null, postedAt: at(30), lookedFrom: at(10) } }), dev('idle'), now), null, 'a check began after the post and found nothing to tell');
-  assert.strictEqual(holdOf(task(dir, { reviews: { pending: null, lookedFrom: at(30) } }), dev('idle'), now), null, 'no review posted by the room');
+  assert.strictEqual(holdOf(task(dir, { reviews: { pending: null, posted: posted(true) } }), dev('idle'), now), null, 'a check listed it and found nothing to tell');
+  assert.strictEqual(holdOf(task(dir, { reviews: { pending: null } }), dev('idle'), now), null, 'no review posted by the room');
   process.env.RELAY_REVIEW_POLL_SECONDS = '0';
   t.after(() => { delete process.env.RELAY_REVIEW_POLL_SECONDS; });
   assert.strictEqual(holdOf(unseen, dev('idle'), now), null, 'with the comment check off, no check will come, and the Dev is never told of reviews');

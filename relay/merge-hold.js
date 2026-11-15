@@ -29,8 +29,8 @@ function unsavedWork(dir) {
   } catch (e) { return 'git could not say whether its checkout has work that is not pushed'; }
 }
 
-const UNSEEN = 'The comment check has not looked at the PR since the latest review was posted, so its Dev was not told of it yet.';
-const unseen = (r) => !!r.postedAt && config.get('reviewPollSeconds') > 0 && !(Date.parse(r.lookedFrom) >= Date.parse(r.postedAt));
+const UNSEEN = 'No comment check has listed the latest posted review on the PR yet, so its Dev was not told of it.';
+const unseen = (r) => !!r.posted && !r.posted.seen && config.get('reviewPollSeconds') > 0;
 
 const busy = (lv) => ({ working: 'is working', quiet: 'is in a turn', waiting: 'is at a question',
   stuck: lv.cause === 'told' ? 'has not started on what it was told' : 'is in a turn with no hook' })[lv.state] || null;

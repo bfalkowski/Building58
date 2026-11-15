@@ -12,11 +12,12 @@
 //             session has ended, and whether all of it was on the PR before the relay watched it
 //   owesPost  { links, count }: the PR has not yet been told that the Dev was told
 //   problem   why gh could not be asked, or null
-//   lookedFrom  when the last check that worked began: it has seen everything posted before then
-//   postedAt  when the room's latest automatic review of the PR was posted, so its verdict counts. The post
-//             starts a check at once, and relay/merge-hold.js holds a merge until lookedFrom is after it
-//             (T-229). A check asked for while one runs waits for it, then runs on its own, since the one
-//             under way may have begun before the post.
+//   posted    { url, at, seen }: the room's latest automatic review of the PR, posted so its verdict
+//             counts. The post starts a check at once, and relay/merge-hold.js holds a merge until a check
+//             that worked has listed that link (seen), since GitHub may list a new comment late (T-229). A
+//             link that is not a comment's is seen by the first check that worked and began after it. A
+//             check asked for while one runs waits for it, then runs on its own, since the one under way
+//             may have begun before the post.
 //
 // The message is typed through relay/delivery.js, so only while the Dev's session is idle. It has
 // links and a count, never a comment's words. T-4's review loop can call tell() with its own news.
@@ -101,7 +102,9 @@ async function check(channel, task) {
     return false;
   }
   if (r.problem) { log('Checking ' + task.pr + ' for review comments works again.'); tasks.record(task, { type: 'note', note: 'Checking the PR for comments works again.' }); }
-  r.problem = null; r.checkedAt = new Date().toISOString(); r.lookedFrom = from;
+  r.problem = null; r.checkedAt = new Date().toISOString();
+  const p = r.posted;
+  if (p && !p.seen && (ITEM_URL.test(p.url) ? got.items.some((i) => i.url === p.url) : from >= p.at)) p.seen = true;
   if (typeof r.comments !== 'number') { r.comments = 0; r.blocking = 0; r.countedSince = new Date().toISOString(); }
   const seen = new Set(r.seen), news = [];
   for (const item of got.items) {
@@ -256,11 +259,11 @@ function tick() {
     }
   }
 }
-function reviewPosted(channel, pr) {
+function reviewPosted(channel, pr, url) {
   if (!(config.get('reviewPollSeconds') > 0)) return;
   const task = tasks.list(channel).find((x) => x.pr === pr && x.state !== 'done');
   if (!task || !PR_URL.test(task.pr)) return;
-  stateOf(task).postedAt = new Date().toISOString();
+  stateOf(task).posted = { url: String(url || ''), at: new Date().toISOString(), seen: false };
   tasks.save();
   checkOnce(channel, task).catch((e) => log('Checking ' + task.pr + ' for review comments failed: ' + e.message));
 }
