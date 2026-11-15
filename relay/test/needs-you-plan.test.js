@@ -69,6 +69,13 @@ test('a task whose session ended before a PR: bring it back', () => {
   assert.deepStrictEqual(listOf({ tasks: [task({ state: 'done' })] }), []);
 });
 
+test('a PR Autopilot handed over stays a decision after review news moves its task out of Waiting on you', () => {
+  const held = 'Its Dev says a finding is a bug: https://github.com/o/r/pull/12#issuecomment-1';
+  const [item] = listOf({ tasks: [task({ state: 'changes_requested', pr: PR, handedOver: held })] });
+  assert.strictEqual(item.kind, 'handed-over');
+  assert.strictEqual(item.line, 'Decide on PR #12 (T-5): ' + held);
+});
+
 test('a PR Autopilot handed over: decide on it, with its reason', () => {
   const dev = seat({ task: 'k1' });
   const [item] = listOf({ seats: [dev], tasks: [task({ owner: dev.terminal, state: 'waiting_on_you', pr: PR, handedOver: 'Its Dev says a finding is a bug: https://github.com/o/r/pull/12#issuecomment-1' })] });

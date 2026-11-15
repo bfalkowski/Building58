@@ -91,6 +91,16 @@ test('a task Waiting on you says why', async (t) => {
     assert.deepStrictEqual(d.next, { text: 'Waiting on you: It changes docs/constitution.md, which only a person merges.', owner: 'you' });
     assert.strictEqual(d.stop.safe, false);
   });
+  await t.test('a hand-over shows its reason, not a GitHub state, even after the task left Waiting on you (PR 45)', () => {
+    const held = 'Its Dev says a finding the review marked non-blocking is a bug: https://github.com/o/r/pull/31#issuecomment-1';
+    const autopilot = { on: true, mine: true, act: 'wait', why: 'GitHub says the PR is unknown.', verdict: 'merge', verdictAt: 'abc', handedOver: held };
+    for (const state of ['in_review', 'changes_requested']) {
+      const k = task({ state, pr: PR });
+      const d = deskOf({ t: idle({ task: k.id }), role: 'Dev', work: work(k), task: k, pipeline: { state: 'green', head: 'abc' }, autopilot, verdict: notSafe('its PR has not merged'), now });
+      assert.deepStrictEqual(d.next, { text: 'Waiting on you: ' + held, owner: 'you' }, state);
+      assert.strictEqual(d.status.key, 'waiting_on_you', state);
+    }
+  });
   await t.test('the note on the move', () => {
     const k = task({ state: 'waiting_on_you', history: [{ type: 'moved', from: 'in_review', to: 'waiting_on_you', by: 'Lead', note: 'constitution change' }] });
     const d = deskOf({ t: idle({ task: k.id }), role: 'Dev', work: work(k), task: k, verdict: notSafe('its task is Waiting on you'), now });

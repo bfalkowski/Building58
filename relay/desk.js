@@ -77,7 +77,7 @@ function statusOf(d, task, pr, ci, p) {
   const current = !a.verdictAt || !p || !p.head || a.verdictAt === p.head;
   if (d.merged) return s('merged', 'merged');
   if (task.state === 'done') return s('done', 'done');
-  if (task.state === 'waiting_on_you') return s('waiting_on_you', 'waiting on you');
+  if (task.state === 'waiting_on_you' || a.handedOver) return s('waiting_on_you', 'waiting on you');
   if (!pr) return s('building', 'building');
   if (d.reviewing) return s('reviewing', d.reviewer ? 'being reviewed by ' + d.reviewer : 'being reviewed');
   if (ci === 'red') return s('ci_failed', 'CI failed');
@@ -128,7 +128,7 @@ function deskOf(d) {
       if (safe) return step('Done, safe to stop', 'you');
       return verdict.safe ? step('Done, but ' + verdict.reason.replace(/^not one the Lead may stop: /, ''), 'you') : step('Done, not safe to stop yet: ' + verdict.reason, 'you');
     }
-    if (task.state === 'waiting_on_you') return step('Waiting on you: ' + waitingWhy(task, d.autopilot), 'you');
+    if (task.state === 'waiting_on_you' || (d.autopilot && d.autopilot.handedOver)) return step('Waiting on you: ' + waitingWhy(task, d.autopilot), 'you');
     if (task.state === 'changes_requested') return step('The Dev fixes what the review found', 'Dev');
     if (!pr) return t.state === 'working' ? step('The Dev builds it, then opens a PR', 'Dev') : step('Waiting on you: read what the Dev wrote, it has no PR yet', 'you');
     return step(...prStep(Object.assign({}, d, { ci }), pr));

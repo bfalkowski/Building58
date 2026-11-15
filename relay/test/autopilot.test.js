@@ -344,6 +344,12 @@ test('a Dev reply with the hold mark sends a merge-verdict PR to the person, eve
   assert.ok((await task()).history.some((h) => /Its Dev says a finding the review marked non-blocking is a bug: https:\/\/github\.com\/acme\/widgets\/pull\/7#issuecomment-102/.test(h.note || '')), 'the card says why');
   await sleep(1000);
   assert.strictEqual(merged(), '', 'no merge on the verdict the Dev disputed');
+  const decisions = async () => (await R.call('GET', '/needs-you')).body.items.filter((i) => i.kind === 'handed-over').map((i) => i.line);
+  assert.deepStrictEqual(await decisions(), ['Decide on PR #7 (' + ticket.id + '): Its Dev says a finding the review marked non-blocking is a bug: ' + PR + '#issuecomment-102']);
+  // The person turns Autopilot off and gives the task back: no tick clears the hand-over now, and it is answered all the same.
+  await R.call('POST', '/autopilot', { on: false });
+  await R.call('POST', '/tasks/' + x.id + '/move', { to: 'in_review' });
+  assert.deepStrictEqual(await decisions(), []);
 });
 
 test('a PR that changes CLAUDE.md waits on the person, and is done once the person merges it', async (t) => {
