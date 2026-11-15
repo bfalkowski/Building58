@@ -173,6 +173,11 @@ function lineOf(channel, task, now) {
   return plan.lineOf(r.late ? Object.assign({}, r, { owner: 'you', why: r.late, late: true }) : r, now || Date.now());
 }
 
+function moveOf(channel, pr) {
+  const r = ON() && store[channel] && store[channel].prs[pr];
+  return r && r.owner ? { owner: r.owner, cause: r.cause, why: r.why } : null;
+}
+
 async function handle(req, res, channel, rest, rctx) {
   if (rest !== '/pr-watch') return false;
   const deny = terminal.localOnly(req, rctx.port);
@@ -190,4 +195,4 @@ function begin(relayCtx) {
   config.every('prWatchSeconds', tick, 5000);
 }
 
-module.exports = { handle, begin, lineOf, tick };
+module.exports = { handle, begin, lineOf, moveOf, tick };
