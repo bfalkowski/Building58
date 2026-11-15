@@ -11,6 +11,8 @@ const { relay, makeRepo, sleep, until, ROOT } = require('./helpers.js');
 // The terminal echoes what is typed, so count what the fake says it got.
 const BRIEF = 'GOT[You are the Lead of this room.';
 const briefs = (screen) => screen.split(BRIEF).length - 1;
+// Every brief the Lead can get: merging off and on, each with Autopilot off and on.
+const KINDS = [{}, { merge: true }, { autopilot: true }, { autopilot: true, merge: true }];
 
 // Claude Code reads keys about 1024 bytes at a time and keeps only the last piece (T-34), so text that
 // could be that long goes in as one paste (relay/typed.js). The brief names full paths, so it grows with
@@ -21,7 +23,7 @@ test('the Lead\'s brief goes in as one paste, whatever the length of the checkou
   const pasted = (text) => asTyped(text) === '\x1b[200~' + text + '\x1b[201~';
   for (const length of [1, 120, 250, 1000]) {
     const root = path.join('/', 'r'.repeat(length - 1));
-    for (const opts of [{}, { merge: true }, { autopilot: true }]) {
+    for (const opts of KINDS) {
       const brief = leadBrief(path.join(root, 'relay'), opts);
       // Keys go in whole only within one read. A short root gives a brief that short, and that is fine.
       assert.ok(pasted(brief) || Buffer.byteLength(brief) < 1024, 'root of ' + length + ', ' + JSON.stringify(opts));
@@ -40,13 +42,26 @@ test('the Lead\'s brief goes in as one paste, whatever the length of the checkou
 
 // The relay gives a task's Dev the reviews on its PR (relay/pr-comments.js, T-17), so a Lead that carried
 // them too would tell the Dev twice (T-76). The Lead passes decisions on, and checks that Devs act on reviews.
+// The relay watches only the PRs of tasks, so a session with no task gets no reviews from it (T-244).
 test('the Lead\'s brief leaves reviews to the relay and checks that Devs act on them', () => {
   const { leadBrief } = require('../lead-brief.js');
-  for (const opts of [{}, { merge: true }, { autopilot: true }]) {
+  for (const opts of KINDS) {
     const brief = leadBrief(path.join(ROOT, 'relay'), opts);
     assert.doesNotMatch(brief, /Pass reviews/, 'it does not carry reviews: ' + JSON.stringify(opts));
     assert.ok(brief.includes('Pass decisions on.'), 'it still passes decisions on');
-    assert.ok(brief.includes('Devs get PR reviews from the relay: check they act.'), 'it checks the Devs act');
+    assert.ok(brief.includes('Task Devs get PR reviews from the relay: check they act.'), 'it says only task Devs get them');
+  }
+});
+
+// Claude Code reads a typed line about 1024 bytes at a time (T-34). The brief now goes in as a paste
+// (T-85), but it is kept under one read from a checkout root of 120 characters, so it stays short to
+// read after each /clear and compact. Merging on is the longest, and Autopilot replaces that part.
+test('every brief the Lead can get is under 1024 bytes from a checkout root of 120 characters', () => {
+  const { leadBrief } = require('../lead-brief.js');
+  const relayDir = path.join('/', 'r'.repeat(119), 'relay');
+  for (const opts of KINDS) {
+    const bytes = Buffer.byteLength(leadBrief(relayDir, opts));
+    assert.ok(bytes < 1024, bytes + ' bytes: ' + JSON.stringify(opts));
   }
 });
 
@@ -76,7 +91,7 @@ test('the Lead\'s brief', async (t) => {
     await told(a.id, 1);
     const screen = await R.screen(a.id);
     assert.ok(screen.includes('node ' + JSON.stringify(path.join(ROOT, 'relay', 'ticket.js')) + ' list'), 'a path with a space still works');
-    for (const job of ['take no ticket work', 'open pull requests', 'Pass decisions on', 'Devs get PR reviews from the relay', 'keep tickets moving', 'what is waiting on them', 'against the code and the pipeline', 'Never merge a pull request: merging stays with the person']) assert.ok(screen.includes(job), job);
+    for (const job of ['take no ticket work', 'open PRs', 'Pass decisions on', 'Task Devs get PR reviews from the relay', 'keep tickets moving', 'what is waiting on them', 'against the code and the pipeline', 'Never merge a pull request: merging stays with the person']) assert.ok(screen.includes(job), job);
     // It is typed in one burst, and Claude Code reads about 1024 bytes at a time (T-34), so the end has to arrive too.
     assert.ok(screen.includes('report in a few lines.]'), 'the whole brief arrived as one line');
     assert.strictEqual((await terminal(a.id)).work.role, 'lead');
