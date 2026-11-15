@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { relay } = require('./helpers.js');
 
 test('removing a home stops every relay still on it first', async (t) => {
@@ -31,4 +31,30 @@ test('a test file that never ends fails with a clear message, and does not hang 
     const alive = () => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
     assert.ok(!alive(), 'what the file left running is stopped too');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A fake gh child, or the relay's last gh poll, can still write into its folder as a test ends, so a
+// plain rmSync of that folder fails with ENOTEMPTY (T-140). Every test removes it with removeDir, which retries.
+test('every fake gh folder is removed with removeDir, which retries while a writer finishes', () => {
+  const plain = [];
+  for (const name of fs.readdirSync(__dirname).filter((f) => f.endsWith('.js'))) {
+    const text = fs.readFileSync(path.join(__dirname, name), 'utf8');
+    const folders = [...text.matchAll(/const (\w+) = [^\n]*mkdtempSync\([^\n]*'office-gh-'/g)].map((m) => m[1]);
+    for (const v of new Set(folders)) if (new RegExp('fs\\.rmSync\\(' + v + '\\b').test(text)) plain.push(name + ': ' + v);
+  }
+  assert.deepStrictEqual(plain, [], 'these remove a fake gh folder with a plain fs.rmSync');
+});
+
+test('removeDir waits out a writer that is still adding files', async () => {
+  const { removeDir } = require('./helpers.js');
+  const ghDir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
+  // Another process, as a fake gh is, keeps adding to the folder for 400 ms while the folder is removed.
+  const writer = "const fs = require('fs'), p = require('path'), d = process.argv[1], end = Date.now() + 400; console.log('go');" +
+    "for (let n = 0; Date.now() < end; n++) { try { fs.mkdirSync(p.join(d, 'd' + n)); fs.writeFileSync(p.join(d, 'd' + n, 'f'), 'x'); } catch (e) { /* gone */ } }";
+  const child = spawn(process.execPath, ['-e', writer, ghDir], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const ended = new Promise((r) => child.once('exit', r));
+  await new Promise((r) => child.stdout.once('data', r));
+  await new Promise((r) => setTimeout(r, 50));
+  try { removeDir(ghDir); } finally { await ended; }
+  assert.ok(!fs.existsSync(ghDir), 'the folder is gone');
 });

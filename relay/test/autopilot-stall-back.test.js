@@ -10,7 +10,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, until, sessionToken } = require('./helpers.js');
+const { relay, makeRepo, removeDir, until, sessionToken } = require('./helpers.js');
 const { prBrief } = require('../../office/reviews.js');
 
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -21,7 +21,7 @@ const STALL = 2000;
 async function rig(t) {
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: String(STALL), RELAY_REVIEW_GRACE_MS: '200' });
-  t.after(async () => { await R.stop(); fs.rmSync(gh, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(gh); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
   fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');

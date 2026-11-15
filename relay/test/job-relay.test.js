@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, until, sleep } = require('./helpers.js');
+const { relay, makeRepo, removeDir, until, sleep } = require('./helpers.js');
 
 // Without relay/jobs.js nothing here can pass, so each test fails at once and says why, rather than
 // waiting out its limits.
@@ -118,7 +118,7 @@ async function autopilotRig(t) {
   need();
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: '3000', RELAY_JOB_SCAN_MS: SCAN });
-  t.after(async () => { await R.stop(); fs.rmSync(gh, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(gh); });
   const repo = makeRepo(R.home);
   const ticket = (await R.call('POST', '/tickets', { title: 'Run the tests', repo })).body.ticket;
   const taskOf = async () => (await R.call('GET', '/tasks')).body.tasks.find((x) => x.ticket === ticket.id);

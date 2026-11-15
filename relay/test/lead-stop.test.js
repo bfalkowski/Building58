@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, sleep, until, sessionToken, ROOT } = require('./helpers.js');
+const { relay, makeRepo, removeDir, sleep, until, sessionToken, ROOT } = require('./helpers.js');
 
 const CLI = path.join(ROOT, 'relay', 'ticket.js');
 const PR = 'https://github.com/acme/widgets/pull/7';
@@ -61,7 +61,7 @@ async function office(env) {
   const leadToken = await tokenFor(lead);
   const stop = (who, headers) => R.call('POST', '/floor/stop', { who }, headers || leadToken);
   const cli = (...args) => execFileSync('node', [CLI, ...args], { env: { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: leadToken['X-Office-Token'] }, encoding: 'utf8', stdio: 'pipe' });
-  const done = async () => { await R.kill().catch(() => {}); await R.remove(); fs.rmSync(gh, { recursive: true, force: true }); };
+  const done = async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(gh); };
   return { R, repo, answers, start, hook, finish, tokenFor, running, rowOf, nameOf, reviewer, dev, lead, leadToken, stop, cli, done };
 }
 

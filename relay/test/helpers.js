@@ -12,6 +12,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (fn, what, tries) => { for (let i = 0; i < (tries || 100); i++) { const v = await fn(); if (v) return v; await sleep(100); } throw new Error('Timed out waiting for ' + what); };
 const freePort = () => new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
 
+// A fake gh, or another child the relay started, can still be writing into a folder as a test ends,
+// so a plain rmSync of it fails with ENOTEMPTY (T-140). This tries again, waiting a little longer each time.
+const removeDir = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+
 function makeRepo(home, name) {
   const repo = path.join(home, name || 'repo');
   execFileSync('git', ['init', '-q', '-b', 'main', repo]);
@@ -128,4 +132,4 @@ function sessionToken(sessionId) {
   if (!token) throw new Error('No token found for session ' + sessionId);
   return token;
 }
-module.exports = { relay, makeRepo, sleep, until, sessionToken, sessionTokens, ROOT };
+module.exports = { relay, makeRepo, removeDir, sleep, until, sessionToken, sessionTokens, ROOT };

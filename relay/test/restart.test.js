@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, sleep, until } = require('./helpers.js');
+const { relay, makeRepo, removeDir, sleep, until } = require('./helpers.js');
 
 const RESUME = { RELAY_RESUME: '1', RELAY_WIP_LIMIT: '5' };
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -610,7 +610,7 @@ test('Update waits for an open huddle', async (t) => {
   const gh = fs.realpathSync(fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-')));
   fs.writeFileSync(path.join(gh, 'answers.json'), JSON.stringify({ prs: {} }));
   const { R, repo, relayChange } = await updatable({ RELAY_HUDDLE_ANSWER_SECONDS: '3', GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh });
-  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); fs.rmSync(gh, { recursive: true, force: true }); });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(gh); });
   const s = (await R.call('POST', '/terminals', { cwd: repo })).body;
   await talk(R, s.sessionId); await idle(R, s.sessionId);
   assert.strictEqual((await R.call('POST', '/huddle', { ask: true })).body.open, true);
