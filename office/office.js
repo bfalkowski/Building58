@@ -1986,6 +1986,7 @@
     manager: { desc: 'Sends the manager through now, instead of waiting for the next visit.', params: {}, run: (c, src) => { if (boss.present) return fail('busy', 'The manager is already here.'); bossVisit(src); return { ok: true }; } },
     reset: { desc: 'Ends all work and clears the board.', params: {}, run: (c, src) => { people.forEach((p) => { finish(p, 'reset', src); if (p.waiting) setWaiting(p, null); }); done.length = 0; [...sessions.values()].forEach(unseat); boardDirty = true; return { ok: true }; } },
     speed: { desc: 'How fast the room moves: 0 to 8, 1 is normal. Work state does not depend on it.', params: { value: '0 to 8' }, run: (c) => { const v = Number(c.value); if (!(v >= 0 && v <= 8)) return fail('bad_param', '"value" is 0 to 8.'); speed = v; return { ok: true, speed }; } },
+    // eslint-disable-next-line no-restricted-syntax -- the wait command is asked for a wait of this many seconds
     wait: { desc: 'Waits this many seconds of real time.', params: { seconds: '0 to 600' }, run: (c) => { const s = Number(c.seconds); if (!(s >= 0 && s <= 600)) return Promise.resolve(fail('bad_param', '"seconds" is 0 to 600.')); return new Promise((r) => setTimeout(() => r({ ok: true, waited: s }), s * 1000)); } }
   };
   async function doAction(cmd) {

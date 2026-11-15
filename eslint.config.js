@@ -59,5 +59,16 @@ module.exports = [
     ignores: ['relay/test/**'],
     plugins: { local: require('./eslint-local.js') },
     rules: { 'local/no-comments': 'error' }
+  },
+  {
+    // A fixed wait in the page guesses how long something takes, and a slow computer makes the guess
+    // wrong (T-278). Wait for the event the thing sends, or let the relay type a first prompt.
+    files: ['office/**/*.js', 'shared/**/*.js'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: "NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']",
+        message: 'Wait for the event, or use delivery.promptOnce in the relay. Do not wait a fixed time.'
+      }]
+    }
   }
 ];
