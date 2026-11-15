@@ -59,7 +59,7 @@ function leadVerdict(channel, t, task, now) {
   return { safe: true, canStop: true, reason: kind.why + v.reason };
 }
 
-function deskFor(channel, t, task, work, verdict, now) {
+function deskFor(channel, t, task, work, verdict, now, needs) {
   const role = roleOf(t), pr = work.pr || (task && task.pr) || t.pr || t.reviewOf || null;
   const shown = role === 'reviewer' ? (pr && tasks.list(channel).find((x) => x.pr === pr)) || null : task;
   const lead = terminal.leadOf(channel);
@@ -67,7 +67,7 @@ function deskFor(channel, t, task, work, verdict, now) {
   const reviewer = pr ? terminal.all(channel).find((x) => x !== t && !x.exited && x.reviewOf === pr && !x.posted) || null : null;
   return deskOf({
     t, role, work, now, verdict,
-    task: shown && Object.assign({}, shown, { pipeline: pipe }),
+    task: shown && Object.assign({}, shown, { pipeline: pipe }, needs ? needs.get(shown.id) || { needsYou: null, reviewRuns: false } : null),
     pipeline: pipe,
     review: pr ? require('./reviews.js').deskOf(channel, pr) : null,
     reviewing: !!reviewer,
@@ -86,7 +86,7 @@ function seatsOf(channel) {
   const taskOf = taskFinder(channel);
   return terminal.all(channel).map((t) => seatOf(t, taskOf(t)));
 }
-function rowOf(channel, t, task, now) {
+function rowOf(channel, t, task, now, needs) {
   const work = terminal.workOfTerm(t) || {};
   const verdict = leadVerdict(channel, t, task, now);
   const seat = seatOf(t, task);
@@ -95,7 +95,7 @@ function rowOf(channel, t, task, now) {
     role: seat.role, ticket: seat.ticket, title: (task && task.title) || t.title || null,
     pr: work.pr || (task && task.pr) || t.pr || null, state: stateOf(t, now), stuck: t.stuck && t.state === 'idle' ? { minutesAgo: minutes(now - t.stuck.at), why: t.stuck.why } : null, message: t.message || null,
     reviewWaits: !!work.reviewWaits, minutesSinceHook: t.hooked ? minutes(now - t.lastActAt) : null, safe: verdict.safe, canStop: verdict.canStop, why: verdict.reason,
-    desk: deskFor(channel, t, task, work, verdict, now),
+    desk: deskFor(channel, t, task, work, verdict, now, needs),
     tired: t.lead ? tiredOf(t) : null,
     mergeHold: mergeHoldOf(channel, t, task, now),
     waitsOn: roleOf(t) === 'Dev' && task ? require('./pr-watch.js').lineOf(channel, task, now) : null,
@@ -111,8 +111,8 @@ function taskFinder(channel) {
   return (t) => (t.task && taskList.find((x) => x.id === t.task)) || taskList.find((x) => x.owner && x.owner.terminal === t.id) || null;
 }
 function floorOf(channel, now) {
-  const taskOf = taskFinder(channel);
-  return pairReviewers(terminal.all(channel).map((t) => rowOf(channel, t, taskOf(t), now)));
+  const taskOf = taskFinder(channel), needs = require('./needs-you.js').boardOf(channel, now);
+  return pairReviewers(terminal.all(channel).map((t) => rowOf(channel, t, taskOf(t), now, needs)));
 }
 
 function pick(channel, who) {

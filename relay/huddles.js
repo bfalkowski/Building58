@@ -1,7 +1,9 @@
 // A huddle: one short report on everyone, for the person and the Lead. The free report reads what the
 // relay, git and gh already know, so it interrupts nobody and spends no tokens. Asking is a separate
 // choice: only idle sessions get a question, through relay/delivery.js, and anyone who has not answered
-// when the time is up is reported as not answering, so a huddle always finishes. See docs/manual/roles.html#huddles.
+// when the time is up is reported as not answering, so a huddle always finishes. What needs the person, and
+// the count in the headline, come from the Needs you list (relay/needs-you-plan.js), so they agree with it.
+// See docs/manual/roles.html#huddles.
 //
 // Like the terminal, this answers only the room page on this machine, while RELAY_TERMINAL=1.
 'use strict';
@@ -12,6 +14,7 @@ const fs = require('fs');
 const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const delivery = require('./delivery.js');
+const { listOf } = require('./needs-you-plan.js');
 
 const GH = process.env.GH_CMD || 'gh';
 const GH_LIMIT = 10000, GIT_LIMIT = 5000;
@@ -89,28 +92,26 @@ const STATUS_WORDS = { working: 'working', waiting: 'waiting on you', finished: 
 function waitingOn(row, prs) {
   const pr = row.pr && !row.pr.failed ? row.pr : null;
   if (row.status === 'gone') {
-    if (pr && pr.state === 'MERGED') return { on: 'you to move its task to Done', needs: 'its PR is merged, and its task is not Done' };
-    if (pr && pr.state === 'CLOSED') return { on: 'you', needs: 'its PR was closed without merging, and its session is gone' };
-    return { on: 'you to bring it back', needs: 'its session is gone and the work is not done' };
+    if (pr && pr.state === 'MERGED') return { on: 'you to move its task to Done' };
+    if (pr && pr.state === 'CLOSED') return { on: 'you' };
+    return { on: 'you to bring it back' };
   }
-  if (row.status === 'waiting') return { on: 'you: ' + (row.message || 'needs your OK'), needs: 'needs your OK' + (row.message ? ': ' + row.message : '') };
-  if (row.taskState === 'waiting_on_you' && !(pr && ['failing', 'running'].includes(pr.pipeline))) return { on: 'you', needs: 'its task is set to Waiting on you' };
-  if (row.quiet && row.status === 'working') return { on: 'nobody knows', needs: 'says it is working, and nothing has happened for ' + ago(row.lastSeconds) };
+  if (row.status === 'waiting') return { on: 'you: ' + (row.message || 'needs your OK') };
+  if (row.taskState === 'waiting_on_you' && !(pr && ['failing', 'running'].includes(pr.pipeline))) return { on: 'you' };
+  if (row.quiet && row.status === 'working') return { on: 'nobody knows' };
   if (row.status !== 'finished' && row.status !== 'unknown') return { on: row.status === 'new' ? 'its first prompt' : 'nothing' };
   if (pr && pr.state === 'MERGED') return { on: 'nothing, its PR is merged' };
   if (pr) {
-    const worked = prs.worked.has(pr.url), says = row.role !== 'reviewer' && !prs.flagged.has(pr.url) && !worked;
-    const need = (on, needs) => { if (says) prs.flagged.add(pr.url); return { on: worked ? 'whoever is working on its PR' : on, needs: says ? needs : null }; };
-    if (pr.state === 'CLOSED') return need('you, its PR is closed', 'its PR was closed without merging');
-    if (pr.pipeline === 'failing') return need('someone to fix the pipeline', 'the pipeline is failing and nobody is on it');
-    if (pr.review === 'CHANGES_REQUESTED') return need('someone to make the changes', 'changes were requested and nobody is on them');
+    const worked = prs.worked.has(pr.url), on = (who) => ({ on: worked ? 'whoever is working on its PR' : who });
+    if (pr.state === 'CLOSED') return on('you, its PR is closed');
+    if (pr.pipeline === 'failing') return on('someone to fix the pipeline');
+    if (pr.review === 'CHANGES_REQUESTED') return on('someone to make the changes');
     if (pr.pipeline === 'running') return { on: 'the pipeline' };
-    if (pr.review === 'APPROVED' && prs.leadMerges && !pr.decision) return { on: worked ? 'whoever is working on its PR' : 'the Lead to merge, under the merge rung' };
-    if (pr.review === 'APPROVED') return need('you to merge', 'approved and ready for you to merge' + (prs.leadMerges && pr.decision ? ', since ' + pr.decision : ''));
+    if (pr.review === 'APPROVED' && prs.leadMerges && !pr.decision) return on('the Lead to merge, under the merge rung');
+    if (pr.review === 'APPROVED') return Object.assign(on('you to merge'), { mergeWhy: worked ? null : 'approved and ready for you to merge' + (prs.leadMerges && pr.decision ? ', since ' + pr.decision : '') });
     return { on: pr.comments ? 'you to read its review and merge, or a fix' : 'a review' };
   }
   if (row.pr && row.pr.failed) return { on: 'unknown, gh did not answer' };
-  if (row.taskState === 'building' || row.taskState === 'changes_requested') return { on: 'a prompt', needs: 'its task is not finished and it stopped with no PR' };
   return { on: 'a prompt' };
 }
 function lineOf(row) {
@@ -141,21 +142,27 @@ async function goneRow(task) {
 }
 function finishRow(row, ask, prs) {
   const w = waitingOn(row, prs);
-  row.waitingOn = w.on; row.needs = w.needs || null; row.ask = ask || null; row.line = lineOf(row);
+  row.waitingOn = w.on; row.mergeWhy = w.mergeWhy || null; row.ask = ask || null;
   return row;
+}
+function needsOf(row, items) {
+  const item = items.find((i) => (row.terminal ? i.terminal === row.terminal : !i.terminal && i.task && i.task === row.taskId));
+  row.needs = item ? item.line : null; row.line = lineOf(row);
 }
 async function gather(channel, h) {
   const list = terminal.all(channel), taskList = tasks.list(channel), lead = terminal.leadOf(channel), names = h.names;
   const taskOf = (t) => taskList.find((x) => x.owner && x.owner.terminal === t.id) || null;
   const gone = taskList.filter((task) => task.state !== 'done' && !terminal.find(channel, task.owner && task.owner.terminal));
   const rows = await Promise.all([...list.map((t) => rowOf(channel, t, taskOf(t), names, lead && lead.id)), ...gone.map(goneRow)]);
-  const prs = { leadMerges: !!(lead && lead.merge), worked: new Set(rows.filter((r) => r.status === 'working' && r.pr && r.pr.url).map((r) => r.pr.url)), flagged: new Set() };
-  for (const row of [...rows].sort((a, b) => (a.role === 'reviewer') - (b.role === 'reviewer'))) { row.answer = h.answerFor(row); finishRow(row, h.noteFor(row), prs); }
+  const prs = { leadMerges: !!(lead && lead.merge), worked: new Set(rows.filter((r) => r.status === 'working' && r.pr && r.pr.url).map((r) => r.pr.url)) };
+  for (const row of rows) { row.answer = h.answerFor(row); finishRow(row, h.noteFor(row), prs); }
+  const items = listOf(require('./needs-you.js').stateOf(channel, Date.now(), { rows }));
+  for (const row of rows) needsOf(row, items);
   const rank = (r) => (r.needs ? 0 : r.status === 'working' ? 1 : 2);
   rows.sort((a, b) => rank(a) - rank(b) || (b.lastSeconds || 0) - (a.lastSeconds || 0));
   const failures = [...new Set(rows.map((r) => r.pr && r.pr.failed).filter(Boolean))];
   const count = (s) => rows.filter((r) => r.status === s).length;
-  const needs = rows.filter((r) => r.needs).length;
+  const needs = items.length;
   const headline = (needs ? needs + ' need' + (needs === 1 ? 's' : '') + ' you' : 'Nothing needs you') + ', ' + count('working') + ' working, ' + count('finished') + ' finished' + (count('gone') ? ', ' + count('gone') + ' gone' : '') + '.';
   return { at: new Date().toISOString(), headline, ghProblem: failures.length ? failures[0] : null, rows, quietLimitMinutes: QUIET_LIMIT() / 60 };
 }

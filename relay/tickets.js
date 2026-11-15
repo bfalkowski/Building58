@@ -88,10 +88,13 @@ const clean = (v) => keepLines(v).trim();
 const blockersOf = (ticket, all, statuses) => (ticket.blockedBy || []).filter((id) => { const b = all.find((x) => x.id === id); return b && statuses.includes(b.status); });
 const waitingFor = (ticket, all) => blockersOf(ticket, all, ['triage', 'ready', 'started']);
 const startedBy = (task) => task.by || ((task.history || []).find((h) => h.type === 'created') || {}).by || 'you';
-async function view(channel, ticket, all) {
+const needsYouOf = (channel) => require('./needs-you.js').boardOf(channel, Date.now());
+async function view(channel, ticket, all, needs) {
   const task = tasks.ofTicket(channel, ticket);
   const { assignee, history: steps } = history.view(channel, ticket, task);
-  return Object.assign({}, ticket, { assignee, history: steps, approved: personApproved(ticket), heldBack: heldBack(ticket, all), waitingFor: waitingFor(ticket, all), rejectedBlockers: blockersOf(ticket, all, ['rejected']), task: task ? { id: task.id, state: task.state, branch: task.branch, pr: task.pr, by: startedBy(task), startedAt: task.createdAt, pipeline: task.pipeline, waitsOn: task.waitsOn || null } : null });
+  const board = task && task.state !== 'done' && (needs === undefined ? needsYouOf(channel) : needs);
+  const look = board ? board.get(task.id) || { needsYou: null, reviewRuns: false } : null;
+  return Object.assign({}, ticket, { assignee, history: steps, approved: personApproved(ticket), heldBack: heldBack(ticket, all), waitingFor: waitingFor(ticket, all), rejectedBlockers: blockersOf(ticket, all, ['rejected']), task: task ? Object.assign({ id: task.id, state: task.state, branch: task.branch, pr: task.pr, by: startedBy(task), startedAt: task.createdAt, pipeline: task.pipeline, waitsOn: task.waitsOn || null }, look) : null });
 }
 async function followTasks(channel, list) {
   for (const t of list) {
@@ -520,9 +523,9 @@ function approveReady(channel, body) {
 }
 
 async function board(channel) {
-  const all = await listAll(channel);
+  const all = await listAll(channel), needs = needsYouOf(channel);
   const lead = terminal.leadOf(channel);
-  return { ok: true, store: store.name, wipLimit: tasks.wipLimit(), leadStarts: lead ? lead.starts || 0 : 0, leadStartsLeft: lead ? lead.startsLeft || 0 : 0, statuses: STATUSES, kinds: kindsOf(all), labels: labelsOf(all), tickets: await Promise.all(boardOrder(all).map((t) => view(channel, t, all))) };
+  return { ok: true, store: store.name, wipLimit: tasks.wipLimit(), leadStarts: lead ? lead.starts || 0 : 0, leadStartsLeft: lead ? lead.startsLeft || 0 : 0, statuses: STATUSES, kinds: kindsOf(all), labels: labelsOf(all), tickets: await Promise.all(boardOrder(all).map((t) => view(channel, t, all, needs))) };
 }
 const changeWatchers = [];
 const onChange = (fn) => changeWatchers.push(fn);

@@ -1,6 +1,9 @@
 // The Board's rules that do not touch the page: which column a ticket goes in, what a filter keeps,
-// and how much of Done shows. office/tickets.js draws with them, on the room page and on
-// office/board.html, and relay/test/board.test.js checks them.
+// and how much of Done shows. A started ticket is in Waiting on you when the Needs you list names its task
+// (needsYou, from relay/needs-you.js), and a task in Waiting on you that it does not name shows where its
+// work is. Without needsYou, as from a relay that does not send it, the task's state decides.
+// office/tickets.js draws with them, on the room page and on office/board.html, and relay/test/board.test.js
+// checks them.
 (function (root) {
   'use strict';
   const COLUMNS = [
@@ -20,7 +23,10 @@
 
   const stateOf = (t) => (t.status === 'started' ? (t.task ? t.task.state : 'building') : t.status);
   function columnOf(t) {
-    if (t.status === 'started' && t.task && t.task.pipeline && t.task.pipeline.waits) return 'building';
+    const task = t.status === 'started' ? t.task : null;
+    if (task && task.needsYou) return 'waiting_on_you';
+    if (task && task.pipeline && task.pipeline.waits) return 'building';
+    if (task && task.needsYou === null && task.state === 'waiting_on_you') return task.reviewRuns ? 'in_review' : 'building';
     const s = stateOf(t), col = COLUMNS.find((c) => c.holds.includes(s));
     if (col) return col.id;
     return t.status === 'started' ? 'building' : null;

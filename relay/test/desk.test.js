@@ -224,3 +224,11 @@ test('a reviewer is paired with the Dev whose PR it reviews', async (t) => {
     assert.strictEqual(rows[1].desk.reviewing, null);
   });
 });
+
+test('the desk shows its ticket in the same Board column as the Board, from Needs you', () => {
+  const column = (k) => deskOf({ t: idle({ task: k.id }), role: 'Dev', work: work(k), task: k, verdict: safe('idle'), now }).column.id;
+  assert.strictEqual(column(task({ needsYou: 'prompt' })), 'waiting_on_you', 'Needs you names it');
+  assert.strictEqual(column(task({ state: 'waiting_on_you', needsYou: null, reviewRuns: true })), 'in_review', 'a review of its PR runs');
+  assert.strictEqual(column(task({ state: 'waiting_on_you', needsYou: null })), 'building');
+  assert.strictEqual(column(task({ state: 'waiting_on_you' })), 'waiting_on_you', 'without Needs you, its state decides');
+});
