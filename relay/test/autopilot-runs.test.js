@@ -14,10 +14,10 @@ const PR = 'https://github.com/acme/widgets/pull/7';
 test('each step adds its time once, from the task history and from Autopilot', () => {
   const r = fresh();
   const task = { history: [{ type: 'created', at: T0 }, { type: 'briefed', at: at(2) }, { type: 'pr', pr: PR, at: at(20) }] };
-  assert.strictEqual(runs.fromTask(r, task), true);
+  assert.strictEqual(runs.fromTask(r, task, false), true);
   assert.deepStrictEqual([r.briefedAt, r.prAt, r.pr], [at(2), at(20), PR]);
   task.history.push({ type: 'briefed', at: at(30) }, { type: 'pr', pr: PR, at: at(31) });
-  assert.strictEqual(runs.fromTask(r, task), false, 'a second brief or PR event does not move the first time');
+  assert.strictEqual(runs.fromTask(r, task, false), false, 'a second brief or PR event does not move the first time');
   assert.deepStrictEqual([r.briefedAt, r.prAt], [at(2), at(20)]);
   const v = { kind: 'fix', commit: 'a'.repeat(40), at: at(25), sessionId: 's', posted: PR + '#issuecomment-1' };
   assert.strictEqual(runs.verdict(r, v), true);
@@ -53,7 +53,7 @@ test('flawed: a review round said fix, or a fix was needed after the merge', () 
 
 test('blocked: stuck on a missing brief, a session at a question, or nothing moving it', () => {
   const r = fresh();
-  runs.fromTask(r, { history: [{ type: 'note', note: 'The brief was not delivered: the session ended first.', at: at(5) }] });
+  runs.fromTask(r, { history: [{ type: 'note', note: 'The brief was not delivered: the session ended first.', at: at(5) }] }, false);
   assert.deepStrictEqual(r.blocked, { reason: 'brief-not-delivered', at: at(5) });
   runs.merged(r, at(60), 'Autopilot');
   assert.strictEqual(runs.outcomeOf(r), 'blocked', 'it merged in the end, but it was stuck on the way');
@@ -103,7 +103,7 @@ test('the day: counts by outcome and by kind, and the median minutes from start 
 test('a record holds only ids, times, verdicts and reason words, and is kept for 90 days', () => {
   const r = runs.start({ task: 'a1b2c3', ticket: 'T-12', kind: 'Write "hello" $(rm -rf ~)', at: T0 });
   assert.strictEqual(r.kind, null, 'a value that is not an id is not kept');
-  runs.fromTask(r, { history: [{ type: 'briefed', at: at(1), text: 'the whole brief' }, { type: 'pr', pr: PR, at: at(2), body: 'secret body' }] });
+  runs.fromTask(r, { history: [{ type: 'briefed', at: at(1), text: 'the whole brief' }, { type: 'pr', pr: PR, at: at(2), body: 'secret body' }] }, false);
   runs.verdict(r, { kind: 'merge', commit: 'c'.repeat(40), at: at(3), sessionId: 'session-id', posted: PR + '#issuecomment-1', token: 'k' });
   runs.hand(r, 'merge-failed', at(4));
   assert.deepStrictEqual(Object.keys(r).sort(), runs.FIELDS.slice().sort());

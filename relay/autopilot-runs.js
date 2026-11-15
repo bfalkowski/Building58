@@ -48,7 +48,7 @@ function fromTask(run, task, byAutopilot) {
   const pr = first((x) => x.type === 'pr');
   if (pr) { changed = once(run, 'prAt', iso(pr.at)) || changed; changed = once(run, 'pr', id(pr.pr)) || changed; }
   const merged = first((x) => x.type === 'merged');
-  if (merged) changed = (byAutopilot === undefined ? once(run, 'mergedAt', iso(merged.at)) : mergedBy(run, merged.at, byAutopilot ? 'Autopilot' : 'person')) || changed;
+  if (merged) changed = mergedBy(run, merged.at, byAutopilot ? 'Autopilot' : 'person') || changed;
   const lost = first((x) => x.type === 'note' && /was not delivered/.test(x.note || ''));
   if (lost) changed = block(run, 'brief-not-delivered', lost.at) || changed;
   return changed;

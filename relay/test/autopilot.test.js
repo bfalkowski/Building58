@@ -183,6 +183,30 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
   });
 });
 
+test('a ticket filed before the merge and made a bug after it marks a fix after the merge at the time of the change', async (t) => {
+  let R = await relay();
+  const first = R;
+  t.after(async () => { await R.stop(); await first.stop(); });
+  const repo = makeRepo(R.home);
+  const early = (await R.call('POST', '/tickets', { title: 'a.txt looks odd', body: 'Since T-12, a.txt looks odd.', repo })).body.ticket;
+  assert.strictEqual(early.kind || null, null);
+  await R.kill();
+  const mergedAt = new Date().toISOString();
+  assert.ok(early.createdAt < mergedAt, 'the ticket is filed before the merge');
+  const kept = { task: 'a1b2c3', ticket: 'T-12', kind: 'feature', pr: PR, startedAt: early.createdAt, briefedAt: null, prAt: null, verdicts: [], mergedAt, mergedBy: 'Autopilot', handed: null, blocked: null, fixAfter: null };
+  fs.writeFileSync(path.join(R.home, '.office-world', 'autopilot.json'), JSON.stringify({ t: { on: false, only: null, day: null, merged: 0, prs: {}, notes: [], runs: { a1b2c3: kept } } }));
+  R = await relay(null, first.home);
+  const run = async () => (await R.call('GET', '/autopilot')).body.runs.recent.find((x) => x.task === 'a1b2c3');
+  assert.deepStrictEqual([(await run()).fixAfter, (await run()).outcome], [null, 'success']);
+  const before = new Date().toISOString();
+  assert.strictEqual((await R.call('POST', '/tickets/' + early.id + '/kind', { kind: 'bug' })).status, 200);
+  const after = new Date().toISOString();
+  const marked = await run();
+  assert.strictEqual(marked.fixAfter.ticket, early.id);
+  assert.ok(before <= marked.fixAfter.at && marked.fixAfter.at <= after, 'the time of the change, not the time the ticket was filed: ' + JSON.stringify(marked.fixAfter));
+  assert.strictEqual(marked.outcome, 'flawed');
+});
+
 // On 2026-11-05 the person pressed Get a review on three of Autopilot's PRs. Each found nothing blocking but
 // gave no verdict, so Autopilot waited for a push that never came. Get a review asks for a verdict now.
 test('Get a review asks for a verdict, and its merge verdict merges, while one with no verdict does not count', async (t) => {
