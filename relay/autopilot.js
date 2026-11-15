@@ -45,6 +45,8 @@ const { livenessOf } = require('./liveness.js');
 const nudge = require('./nudge.js');
 const { holdOf } = require('./merge-hold.js');
 const runs = require('./autopilot-runs.js');
+const pushHold = require('./push-hold.js');
+const pipeline = require('./pipeline.js');
 
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const GH = process.env.GH_CMD || 'gh';
@@ -134,7 +136,7 @@ async function giveVerdict(channel, agent, kind) {
 const unposted = (rec, t) => rec && rec.verdicts.find((x) => x.sessionId === t.sessionId && !x.posted);
 terminal.onReviewPosted((channel, t) => {
   const v = unposted(chOf(channel).prs[t.reviewOf], t);
-  if (v) { v.posted = t.posted.url; save(); }
+  if (v) { v.posted = t.posted.url; save(); holdPushes(channel); }
 });
 terminal.onReviewDone((channel, t) => {
   const rec = chOf(channel).prs[t.reviewOf];
@@ -154,7 +156,7 @@ terminal.onReviewTurnEnd(async (channel, t) => {
     const since = Math.min(Date.parse(t.startedAt) || Infinity, Date.parse(v.at) || Infinity) - CLOCK_SKEW_MS;
     const url = plan.reviewPostFor(comments, { login, since, commit: v.commit });
     if (!url || v.posted || rec.verdicts.some((x) => x.posted === url)) return;
-    v.posted = url; save();
+    v.posted = url; save(); holdPushes(channel);
     note(channel, 'The review of PR ' + number(t.reviewOf) + ' at ' + v.commit.slice(0, 7) + ' is on the PR, though its post was not seen, so its verdict counts: ' + url);
   } catch (e) {
     console.error('Could not look on ' + t.reviewOf + ' for its review: ' + e.message);
@@ -222,6 +224,7 @@ async function look(channel) {
   if (c.day !== today()) { c.day = today(); c.merged = 0; runs.prune(runsOf(channel), Date.now()); save(); }
   if (update.restarting()) return;
   movedAgain(channel);
+  holdPushes(channel);
   for (const task of tasks.list(channel).filter(mineTask)) track(channel, task);
   for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done')) {
     if (held(channel, task)) await mergedYet(channel, task); else await lookAt(channel, task);
@@ -480,8 +483,18 @@ async function handle(req, res, channel, rest, rctx) {
   return true;
 }
 
+function holdPushes(channel, only) {
+  for (const task of tasks.list(channel)) {
+    if (!task.pr || !task.worktree || (only && task !== only)) continue;
+    try { pushHold.sync(task, verdictOf(channel, task.pr), pipeline.of(task.pr)); } catch (e) { if (ctx) ctx.log('Could not mark the push hold of ' + task.worktree + ': ' + e.message); }
+  }
+}
+tasks.events.on('state', (channel, task) => holdPushes(channel, task));
+tasks.events.on('pr', (channel, task) => holdPushes(channel, task));
+
 function begin(relayCtx) {
   ctx = relayCtx;
+  for (const channel of tasks.channels()) holdPushes(channel);
   config.every('autopilotTickSeconds', tick);
 }
 
