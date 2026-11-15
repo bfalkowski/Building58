@@ -10,7 +10,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, until, sleep, sessionToken, ROOT } = require('./helpers.js');
+const { relay, makeRepo, removeDir, until, sleep, sessionToken, ROOT } = require('./helpers.js');
 const { prBrief } = require('../../office/reviews.js');
 const { reviewPostFor } = require('../autopilot-plan.js');
 
@@ -22,7 +22,7 @@ const GRACE = 1500;
 test('a posted review stays linked to its verdict, whatever comes after it', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: String(GRACE) });
-  t.after(async () => { await R.stop(); fs.rmSync(ghDir, { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
   fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');

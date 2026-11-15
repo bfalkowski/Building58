@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, until, sleep } = require('./helpers.js');
+const { relay, makeRepo, removeDir, until, sleep } = require('./helpers.js');
 const { stateOf, gate } = require('../pipeline.js');
 
 const PASSED = { __typename: 'CheckRun', name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' };
@@ -51,7 +51,7 @@ const QUIET = 3000;  // longer than the no-checks wait below, and the relay asks
 
 test('automatic reviews wait for a green pipeline', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
-  t.after(() => fs.rmSync(ghDir, { recursive: true, force: true }));
+  t.after(() => removeDir(ghDir));
   const prs = {};
   const answer = (pr, head, checks, state) => { prs[pr] = { state: state || 'OPEN', headRefOid: head, statusCheckRollup: checks }; fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs })); };
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_PIPELINE_POLL_SECONDS: '1', RELAY_PIPELINE_NO_CHECKS_MS: '2000' }, null, { autoReview: true });
@@ -216,7 +216,7 @@ test('automatic reviews wait for a green pipeline', async (t) => {
 
 test('the Board shows a task in review with a running or failed pipeline as waiting on it', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
-  t.after(() => fs.rmSync(ghDir, { recursive: true, force: true }));
+  t.after(() => removeDir(ghDir));
   const answer = (checks, state) => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR(9)]: { state: state || 'OPEN', headRefOid: 'a'.repeat(40), statusCheckRollup: checks } } }));
   answer([RUNNING]);
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_PIPELINE_POLL_SECONDS: '1' });
