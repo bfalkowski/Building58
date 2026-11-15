@@ -331,7 +331,7 @@ test('a relay that started no session, such as the demo\'s, leaves the saved lis
 test('the demo keeps its sessions in a list of its own', async (t) => {
   const own = path.join(require('os').tmpdir(), 'office-demo-test-' + process.pid, 'sessions.json');
   const R = await relay({ RELAY_RESUME: '0', RELAY_SESSIONS_FILE: own });
-  t.after(async () => { await R.stop(); fs.rmSync(path.dirname(own), { recursive: true, force: true }); });
+  t.after(async () => { await R.stop(); removeDir(path.dirname(own)); });
   await R.call('POST', '/terminals', { cwd: R.home });
   await until(() => fs.existsSync(own), 'its own list');
   assert.ok(!fs.existsSync(path.join(R.home, '.office-world', 'sessions.json')), 'the room\'s list is untouched');
@@ -350,7 +350,7 @@ test('the supervisor says so when the relay cannot start', async () => {
     assert.match(r.stderr, /already in use/);
     assert.match(r.stderr, /The relay stopped with exit code 1\./);
     assert.match(r.stderr, /Start it again .* and they all come back/);
-  } finally { blocker.close(); fs.rmSync(home, { recursive: true, force: true }); }
+  } finally { blocker.close(); removeDir(home); }
 });
 
 // A relay whose Update pulls from a clone, and a repo whose PR 7 can be reviewed, as in checkouts.test.js.
@@ -473,7 +473,7 @@ test('a reviewer that cannot come back keeps its checkout', async (t) => {
   });
   await t.test('one whose folder is gone is not kept', async () => {
     await R.kill();
-    fs.rmSync(reviewer.cwd, { recursive: true, force: true });
+    removeDir(reviewer.cwd);
     ({ R } = await updatable({}, home));
     await sleep(1500);
     assert.deepStrictEqual((await R.call('GET', '/terminals')).body.failed, []);
@@ -592,7 +592,7 @@ test('Update moves main only to its upstream, even when another fetch rewrote FE
   fs.writeFileSync(path.join(bin, 'git'), '#!/bin/sh\n"' + realGit + '" "$@" || exit $?\n'
     + 'if [ "$1 $2 $#" = "fetch --quiet 2" ] && [ -s "' + other + '" ]; then printf "%s\\t\\tbranch \'feat\' of origin\\n" "$(cat "' + other + '")" > "$("' + realGit + '" rev-parse --git-path FETCH_HEAD)"; fi\n', { mode: 0o755 });
   const { R, home } = await updatable({ PATH: bin + ':' + process.env.PATH });
-  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); fs.rmSync(tmp, { recursive: true, force: true }); });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(tmp); });
   const src = path.join(home, 'src'), dir = path.join(home, 'relay-folder');
   // A branch cut from main, with a change of its own, not merged.
   sh(src, 'checkout', '-qb', 'feat'); commit(src, 'office/feat.html', 'unmerged\n', 'unmerged work'); sh(src, 'push', '-q', 'origin', 'feat');
@@ -664,7 +664,7 @@ test('the relay key reaches no git or gh the relay starts', async (t) => {
   fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\nenv >> "$ENV_LOG"\nexec "' + process.execPath + '" "' + path.join(__dirname, 'fake-gh.js') + '" "$@"\n', { mode: 0o755 });
   // No RELAY_KEY, so the supervisor picks a random one.
   const { R, repo } = await updatable({ RELAY_KEY: '', PATH: bin + ':' + process.env.PATH, ENV_LOG: log, GH_CMD: path.join(bin, 'gh'), FAKE_GH_DIR: gh });
-  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); fs.rmSync(tmp, { recursive: true, force: true }); });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(tmp); });
   const key = (await until(() => R.output().match(/Key: ([0-9a-f]{24})/), 'the key'))[1];
   const call = (method, p, body) => R.call(method, p, body, { Authorization: 'Bearer ' + key });
   assert.strictEqual((await call('POST', '/terminals', { cwd: repo })).status, 201);

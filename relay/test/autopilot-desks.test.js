@@ -110,7 +110,7 @@ test('a start fails for another reason: Autopilot turns itself off and says why'
   const elsewhere = makeRepo(o.R.home, 'gone');
   const next = await o.R.call('POST', '/tickets', { title: 'In a repo that goes', repo: elsewhere }).then((r) => r.body.ticket);
   assert.ok(next, 'the ticket was filed');
-  fs.rmSync(elsewhere, { recursive: true, force: true });
+  removeDir(elsewhere);
   await o.R.call('POST', '/autopilot', { on: true, only: next.id });
   await until(async () => (await o.ap()).on === false, 'Autopilot to turn itself off');
   const a = await o.ap();

@@ -35,14 +35,59 @@ test('a test file that never ends fails with a clear message, and does not hang 
 
 // A fake gh child, or the relay's last gh poll, can still write into its folder as a test ends, so a
 // plain rmSync of that folder fails with ENOTEMPTY (T-140). Every test removes it with removeDir, which retries.
-test('every fake gh folder is removed with removeDir, which retries while a writer finishes', () => {
-  const plain = [];
-  for (const name of fs.readdirSync(__dirname).filter((f) => f.endsWith('.js'))) {
-    const text = fs.readFileSync(path.join(__dirname, name), 'utf8');
-    const folders = [...text.matchAll(/const (\w+) = [^\n]*mkdtempSync\([^\n]*'office-gh-'/g)].map((m) => m[1]);
-    for (const v of new Set(folders)) if (new RegExp('fs\\.rmSync\\(' + v + '\\b').test(text)) plain.push(name + ': ' + v);
+// In a file that makes a fake gh folder, every folder made gets a name and a removeDir, and any other rm
+// removes one file, a path.join with no recursive, so no plain removal hides behind another name.
+// This file is left out: its examples above break the rule on purpose.
+const fakeGhProblems = (name, text) => {
+  const makes = [...text.matchAll(/mkdtempSync\([^\n]*?['"`]office-gh-/g)];
+  if (!makes.length) return [];
+  const at = (i) => name + ':' + text.slice(0, i).split('\n').length;
+  const problems = [];
+  const made = new Map();
+  for (const m of makes) {
+    const before = text.slice(text.lastIndexOf('\n', m.index) + 1, m.index).match(/([\w$.]+)\s*=\s*[^=]*$/);
+    if (!before) problems.push(at(m.index) + ' makes a fake gh folder with no name to remove it by');
+    else made.set(before[1], [...(made.get(before[1]) || []), m.index]);
   }
-  assert.deepStrictEqual(plain, [], 'these remove a fake gh folder with a plain fs.rmSync');
+  for (const [v, places] of made) {
+    const removed = text.match(new RegExp('removeDir\\(\\s*' + v.replace(/\./g, '\\.') + '\\s*\\)', 'g')) || [];
+    for (const i of places.slice(removed.length)) problems.push(at(i) + ' never removes ' + v + ' with removeDir');
+  }
+  for (const m of text.matchAll(/\b(?:rm|rmdir)(?:Sync)?\(/g)) {
+    let depth = 1, i = m.index + m[0].length;
+    for (; i < text.length && depth; i++) depth += text[i] === '(' ? 1 : text[i] === ')' ? -1 : 0;
+    const args = text.slice(m.index + m[0].length, i - 1).trim();
+    const oneFile = /^path\.join\([\s\S]*\)\s*(,\s*\{[^}]*\})?$/.test(args) && !/recursive/.test(args);
+    if (!oneFile) problems.push(at(m.index) + ' removes a folder with ' + m[0] + args.split('\n')[0] + '), not removeDir');
+  }
+  return problems;
+};
+
+test('the fake gh guard sees each way a test can make or remove the folder', () => {
+  const make = (lhs, q = "'") => lhs + ' = fs.mkdtempSync(path.join(os.tmpdir(), ' + q + 'office-gh-' + q + '));\n';
+  const cases = [
+    ['let', make('let gh') + 't.after(() => fs.rmSync(gh, { recursive: true, force: true }));\n'],
+    ['double quotes', make('const gh', '"') + 't.after(() => fs.rmSync(gh, { recursive: true, force: true }));\n'],
+    ['a folder kept on an object', make('o.ghDir') + 't.after(() => fs.rmSync(o.ghDir, { recursive: true, force: true }));\n'],
+    ['a destructured rmSync', "const { rmSync } = fs;\n" + make('const gh') + 't.after(() => rmSync(gh, { recursive: true, force: true }));\n'],
+    ['a name kept under another name', make('const gh') + 'const dir = gh;\nt.after(() => fs.rmSync(dir, { recursive: true, force: true }));\n'],
+    ['a rmSync over two lines', make('const gh') + 't.after(() => fs.rmSync(gh, {\n  recursive: true, force: true }));\n'],
+    ['never removed', make('const gh') + 'run(gh);\n'],
+    ['two folders under one name, removed once', make('const gh') + 't.after(() => removeDir(gh));\n' + make('const gh') + 'run(gh);\n'],
+    ['made with no name', 'run(fs.mkdtempSync(path.join(os.tmpdir(), \'office-gh-\')));\n'],
+  ];
+  for (const [what, text] of cases) assert.notDeepStrictEqual(fakeGhProblems('x.test.js', text), [], 'it catches: ' + what);
+  const fine = make('const gh') + make('o.ghDir', '"') + "fs.rmSync(path.join(gh, 'merged.log'), { force: true });\n"
+    + 't.after(() => { removeDir(gh); removeDir(o.ghDir); });\n';
+  assert.deepStrictEqual(fakeGhProblems('x.test.js', fine), [], 'and passes removeDir, and a single file removed inside the folder');
+  assert.deepStrictEqual(fakeGhProblems('x.test.js', "fs.rmSync(dir, { recursive: true, force: true });\n"), [],
+    'and leaves alone a file that makes no fake gh folder');
+});
+
+test('every fake gh folder is removed with removeDir, which retries while a writer finishes', () => {
+  const problems = fs.readdirSync(__dirname).filter((f) => f.endsWith('.js') && f !== path.basename(__filename))
+    .flatMap((name) => fakeGhProblems(name, fs.readFileSync(path.join(__dirname, name), 'utf8')));
+  assert.deepStrictEqual(problems, [], 'these fake gh folders are not removed with removeDir');
 });
 
 test('removeDir waits out a writer that is still adding files', async () => {
