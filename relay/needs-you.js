@@ -6,7 +6,8 @@
 // question on its screen; each task that is not done (relay/tasks.js); Autopilot's hand-over reason
 // (relay/autopilot.js); whether a review of a PR runs; whether a PR merged or closed (relay/floor.js,
 // relay/pipeline.js); and who may merge a PR, from the PR watch (relay/pr-watch.js) and the last huddle
-// report (relay/huddles.js), when they have looked.
+// report (relay/huddles.js), when they have looked. The huddle counts its headline from the same list, and
+// boardOf gives the Board each task's item, so its Waiting on you column holds the tickets the list names.
 //
 // Like the terminal, this answers only the room page on this machine, with the person's key.
 'use strict';
@@ -32,8 +33,8 @@ function onlyYouMerge(channel, pr, report) {
   const move = prWatch.moveOf(channel, pr);
   if (move && move.owner === 'you' && move.cause === 'protected') return move.why;
   if (move && move.owner === 'you' && move.cause === 'ready') return move.why + ' The Lead may not merge it.';
-  const row = report && report.rows.find((r) => r.pr && r.pr.url === pr);
-  if (row && row.needs && row.pr.state === 'OPEN' && row.pr.review === 'APPROVED' && row.pr.pipeline === 'passing') return row.needs;
+  const row = report && report.rows.find((r) => r.pr && r.pr.url === pr && r.mergeWhy);
+  if (row && row.pr.state === 'OPEN' && row.pr.pipeline === 'passing') return row.mergeWhy;
   return null;
 }
 function noteOf(task) {
@@ -41,20 +42,20 @@ function noteOf(task) {
   return moved && moved.note ? moved.note : null;
 }
 
-function stateOf(channel, now) {
+function stateOf(channel, now, lastReport) {
   const all = terminal.all(channel), list = tasks.list(channel).filter((t) => t.state !== 'done');
   const taskOf = (t) => (t.task && list.find((x) => x.id === t.task)) || list.find((x) => x.owner && x.owner.terminal === t.id) || null;
   const seats = all.map((t) => {
     const task = taskOf(t), lv = livenessOf(t, now);
     return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : terminal.questionOnScreen(t), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, spoke: !!t.spoke, fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
   });
-  const report = huddles.reportOf(channel);
+  const report = lastReport || huddles.reportOf(channel);
   const reviewing = (pr) => all.some((x) => !x.exited && x.reviewOf === pr && !x.posted);
   const out = list.map((task) => ({
     id: task.id, ticket: task.ticket || null, title: task.title || null, state: task.state, pr: task.pr || null,
     prOpen: task.pr ? !closed(channel, task.pr) : null,
     owner: task.owner && terminal.find(channel, task.owner.terminal) ? task.owner.terminal : null,
-    note: noteOf(task), reviewRuns: !!task.pr && reviewing(task.pr),
+    note: noteOf(task), reviewRuns: !!task.pr && reviewing(task.pr), pipelineWaits: !!(tasks.pipelineOf(task) || {}).waits,
     handedOver: autopilot.deskOf(channel, task).handedOver,
     onlyYouMerge: task.pr ? onlyYouMerge(channel, task.pr, report) : null,
   }));
@@ -73,4 +74,10 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, stateOf };
+function boardOf(channel, now) {
+  if (!terminal.ENABLED) return null;
+  const state = stateOf(channel, now), items = listOf(state);
+  return new Map(state.tasks.map((t) => [t.id, { needsYou: (items.find((i) => i.task === t.id) || {}).kind || null, reviewRuns: t.reviewRuns }]));
+}
+
+module.exports = { handle, stateOf, boardOf };

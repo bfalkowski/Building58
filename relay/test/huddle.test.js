@@ -58,7 +58,7 @@ test('the free report', async (t) => {
   });
   await t.test('leads with what needs the person, and says what they wait on', () => {
     assert.strictEqual(s.report.rows[0].terminal, waiting.id);
-    assert.match(s.report.rows[0].needs, /needs your OK: Claude needs your permission/);
+    assert.match(s.report.rows[0].needs, /^Approve or deny the request from .+: Claude needs your permission to use Bash$/, 'the line from the Needs you list');
     assert.match(s.report.headline, /^1 needs you, 1 working, 1 finished/);
     assert.match(rowOf(s, done).waitingOn, /a review/);
   });
@@ -134,12 +134,12 @@ test('one PR, several sessions', async (t) => {
     assert.match(rowOf(s, reviewer).waitingOn, /whoever is working on its PR/);
     assert.match(s.report.headline, /^Nothing needs you/);
   });
-  await t.test('once everyone has stopped, it needs you once, on the author\'s line', async () => {
+  await t.test('once everyone has stopped, it waits on someone to fix the pipeline, which the Needs you list does not name', async () => {
     await finished(dev);
     const s = await huddle();
-    assert.match(rowOf(s, dev).needs, /pipeline is failing and nobody is on it/);
-    assert.strictEqual(rowOf(s, reviewer).needs, null);
-    assert.match(s.report.headline, /^1 needs you/);
+    assert.match(rowOf(s, dev).waitingOn, /^someone to fix the pipeline$/);
+    assert.strictEqual(rowOf(s, dev).needs, null);
+    assert.match(s.report.headline, /^Nothing needs you/);
   });
   await t.test('comments alone never need you', async () => {
     answers({ prs: { [PR]: { ...green, comments: [{ body: 'x' }] } } });
@@ -169,7 +169,8 @@ test('quiet sessions are flagged', async (t) => {
   const r = rowOf(await huddle(), a);
   assert.strictEqual(r.status, 'working', 'it is still reported as what the hooks last said');
   assert.ok(r.quiet);
-  assert.match(r.needs, /says it is working, and nothing has happened/);
+  assert.strictEqual(r.waitingOn, 'nobody knows');
+  assert.strictEqual(r.needs, null, 'a quiet session may still be at work, so the Needs you list does not name it');
   assert.match(r.line, /QUIET \d+s/);
 });
 
@@ -183,7 +184,7 @@ test('a stopped task whose PR is merged', async (t) => {
   await until(async () => !(await R.call('GET', '/terminals')).body.terminals.length, 'it to stop');
   const row = (await huddle()).report.rows[0];
   assert.strictEqual(row.status, 'gone');
-  assert.match(row.needs, /PR is merged, and its task is not Done/);
+  assert.strictEqual(row.needs, null, 'the Needs you list does not name it');
   assert.match(row.waitingOn, /move its task to Done/);
 });
 
@@ -196,7 +197,9 @@ test('a task whose session is gone', async (t) => {
   const s = await huddle();
   assert.strictEqual(s.report.rows.length, 1);
   assert.strictEqual(s.report.rows[0].status, 'gone');
-  assert.match(s.report.rows[0].needs, /session is gone/);
+  assert.match(s.report.rows[0].waitingOn, /bring it back/);
+  assert.match(s.report.rows[0].needs, /^Bring back the worker on task \w+, or move its card: its session ended with no PR\.$/, 'the line from the Needs you list');
+  assert.match(s.report.headline, /^1 needs you/);
   assert.match(s.report.rows[0].line, /Build a thing/);
   assert.match(s.report.headline, /1 gone/);
   await R.call('POST', '/tasks/' + made.id + '/move', { to: 'done' });
@@ -512,7 +515,7 @@ test('an approved, green PR waits on the Lead when it may merge', async (t) => {
   await t.test('with no Lead that may merge, it waits on the person', async () => {
     const r = rowOf(await huddle(), dev);
     assert.match(r.waitingOn, /^you to merge/);
-    assert.match(r.needs, /approved and ready for you to merge$/);
+    assert.match(r.mergeWhy, /approved and ready for you to merge$/);
   });
   const lead = await add({ cwd: fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-huddle-lead-'))) });  // on no PR
   await finished(lead);
@@ -521,7 +524,7 @@ test('an approved, green PR waits on the Lead when it may merge', async (t) => {
     const s = await huddle({ lead: false });
     const r = rowOf(s, dev);
     assert.match(r.waitingOn, /^the Lead to merge/);
-    assert.strictEqual(r.needs, null);
+    assert.strictEqual(r.mergeWhy, null);
     assert.match(r.line, /waiting on the Lead to merge/);
     assert.match(s.report.headline, /^Nothing needs you/);
   });
@@ -539,7 +542,7 @@ test('an approved, green PR waits on the Lead when it may merge', async (t) => {
       answers({ prs: { feature: { ...approved, ...over } } });
       const r = rowOf(await huddle({ lead: false }), dev);
       assert.match(r.waitingOn, /^you to merge/);
-      assert.match(r.needs, why);
+      assert.match(r.mergeWhy, why);
     });
   }
 });

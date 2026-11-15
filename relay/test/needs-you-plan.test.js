@@ -95,6 +95,8 @@ test('a task in Waiting on you: look at it, with the note that put it there', ()
   assert.deepStrictEqual(listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, reviewRuns: true })] }), [], 'a review of it runs, so the next move is not yours yet');
   const dev = seat({ task: 'k1', live: 'working' });
   assert.deepStrictEqual(listOf({ seats: [dev], tasks: [task({ owner: dev.terminal, state: 'waiting_on_you' })] }), [], 'its Dev is at work again');
+  assert.deepStrictEqual(listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, pipelineWaits: true })] }), [], 'its pipeline runs or fails, so the next move is not yours yet');
+  assert.strictEqual(listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, pipelineWaits: true, handedOver: 'It changes CLAUDE.md.' })] })[0].kind, 'handed-over', 'Autopilot handed it over all the same');
 });
 
 test('a PR only the person may merge: merge it', () => {

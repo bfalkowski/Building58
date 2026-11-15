@@ -13,7 +13,7 @@ const CI_WORDS = { green: 'CI green', red: 'CI failed', pending: 'CI running', n
 
 function columnOfTask(task) {
   if (!task || !task.state) return null;
-  const id = columnOf({ status: 'started', task: { state: task.state, pipeline: task.pipeline || null } });
+  const id = columnOf({ status: 'started', task: { state: task.state, pipeline: task.pipeline || null, needsYou: task.needsYou, reviewRuns: task.reviewRuns } });
   const col = COLUMNS.find((c) => c.id === id);
   return col ? { id: col.id, label: col.label } : null;
 }

@@ -29,6 +29,18 @@ test('each ticket lands in one column, or none if rejected', () => {
   assert.strictEqual(columnOf(ticket({ status: 'rejected' })), null);
 });
 
+test('a started ticket follows Needs you: in Waiting on you when it names the task, else where its work is', () => {
+  const { columnOf } = model();
+  const started = (task) => ticket({ status: 'started', task });
+  for (const state of ['building', 'in_review', 'changes_requested', 'waiting_on_you']) assert.strictEqual(columnOf(started({ state, needsYou: 'prompt' })), 'waiting_on_you', state);
+  assert.strictEqual(columnOf(started({ state: 'in_review', needsYou: 'merge', pipeline: { waits: true } })), 'waiting_on_you', 'Needs you comes first');
+  assert.strictEqual(columnOf(started({ state: 'waiting_on_you', needsYou: null })), 'building', 'its Dev is at work');
+  assert.strictEqual(columnOf(started({ state: 'waiting_on_you', needsYou: null, reviewRuns: true })), 'in_review', 'a review of its PR runs');
+  assert.strictEqual(columnOf(started({ state: 'in_review', needsYou: null })), 'in_review');
+  assert.strictEqual(columnOf(started({ state: 'in_review', needsYou: null, pipeline: { waits: true } })), 'building');
+  assert.strictEqual(columnOf(started({ state: 'waiting_on_you' })), 'waiting_on_you', 'without needsYou, the state decides');
+});
+
 test('a task state goes in exactly one column', () => {
   const { COLUMNS } = model();
   const held = COLUMNS.flatMap((c) => c.holds);

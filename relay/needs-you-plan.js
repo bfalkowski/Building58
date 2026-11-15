@@ -1,14 +1,17 @@
 // Needs you: one list of what the person has to do now, from state the relay already keeps. relay/needs-you.js
-// gathers that state and the Needs you panel on the room page (office/needs-you.js) shows the list. A plain
-// function with no side effects, so the tests run it without a relay. See docs/manual/roles.html#needs-you.
+// gathers that state and the Needs you panel on the room page (office/needs-you.js) shows the list. The huddle
+// headline (relay/huddles.js) and the Board's Waiting on you column (office/board-model.js) count from the same
+// list, so all three agree. A plain function with no side effects, so the tests run it without a relay.
+// See docs/manual/roles.html#needs-you.
 //
 //   listOf({ seats, tasks }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
 //
 // A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh },
 // where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
 // spoke says a turn of it has begun, and fresh says it started under a minute ago with no turn yet.
-// A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, handedOver,
-// onlyYouMerge }, where owner is the terminal of its Dev while that session runs.
+// A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
+// handedOver, onlyYouMerge }, where owner is the terminal of its Dev while that session runs, and pipelineWaits
+// says its open PR's pipeline is running or failing.
 //
 // One rule for each kind. A session gives at most one item, and so does a task. A task whose Dev already has an
 // item gives none, since answering the Dev is the one move. The kinds, most urgent first:
@@ -16,7 +19,8 @@
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   merge        an open PR that only the person may merge
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason
-//   waiting      any other task in Waiting on you, unless a review of its PR runs or its Dev is at work
+//   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
+//                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
 //   prompt       an idle Dev on a task in Building or Changes requested with no PR, unless it has just started
 //   gone         a task in Building or Changes requested with no PR whose session has ended
@@ -53,7 +57,7 @@ function taskItem(t, dev) {
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), { url: pr });
   if (t.state === 'waiting_on_you') {
-    if (t.reviewRuns || (dev && BUSY.includes(dev.live))) return null;
+    if (t.reviewRuns || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;
     const note = oneLine(t.handedOver || t.note, 300);
     return item('waiting', 'Look at ' + nameOf(t) + ': its task is in Waiting on you.' + (note ? ' ' + note : ''), pr ? { url: pr } : dev ? { terminal: dev.terminal } : { ticket: t.ticket || t.id });
   }
