@@ -12,6 +12,12 @@
 //             session has ended, and whether all of it was on the PR before the relay watched it
 //   owesPost  { links, count }: the PR has not yet been told that the Dev was told
 //   problem   why gh could not be asked, or null
+//   posted    { url, at, seen }: the room's latest automatic review of the PR, posted so its verdict
+//             counts. The post starts a check at once, and relay/merge-hold.js holds a merge until a check
+//             that worked has listed that link (seen), since GitHub may list a new comment late (T-229). A
+//             link that is not a comment's is seen by the first check that worked and began after it. A
+//             check asked for while one runs waits for it, then runs on its own, since the one under way
+//             may have begun before the post.
 //
 // The message is typed through relay/delivery.js, so only while the Dev's session is idle. It has
 // links and a count, never a comment's words. T-4's review loop can call tell() with its own news.
@@ -85,6 +91,7 @@ async function check(channel, task) {
   if (r.owesPost) await postTold(task);
   if (!r.watchingSince) { r.watchingSince = new Date().toISOString(); tasks.save(); }
   const since = Date.parse(r.watchingSince);
+  const from = new Date().toISOString();
   const got = await itemsOf(task.pr);
   if (got.failed) {
     if (r.problem !== got.failed) {
@@ -96,6 +103,8 @@ async function check(channel, task) {
   }
   if (r.problem) { log('Checking ' + task.pr + ' for review comments works again.'); tasks.record(task, { type: 'note', note: 'Checking the PR for comments works again.' }); }
   r.problem = null; r.checkedAt = new Date().toISOString();
+  const p = r.posted;
+  if (p && !p.seen && (ITEM_URL.test(p.url) ? got.items.some((i) => i.url === p.url) : from >= p.at)) p.seen = true;
   if (typeof r.comments !== 'number') { r.comments = 0; r.blocking = 0; r.countedSince = new Date().toISOString(); }
   const seen = new Set(r.seen), news = [];
   for (const item of got.items) {
@@ -113,9 +122,11 @@ async function check(channel, task) {
   return true;
 }
 const checking = new Map();
-function checkOnce(channel, task) {
-  if (!checking.has(task.id)) checking.set(task.id, check(channel, task).finally(() => checking.delete(task.id)));
-  return checking.get(task.id);
+async function checkOnce(channel, task) {
+  while (checking.has(task.id)) await checking.get(task.id).catch(() => {});
+  const p = check(channel, task).finally(() => checking.delete(task.id));
+  checking.set(task.id, p);
+  return p;
 }
 async function checkNow(channel, task) {
   if (!(config.get('reviewPollSeconds') > 0) || !PR_URL.test(task.pr || '')) return true;
@@ -248,6 +259,14 @@ function tick() {
     }
   }
 }
+function reviewPosted(channel, pr, url) {
+  if (!(config.get('reviewPollSeconds') > 0)) return;
+  const task = tasks.list(channel).find((x) => x.pr === pr && x.state !== 'done');
+  if (!task || !PR_URL.test(task.pr)) return;
+  stateOf(task).posted = { url: String(url || ''), at: new Date().toISOString(), seen: false };
+  tasks.save();
+  checkOnce(channel, task).catch((e) => log('Checking ' + task.pr + ' for review comments failed: ' + e.message));
+}
 let polling = false;
 async function poll() {
   if (polling) return;
@@ -267,4 +286,4 @@ config.every('reviewPollSeconds', poll, 5000);
 setInterval(tick, TICK).unref();
 
 
-module.exports = { noteHook, tell, poll, checkNow, useVerdicts, useHolds, DEV_MARK, TOLD_MARK, HOLD_MARK };
+module.exports = { noteHook, tell, poll, checkNow, reviewPosted, useVerdicts, useHolds, DEV_MARK, TOLD_MARK, HOLD_MARK };

@@ -136,7 +136,7 @@ async function giveVerdict(channel, agent, kind) {
 const unposted = (rec, t) => rec && rec.verdicts.find((x) => x.sessionId === t.sessionId && !x.posted);
 terminal.onReviewPosted((channel, t) => {
   const v = unposted(chOf(channel).prs[t.reviewOf], t);
-  if (v) { v.posted = t.posted.url; save(); holdPushes(channel); }
+  if (v) { v.posted = t.posted.url; save(); holdPushes(channel); prComments.reviewPosted(channel, t.reviewOf, t.posted.url); }
 });
 terminal.onReviewDone((channel, t) => {
   const rec = chOf(channel).prs[t.reviewOf];
@@ -157,6 +157,7 @@ terminal.onReviewTurnEnd(async (channel, t) => {
     const url = plan.reviewPostFor(comments, { login, since, commit: v.commit });
     if (!url || v.posted || rec.verdicts.some((x) => x.posted === url)) return;
     v.posted = url; save(); holdPushes(channel);
+    prComments.reviewPosted(channel, t.reviewOf, url);
     note(channel, 'The review of PR ' + number(t.reviewOf) + ' at ' + v.commit.slice(0, 7) + ' is on the PR, though its post was not seen, so its verdict counts: ' + url);
   } catch (e) {
     console.error('Could not look on ' + t.reviewOf + ' for its review: ' + e.message);

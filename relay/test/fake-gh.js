@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Stands in for gh. FAKE_GH_DIR holds calls.log, which it appends each call to, and answers.json:
 //   { "fail": "message" }                  every call fails with that message
+//   { "failApi": { "repos/o/r/issues/7/comments": "message" } }  `gh api` on that path fails with that message
 //   { "prs": { "<branch or PR link>": {...} } }  what `gh pr view` prints. Anything else has no PR.
 //   { "api": { "repos/o/r/issues/7/comments": [...] } }  what `gh api --slurp` prints, as one page. Anything else is empty.
 //                                          Without --slurp, such as `gh api user`, it prints the value as it is.
@@ -19,6 +20,7 @@ if (answers.fail) { console.error(answers.fail); process.exit(1); }
 const [verb, sub] = process.argv.slice(2);
 if (verb === 'api') {
   const at = process.argv.slice(3).find((a) => !a.startsWith('-')).split('?')[0];
+  if ((answers.failApi || {})[at]) { console.error(answers.failApi[at]); process.exit(1); }
   const value = (answers.api || {})[at];
   console.log(JSON.stringify(process.argv.includes('--slurp') ? [value || []] : value || {}));
   process.exit(0);
