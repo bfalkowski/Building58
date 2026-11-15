@@ -1523,7 +1523,7 @@
     ['#f08c7e', '#f0c25e', '#8fd19e'].forEach((c, i) => { x.fillStyle = c; x.beginPath(); x.arc(18 + i * 18, 17, 6, 0, Math.PI * 2); x.fill(); });
     x.fillStyle = '#cfd6df'; x.font = '18px ' + MONO;
     const seated = w.sessionId && sessions.get(w.sessionId);
-    const title = w.name.toLowerCase() + ' — ' + (w.task ? w.task.label : (seated && seated.title) || 'session');
+    const title = w.name.toLowerCase() + ' · ' + (w.task ? w.task.label : (seated && seated.title) || 'session');
     x.fillText(title.slice(0, 34), 76, 23);
     let lines = (w.task ? w.task.lines : []) || [];
     if (w.lead && sc === DESKS.lead.screens[1]) lines = leadLog;
