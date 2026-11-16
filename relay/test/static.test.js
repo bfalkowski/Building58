@@ -42,6 +42,12 @@ test('The static server', async (t) => {
     assert.strictEqual(await get('/%E0%A4%A'), 404);
     assert.strictEqual(await get('/office/%'), 404);
   });
+  await t.test('answers 404, not 500 or the root page, to a path that starts with two slashes', async () => {
+    assert.strictEqual(await get('//'), 404);
+    assert.strictEqual(await get('//x'), 404);
+    assert.strictEqual(await get('///office/index.html'), 404);
+    assert.strictEqual(await get('//['), 404);
+  });
   await t.test('answers 400 bad_channel, not 500, to a malformed escape in a channel name', async () => {
     const r = await fetch('http://127.0.0.1:' + R.port + '/channels/%E0%A4%A/tickets', { headers: { Authorization: 'Bearer test-key' } });
     assert.strictEqual(r.status, 400);
