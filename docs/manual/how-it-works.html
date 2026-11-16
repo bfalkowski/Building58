@@ -399,6 +399,7 @@
     <tr><td>The Lead stops posted reviewers and Devs whose work merged</td><td class="plain"><span class="pill off">switch, starts off</span></td><td class="plain">T-55, T-92, <code>RELAY_LEAD_STOPS</code></td></tr>
     <tr><td>Update goes back to the last good commit when the new relay fails</td><td class="plain"><span class="pill off">switch, starts off</span></td><td class="plain">T-80, <code>RELAY_ROLLBACK</code></td></tr>
     <tr><td>The Lead starts tickets, a few at a time</td><td class="plain"><span class="pill off">your switch, with limits</span></td><td class="plain">T-37</td></tr>
+    <tr><td>The Lead starts a review of a task's PR, through the relay</td><td class="plain"><span class="pill off">switch, starts off</span></td><td class="plain">T-98</td></tr>
   </tbody>
 </table>
 <p>Rungs that are not built yet are in article 5 and on the Board, not here.</p>
@@ -503,7 +504,7 @@
     <tr><td><code>relay/tickets.js</code></td><td>The rules about tickets. Starting one makes a task.</td></tr>
     <tr><td><code>relay/ticket-history.js</code></td><td>Each ticket's <a href="roles.html#ticket-history">history</a> and who has it now, and the name the relay gave each session.</td></tr>
     <tr><td><code>relay/ticket-stores/</code></td><td>Where tickets are kept: <code>local.js</code> by default, or <code>github.js</code>.</td></tr>
-    <tr><td><code>relay/ticket.js</code></td><td>The command sessions use to list and file tickets and to read and post on the chat board, and the Lead to read the floor and how tired it is, move tasks and tickets, start tickets and stop sessions.</td></tr>
+    <tr><td><code>relay/ticket.js</code></td><td>The command sessions use to list and file tickets and to read and post on the chat board, and the Lead to read the floor and how tired it is, move tasks and tickets, start tickets, start reviews and stop sessions.</td></tr>
     <tr><td><code>relay/tasks.js</code></td><td>Keeps the tasks on disk and gives each a checkout and a worker.</td></tr>
     <tr><td><code>relay/checkouts.js</code></td><td>Gives Add worker and automatic PR reviews their own checkouts, and takes them away.</td></tr>
     <tr><td><code>relay/reviews.js</code></td><td>Starts the automatic reviews: the first one, and a follow-up after each push. Keeps their switches and each PR's count.</td></tr>

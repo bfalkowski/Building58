@@ -66,6 +66,17 @@ test('every brief the Lead can get is under 1024 bytes from a checkout root of 1
   }
 });
 
+// T-98: the Lead reviewed PR 42 with a subagent in its own session, which the Floor could not see. Every
+// brief sends it to the relay for a reviewer of its own, and the test above keeps each under 1024 bytes.
+test('the Lead\'s brief starts reviews through the relay, never in its own session', () => {
+  const { leadBrief } = require('../lead-brief.js');
+  for (const opts of KINDS) {
+    const brief = leadBrief(path.join(ROOT, 'relay'), opts);
+    assert.ok(brief.includes('ticket.js has move, tasks, task, start, stop, review <PR>'), JSON.stringify(opts));
+    assert.ok(brief.includes('Never review yourself or by subagent.'), JSON.stringify(opts));
+  }
+});
+
 test('the Lead\'s brief', async (t) => {
   let R = await relay({ RELAY_WIP_LIMIT: '5' });
   const home = R.home, repo = makeRepo(home), file = path.join(home, '.office-world', 'lead.json');

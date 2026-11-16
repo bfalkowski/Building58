@@ -192,5 +192,5 @@ test('with the pipeline check at 0, a new commit still takes the label off, and 
 
 test('the Lead\'s brief says to mark ready PRs with ticket.js ready', () => {
   const { leadBrief } = require('../lead-brief.js');
-  for (const opts of [{}, { merge: true }, { autopilot: true }, { merge: true, autopilot: true }]) assert.ok(leadBrief('/r/relay', opts).includes('Mark ready PRs with ticket.js ready'), JSON.stringify(opts));
+  for (const opts of [{}, { merge: true }, { autopilot: true }, { merge: true, autopilot: true }]) assert.ok(leadBrief('/r/relay', opts).includes('Check PRs against the code and the pipeline, then ticket.js ready.'), JSON.stringify(opts));
 });
