@@ -116,9 +116,9 @@ test('the relay starts the first review and the follow-ups, with no page open', 
     await opens(d, pr);
     await stop(await newReviewer(pr));
     await pushes(d); await say(d, 'Stop');
-    await noNewReviewer(pr, 'the PR is still at the commit its review read');
+    await until(() => /PR #9 has no new commits since its last review/.test(R.output()), 'the relay to find no new commits', 300);
+    assert.deepStrictEqual((await reviewersOf(pr)).filter((x) => !seen.has(x.id)), [], 'the PR is still at the commit its review read');
     assert.strictEqual((await reviews()).prs.find((x) => x.pr === pr).count, 1);
-    assert.match(R.output(), /PR #9 has no new commits since its last review/);
     await stop(d);
   });
 
@@ -127,8 +127,8 @@ test('the relay starts the first review and the follow-ups, with no page open', 
     while ((await terminals()).length < 9) others.push(await dev());
     commit(pr);
     await opens(d, pr);
-    await noNewReviewer(pr, 'all 9 desks are taken');
-    assert.match(R.output(), /No desk is free for the review of PR #10/);
+    await until(() => /No desk is free for the review of PR #10/.test(R.output()), 'the relay to find no desk free', 300);
+    assert.deepStrictEqual((await reviewersOf(pr)).filter((x) => !seen.has(x.id)), [], 'all 9 desks are taken');
     const p = (await reviews()).prs.find((x) => x.pr === pr);
     assert.deepStrictEqual([p.count, p.desk], [0, true], 'it waits for a desk, and is not counted yet');
     await stop(others.pop());
@@ -141,7 +141,7 @@ test('the relay starts the first review and the follow-ups, with no page open', 
   await t.test('a first review that keeps failing for another reason waits on the person', async () => {
     const d = await dev(), pr = 'https://github.com/acme/other/pull/3';  // the folder has no remote for acme/other, and its own repo cannot be reached
     await opens(d, pr);
-    await until(async () => { const p = (await reviews()).prs.find((x) => x.pr === pr); return p && p.failed; }, 'it to give up after 3 tries');
+    await until(async () => { const p = (await reviews()).prs.find((x) => x.pr === pr); return p && p.failed; }, 'it to give up after 3 tries', 300);
     const p = (await reviews()).prs.find((x) => x.pr === pr);
     assert.deepStrictEqual([p.count, p.held], [0, false]);
     assert.match(p.failed, /fetching https:\/\/github\.com\/acme\/other\/pull\/3 from its own repo failed/);
