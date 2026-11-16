@@ -48,9 +48,13 @@
   function follow(u) {
     clearInterval(timer);
     btn.disabled = true; showOff(u || { state: 'waiting' });
+    if (u && u.step && reloads === null) reloads = u.step.reloads;
     timer = setInterval(async () => {
       const r = await api();
-      if (r && r.run && run && r.run !== run) wentAway = true;
+      if (r && r.run && run && r.run !== run) {
+        if (r.update) { tell('The relay is back. Reloading.'); location.reload(); return; }
+        wentAway = true;
+      }
       if (!r) {
         wentAway = true; offBtn.hidden = true; goneSince = goneSince || Date.now();
         if (Date.now() - goneSince < BACK_WITHIN) tell('Restarting the relay. Every session comes back.');
