@@ -5,6 +5,8 @@
 //   { "prs": { "<branch or PR link>": {...} } }  what `gh pr view` prints. Anything else has no PR.
 //   { "api": { "repos/o/r/issues/7/comments": [...] } }  what `gh api --slurp` prints, as one page. Anything else is empty.
 //                                          Without --slurp, such as `gh api user`, it prints the value as it is.
+//   { "gateApi": { "repos/o/r/pulls/7/reviews": "/a/file" } }  `gh api` on that path waits until the file exists,
+//                                          then answers from answers.json as it was when the call began
 // `gh pr comment <link> --body-file -` appends its link and body to posted.log, and prints a comment link.
 // `gh pr merge <link> --merge` appends `<link> --merge` to merged.log.
 'use strict';
@@ -21,6 +23,8 @@ const [verb, sub] = process.argv.slice(2);
 if (verb === 'api') {
   const at = process.argv.slice(3).find((a) => !a.startsWith('-')).split('?')[0];
   if ((answers.failApi || {})[at]) { console.error(answers.failApi[at]); process.exit(1); }
+  const gate = (answers.gateApi || {})[at];
+  while (gate && !fs.existsSync(gate)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
   const value = (answers.api || {})[at];
   console.log(JSON.stringify(process.argv.includes('--slurp') ? [value || []] : value || {}));
   process.exit(0);
