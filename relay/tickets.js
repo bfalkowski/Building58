@@ -266,6 +266,7 @@ function setShapes(channel, ticket, body) {
     const all = await listAll(channel);
     if (body.shapes === undefined) return [400, { ok: false, error: 'bad_param', message: 'Give "shapes", a list of the ticket ids this design ticket shapes, or [] for none.' }];
     const now = all.find((t) => t.id === ticket.id) || ticket;
+    if (!['triage', 'ready', 'started'].includes(now.status)) return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage, Ready or Started can change what it shapes. This one is ' + now.status + '.' }];
     const { shapes, error } = shapesFrom(body.shapes, all, now.id);
     if (error) return error;
     const had = Array.isArray(now.shapes) ? now.shapes : [];

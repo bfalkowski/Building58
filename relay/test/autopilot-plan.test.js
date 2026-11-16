@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { forPr, ciOf, nextTicket, heldBack } = require('../autopilot-plan.js');
+const { forPr, ciOf, nextTicket, heldBack, whyNoneAllowed } = require('../autopilot-plan.js');
 
 const HEAD = 'a'.repeat(40);
 const green = [{ name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' }];
@@ -109,4 +109,30 @@ test('it skips a ticket on hold, replaced, or shaped by an open design ticket (T
   assert.strictEqual(nextTicket(started, none, null), null, 'a design ticket being built still holds what it shapes');
   const cleared = all.map((t) => (t.id === 'T-8' ? { ...t, mark: null } : t));
   assert.strictEqual(nextTicket(cleared, none, ['T-8']).id, 'T-8', 'clearing the mark lets it start');
+});
+test('with an allowed list and nothing to start, the idle note names why each allowed ticket waits (T-291)', () => {
+  const ready = (id, extra) => Object.assign({ id, status: 'ready', repo: '/r', createdBy: 'you', priority: 'normal', rank: Number(id.slice(2)) }, extra);
+  const none = () => false;
+  const all = [
+    ready('T-1', { status: 'done' }),
+    ready('T-2', { status: 'started' }),
+    ready('T-3', { status: 'triage' }),
+    ready('T-4', { createdBy: 'lead', approvedBy: 'none' }),
+    ready('T-5', { blockedBy: ['T-2'] }),
+    ready('T-6', { mark: 'hold' }),
+    ready('T-7', { mark: 'replaced', replacedBy: 'T-9' }),
+    ready('T-8'),
+    ready('T-9', { status: 'triage', shapes: ['T-8'] }),
+    ready('T-10', { repo: null })
+  ];
+  const only = ['T-1', 'T-2', 'T-3', 'T-4', 'T-5', 'T-6', 'T-7', 'T-8', 'T-10'];
+  assert.strictEqual(nextTicket(all, none, only), null);
+  assert.strictEqual(whyNoneAllowed(all, none, only), 'No ticket you allowed can start. T-3: In Triage. T-4: Not approved by you. T-5: Waiting for T-2. T-6: On hold. T-7: Replaced by T-9. T-8: Waiting on design ticket T-9, which shapes it. T-10: No repo.');
+  assert.strictEqual(whyNoneAllowed(all, none, ['T-1', 'T-2']), 'Every ticket you allowed is started or done.');
+  assert.strictEqual(whyNoneAllowed(all, (t) => t.id === 'T-8', ['T-1', 'T-8']), 'Every ticket you allowed is started or done.', 'a ticket with a task counts as started');
+  const rejected = ready('T-11', { status: 'rejected' });
+  assert.strictEqual(whyNoneAllowed([rejected], none, ['T-11']), 'No ticket you allowed can start. T-11: Rejected.', 'a rejected ticket is not started or done');
+  assert.strictEqual(whyNoneAllowed([...all, rejected], none, ['T-1', 'T-11']), 'No ticket you allowed can start. T-11: Rejected.');
+  assert.strictEqual(whyNoneAllowed(all, none, ['T-99', 'games']), 'No ticket on the Board has an id or label you allowed.');
+  assert.strictEqual(whyNoneAllowed([ready('T-5', { labels: ['flaky'], mark: 'hold' })], none, ['flaky']), 'No ticket you allowed can start. T-5: On hold.', 'a label counts too');
 });
