@@ -91,7 +91,7 @@ test('a stuck task comes back even over the WIP limit, and Autopilot starts noth
   await until(async () => (await taskOf(made[0])).state === 'waiting_on_you', 'the stuck task to wait on you');
   const next = await until(() => taskOf(made[1]), 'the second ticket to start in the freed place');
   await say(next.owner.sessionId, 'UserPromptSubmit');
-  await until(async () => /^Waiting for room under the WIP limit: 1 tasks are being built, and the limit is 1\.$/.test((await ap()).idle || ''), 'Autopilot to wait at the WIP limit');
+  await until(async () => /^Waiting for room under the WIP limit: 1 task is being built, and the limit is 1\.$/.test((await ap()).idle || ''), 'Autopilot to wait at the WIP limit');
 
   await say(next.owner.sessionId, 'PreToolUse', { tool_name: 'Bash' });
   await say(dev, 'PostToolUse', { tool_name: 'Bash' });

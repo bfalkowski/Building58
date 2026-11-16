@@ -338,7 +338,8 @@ async function maybeStart(channel) {
     const next = plan.nextTicket(all, (t) => !!tasks.ofTicket(channel, t), c.only);
     if (!next) { c.idle = c.only ? plan.whyNoneAllowed(all, (t) => !!tasks.ofTicket(channel, t), c.only) : 'Nothing in Ready that a person approved and that is not blocked, on hold, replaced or waiting on a design ticket.'; return; }
     const waitWip = (message) => { c.idle = 'Waiting for room under the WIP limit: ' + message; };
-    if (tasks.building(channel) >= tasks.wipLimit()) { waitWip(tasks.building(channel) + ' tasks are being built, and the limit is ' + tasks.wipLimit() + '.'); return; }
+    const building = tasks.building(channel);
+    if (building >= tasks.wipLimit()) { waitWip(building + (building === 1 ? ' task is' : ' tasks are') + ' being built, and the limit is ' + tasks.wipLimit() + '.'); return; }
     const wasWaiting = /^Waiting for a free desk/.test(c.idle || '');
     c.idle = null;
     let [status, out] = await tickets.startBy(channel, next, BY, ctx);
