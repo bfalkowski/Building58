@@ -62,6 +62,10 @@
     }
     return aim;
   }
+  const ARM_JOINTS = ['sLx', 'sLz', 'eL', 'sRx', 'sRz', 'eR'], SETTLED = 0.02;
+  function chairTurn(p, aim, want) {
+    return ARM_JOINTS.every((j) => Math.abs(p[j] - aim[j]) < SETTLED) ? want : 0;
+  }
   const ARM_CARRY = { sRx: -0.28, sRz: 0.08, eR: -1.45 }, ARM_CARRY_SIT = { sRx: 0.27, sRz: 0.08, eR: -2.49 }, ARM_SIP = { sRx: -0.62, sRz: -0.2, eR: -2.38 }, ARM_PADDLE = { sRx: -0.7, sRz: 0.2, eR: -1.0 };
   const SEAT = { pelvis: 0.09, hip: 0.02, thigh: 0.43, shin: 0.49 };
   function seatOn(pose, seat, height) {
@@ -74,6 +78,6 @@
     return out;
   }
   function towards(p, aim, k) { for (const j of JOINTS) p[j] += (aim[j] - p[j]) * k; }
-  const api = { POSE, RIG, DESK, SEAT, typePoseFor, aimArms, seatOn, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE };
+  const api = { POSE, RIG, DESK, SEAT, typePoseFor, aimArms, chairTurn, seatOn, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE };
   if (typeof module !== 'undefined') module.exports = api; else window.OfficePoses = api;
 })();

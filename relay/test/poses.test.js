@@ -4,7 +4,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { POSE, RIG, typePoseFor, aimArms, towards, ARM_CARRY_SIT, ARM_SIP } = require('../../office/poses.js');
+const { POSE, RIG, typePoseFor, aimArms, chairTurn, towards, ARM_CARRY_SIT, ARM_SIP } = require('../../office/poses.js');
 
 // The desk top is 0.70 to 0.75 high. Its front edge is 0.27 in front of the chair's spot at the
 // Lead's desk and 0.29 at the benches (desk() and bench() in office/office.js), so 0.27 holds for
@@ -104,6 +104,28 @@ test('the swivel fidget keeps the hands clear, in the chair and as the next fidg
     for (const fps of FPS) for (const b of Object.keys(P)) {
       const { worst } = play(POSE.sit, P[b], h, fps, () => 0, true, SWIVEL);
       if (worst > 0.001) hits.push(`sit to ${b}, turned, height ${h}, ${fps} fps: ${(worst * 1000).toFixed(0)} mm deep`);
+    }
+  }
+  assert.deepStrictEqual(hits, []);
+});
+
+test('the swivel fidget keeps the hands clear when it starts from another seated pose', () => {
+  // In the room the fidget before it, such as phone or wave, leaves the arms up, and the turn
+  // starts at 0 and passes through 0 about every 3.5 s (fidgetOf in office/office.js). The chair
+  // turns only once the arms are at their pose. After 7 s the next fidget, wave, starts.
+  const hits = [];
+  for (const h of HEIGHTS) for (const fps of FPS) {
+    const P = seatedPoses(h);
+    for (const a of Object.keys(P)) for (let phase = 0; phase < 7; phase++) {
+      const p = Object.assign({}, P[a]), route = {}, dt = 1 / fps;
+      let swivel = 0, worst = 0;
+      for (let t = 0; t < 10; t += dt) {
+        const to = t < 7 ? POSE.sit : P.wave, want = t < 7 ? Math.sin(t * 0.9 + phase) * 0.55 : 0;
+        swivel += (chairTurn(p, to, want) - swivel) * Math.min(1, dt * 3);
+        towards(p, aimArms(route, p, to, h, 0, swivel), Math.min(1, dt * 7));
+        worst = Math.max(worst, depth(p, h, 0, swivel));
+      }
+      if (worst > 0.001) hits.push(`${a} to swivel, phase ${phase}, height ${h}, ${fps} fps: ${(worst * 1000).toFixed(0)} mm deep`);
     }
   }
   assert.deepStrictEqual(hits, []);
