@@ -121,8 +121,7 @@ async function markNow(channel, body, agent) {
   if (hold.failed) return [409, { ok: false, error: 'not_ready', message: 'Not marked: the relay could not read the Floor to check for a merge hold: ' + hold.failed }];
   const why = plan.refusal(v.value, head, hold.hold);
   if (why) return [409, { ok: false, error: 'not_ready', message: 'Not marked: ' + why }];
-  const marks = store[channel] || (store[channel] = {});
-  const before = marks[pr];
+  const before = store[channel] && store[channel][pr];
   if (before && before.head === v.value.headRefOid) {
     const on = (v.value.labels || []).some((l) => l && l.name === plan.LABEL);
     const labelled = on ? {} : await addLabel(pr);
@@ -138,7 +137,7 @@ async function markNow(channel, body, agent) {
   if (posted.failed) return [502, { ok: false, error: 'gh', message: 'gh could not post the note: ' + posted.failed }];
   const comment = oneLine(posted.out, 300);
   const labelled = await addLabel(pr);
-  marks[pr] = { head: full, at: new Date().toISOString(), comment, who, labelled: !labelled.failed };
+  (store[channel] || (store[channel] = {}))[pr] = { head: full, at: new Date().toISOString(), comment, who, labelled: !labelled.failed };
   save();
   log((agent ? 'The Lead' : 'The person') + ' marked ' + pr + ' ready to merge at ' + full.slice(0, 7) + (labelled.failed ? ', but the label failed: ' + labelled.failed : '.'));
   if (labelled.failed) return [502, { ok: false, error: 'gh', comment, message: 'The note is posted (' + comment + '), but gh could not add the label: ' + labelled.failed }];
@@ -150,14 +149,14 @@ async function look() {
   if (looking) return;
   looking = true;
   try {
-    for (const [channel, marks] of Object.entries(store)) {
-      for (const pr of Object.keys(marks)) await inTurn(() => lookAt(channel, marks, pr));
-      if (!Object.keys(marks).length) { delete store[channel]; save(); }
+    for (const channel of Object.keys(store)) {
+      for (const pr of Object.keys(store[channel] || {})) await inTurn(() => lookAt(channel, pr));
+      if (store[channel] && !Object.keys(store[channel]).length) { delete store[channel]; save(); }
     }
   } finally { looking = false; }
 }
-async function lookAt(channel, marks, pr) {
-  const m = marks[pr];
+async function lookAt(channel, pr) {
+  const marks = store[channel] || {}, m = marks[pr];
   if (!m) return;
   const v = await view(pr, 'state,headRefOid,labels');
   if (v.failed) { if (m.problem !== v.failed) log('Could not ask gh about ' + pr + ', so its ready to merge label is checked again later: ' + v.failed); m.problem = v.failed; return; }
