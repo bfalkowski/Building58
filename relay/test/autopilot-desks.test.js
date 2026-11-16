@@ -204,8 +204,8 @@ test('a task fills the WIP limit while Autopilot frees a desk: it waits, then st
   await until(async () => /^Waiting for room under the WIP limit/.test((await o.ap()).idle || '') || (await o.ap()).on === false, 'Autopilot to wait or give up');
   let a = await o.ap();
   assert.strictEqual(a.on, true, 'Autopilot stayed on: ' + JSON.stringify(a.notes.slice(-3)));
-  assert.ok(!a.notes.some((x) => /Could not start|turned itself off/.test(x.text)), JSON.stringify(a.notes));
-  assert.ok(!(await o.terminals()).some((x) => x.id === mine.id), 'its own Done Dev was stopped');
+  assert.ok(!a.notes.some((x) => /Could not start|turned itself off|did not end within/.test(x.text)), JSON.stringify(a.notes));
+  assert.ok(!(await o.terminals()).some((x) => x.id === mine.id && x.running), 'its own Done Dev was stopped');
   assert.ok(!(await o.R.call('GET', '/tasks')).body.tasks.some((x) => x.ticket === next.id), 'nothing started past the limit');
   assert.strictEqual((await o.R.call('POST', '/tasks/' + theirs.id + '/move', { to: 'done' })).status, 200);
   assert.strictEqual((await o.started(next)).by, 'Autopilot');
