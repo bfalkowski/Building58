@@ -150,6 +150,24 @@ async function sourceFor(folder, owner, name) {
   const urls = remotes.map((r) => r.prefix + owner + '/' + name + '.git').concat('https://github.com/' + owner + '/' + name + '.git');
   return { urls: [...new Set(urls)] };
 }
+const ROOM = path.join(__dirname, '..');
+const isCloneOf = async (top, owner, name) => !!(top && ((await sourceFor(top, owner, name)) || {}).remote);
+async function roomCloneOf(channel, owner, name) {
+  const tickets = await require('./tickets.js').listAll(channel).catch(() => []);
+  for (const folder of new Set([ROOM].concat(tickets.map((t) => t.repo).filter(Boolean)))) {
+    const top = fs.existsSync(folder) && await git(folder, ['rev-parse', '--show-toplevel']).catch(() => null);
+    if (await isCloneOf(top, owner, name)) return top;
+  }
+  return null;
+}
+async function reviewTop(channel, top, from, pr, log) {
+  const [, owner, name] = pr.match(PR_URL);
+  if (await isCloneOf(top, owner, name)) return top;
+  const room = await roomCloneOf(channel, owner, name);
+  if (!room) return top;
+  log(from + ' is not a clone of ' + owner + '/' + name + ', so the review of ' + pr + ' uses ' + room + '.');
+  return room;
+}
 function quietEnv(env) {
   const own = env.SSH_ASKPASS ? { SSH_ASKPASS_REQUIRE: env.SSH_ASKPASS_REQUIRE || 'prefer' } : { SSH_ASKPASS: '/usr/bin/false', SSH_ASKPASS_REQUIRE: 'force' };
   return Object.assign({}, env, { GIT_TERMINAL_PROMPT: '0' }, own);
@@ -209,7 +227,8 @@ async function make(channel, body, ctx) {
   if (pr && !PR_URL.test(pr)) return [400, { ok: false, error: 'bad_pr', message: 'A PR link looks like https://github.com/owner/repo/pull/1.' }];
   if (prompt.length > MAX_PROMPT) return [400, { ok: false, error: 'bad_prompt', message: 'Keep the prompt to ' + MAX_PROMPT + ' characters.' }];
   const size = { cols: body.cols, rows: body.rows };
-  const top = await git(from, ['rev-parse', '--show-toplevel']).catch(() => null);
+  const here = await git(from, ['rev-parse', '--show-toplevel']).catch(() => null);
+  const top = pr ? await reviewTop(channel, here, from, pr, ctx.log) : here;
   if (!top && pr) return [400, { ok: false, error: 'no_repo', message: 'Need a git repo to review a PR: ' + from }];
   if (!top) { const r = terminal.start(channel, Object.assign({ cwd: from }, size), ctx); return [r.status, r.body]; }
 
