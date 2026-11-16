@@ -29,6 +29,10 @@
 //                                              (from Triage or Ready, for work that merged without a task)
 //   node relay/ticket.js tasks                 (every task's id, including those with no ticket)
 //   node relay/ticket.js task 63e175 in_review (building, in_review, changes_requested, waiting_on_you or done)
+// Only a session you made the Lead, while you have turned on Let the Lead start reviews, can ask the relay
+// for a review of a task's PR. The relay starts a reviewer in its own checkout, as Get a review does. It
+// refuses a PR that is no task's, one a reviewer is on, an ask with no desk free, and a PR past its reviews:
+//   node relay/ticket.js review https://github.com/owner/repo/pull/12
 // Only a session you made the Lead and let start tickets can start one. The relay refuses past your limit:
 //   node relay/ticket.js start T-1             (from Ready, one at a time, in Board order, while few enough are building)
 // And, while the person runs the relay with RELAY_LEAD_STOPS=1, stop a session the floor calls safe to stop:
@@ -169,6 +173,12 @@ async function main() {
       : 'The relay does not know yet. The Lead\'s status line sends the number after each reply, and none has come since its last /clear or refresh. ' + scale);
     return 0;
   }
+  if (cmd === 'review' && args[0]) {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/reviews/lead'), { method: 'POST', headers, body: JSON.stringify({ pr: args[0] }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log('Review started: ' + r.pr + '  ' + (r.reviewer || 'a reviewer') + ' reviews it in its own checkout, posts and leaves  (' + r.count + ' of ' + r.max + ' for this PR)');
+    return 0;
+  }
   if (cmd === 'start' && args[0]) {
     const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/start', { method: 'POST', headers, body: '{}' })).json();
     if (!r.ok) { console.error(r.message); return 1; }
@@ -251,7 +261,7 @@ async function main() {
     console.log('Moved: ' + moved.id + '  ' + (r.ticket ? moved.status : moved.state) + (r.ticket && r.ticket.pr ? '  ' + r.ticket.pr : ''));
     return 0;
   }
-  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
+  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js review <PR link>, or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
   return 1;
 }
 main().then((code) => { process.exitCode = code; }, (e) => { console.error('The relay did not answer: ' + e.message); process.exitCode = 1; });
