@@ -9,6 +9,8 @@
 //                                          then answers from answers.json as it was when the call began
 // `gh pr comment <link> --body-file -` appends its link and body to posted.log, and prints a comment link.
 // `gh pr merge <link> --merge` appends `<link> --merge` to merged.log.
+// `gh pr edit <link> ...` appends its arguments to edited.log. With "labels": [...] in answers.json, adding a
+// label not in the list fails as gh does, and `gh label create <name>` adds it to the list.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -31,6 +33,17 @@ if (verb === 'api') {
 }
 if (verb === 'pr' && sub === 'merge') {  // appends its arguments to merged.log
   fs.appendFileSync(path.join(dir, 'merged.log'), process.argv.slice(4).join(' ') + '\n');
+  process.exit(0);
+}
+if (verb === 'label' && sub === 'create') {
+  answers.labels = (answers.labels || []).concat(process.argv[4]);
+  fs.writeFileSync(path.join(dir, 'answers.json'), JSON.stringify(answers));
+  process.exit(0);
+}
+if (verb === 'pr' && sub === 'edit') {
+  const add = process.argv.indexOf('--add-label');
+  if (add > 0 && answers.labels && !answers.labels.includes(process.argv[add + 1])) { console.error('could not add label: \'' + process.argv[add + 1] + '\' not found'); process.exit(1); }
+  fs.appendFileSync(path.join(dir, 'edited.log'), process.argv.slice(4).join(' ') + '\n');
   process.exit(0);
 }
 if (verb === 'pr' && sub === 'comment') {

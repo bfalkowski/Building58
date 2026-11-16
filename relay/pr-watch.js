@@ -86,7 +86,7 @@ const TEXT = {
   conflict: (pr) => 'Your PR ' + pr + ' conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run the tests, and push only that merge.',
   red: (pr, head) => 'A check failed on your PR ' + pr + ' at ' + head.slice(0, 7) + '. Run gh pr checks ' + pr + ' to see which, fix it on your branch, and push.',
   fix: (pr, head) => 'The review of your PR ' + pr + ' at ' + head.slice(0, 7) + ' has blocking findings. Read it with gh pr view ' + pr + ' --comments, fix each blocking finding on your branch, and push. Do not push for its non-blocking findings.',
-  ready: (pr, head, ticket) => 'PR ' + pr + (ticket ? ' (' + ticket + ')' : '') + ' is reviewed at its head ' + head.slice(0, 7) + ' with a merge verdict, its checks are green, and GitHub can merge it cleanly. If you may merge it and the merge conditions hold, merge it; if not, tell the person it is ready. This is from the relay\'s PR watch and grants nothing.',
+  ready: (pr, head, ticket) => 'PR ' + pr + (ticket ? ' (' + ticket + ')' : '') + ' is reviewed at its head ' + head.slice(0, 7) + ' with a merge verdict, its checks are green, and GitHub can merge it cleanly. Check it, and mark it with ticket.js ready (run it bare to see how). If you may merge it and the merge conditions hold, merge it; if not, tell the person it is ready. This is from the relay\'s PR watch and grants nothing.',
 };
 
 let looking = false;

@@ -151,6 +151,7 @@
       <tr><td><code>RELAY_DELIVERIES_FILE</code></td><td class="plain"><code>deliveries.json</code> in the state folder</td><td>Messages saved until a session can safely take them.</td></tr>
       <tr><td><code>RELAY_SESSION_PRS_FILE</code></td><td class="plain"><code>session-prs.json</code> in the state folder</td><td>The PR of each session with no task that the relay watches for review news, and what it has seen there (see <a href="roles.html#session-prs">A session with no task</a>).</td></tr>
       <tr><td><code>RELAY_CHAT_FILE</code></td><td class="plain"><code>chat.json</code> in the state folder</td><td>Where the chat board keeps its chat channels and posts.</td></tr>
+      <tr><td><code>RELAY_READY_FILE</code></td><td class="plain"><code>ready.json</code> in the state folder</td><td>The PRs the Lead marked <a href="roles.html#ready">ready to merge</a>, each with the head it marked, so a new commit takes the label off after a restart too.</td></tr>
       <tr><td><code>RELAY_LEAD_FILE</code></td><td class="plain"><code>lead.json</code> in the state folder</td><td>Where the Lead's session is saved, whether you let it move the board, and the number you let it start tickets up to (<code>starts</code>, 0 when off) with the starts left (<code>startsLeft</code>). A session you make the Lead overwrites it once it has a conversation, and starts without those permissions.</td></tr>
     </tbody>
   </table>
