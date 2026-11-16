@@ -238,6 +238,12 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       const design = await call('POST', '/tickets', { title: 'Agent design on Triage', shapes: [triaged.id] }, agent);
       assert.strictEqual(design.status, 201, 'a session may name a ticket still in Triage');
       assert.deepStrictEqual(design.body.ticket.shapes, [triaged.id]);
+      assert.strictEqual((await call('POST', '/tickets/' + triaged.id + '/move', { to: 'ready' })).status, 200);
+      const again = await call('POST', '/tickets', { title: 'Agent design on Triage', shapes: [triaged.id] }, agent);
+      assert.strictEqual(again.status, 200, 'filing the same design ticket again after its ticket was approved is a duplicate, not bad_shapes (T-300)');
+      assert.strictEqual(again.body.duplicate, true);
+      assert.strictEqual(again.body.ticket.id, design.body.ticket.id);
+      assert.match((await call('GET', '/tickets/' + triaged.id)).body.ticket.heldBack, new RegExp('design ticket ' + design.body.ticket.id), 'a ticket approved after the filing still waits');
       for (const x of [triaged, design.body.ticket]) await call('POST', '/tickets/' + x.id + '/move', { to: 'rejected' });
       const cleared = (await call('POST', '/tickets/' + b.id + '/mark', { mark: null })).body.ticket;
       assert.strictEqual(cleared.heldBack, null);
