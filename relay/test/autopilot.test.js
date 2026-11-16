@@ -267,6 +267,12 @@ test('Get a review asks for a verdict, and its merge verdict merges, while one w
     const reviews = (await R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR);
     assert.strictEqual(reviews.count, 0, 'Get a review is not counted toward the automatic review limit');
   });
+
+  await t.test('the brief and the ask do not count toward the prompt limit, which is only for what the page sends', async () => {
+    const r = await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: 'x'.repeat(8000) });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual((await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: 'x'.repeat(8001) })).status, 400);
+  });
 });
 
 // T-186: June's fixes were still uncommitted when PR 141 merged, so they needed another PR. Before a merge,
