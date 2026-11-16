@@ -58,7 +58,7 @@ test('a brief names its installed skills, #office says once what is missing, and
   const repo = makeRepo(R.home);
   const brief = async (title) => {
     const task = (await R.call('POST', '/tasks', { title, repo })).body.task;
-    const screen = await until(async () => { const s = await R.screen(task.owner.terminal); return s.includes('GOT[Your task is to build') && s; }, 'the brief');
+    const screen = await until(async () => { const s = await R.screen(task.owner.terminal); return /GOT\[Your task is to build[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
     return screen.match(/GOT\[(Your task is to build[^\]\r\n]*)\]/)[1];
   };
   const office = async () => (await R.call('GET', '/chat/office')).body.posts.map((p) => p.text);
@@ -94,7 +94,7 @@ test('a skill only a person can run is named with its SKILL.md to read, and a ca
   const repo = makeRepo(R.home);
   const file = path.join(dir, 'plugins', 'cache', 'cursor-plugins', 'pstack', '1.0.0', 'skills', 'blast-radius', 'SKILL.md');
   const task = (await R.call('POST', '/tasks', { title: 'Build it', repo })).body.task;
-  const screen = await until(async () => { const s = await R.screen(task.owner.terminal); return s.includes('GOT[Your task is to build') && s; }, 'the brief');
+  const screen = await until(async () => { const s = await R.screen(task.owner.terminal); return /GOT\[Your task is to build[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
   const brief = screen.match(/GOT\[(Your task is to build[^\]\r\n]*)\]/)[1];
   assert.ok(brief.includes('Use these skills where they fit: mattpocock-skills:tdd (for new behavior, or a bug a test can catch), mattpocock-skills:diagnosing-bugs (for a bug), mattpocock-skills:codebase-design (for a change of structure), mattpocock-skills:pr.'), brief);
   assert.ok(brief.includes('These skills cannot be called, so read the file of each and follow it where it fits: pstack:blast-radius at ' + file + '.'), brief);

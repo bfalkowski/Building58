@@ -57,8 +57,7 @@ test('a restart brings every session back', async (t) => {
     assert.strictEqual(w.task, task.id); assert.strictEqual(w.cwd, task.worktree);
   });
   await t.test('each with claude --resume, and the Lead is not briefed again', async () => {
-    const screen = await R.screen(after.find((x) => x.lead).id);
-    assert.match(screen, new RegExp('--resume ' + lead.sessionId));
+    await until(async () => (await R.screen(after.find((x) => x.lead).id)).includes('--resume ' + lead.sessionId), 'the Lead brought back with --resume');
     await sleep(2500);
     assert.doesNotMatch(await R.screen(after.find((x) => x.lead).id), /GOT\[/);
   });

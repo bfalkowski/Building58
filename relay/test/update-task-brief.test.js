@@ -66,7 +66,7 @@ test('a Dev started while an update waits gets its brief then, and once', async 
 
   await t.test('after the restart the Dev is back, and its brief is not typed again', async () => {
     await say(dev.sessionId, 'Stop');
-    await until(async () => { try { return (await update()).run !== run; } catch (e) { return false; } }, 'the relay to restart', 200);
+    await until(async () => { try { return (await update()).run !== run; } catch (e) { return false; } }, 'the relay to restart');
     const back = await until(async () => { try { return (await R.call('GET', '/terminals')).body.terminals.find((x) => x.sessionId === dev.sessionId); } catch (e) { return null; } }, 'the Dev to come back');
     await sleep(2500);
     assert.strictEqual(await typed(back.id), 1, 'typed once');

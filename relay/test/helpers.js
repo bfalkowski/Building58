@@ -9,7 +9,19 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const until = async (fn, what, tries) => { for (let i = 0; i < (tries || 100); i++) { const v = await fn(); if (v) return v; await sleep(100); } throw new Error('Timed out waiting for ' + what); };
+// It waits for the event, so a longer limit costs a passing test nothing. 10 seconds was not enough on a machine
+// running several test suites at once (T-154), so the default is 30.
+const until = async (fn, what, tries) => { for (let i = 0; i < (tries || 300); i++) { const v = await fn(); if (v) return v; await sleep(100); } throw new Error('Timed out waiting for ' + what); };
+// The relay closes a kept-alive connection after 5 idle seconds. A test that blocks for longer, as a few
+// execFileSync calls on a busy machine do, cannot see that close, and its next fetch goes out on the dead
+// connection and fails with ECONNRESET or "other side closed". The relay closes only an idle connection,
+// so that request never reached it, and it is sent again on a new one. A relay that is gone refuses the next try.
+const stale = (e) => !!(e && e.cause && ['ECONNRESET', 'EPIPE', 'UND_ERR_SOCKET'].includes(e.cause.code));
+const send = async (url, options) => {
+  for (let tries = 1; ; tries++) {
+    try { return await fetch(url, options); } catch (e) { if (!stale(e) || tries >= 3) throw e; }
+  }
+};
 const freePort = () => new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
 
 // A fake gh, or another child the relay started, can still be writing into a folder as a test ends,
@@ -59,10 +71,10 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   child.on('exit', (code, signal) => { if (!stopping) process.stderr.write('The test relay on port ' + port + ' ended by itself (' + (signal || 'code ' + code) + '). It said:\n' + output + '\n'); });
   // No request waits forever: a relay that stopped answering fails the test, and does not hang it.
   const call = async (method, p, body, headers) => {
-    const r = await fetch(base + p, { method, headers: { ...(headers || { Authorization: 'Bearer test-key' }), 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000) });
+    const r = await send(base + p, { method, headers: { ...(headers || { Authorization: 'Bearer test-key' }), 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000) });
     return { status: r.status, body: await r.json() };
   };
-  const health = () => fetch('http://127.0.0.1:' + port + '/health', { signal: AbortSignal.timeout(5000) }).then((r) => r.ok, () => false);
+  const health = () => send('http://127.0.0.1:' + port + '/health', { signal: AbortSignal.timeout(5000) }).then((r) => r.ok, () => false);
   const ours = async () => (child.exitCode !== null || child.signalCode ? 'gone' : output.includes('Relay on http://127.0.0.1:' + port) && await health());
   const up = await until(ours, 'the relay', 300).catch((e) => { stopping = true; child.kill(); throw e; });  // the test has no R.stop yet, and a live child keeps the file from exiting
   if (up === 'gone') {
@@ -75,7 +87,7 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   // back, and until then it refuses new sessions (no_host). So a test starts once that is done.
   // A relay with no sessions, or a random key, says nothing of that, and is ready as it is.
   if (env.RELAY_TERMINAL === '1' && env.RELAY_KEY) {
-    const back = async () => { try { const r = await fetch('http://127.0.0.1:' + port + '/health', { headers: { Authorization: 'Bearer ' + env.RELAY_KEY }, signal: AbortSignal.timeout(5000) }); const b = await r.json(); return !b.restore || b.restore.done; } catch (e) { return false; } };
+    const back = async () => { try { const r = await send('http://127.0.0.1:' + port + '/health', { headers: { Authorization: 'Bearer ' + env.RELAY_KEY }, signal: AbortSignal.timeout(5000) }); const b = await r.json(); return !b.restore || b.restore.done; } catch (e) { return false; } };
     await until(back, 'the relay to take its sessions back', 300)
       .catch((e) => { stopping = true; child.kill(); throw e; });
   }
@@ -84,7 +96,7 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   if (env.RELAY_TERMINAL === '1' && !(options && options.autoReview)) await call('POST', '/reviews', { auto: false });
   const screen = async (id, ms) => {  // what a page that opens this session now sees in ms (300) of reading
     const ctl = new AbortController();
-    const r = await fetch(base + '/terminals/' + id + '/stream', { headers: { Authorization: 'Bearer test-key' }, signal: ctl.signal });
+    const r = await send(base + '/terminals/' + id + '/stream', { headers: { Authorization: 'Bearer test-key' }, signal: ctl.signal });
     let text = '';
     const reader = r.body.getReader(), dec = new TextDecoder();
     setTimeout(() => ctl.abort(), ms || 300);
@@ -127,8 +139,10 @@ function sessionTokens(sessionId) {
   const tokens = lines.map((l) => l.split(' ')).filter(([id, pid, token]) => id === sessionId && token && alive(Number(pid))).map((x) => x[2]);
   return [...new Set(tokens)];
 }
+// The newest, since the session a test just started is the last line. An older one's pid can look alive
+// while it ends, or once the system gives that pid to another process, on a busy machine (T-154).
 function sessionToken(sessionId) {
-  const [token] = sessionTokens(sessionId);
+  const token = sessionTokens(sessionId).pop();
   if (!token) throw new Error('No token found for session ' + sessionId);
   return token;
 }

@@ -96,7 +96,7 @@ test('Autopilot: a quiet Dev keeps its task, a stuck one hands it to you, and it
 
   // Its output stops too. Once it is stuck for Autopilot's stall time, the task waits on you.
   await R.call('POST', '/terminals/' + dev.terminal + '/input', { data: '/still\r' });
-  const parked = await until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the stuck task to wait on you', 150);
+  const parked = await until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the stuck task to wait on you');
   const move = parked.history.filter((h) => h.type === 'moved').pop();
   assert.strictEqual(move.by, 'Autopilot');
   assert.match(move.note, /Its Dev .* has sent no hook and printed nothing for \d+ minutes\. The session is still open at its desk: look at it there, and the task goes back to Building once it moves again\./);

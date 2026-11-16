@@ -175,7 +175,7 @@ test('a first prompt whose session is never ready gives up, and says why', async
   const q = session('q2', 'sess-q2');
   q.screen = 'trust';
   delivery.promptOnce('test', 'q2', 'Review PR 11.', (problem) => done.push(problem));
-  await until(() => done.length, 'it to give up', 100);
+  await until(() => done.length, 'it to give up');
   assert.deepStrictEqual(done, ['the session was not ready after 0 minutes']);
   assert.strictEqual(typedTo('q2').length, 0);
 });

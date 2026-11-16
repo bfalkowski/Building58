@@ -53,7 +53,7 @@ test('Update goes back to the last good commit when the new relay fails its chec
 
   await t.test('the first start passes, and its commit is recorded outside the repo', async () => {
     await waitFor(() => good().commit === first, 'the first commit to be recorded');
-    assert.match(R.output(), /passed its check/);
+    await waitFor(() => /passed its check/.test(R.output()), 'the supervisor to say so');  // it saves the commit first, then prints
   });
 
   const s = (await R.call('POST', '/terminals', { cwd: dir })).body;

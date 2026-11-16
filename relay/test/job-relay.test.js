@@ -16,6 +16,9 @@ const { relay, makeRepo, removeDir, until, sleep } = require('./helpers.js');
 const HAS_JOBS = fs.existsSync(path.join(__dirname, '..', 'jobs.js'));
 const need = () => assert.ok(HAS_JOBS, 'relay/jobs.js is missing, so no session host looks for jobs');
 const SCAN = '200';  // RELAY_JOB_SCAN_MS: how often the session host looks for jobs
+// RELAY_AUTOPILOT_STALL_MS for Autopilot. On a busy machine the session host can take seconds to find a job, and
+// the test to see a nudge, and both must happen within this time (T-154).
+const STALL = 6000;
 // What the fake claude says it got, once per message, apart from the echo of the typing itself.
 const NUDGE = /GOT\[Your task has no PR yet\. If a test run was lost, run it again in the foreground and open the PR\. If you are blocked, say why\.\]/g;
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -110,14 +113,14 @@ test('an update stops waiting for a job that has run past the stall time, and th
   assert.strictEqual(u.status, 202, JSON.stringify(u.body));
   await restartOf(R, run);
   // The session ran on in the session host, so the new relay takes it back with its job still running.
-  const back = await until(async () => { try { return (await R.call('GET', '/floor')).body.sessions.find((r) => r.terminal === s.id && /^job/.test(r.state)); } catch (e) { return null; } }, 'the session back, still running its job', 100);
+  const back = await until(async () => { try { return (await R.call('GET', '/floor')).body.sessions.find((r) => r.terminal === s.id && /^job/.test(r.state)); } catch (e) { return null; } }, 'the session back, still running its job');
   assert.ok(back);
 });
 
 async function autopilotRig(t) {
   need();
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
-  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: '3000', RELAY_JOB_SCAN_MS: SCAN });
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: String(STALL), RELAY_JOB_SCAN_MS: SCAN });
   t.after(async () => { await R.stop(); removeDir(gh); });
   const repo = makeRepo(R.home);
   const ticket = (await R.call('POST', '/tickets', { title: 'Run the tests', repo })).body.ticket;
@@ -137,23 +140,24 @@ test('Autopilot neither parks nor nudges a Dev with a job, and nudges once it en
   await keys(dev.terminal, '/job\r');
   await say(dev.sessionId, 'Stop');
   // Past twice the stall time with its job running and no PR: busy, so nothing happens.
-  await sleep(3000 * 2 + 1500);
+  await sleep(STALL * 2 + 1500);
   assert.strictEqual((await taskOf()).state, 'building', 'a Dev with a job keeps its task');
   assert.strictEqual(await nudges(), 0, 'and is not nudged');
   assert.ok(!(await notes()).some((n) => /waits on you|nudged/.test(n)), JSON.stringify(await notes()));
   // The job ends. Now it is idle with no PR, and after the stall time it is nudged.
   await keys(dev.terminal, '/nojob\r');
-  await until(async () => (await nudges()) === 1, 'the nudge', 100);
+  await until(async () => (await nudges()) === 1, 'the nudge');
 });
 
 test('an idle Dev with no PR is nudged once, then parked with what is true if nothing comes of it', async (t) => {
-  const { dev, taskOf, nudges, notes, say } = await autopilotRig(t);
+  const { R, dev, taskOf, nudges, notes, say } = await autopilotRig(t);
   await say(dev.sessionId, 'Stop');
-  await until(async () => (await nudges()) === 1, 'the nudge', 100);
-  assert.strictEqual((await taskOf()).state, 'building', 'nudged, not parked');
-  assert.ok((await notes()).some((n) => /nudged its Dev/.test(n)), JSON.stringify(await notes()));
-  const parked = await until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the task to wait on you', 100);
+  await until(async () => (await nudges()) === 1, 'the nudge');
+  const parked = await until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the task to wait on you');
   const move = parked.history.filter((h) => h.type === 'moved').pop();
+  const nudged = (await R.call('GET', '/autopilot')).body.notes.find((n) => /nudged its Dev/.test(n.text));
+  assert.ok(nudged, JSON.stringify(await notes()));
+  assert.ok(Date.parse(nudged.at) <= Date.parse(move.at), 'nudged first, and parked only after that');
   assert.strictEqual(move.by, 'Autopilot');
   assert.match(move.note, /^Autopilot: Nothing moved it for \d+ minutes: its Dev has been idle for \d+ minutes with no PR, and did not start a turn after Autopilot nudged it \d+ minutes ago\.$/);
   assert.doesNotMatch(move.note, /gone/);
@@ -163,11 +167,11 @@ test('an idle Dev with no PR is nudged once, then parked with what is true if no
 test('a Dev that takes a turn after the nudge and stops again with no PR is parked, not nudged again', async (t) => {
   const { dev, taskOf, nudges, say } = await autopilotRig(t);
   await say(dev.sessionId, 'Stop');
-  await until(async () => (await nudges()) === 1, 'the nudge', 100);
+  await until(async () => (await nudges()) === 1, 'the nudge');
   await say(dev.sessionId, 'UserPromptSubmit');
   await sleep(500);
   await say(dev.sessionId, 'Stop');
-  const parked = await until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the task to wait on you', 100);
+  const parked = await until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the task to wait on you');
   assert.match(parked.history.filter((h) => h.type === 'moved').pop().note, /its Dev has been idle for \d+ minutes with no PR, and took a turn after Autopilot nudged it \d+ minutes ago\.$/);
   assert.strictEqual(await nudges(), 1, 'one nudge per stall');
 });
@@ -176,7 +180,7 @@ test('a Dev whose session ended is parked as session ended, and is not nudged', 
   const { dev, taskOf, notes, say, keys } = await autopilotRig(t);
   await say(dev.sessionId, 'Stop');
   await keys(dev.terminal, '/exit\r');
-  const parked = await until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the task to wait on you', 100);
+  const parked = await until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the task to wait on you');
   assert.match(parked.history.filter((h) => h.type === 'moved').pop().note, /its Dev's session ended, and there is no PR\.$/);
   assert.ok(!(await notes()).some((n) => /nudged/.test(n)), 'nobody to nudge');
 });

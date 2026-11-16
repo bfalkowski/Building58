@@ -56,7 +56,7 @@ test('a hold reply posted while a poll is reading the PR stops the merge', async
   await until(async () => (await ap()).prs.some((p) => p.verdict === 'merge' && /^Its Dev is working/.test(p.why || '')), 'the wait for the Dev');
 
   assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 3600 } })).status, 200);
-  await until(() => asked(REVIEWS) >= 1, 'the poll to read the issue comments and reach the reviews', 150);
+  await until(() => asked(REVIEWS) >= 1, 'the poll to read the issue comments and reach the reviews');
   assert.strictEqual(asked(COMMENTS), 1, 'the poll read the issue comments before the reply');
   answer([{ id: 102, html_url: PR + '#issuecomment-102', body: '<!-- office:dev -->\n<!-- office:hold -->\nFinding 2 is a bug.', created_at: new Date().toISOString() }]);
   await say(dev, 'Stop');

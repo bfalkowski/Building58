@@ -249,6 +249,8 @@ test('moving the board', async (t) => {
   });
 
   await R.kill();
+  // A session brought back keeps its id, so a token of the old one, still ending on a busy machine, would be found first.
+  await until(() => [lead, other].every((x) => !sessionTokens(x.sessionId).length), 'the old sessions to end');
   R = await relay({ RELAY_WIP_LIMIT: '5', ...ghEnv }, home);
   await t.test('Bring back keeps it, and only for that session', async () => {
     const g = (await R.call('GET', '/terminals')).body;

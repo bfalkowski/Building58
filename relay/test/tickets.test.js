@@ -159,7 +159,7 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       task = r.body.task;
       assert.strictEqual(task.ticket, first.id);
       assert.strictEqual(task.brief, 'Do it.');
-      const screen = await until(async () => { const s = await R.screen(r.body.task.worker.terminal); return s.includes('GOT[') && s; }, 'the brief');
+      const screen = await until(async () => { const s = await R.screen(r.body.task.worker.terminal); return /GOT\[[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
       assert.match(screen, /build this now: First\. Do it\./);
       assert.ok(fs.existsSync(task.worktree));
       assert.strictEqual((await call('POST', '/tickets/' + first.id + '/start', {})).body.error, 'started');
@@ -288,7 +288,7 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       assert.strictEqual(r.status, 201, JSON.stringify(r.body));
       const pm = (await call('GET', '/terminals')).body.terminals.find((x) => x.id === r.body.terminal);
       assert.strictEqual(pm.role, 'pm');
-      const screen = await until(async () => { const s = await R.screen(pm.id); return s.includes('GOT[') && s; }, 'the brief');
+      const screen = await until(async () => { const s = await R.screen(pm.id); return /GOT\[[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
       assert.match(screen, /product manager[\s\S]*ticket\.js create[\s\S]*A radio/);
       // Claude Code reads about 1024 bytes at a time (T-34). The brief is longer than that since it says
       // how to order the work (T-46), so the relay types it as one paste, which arrives whole.

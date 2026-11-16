@@ -16,7 +16,7 @@ const push = (src, text) => {
   return sh(src, 'rev-parse', 'HEAD');
 };
 const moved = async (R) => (await R.call('GET', '/chat/office')).body.posts.map((p) => p.text).filter((t) => /moved/.test(t));
-const watching = (R, sha) => until(() => R.output().includes('Watching main on origin at ' + sha.slice(0, 7)), 'the relay to look at origin', 100);
+const watching = (R, sha) => until(() => R.output().includes('Watching main on origin at ' + sha.slice(0, 7)), 'the relay to look at origin');
 
 test('#office says once for each move of main on origin, and nothing at the start', async (t) => {
   const R0 = await relay({});
