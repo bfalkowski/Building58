@@ -216,13 +216,13 @@ const onReview = (fn) => { reviewSeen = fn; };
 let askOf = () => '';
 const useAsk = (fn) => { askOf = fn; };
 let making = 0;
-async function create(channel, body, ctx) {
+async function create(channel, body, ctx, ask) {
   making++;
-  try { return await make(channel, body, ctx); } finally { making--; }
+  try { return await make(channel, body, ctx, ask); } finally { making--; }
 }
-async function make(channel, body, ctx) {
+async function make(channel, body, ctx, ask) {
   const from = terminal.expand(body.from), pr = body.pr ? String(body.pr) : null;
-  const prompt = body.prompt ? String(body.prompt) + (pr ? require('./skills.js').brief('reviewer').trimEnd() : '') : '';
+  const prompt = body.prompt ? String(body.prompt) : '';
   const unlessAt = /^[0-9a-f]{40}$/.test(String(body.unlessAt || '')) ? String(body.unlessAt) : null;
   if (pr && !PR_URL.test(pr)) return [400, { ok: false, error: 'bad_pr', message: 'A PR link looks like https://github.com/owner/repo/pull/1.' }];
   if (prompt.length > MAX_PROMPT) return [400, { ok: false, error: 'bad_prompt', message: 'Keep the prompt to ' + MAX_PROMPT + ' characters.' }];
@@ -256,7 +256,8 @@ async function make(channel, body, ctx) {
   save();
   if (pr && reviewSeen) reviewSeen(channel, pr, c.commit, started.body.id);
   if (pr) noteReviewer(channel, pr, started.body.id, body.by === 'Lead' ? 'Lead' : body.auto ? 'automatic review' : 'you');
-  if (prompt) delivery.promptOnce(channel, started.body.id, prompt, (problem) => { if (problem) ctx.log('The review of ' + pr + ' did not get its prompt: ' + problem); });
+  const typed = prompt && pr ? prompt + require('./skills.js').brief('reviewer').trimEnd() + (ask ? askOf(channel) : '') : prompt;
+  if (typed) delivery.promptOnce(channel, started.body.id, typed, (problem) => { if (problem) ctx.log('The review of ' + pr + ' did not get its prompt: ' + problem); });
   return [201, Object.assign({}, started.body, { checkout: view(channel, c) })];
 }
 const PM_NOTES = {
@@ -330,8 +331,7 @@ async function handle(req, res, channel, rest, ctx) {
   if (!id && req.method === 'GET') out = [200, { ok: true, checkouts: listOf(channel).map((c) => view(channel, c)) }];
   else if (!id && req.method === 'POST') {
     const body = await ctx.readJson(req);
-    if (body.pr && body.prompt) body.prompt = String(body.prompt) + askOf(channel);
-    out = await create(channel, body, ctx);
+    out = await create(channel, body, ctx, !body.auto);
     if (body.pr && out[0] >= 400) ctx.log('No reviewer for ' + body.pr + ': ' + out[1].message);
     const task = body.pr && out[0] < 400 && !out[1].unchanged && tasks.list(channel).find((x) => x.pr === body.pr);
     if (task) { tasks.record(task, { type: 'review_asked', by: ctx.agent ? 'Lead' : 'you' }); tasks.save(); }
