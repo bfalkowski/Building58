@@ -53,6 +53,7 @@ function nextTicket(all, hasTask, only) {
   return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && !unsettled(t, all).length && !heldBack(t, all) && !hasTask(t) && allowed(t, only)))[0] || null;
 }
 function waitsWhy(t, all) {
+  if (t.status === 'rejected') return 'Rejected';
   if (t.status === 'triage') return 'In Triage';
   if (!approved(t)) return 'Not approved by you';
   const blockers = unsettled(t, all);
@@ -64,7 +65,7 @@ function waitsWhy(t, all) {
 function whyNoneAllowed(all, hasTask, only) {
   const mine = boardOrder(all.filter((t) => allowed(t, only)));
   if (!mine.length) return 'No ticket on the Board has an id or label you allowed.';
-  const waiting = mine.filter((t) => ['triage', 'ready'].includes(t.status) && !hasTask(t)).map((t) => [t.id, waitsWhy(t, all)]).filter(([, why]) => why);
+  const waiting = mine.filter((t) => ['triage', 'ready', 'rejected'].includes(t.status) && !hasTask(t)).map((t) => [t.id, waitsWhy(t, all)]).filter(([, why]) => why);
   if (!waiting.length) return 'Every ticket you allowed is started or done.';
   return 'No ticket you allowed can start. ' + waiting.map(([id, why]) => id + ': ' + why + '.').join(' ');
 }

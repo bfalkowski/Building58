@@ -130,6 +130,9 @@ test('with an allowed list and nothing to start, the idle note names why each al
   assert.strictEqual(whyNoneAllowed(all, none, only), 'No ticket you allowed can start. T-3: In Triage. T-4: Not approved by you. T-5: Waiting for T-2. T-6: On hold. T-7: Replaced by T-9. T-8: Waiting on design ticket T-9, which shapes it. T-10: No repo.');
   assert.strictEqual(whyNoneAllowed(all, none, ['T-1', 'T-2']), 'Every ticket you allowed is started or done.');
   assert.strictEqual(whyNoneAllowed(all, (t) => t.id === 'T-8', ['T-1', 'T-8']), 'Every ticket you allowed is started or done.', 'a ticket with a task counts as started');
+  const rejected = ready('T-11', { status: 'rejected' });
+  assert.strictEqual(whyNoneAllowed([rejected], none, ['T-11']), 'No ticket you allowed can start. T-11: Rejected.', 'a rejected ticket is not started or done');
+  assert.strictEqual(whyNoneAllowed([...all, rejected], none, ['T-1', 'T-11']), 'No ticket you allowed can start. T-11: Rejected.');
   assert.strictEqual(whyNoneAllowed(all, none, ['T-99', 'games']), 'No ticket on the Board has an id or label you allowed.');
   assert.strictEqual(whyNoneAllowed([ready('T-5', { labels: ['flaky'], mark: 'hold' })], none, ['flaky']), 'No ticket you allowed can start. T-5: On hold.', 'a label counts too');
 });
