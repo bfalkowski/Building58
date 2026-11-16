@@ -202,7 +202,9 @@ function reply(entry, ch) {
   return Object.assign({ id: entry.id, channel: ch.name, action: entry.command.action }, r);
 }
 
+const nothingHere = (req, res) => { if (req.method === 'GET') send(res, 404, 'Not found'); else problem(res, 404, 'not_found', 'There is nothing here.'); };
 async function handle(req, res) {
+  if (req.url.startsWith('//')) { nothingHere(req, res); return; }
   const url = new URL(req.url, 'http://relay');
   if (req.method === 'OPTIONS') { res.writeHead(204, cors()); res.end(); return; }
 
@@ -212,7 +214,7 @@ async function handle(req, res) {
     return;
   }
   const m = url.pathname.match(/^\/channels\/([^/]+)(\/[^?]*)?$/);
-  if (!m) { if (req.method === 'GET') serveStatic(req, res, url); else problem(res, 404, 'not_found', 'There is nothing here.'); return; }
+  if (!m) { if (req.method === 'GET') serveStatic(req, res, url); else nothingHere(req, res); return; }
   if (office && !hooksOpen && req.method === 'POST' && m[2] === '/commands') {
     const body = await readJson(req).catch(() => null);
     if (body && body.action === 'hook' && body.event && typeof body.event === 'object' && !office.terminal.localOnly(req, PORT)) {
