@@ -40,7 +40,7 @@ const office = SESSIONS ? {
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
   config: require('./config.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'),
-  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js')
+  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js')
 } : null;
 if (office) {
   const w = (ONE ? [ONE] : worlds()).find((x) => x.sessions && x.roster);
@@ -49,7 +49,7 @@ if (office) {
   }
 }
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
-const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'games', 'needsYou'].map((k) => office[k]) : [];
+const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'games', 'needsYou', 'ready'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -230,6 +230,7 @@ async function handle(req, res) {
   const tokenMay = agent && agent.channel === m[1] && (plays || (seat ? req.method === 'POST' && (m[2] === '/commands' || m[2] === '/terminals/context') : ((m[2] === '/tickets' && !(proposer && req.method !== 'GET')) || (!proposer && /^\/chat(\/[\w-]{1,64})?$/.test(m[2] || '')) || (agent.lead && req.method === 'GET' && m[2] === '/floor') ||
     (agent.board && ((req.method === 'GET' && m[2] === '/tasks') || (req.method === 'POST' && (m[2] === '/floor/stop' || /^\/(tasks|tickets)\/[^/]+\/move$/.test(m[2] || ''))))) ||
     (agent.lead && agent.starts > 0 && req.method === 'POST' && /^\/tickets\/[^/]+\/start$/.test(m[2] || '')) ||
+    (agent.lead && req.method === 'POST' && m[2] === '/ready') ||
     (agent.role === 'coo' && ((req.method === 'GET' && m[2] === '/coo/measures') || (req.method === 'POST' && m[2] === '/coo/report'))) ||
     (agent.role === 'security' && ((req.method === 'GET' && m[2] === '/security/measures') || (req.method === 'POST' && m[2] === '/security/report'))) ||
     ((agent.role === 'reviewer' || !!agent.reviewOf) && req.method === 'POST' && m[2] === '/autopilot/verdict') ||
@@ -406,6 +407,7 @@ server.listen(PORT, HOST, async () => {
     reviews.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     autopilot.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.prWatch.begin({ log });
+    office.ready.begin({ log });
     // Replayed after reviews.begin, or reviews would ignore a queued PR or push.
     hooksOpen = true;
     replayHooks(hookQueue.take(stateDir()).concat(earlyHooks.splice(0)).sort((a, b) => a.event.at - b.event.at));
