@@ -53,6 +53,10 @@ terminal](../docs/manual/running.html#own-terminal) and [What the hook sends](..
 - [Running it](../docs/manual/running.html): restarts, Update, copies of the repo, GitHub issues, common messages.
 - [When the new relay fails](../docs/manual/running.html#rollback): with `RELAY_ROLLBACK=1`, Update goes back to
   the last commit that worked, and the page says which commit failed and which one runs.
+- [One merge at a time](../docs/manual/running.html#update-steps): with `RELAY_ROLLBACK=1`, one press of
+  **Update** goes through the new merges one at a time, oldest first. It restarts the relay only for a merge
+  that changes it, and goes on only once the new relay passes its check. The bar shows "Update: 2 of 5, PR 41"
+  and can stop between merges. At the first failed check it stops, and only that merge goes out. At most 20 a press.
 - [The session host](../docs/manual/running.html#session-host): a relay restart, such as Update's, leaves every
   session running with its output. Stopping the relay ends them, and the next start brings them back.
 - [Roles and how work moves](../docs/manual/roles.html): what you do, the Lead, reviews, huddles.
