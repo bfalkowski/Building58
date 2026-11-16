@@ -9,12 +9,15 @@
 //   - posts one comment headed Ready to merge, with the head, who merges it and the Lead's note. It starts
 //     with the ready mark, so relay/pr-comments.js does not pass it to the Dev as a review.
 //   - adds the label "ready to merge", and makes the label first if the repo has none.
-//   - keeps { head } for the PR in RELAY_READY_FILE. Every pipelinePollSeconds it asks gh for the PR's head
-//     again. When a new commit lands, it takes the label off, so the label never points at an old head,
+//   - keeps { head } for the PR in RELAY_READY_FILE. Every pipelinePollSeconds, or RELAY_READY_POLL_SECONDS
+//     while that is 0, it asks gh for the PR's head again. When a new commit lands, it takes the label off, so the label never points at an old head,
 //     and says so in #office. The note stays as history. A PR that merged or closed, or whose label someone
 //     took off, is no longer watched.
 // Who merges is worked out from every file the PR changes or renames (gh api, paged, as Autopilot and the
 // PR watch list them), Autopilot, and the Lead's merge switch, at the time the note is posted.
+// A second mark at a head already marked posts no second note: it only puts the label back if it is off.
+// A mark whose label gh could not add stays watched, so the Lead's retry adds the label and posts nothing.
+// Marking and the watch take turns on one queue, so a mark made while the watch reads that PR is not undone.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -35,6 +38,9 @@ const SHA = /^[0-9a-f]{7,64}$/;
 const MAX_TEXT = 20000;
 const GUIDE = plan.guide(__dirname);
 const FILE = state.file('ready.json', 'RELAY_READY_FILE');
+const FALLBACK_SECONDS = Math.max(1, Number(process.env.RELAY_READY_POLL_SECONDS) || 60);
+let queue = Promise.resolve();
+const inTurn = (fn) => { const run = queue.then(fn, fn); queue = run.catch(() => {}); return run; };
 
 let ctx = null;
 const log = (text) => { if (ctx) ctx.log(text); };
@@ -90,8 +96,8 @@ async function addLabel(pr) {
 function holdOf(channel, pr) {
   try {
     const row = require('./floor.js').floorOf(channel, Date.now()).find((s) => s.pr === pr && s.mergeHold);
-    return row ? row.mergeHold : null;
-  } catch (e) { return null; }
+    return { hold: row ? row.mergeHold : null };
+  } catch (e) { return { failed: oneLine(e.message, 200) || 'it failed' }; }
 }
 function whoOf(channel, pr, files) {
   const task = tasks.list(channel).find((t) => t.pr === pr && t.state !== 'done');
@@ -102,16 +108,28 @@ function whoOf(channel, pr, files) {
   });
 }
 
-async function mark(channel, body, agent) {
+function mark(channel, body, agent) { return inTurn(() => markNow(channel, body, agent)); }
+async function markNow(channel, body, agent) {
   const pr = String(body.pr || '').trim(), head = String(body.head || '').trim().toLowerCase(), text = keepLines(body.text, MAX_TEXT + 1);
   if (!PR_URL.test(pr) || !SHA.test(head) || !text.trim()) return [400, { ok: false, error: 'bad_param', message: GUIDE }];
   if (text.length > MAX_TEXT) return [400, { ok: false, error: 'bad_param', message: 'The note is longer than ' + MAX_TEXT + ' characters. Make it shorter.' }];
   const missing = plan.missingParts(text);
   if (missing) return [400, { ok: false, error: 'bad_param', message: 'The note needs a line starting with each of: ' + missing.join(', ') + '.\n' + GUIDE }];
-  const v = await view(pr, 'state,baseRefName,headRefOid,statusCheckRollup,mergeable');
+  const v = await view(pr, 'state,baseRefName,headRefOid,statusCheckRollup,mergeable,labels');
   if (v.failed) return [502, { ok: false, error: 'gh', message: 'gh could not read ' + pr + ': ' + v.failed }];
-  const why = plan.refusal(v.value, head, holdOf(channel, pr));
+  const hold = holdOf(channel, pr);
+  if (hold.failed) return [409, { ok: false, error: 'not_ready', message: 'Not marked: the relay could not read the Floor to check for a merge hold: ' + hold.failed }];
+  const why = plan.refusal(v.value, head, hold.hold);
   if (why) return [409, { ok: false, error: 'not_ready', message: 'Not marked: ' + why }];
+  const marks = store[channel] || (store[channel] = {});
+  const before = marks[pr];
+  if (before && before.head === v.value.headRefOid) {
+    const on = (v.value.labels || []).some((l) => l && l.name === plan.LABEL);
+    const labelled = on ? {} : await addLabel(pr);
+    if (labelled.failed) return [502, { ok: false, error: 'gh', comment: before.comment, message: 'This head is already marked (' + before.comment + '), but gh could not add the label: ' + labelled.failed }];
+    before.labelled = true; save();
+    return [200, { ok: true, again: true, pr, head: before.head, comment: before.comment, label: plan.LABEL, who: before.who }];
+  }
   const files = await filesOf(pr);
   if (files.failed) return [502, { ok: false, error: 'gh', message: 'gh could not list the files of ' + pr + ', so who merges it is not known: ' + files.failed }];
   const full = v.value.headRefOid;
@@ -120,8 +138,7 @@ async function mark(channel, body, agent) {
   if (posted.failed) return [502, { ok: false, error: 'gh', message: 'gh could not post the note: ' + posted.failed }];
   const comment = oneLine(posted.out, 300);
   const labelled = await addLabel(pr);
-  const marks = store[channel] || (store[channel] = {});
-  marks[pr] = { head: full, at: new Date().toISOString(), comment };
+  marks[pr] = { head: full, at: new Date().toISOString(), comment, who, labelled: !labelled.failed };
   save();
   log((agent ? 'The Lead' : 'The person') + ' marked ' + pr + ' ready to merge at ' + full.slice(0, 7) + (labelled.failed ? ', but the label failed: ' + labelled.failed : '.'));
   if (labelled.failed) return [502, { ok: false, error: 'gh', comment, message: 'The note is posted (' + comment + '), but gh could not add the label: ' + labelled.failed }];
@@ -134,25 +151,28 @@ async function look() {
   looking = true;
   try {
     for (const [channel, marks] of Object.entries(store)) {
-      for (const [pr, m] of Object.entries(marks)) {
-        const v = await view(pr, 'state,headRefOid,labels');
-        if (v.failed) { if (m.problem !== v.failed) log('Could not ask gh about ' + pr + ', so its ready to merge label is checked again later: ' + v.failed); m.problem = v.failed; continue; }
-        m.problem = null;
-        const open = String(v.value.state || '').toUpperCase() === 'OPEN';
-        const labelled = (v.value.labels || []).some((l) => l && l.name === plan.LABEL);
-        if (!open || !labelled) { delete marks[pr]; save(); continue; }
-        if (v.value.headRefOid === m.head) continue;
-        const r = await gh(['pr', 'edit', pr, '--remove-label', plan.LABEL]);
-        if (r.failed) { log('Could not take the ready to merge label off ' + pr + ': ' + r.failed); continue; }
-        delete marks[pr]; save();
-        const now = String(v.value.headRefOid).slice(0, 7);
-        log('Took the ready to merge label off ' + pr + ': its head moved from ' + m.head.slice(0, 7) + ' to ' + now + '.');
-        const task = tasks.list(channel).find((t) => t.pr === pr);
-        chat.announce(channel, 'PR #' + pr.match(PR_URL)[3] + ' has a new commit, ' + now + ', after the Lead marked ' + m.head.slice(0, 7) + ' ready to merge, so the relay took its "' + plan.LABEL + '" label off. The note stays as history.', task && task.ticket);
-      }
+      for (const pr of Object.keys(marks)) await inTurn(() => lookAt(channel, marks, pr));
       if (!Object.keys(marks).length) { delete store[channel]; save(); }
     }
   } finally { looking = false; }
+}
+async function lookAt(channel, marks, pr) {
+  const m = marks[pr];
+  if (!m) return;
+  const v = await view(pr, 'state,headRefOid,labels');
+  if (v.failed) { if (m.problem !== v.failed) log('Could not ask gh about ' + pr + ', so its ready to merge label is checked again later: ' + v.failed); m.problem = v.failed; return; }
+  m.problem = null;
+  const open = String(v.value.state || '').toUpperCase() === 'OPEN';
+  const labelled = (v.value.labels || []).some((l) => l && l.name === plan.LABEL);
+  if (!open || (!labelled && m.labelled !== false)) { delete marks[pr]; save(); return; }
+  if (v.value.headRefOid === m.head) return;
+  const r = labelled ? await gh(['pr', 'edit', pr, '--remove-label', plan.LABEL]) : {};
+  if (labelled && r.failed) { log('Could not take the ready to merge label off ' + pr + ': ' + r.failed); return; }
+  delete marks[pr]; save();
+  const now = String(v.value.headRefOid).slice(0, 7);
+  log('Took the ready to merge label off ' + pr + ': its head moved from ' + m.head.slice(0, 7) + ' to ' + now + '.');
+  const task = tasks.list(channel).find((t) => t.pr === pr);
+  chat.announce(channel, 'PR #' + pr.match(PR_URL)[3] + ' has a new commit, ' + now + ', after the Lead marked ' + m.head.slice(0, 7) + ' ready to merge, so the relay took its "' + plan.LABEL + '" label off. The note stays as history.', task && task.ticket);
 }
 
 async function handle(req, res, channel, rest, rctx) {
@@ -167,7 +187,15 @@ async function handle(req, res, channel, rest, rctx) {
 
 function begin(relayCtx) {
   ctx = relayCtx;
-  config.every('pipelinePollSeconds', () => { look().catch((e) => log('Checking the ready to merge labels failed: ' + e.message)); }, 5000);
+  let first = true;
+  const next = () => {
+    const seconds = config.get('pipelinePollSeconds') > 0 ? config.get('pipelinePollSeconds') : FALLBACK_SECONDS;
+    setTimeout(() => {
+      first = false;
+      look().catch((e) => log('Checking the ready to merge labels failed: ' + e.message)).finally(next);
+    }, first ? Math.min(seconds * 1000, 5000) : seconds * 1000).unref();
+  };
+  next();
 }
 
 module.exports = { handle, begin, look, mark, GUIDE };

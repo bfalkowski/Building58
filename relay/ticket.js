@@ -196,7 +196,8 @@ async function main() {
     const [pr, head] = f.rest;
     const r = await (await fetch(URL_.replace(/\/tickets$/, '/ready'), { method: 'POST', headers, body: JSON.stringify({ pr, head, text: f.body || '' }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
-    console.log('Marked ' + r.pr + ' ready to merge at ' + r.head.slice(0, 7) + ': ' + r.comment + '. Who merges: ' + r.who + ' A new commit takes the "' + r.label + '" label off.');
+    if (r.again) console.log('Already marked ' + r.pr + ' ready to merge at ' + r.head.slice(0, 7) + ': ' + r.comment + '. No new note; the "' + r.label + '" label is on.');
+    else console.log('Marked ' + r.pr + ' ready to merge at ' + r.head.slice(0, 7) + ': ' + r.comment + '. Who merges: ' + r.who + ' A new commit takes the "' + r.label + '" label off.');
     return 0;
   }
   if (cmd === 'measures') {

@@ -13,6 +13,7 @@ const CLI = path.join(ROOT, 'relay', 'ticket.js');
 const PR = 'https://github.com/acme/widgets/pull/12';
 const FILES = 'repos/acme/widgets/pulls/12/files';
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', NEXT = 'ffffeeee0000111122223333444455556666aaaa';
+const THIRD = '3333333333333333333333333333333333333333', FOURTH = '4444444444444444444444444444444444444444';
 const GREEN = [{ status: 'COMPLETED', conclusion: 'SUCCESS' }];
 const NOTE = 'Reviews: https://github.com/acme/widgets/pull/12#issuecomment-1, verdict merge.\nFindings: the one blocking finding is fixed in a1b2c3d, checked in relay/x.js.\nHand checks still open: none.\n';
 
@@ -115,6 +116,15 @@ test('ticket.js ready', async (t) => {
     assert.strictEqual(read('edited.log'), PR + ' --add-label ready to merge\n');
   });
 
+  await t.test('marking the same head again posts no second note', () => {
+    answers({ prs: { [PR]: pr({ labels: [{ name: 'ready to merge' }] }) }, api: files('relay/x.js'), labels: ['ready to merge'] });
+    const r = ready([PR, HEAD, '--body', '-'], NOTE);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^Already marked .* at a1b2c3d: .*#issuecomment-\d+\. No new note/);
+    assert.strictEqual(read('edited.log').split('--add-label').length - 1, 1, 'the label is on, so nothing is edited');
+    assert.strictEqual(read('posted.log').split('\n---\n').filter(Boolean).length, 1, 'still one note');
+  });
+
   await t.test('the label stays while the head stays', async () => {
     answers({ prs: { [PR]: pr({ labels: [{ name: 'ready to merge' }] }) }, labels: ['ready to merge'] });
     await sleep(2500);
@@ -138,23 +148,46 @@ test('ticket.js ready', async (t) => {
     let r = ready([PR, NEXT, '--body', '-'], NOTE);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.match(r.stdout, /Who merges: the Lead, under the merge rung/);
-    answers({ prs: { [PR]: pr({ headRefOid: NEXT }) }, api: files('relay/x.js', 'docs/constitution.md'), labels: ['ready to merge'] });
-    r = ready([PR, NEXT, '--body', '-'], NOTE);
+    answers({ prs: { [PR]: pr({ headRefOid: THIRD }) }, api: files('relay/x.js', 'docs/constitution.md'), labels: ['ready to merge'] });
+    r = ready([PR, THIRD, '--body', '-'], NOTE);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.match(r.stdout, /Who merges: the person, since it changes docs\/constitution\.md/);
-    answers({ prs: { [PR]: pr({ headRefOid: NEXT }) }, api: files({ filename: 'docs/rules.md', previous_filename: 'CLAUDE.md' }), labels: ['ready to merge'] });
-    r = ready([PR, NEXT, '--body', '-'], NOTE);
+    answers({ prs: { [PR]: pr({ headRefOid: FOURTH }) }, api: files({ filename: 'docs/rules.md', previous_filename: 'CLAUDE.md' }), labels: ['ready to merge'] });
+    r = ready([PR, FOURTH, '--body', '-'], NOTE);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.match(r.stdout, /Who merges: the person, since it changes CLAUDE\.md/, 'a rename counts');
     assert.match(read('calls.log'), /^api --paginate --slurp repos\/acme\/widgets\/pulls\/12\/files\?per_page=100$/m, 'every page of files, not the first 100');
   });
 
   await t.test('a PR that merged is no longer watched, and keeps its label', async () => {
-    answers({ prs: { [PR]: pr({ state: 'MERGED', headRefOid: NEXT, labels: [{ name: 'ready to merge' }] }) }, labels: ['ready to merge'] });
+    answers({ prs: { [PR]: pr({ state: 'MERGED', headRefOid: FOURTH, labels: [{ name: 'ready to merge' }] }) }, labels: ['ready to merge'] });
     const before = read('edited.log');
     await until(() => !Object.keys(JSON.parse(fs.readFileSync(path.join(R.home, '.office-world', 'ready.json'), 'utf8'))).length, 'the PR to be dropped');
     assert.strictEqual(read('edited.log'), before);
   });
+});
+
+test('with the pipeline check at 0, a new commit still takes the label off, and a failed label is retried without a second note', async (t) => {
+  const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
+  const R = await relay({ RELAY_PIPELINE_POLL_SECONDS: '0', RELAY_READY_POLL_SECONDS: '1', GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(gh); });
+  const answers = (a) => fs.writeFileSync(path.join(gh, 'answers.json'), JSON.stringify(a));
+  const read = (f) => { try { return fs.readFileSync(path.join(gh, f), 'utf8'); } catch (e) { return ''; } };
+  const pr = (extra) => Object.assign({ state: 'OPEN', baseRefName: 'main', headRefOid: HEAD, statusCheckRollup: GREEN, mergeable: 'MERGEABLE', labels: [] }, extra);
+  const api = { [FILES]: [{ filename: 'relay/x.js' }] };
+  answers({ prs: { [PR]: pr() }, api, labels: [], failLabel: 'HTTP 403: Resource not accessible' });
+  let r = await R.call('POST', '/ready', { pr: PR, head: HEAD, text: NOTE });
+  assert.strictEqual(r.status, 502);
+  assert.match(r.body.message, /The note is posted .*, but gh could not add the label: HTTP 403/);
+  await sleep(2500);
+  answers({ prs: { [PR]: pr() }, api, labels: [] });
+  r = await R.call('POST', '/ready', { pr: PR, head: HEAD, text: NOTE });
+  assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  assert.strictEqual(r.body.again, true, 'the watch kept the mark whose label failed');
+  assert.strictEqual(read('posted.log').split('\n---\n').filter(Boolean).length, 1, 'the retry posts no second note');
+  assert.match(read('edited.log'), /--add-label ready to merge\n$/);
+  answers({ prs: { [PR]: pr({ headRefOid: NEXT, labels: [{ name: 'ready to merge' }] }) }, labels: ['ready to merge'] });
+  await until(() => read('edited.log').includes(PR + ' --remove-label ready to merge'), 'the label to come off with the pipeline check off');
 });
 
 test('the Lead\'s brief says to mark ready PRs with ticket.js ready', () => {
