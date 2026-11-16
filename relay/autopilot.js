@@ -195,6 +195,7 @@ prComments.useHolds((channel, task, url) => {
   const v = rec.verdicts.filter((x) => postOf(channel, x)).pop();
   handOver(channel, task, rec, 'Its Dev says a finding the review marked non-blocking is a bug: ' + url, 'dev-says-bug', v ? v.commit : null);
 });
+prComments.useHandOvers((channel, task) => !!deskOf(channel, task).handedOver);
 tickets.onFiled((channel, ticket, agent, at) => {
   if (!ticket || ticket.kind !== 'bug' || !store[channel] || !store[channel].runs) return;
   const text = String(ticket.title || '') + '\n' + String(ticket.body || '');
