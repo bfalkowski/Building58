@@ -180,9 +180,10 @@ function tell(channel, task, pr, links, opts) {
   if (!before && !task.session) chat.reviewNews(channel, task, added.length);
   queue(channel, task);
 }
-let verdictOf = () => null, onHold = () => {};
+let verdictOf = () => null, onHold = () => {}, handedOver = () => false;
 const useVerdicts = (fn) => { verdictOf = fn; };
 const useHolds = (fn) => { onHold = fn; };
+const useHandOvers = (fn) => { handedOver = fn; };
 const FIX = 'Read each one with gh, then fix or dispute each finding, reply on the PR, and push.';
 const MERGE = 'The review\'s verdict says merge, so do not push for its findings. Read each one with gh and reply on the PR. Put the non-blocking findings worth doing into one follow-up ticket for this PR with node ' + path.join(__dirname, 'ticket.js') +
   ' create "Title" --body - and a quoted heredoc, naming the PR and each finding, then stop. If you think a finding marked non-blocking is really a bug, say so in a reply that starts with ' + DEV_MARK + ' and has ' + HOLD_MARK + ' on its next line, and push no fix: the PR then waits on the person. A failing check and a conflict with main are still yours: fix the check, or merge main, and push only that.';
@@ -207,11 +208,11 @@ function delivered(channel, id, p) {
   const r = task.reviews;
   r.pending = null;
   r.owesPost = { links: p.links, count: p.count };
-  const clean = !!p.merge;
-  const note = 'Told the Dev about ' + plural(p.count) + (p.before ? ' from before the room watched the PR, so the card stays' : clean ? '. The review\'s verdict says merge, so the card stays' : '') + '.';
+  const clean = !!p.merge, handed = !task.session && !p.before && !clean && !!handedOver(channel, task);
+  const note = 'Told the Dev about ' + plural(p.count) + (p.before ? ' from before the room watched the PR, so the card stays' : clean ? '. The review\'s verdict says merge, so the card stays' : handed ? '. Autopilot handed the task to you, so the card stays' : '') + '.';
   recordOf(task, { type: 'review', note });
   log('Told the Dev of ' + whose(task) + ' about ' + plural(p.count) + ' on ' + p.pr + (p.before ? ', from before it watched the PR' : ''));
-  if (!task.session && !p.before && !clean && task.state !== 'changes_requested' && task.state !== 'done') tasks.moveBack(channel, task, note);
+  if (!task.session && !p.before && !clean && !handed && task.state !== 'changes_requested' && task.state !== 'done') tasks.moveBack(channel, task, note);
   saveOf(task);
   postTold(task);
 }
@@ -344,4 +345,4 @@ config.every('reviewPollSeconds', poll, 5000);
 setInterval(tick, TICK).unref();
 
 
-module.exports = { noteHook, tell, poll, checkNow, reviewPosted, useVerdicts, useHolds, DEV_MARK, TOLD_MARK, HOLD_MARK };
+module.exports = { noteHook, tell, poll, checkNow, reviewPosted, useVerdicts, useHolds, useHandOvers, DEV_MARK, TOLD_MARK, HOLD_MARK };

@@ -316,3 +316,36 @@ test('a review whose verdict says merge reaches the Dev but leaves the card, and
   });
   assert.match(c.history.filter((h) => h.type === 'review').slice(-1)[0].note, /verdict says merge/);
 });
+
+test('a review comment on a task Autopilot handed to the person tells the Dev but leaves the card in Waiting on you', async (t) => {
+  // T-305: Autopilot handed PR 45 to the person for a Dev reply with the hold mark, and a review comment three
+  // minutes later moved the card to Changes requested, so the column no longer said a decision waited on the person.
+  const o = await office(t);
+  const made = await o.R.call('POST', '/tasks', { title: 'Handed over', repo: o.repo, by: 'Autopilot' });
+  assert.strictEqual(made.status, 201, JSON.stringify(made.body));
+  await until(async () => /GOT\[Your task is to build/.test(await o.R.screen(made.body.task.worker.terminal)), 'the brief typed');
+  let task = await o.get(made.body.task.id);
+  await o.idle(task);
+  await until(async () => (await o.get(task.id)).briefed, 'the brief');
+  await o.R.hook({ hook_event_name: 'PostToolUse', session_id: task.owner.sessionId.slice(0, 12), tool_name: 'Bash', pr_url: o.pr(12) });
+  await until(async () => (await o.get(task.id)).pr === o.pr(12), 'the PR on the task');
+  await o.idle(task);
+  o.issue(12).push(Object.assign(at(12, 401, new Date().toISOString()), { body: '<!-- office:dev -->\n<!-- office:hold -->\nFinding 2 is a bug.' }));
+  o.say();
+  await until(async () => (await o.get(task.id)).state === 'waiting_on_you', 'Autopilot to hand it over');
+  o.issue(12).push(at(12, 402, new Date().toISOString()));
+  o.say();
+  await until(async () => (await o.told(task)).length === 1, 'the Dev to be told');
+  await until(() => o.posted().length === 1, 'the note on the PR');
+  await sleep(1500);
+  task = await o.get(task.id);
+  assert.strictEqual(task.state, 'waiting_on_you', 'the decision still waits on the person');
+  assert.ok(task.history.some((h) => h.type === 'review' && /Autopilot handed the task to you, so the card stays/.test(h.note)), JSON.stringify(task.history.slice(-3)));
+  await t.test('once the person moves the card, a new comment moves it back as usual', async () => {
+    await o.R.call('POST', '/tasks/' + task.id + '/move', { to: 'in_review' });
+    o.issue(12).push(at(12, 403, new Date().toISOString()));
+    o.say();
+    await until(async () => (await o.get(task.id)).state === 'changes_requested', 'Changes requested');
+    assert.strictEqual((await o.told(task)).length, 2);
+  });
+});
