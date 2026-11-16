@@ -84,7 +84,7 @@ function statusOf(d, task, pr, ci, p) {
   if (d.reviewing) return s('reviewing', d.reviewer ? 'being reviewed by ' + d.reviewer : 'being reviewed');
   if (ci === 'red') return s('ci_failed', 'CI failed');
   if (ci === 'pending') return s('ci_running', 'CI running');
-  if (task.state === 'changes_requested' || (a.verdict === 'fix' && current)) return s('fix', 'fix requested');
+  if ((task.state === 'changes_requested' || a.verdict === 'fix') && current) return s('fix', 'fix requested');
   if (a.verdict === 'merge' && current) return s('merge', 'review says merge');
   return s('review_waits', 'waiting for a review');
 }
