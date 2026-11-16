@@ -32,9 +32,15 @@ if [ -n "$FAKE_CLAUDE_SLOW_START" ]; then
   [ -n "$early" ] && echo "EARLY[$early]"
 fi
 printf '\xe2\x9d\xaf \n'
-# With FAKE_CLAUDE_SLOW_EXIT set, it takes a second to end once the relay hangs it up, so a test can see
-# a session that is stopped but still ending.
-if [ -n "$FAKE_CLAUDE_SLOW_EXIT" ]; then trap 'sleep 1; exit 0' HUP; fi
+# With FAKE_CLAUDE_SLOW_EXIT=<seconds>, it takes that long to end once the relay hangs it up, so a test
+# can see a session that is stopped but still ending. A value that is not a number means one second.
+# While it ends it ignores more hang-ups and SIGTERM. The relay sends SIGTERM to pty-bridge.py 1.5
+# seconds after the hang-up (stop in relay/terminal.js), and the bridge then hangs it up again. Without
+# this, that second hang-up would start the wait over.
+if [ -n "$FAKE_CLAUDE_SLOW_EXIT" ]; then
+  slow_exit=1; [[ "$FAKE_CLAUDE_SLOW_EXIT" =~ ^[0-9]+(\.[0-9]+)?$ ]] && slow_exit=$FAKE_CLAUDE_SLOW_EXIT
+  trap 'trap "" HUP TERM; sleep "$slow_exit"; exit 0' HUP
+fi
 # /job starts a background job as the Bash tool does: a shell run with -c that sources Claude Code's shell
 # snapshot, here around a sleep of 60 seconds (relay/jobs.js). /nojob ends it. /helper starts a child that
 # is not a job, as Claude Code's caffeinate is.
