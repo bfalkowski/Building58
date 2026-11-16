@@ -181,6 +181,7 @@ test('a Dev\'s status icon says where its PR stands, with a label to read it by 
   });
   await t.test('a verdict on an older commit no longer speaks: the push waits for its review', () => {
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, autopilot: { verdict: 'merge', verdictAt: OLD } }), ['review_waits', 'waiting for a review']);
+    assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, autopilot: { verdict: 'fix', verdictAt: OLD } }, { state: 'changes_requested' }), ['review_waits', 'waiting for a review'], 'a fix pushed while the card is still in Changes requested');
   });
   await t.test('a review running wins over CI, and a failed CI over an old verdict', () => {
     assert.strictEqual(status({ pipeline: { state: 'pending' }, reviewing: true, reviewer: 'Ada' }).key, 'reviewing');

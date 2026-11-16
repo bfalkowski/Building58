@@ -413,4 +413,4 @@ function deskOf(channel, pr) {
   return r ? { count: r.count || 0, waits: !!r.waits, held: !desk && !retry && !!(r.first || (r.pending && r.why)), desk, retry, failed: !!r.failed } : null;
 }
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, startText, stateOf, owe };
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe };
