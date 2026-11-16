@@ -90,6 +90,19 @@ pageTest('Clean up asks before it deletes files git ignores, then removes the ch
   assert.deepStrictEqual(errorsBut(p, 409, '/channels/t/checkouts/' + checkout.id + '/clean'), [], 'only the 409s that ask about ignored files');
 });
 
+// T-153: a PM checkout left with a file says it was the PM's.
+pageTest('a checkout the PM left says it was the PM\'s', get, async (p) => {
+  const repo = makeRepo(o.R.home, 'pm-repo');
+  await p.open();
+  const r = await o.R.call('POST', '/tickets/ask', { idea: 'A radio', repo });
+  assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+  const pm = (await o.R.call('GET', '/terminals')).body.terminals.find((x) => x.id === r.body.terminal);
+  fs.writeFileSync(path.join(pm.cwd, 'notes.txt'), 'kept\n');
+  await o.R.call('POST', '/terminals/' + pm.id + '/stop', {});
+  await p.page.locator('.cc-ask', { hasText: 'Checkout for the PM with nobody in it: ' + pm.cwd }).waitFor();
+  assert.deepStrictEqual(p.errors, []);
+});
+
 pageTest('a reviewer that could not start says why, and the refresh leaves that on screen', get, async (p) => {
   const folder = fs.mkdtempSync(path.join(o.R.home, 'gone-'));
   await p.open();

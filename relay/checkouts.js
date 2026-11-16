@@ -304,7 +304,8 @@ function noteReviewer(channel, pr, id, by) {
   const t = terminal.find(channel, id);
   if (on && t) history.add(channel, on, { stage: 'reviewer', role: 'reviewer', by, task: on.task, pr }, t);
 }
-const view = (channel, c) => Object.assign({}, c, { running: terminal.runningIn(c.path) });
+const ownerOf = (c) => (c.kind === 'pm' ? 'the PM' : null);
+const view = (channel, c) => Object.assign({}, c, { running: terminal.runningIn(c.path), owner: ownerOf(c) });
 const clean = (channel, c, body) => inTurn(c, async () => {
   if (!listOf(channel).includes(c)) return [200, { ok: true, removed: c.id, branches: [] }];
   if (terminal.runningIn(c.path)) return [409, { ok: false, error: 'in_use', message: 'A session is still running in this checkout. Stop it first.' }];
