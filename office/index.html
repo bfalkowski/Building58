@@ -27,7 +27,7 @@
   .top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
   .page-theme { display: inline-flex; align-items: center; gap: 6px; font: 13px var(--mono); color: var(--muted); }
   .page-theme .btn { font: 600 13px/1 var(--sans); padding: 5px 10px; }
-  .page-theme .btn + .btn { margin-left: -7px; }  /* overlap the 6px gap and one border, so the two buttons are one control */
+  .page-theme .btn + .btn { margin-left: -7px; }  /* overlap the 6px gap and one border, so the buttons are one control */
   .page-theme .btn:first-of-type { border-radius: 4px 0 0 4px; }
   .page-theme .btn:last-of-type { border-radius: 0 4px 4px 0; }
   .page-theme .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
@@ -514,6 +514,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
       <div class="page-theme" role="group" aria-label="Page colours, not the scene's light">Page
         <button class="btn" type="button" data-page-theme="light" aria-pressed="false">Light</button>
         <button class="btn" type="button" data-page-theme="dark" aria-pressed="false">Dark</button>
+        <button class="btn" type="button" data-page-theme="" aria-pressed="false" title="Follow this computer's Light or Dark setting">Auto</button>
       </div>
     </div>
   </div>
