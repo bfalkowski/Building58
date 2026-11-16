@@ -16,7 +16,7 @@ function storage() {
 }
 const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
 
-// One page load. own is a data-theme the page set before the script ran. Returns the page's root attributes, its two switch buttons, and a click.
+// One page load. own is a data-theme the page set before the script ran. Returns the page's root attributes, its three switch buttons (Light, Dark, Auto), and a click.
 function load({ store, systemDark = false, own }) {
   const attrs = new Map(own ? [['data-theme', own]] : []);
   const root = { getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null), setAttribute: (k, v) => attrs.set(k, String(v)), removeAttribute: (k) => attrs.delete(k) };
@@ -26,7 +26,7 @@ function load({ store, systemDark = false, own }) {
     b.closest = () => b;
     return b;
   };
-  const buttons = [button('light'), button('dark')];
+  const buttons = [button('light'), button('dark'), button('')];
   const on = {};
   const document = { documentElement: root, querySelectorAll: () => buttons, addEventListener: (t, f) => { on[t] = f; } };
   const window = {
@@ -44,10 +44,50 @@ function load({ store, systemDark = false, own }) {
 test('the page follows the computer until someone chooses', () => {
   const light = load({ store: storage(), systemDark: false });
   assert.strictEqual(light.theme(), null, 'no data-theme, so the CSS follows the computer');
-  assert.deepStrictEqual(light.pressed(), ['light']);
+  assert.deepStrictEqual(light.pressed(), [''], 'Auto is the one pressed');
+  assert.strictEqual(light.api.current(), 'light', 'current() is still what the page shows');
   const dark = load({ store: storage(), systemDark: true });
   assert.strictEqual(dark.theme(), null);
-  assert.deepStrictEqual(dark.pressed(), ['dark']);
+  assert.deepStrictEqual(dark.pressed(), ['']);
+  assert.strictEqual(dark.api.current(), 'dark');
+});
+
+test('Auto forgets the choice, so the page follows the computer again, after a reload too', () => {
+  const store = storage();
+  const page = load({ store, systemDark: true });
+  page.click(0);
+  assert.strictEqual(store.getItem('office.pageTheme'), 'light');
+  page.click(2);
+  assert.strictEqual(page.theme(), null, 'no data-theme, so the CSS follows the computer');
+  assert.deepStrictEqual(page.pressed(), ['']);
+  assert.strictEqual(page.api.current(), 'dark');
+  assert.strictEqual(store.getItem('office.pageTheme'), null, 'office.pageTheme is removed');
+  const again = load({ store, systemDark: true });
+  assert.strictEqual(again.theme(), null);
+  assert.deepStrictEqual(again.pressed(), ['']);
+});
+
+test("choose('') is Auto, and an unknown value changes nothing", () => {
+  const store = storage();
+  const page = load({ store });
+  page.api.choose('dark');
+  page.api.choose('purple');
+  assert.strictEqual(page.theme(), 'dark');
+  page.api.choose('');
+  assert.strictEqual(page.theme(), null);
+  assert.strictEqual(store.getItem('office.pageTheme'), null);
+});
+
+test('an open tab follows Auto pressed in another tab', () => {
+  const store = storage();
+  const other = load({ store });
+  other.click(1);
+  const page = load({ store });
+  assert.strictEqual(page.theme(), 'dark');
+  other.click(2);
+  page.storage();
+  assert.strictEqual(page.theme(), null);
+  assert.deepStrictEqual(page.pressed(), ['']);
 });
 
 test('a choice is kept across a reload, before the page is drawn', () => {
@@ -76,6 +116,9 @@ test('with storage blocked the switch still works for this page', () => {
   page.click(1);
   assert.strictEqual(page.theme(), 'dark');
   assert.strictEqual(page.api.current(), 'dark');
+  page.click(2);
+  assert.strictEqual(page.theme(), null, 'Auto works without storage, and nothing threw');
+  assert.deepStrictEqual(page.pressed(), ['']);
   assert.strictEqual(load({ store: blocked }).theme(), null, 'nothing was kept, and nothing threw');
 });
 
@@ -88,6 +131,9 @@ test('a page that sets its own data-theme before the script keeps it, whatever i
   page.click(1);
   assert.strictEqual(page.theme(), 'light', 'a switch does not change it');
   assert.strictEqual(store.getItem('office.pageTheme'), 'dark', 'and the choice kept for other pages is left alone');
+  page.click(2);
+  assert.strictEqual(page.theme(), 'light', 'Auto does not change it either');
+  assert.strictEqual(store.getItem('office.pageTheme'), 'dark', 'nor forget the choice');
   page.storage();
   assert.strictEqual(page.theme(), 'light', 'nor does a choice made in another tab');
 });
@@ -108,5 +154,13 @@ test('All worlds, every world page, the room, the board tab, help.html and every
     const style = html.search(/<style>|<link rel="stylesheet"/);
     assert.ok(script > 0 && script < html.indexOf('</head>'), path.relative(ROOT, p) + ' loads shared/theme.js in its head');
     assert.ok(style < 0 || script < style, path.relative(ROOT, p) + ' loads it before its styles');
+  }
+});
+
+test('every page switch has Light, Dark and Auto', () => {
+  for (const f of [['office', 'index.html'], ['office', 'board.html']]) {
+    const html = fs.readFileSync(path.join(ROOT, ...f), 'utf8');
+    const values = [...html.matchAll(/data-page-theme="([a-z]*)"/g)].map((m) => m[1]);
+    assert.deepStrictEqual(values, ['light', 'dark', ''], f.join('/'));
   }
 });
