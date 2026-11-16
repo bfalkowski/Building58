@@ -449,7 +449,7 @@
         label.textContent = home(c.path) + ' holds files git ignores, and Clean up would delete them: ' + ignored.slice(0, 8).join(', ') + (ignored.length > 8 ? ' and ' + (ignored.length - 8) + ' more' : '');
         row.append(label, leftoverButton('Delete them too', () => cleanLeftover(c, ignored)), leftoverButton('Keep', () => { asking.delete(c.id); drawLeftovers(lastLeftovers); }));
       } else {
-        label.textContent = 'Checkout with nobody in it: ' + home(c.path) + (c.branch ? ' on ' + c.branch : '') + (c.left ? '. ' + c.left : '');
+        label.textContent = 'Checkout' + (c.owner ? ' for ' + c.owner : '') + ' with nobody in it: ' + home(c.path) + (c.branch ? ' on ' + c.branch : '') + (c.left ? '. ' + c.left : '');
         row.append(label, leftoverButton('Clean up', () => cleanLeftover(c)));
       }
       leftovers.append(row);

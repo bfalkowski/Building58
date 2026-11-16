@@ -599,6 +599,20 @@ test('with no remote, or a remote that cannot be reached, the PM reads the local
   await until(() => /The PM reads main as it is here: origin could not be reached/.test(R.output()), 'the log line');
   await stopPm(R, pm2);
 });
+// T-153: a PM checkout left with a file waits for Clean up, and the checkouts route says it was the PM's.
+test('a PM that leaves a file keeps its checkout, and the checkouts route names the PM', async (t) => {
+  const R = await relay(); t.after(R.stop);
+  const r = await R.call('POST', '/tickets/ask', { idea: 'A radio', repo: R.repo });
+  assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+  const pm = await pmOf(R, r);
+  fs.writeFileSync(path.join(pm.cwd, 'notes.txt'), 'kept\n');
+  await R.call('POST', '/terminals/' + pm.id + '/stop', {});
+  const c = await until(async () => (await R.call('GET', '/checkouts')).body.checkouts.find((x) => x.path === pm.cwd && x.left), 'the relay to keep it');
+  assert.strictEqual(c.kind, 'pm');
+  assert.strictEqual(c.owner, 'the PM');
+  assert.match(c.left, /notes\.txt/);
+  assert.ok(fs.existsSync(path.join(pm.cwd, 'notes.txt')));
+});
 test('with no remote and no main or master, a session files against the main folder\'s branch', async (t) => {
   const R = await relay(); t.after(R.stop);
   gitIn(R.repo, 'branch', '-m', 'main', 'develop');
