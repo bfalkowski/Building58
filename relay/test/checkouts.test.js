@@ -574,6 +574,23 @@ test('a review of a PR the clone names another way (T-8)', async (t) => {
     assert.match(r.body.message, /git@github-work:acme\/by-ssh\.git: .*Permission denied/);
     assert.match(fs.readFileSync(sshLog, 'utf8'), /^askpass=\/usr\/bin\/false require=force$/m);
   });
+  await t.test('a PR opened from another project\'s folder is reviewed in the room\'s clone of its repo (T-319)', async () => {
+    only('https://github.com/acme/widgets.git');
+    await R.call('POST', '/tickets', { title: 'Work in widgets', repo });
+    const plain = path.join(R.home, 'plain');
+    fs.mkdirSync(plain);
+    for (const folder of [elsewhere, plain]) {
+      const r = await R.call('POST', '/checkouts', { from: folder, pr: 'https://github.com/acme/widgets/pull/7' });
+      assert.strictEqual(r.status, 201, folder + ': ' + JSON.stringify(r.body));
+      assert.strictEqual(sh(r.body.cwd, 'rev-parse', 'HEAD'), tip, folder);
+      assert.strictEqual(r.body.checkout.repo, repo, folder);
+      assert.strictEqual(r.body.checkout.from, folder, folder);
+      await stop(r.body.id); await gone(r.body.checkout.id);
+    }
+    assert.strictEqual(refs(), '');
+    assert.strictEqual(sh(elsewhere, 'for-each-ref', 'refs/office'), '');
+    assert.match(R.output(), /is not a clone of acme\/widgets, so the review of https:\/\/github\.com\/acme\/widgets\/pull\/7 uses /);
+  });
 });
 
 test('a relay restart', async (t) => {
