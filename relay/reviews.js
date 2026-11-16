@@ -26,7 +26,17 @@
 // also loads for Get a review. The switches, the counts and the commit each PR's last review read are
 // kept in RELAY_REVIEWS_FILE, so a restart keeps them.
 //
-// Like the terminal, the route answers only the room page on this machine, while RELAY_TERMINAL=1.
+// The Lead asks for a review (T-98): POST /reviews/lead with { pr }, from ticket.js review, while the person's
+// switch Let the Lead start reviews is on (off by default, article 5). Only the Lead's token reaches it
+// (relay/server.js); the person's key gets 403, since the page has Get a review. It is the review Get a review
+// starts on a session with a PR: the same checkouts.create, brief and verdict ask, in its own checkout, and the
+// reviewer posts and leaves. The relay refuses a PR that is no task's, one that a reviewer is reviewing or is
+// about to, an ask with no desk free, and a PR that has had MAX_AUTO_REVIEWS. The Lead's reviews count in the
+// same per-PR count as the automatic ones, taken before the start so two asks cannot both pass the limit, and
+// given back if the start fails. It takes the place of a first review or a follow-up that waits, so a PR does
+// not get two reviews. The Lead never reviews in its own session.
+//
+// Like the terminal, the routes answer only the room page and its sessions on this machine, while RELAY_TERMINAL=1.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -299,6 +309,40 @@ terminal.onWork((channel, t) => {
   return Object.assign({ role: null, ticket: null, ticketAt: null, label: null }, work, { pr, reviewWaits: true });
 });
 
+const refuse = (status, error, message) => [status, { ok: false, error, message }];
+async function leadReview(channel, body, agent) {
+  if (!config.get('leadReviews')) return refuse(403, 'forbidden', 'The person has not let the Lead start reviews. They turn it on with Let the Lead start reviews in Settings. Until then, tell them which PR needs a review, so they press Get a review. Never review it in your own session.');
+  if (!agent.lead || !terminal.all(channel).includes(agent)) return refuse(403, 'forbidden', 'This session is no longer running as the Lead.');
+  const pr = String((body && body.pr) || '').trim();
+  if (!PR_URL.test(pr)) return refuse(400, 'bad_pr', 'A PR link looks like https://github.com/owner/repo/pull/1.');
+  const task = tasks.list(channel).find((x) => x.pr === pr);
+  if (!task) return refuse(404, 'not_a_task', pr + ' is not the PR of any task on the Board, so the relay does not review it. The person can press Get a review.');
+  if (reviewing(channel, pr)) return refuse(409, 'reviewing', 'A reviewer is already reviewing ' + pr + '. Wait for it to post.');
+  if (!deskFree(channel)) return refuse(409, 'full', 'No desk is free for a reviewer. Wait for one, or stop a session that is done.');
+  const c = chOf(channel), max = MAX_AUTO_REVIEWS();
+  if (((c.prs[pr] && c.prs[pr].count) || 0) >= max) return refuse(409, 'limit', pr + ' has had ' + max + ' reviews the relay started, the limit for one PR. Its next review is the person\'s: tell them, so they review it or press Get a review.');
+  const fresh = !c.prs[pr], rec = c.prs[pr] || (c.prs[pr] = { count: 0, head: null, pending: null, waits: false });
+  const dev = devOf(channel, pr), from = (dev && dev.cwd) || rec.from || task.repo;
+  rec.count = (rec.count || 0) + 1; rec.from = from;
+  const held = { first: rec.first, pending: rec.pending };
+  delete rec.first; rec.pending = null; rec.why = null;
+  save();
+  const out = await startReview(channel, { from, pr, prompt: prBrief(pr) + autopilot.ask(channel), by: 'Lead' });
+  if (!out.ok) {
+    if (fresh && !rec.head && c.prs[pr] === rec) delete c.prs[pr];
+    rec.count = Math.max(0, rec.count - 1);
+    if (held.first && !rec.head) rec.first = held.first;
+    if (held.pending && !rec.pending) rec.pending = held.pending;
+    save();
+    return refuse(out.error === 'full' ? 409 : 502, out.error || 'not_started', 'The review of ' + pr + ' did not start: ' + (out.message || 'the relay did not say why.'));
+  }
+  delivery.drop(channel, 'pipeline ' + pr);
+  tasks.record(task, { type: 'review_asked', by: 'Lead' }); tasks.save();
+  startedNews(channel, out, 'a review of PR ' + number(pr) + ' that the Lead asked for');
+  ctx.log('The Lead asked for a review of ' + pr + ' (' + rec.count + ' of ' + max + ').');
+  return [201, { ok: true, pr, reviewer: out.who || null, id: out.id, count: rec.count, max }];
+}
+
 function view(channel) {
   const c = chOf(channel), s = switchesOf(channel);
   const prs = Object.entries(c.prs).map(([pr, r]) => ({ pr, count: r.count, head: r.head, pending: !!r.pending, waits: !!r.waits, held: !!r.first, desk: !!(r.first && r.first.desk), failed: r.failed || null, pipeline: (r.first || r.pending) && pipeline.on() ? pipeline.summary(pr) : null, why: r.why || null }));
@@ -306,10 +350,17 @@ function view(channel) {
 }
 async function handle(req, res, channel, rest, rctx) {
   if (!/^\/reviews(\/|$)/.test(rest)) return false;
-  if (rest !== '/reviews' || !['GET', 'POST'].includes(req.method)) { rctx.problem(res, 404, 'not_found', 'Unknown reviews route.'); return true; }
+  const lead = rest === '/reviews/lead' && req.method === 'POST';
+  if (!lead && (rest !== '/reviews' || !['GET', 'POST'].includes(req.method))) { rctx.problem(res, 404, 'not_found', 'Unknown reviews route.'); return true; }
   const deny = terminal.localOnly(req, rctx.port);
   if (deny) { rctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { rctx.problem(res, 404, 'terminal_off', 'Automatic reviews need the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
+  if (lead) {
+    if (!rctx.agent) { rctx.problem(res, 403, 'forbidden', 'Only the Lead asks here, with ticket.js review. Press Get a review on a session instead.'); return true; }
+    const [status, out] = await leadReview(channel, await rctx.readJson(req), rctx.agent);
+    rctx.send(res, status, out);
+    return true;
+  }
   if (req.method === 'POST') {
     const body = await rctx.readJson(req), c = chOf(channel);
     for (const k of ['auto', 'again']) {
