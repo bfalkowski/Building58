@@ -296,10 +296,7 @@ const notReady = (agent, what, state) => [agent ? 403 : 409, { ok: false, error:
 const setBy = (agent, what) => ({ orderedBy: !agent ? 'you' : agent.lead ? 'Lead' : 'PM', orderedWhat: what });
 const NOT_YOURS = 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.';
 function sessionMayOrder(channel, agent) {
-  if (agent.lead) {
-    if (!config.get('leadOrder')) return 'The person has not let the Lead set priority. They turn it on with Let the Lead set priority in Settings. Until then, recommend an order and let them set it.';
-    return terminal.all(channel).includes(agent) ? null : 'This session is no longer running as the Lead.';
-  }
+  if (agent.lead) return config.get('leadOrder') ? null : 'The person has not let the Lead set priority. They turn it on with Let the Lead set priority in Settings. Until then, recommend an order and let them set it.';
   if (agent.role !== 'pm') return NOT_YOURS;
   if (!config.get('pmOrder')) return 'The person has not let the PM set the order. They turn it on with Let the PM set the order in Settings. Until then, recommend an order and let them set it.';
   const newest = terminal.all(channel).filter((t) => t.role === 'pm').sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))[0];

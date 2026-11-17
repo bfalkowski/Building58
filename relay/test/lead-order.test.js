@@ -131,7 +131,15 @@ test('the Lead sets priority and order only with the switch on, only in Triage o
   await t.test('a session that is no longer the Lead gets 403', async () => {
     await talk(worker);
     assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: worker.id })).status, 200);
-    assert.strictEqual((await prio(ids.B, 'low', leadT)).status, 403, 'the old Lead');
+    const old = await prio(ids.B, 'low', leadT);
+    assert.strictEqual(old.status, 403, 'the old Lead');
+    assert.match(old.body.message, /^Only the person sets a ticket's priority/, 'the old Lead is told it is not its to set');
+    const env = { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: leadT['X-Office-Token'] };
+    const before = await ticket(ids.B);
+    assert.throws(() => execFileSync('node', [path.join(H.ROOT, 'relay', 'ticket.js'), 'priority', ids.B, 'low'], { env, encoding: 'utf8', stdio: 'pipe' }),
+      (e) => /Only the person sets a ticket's priority/.test(String(e.stderr) + String(e.stdout)), 'ticket.js priority from the old Lead');
+    const after = await ticket(ids.B);
+    assert.deepStrictEqual([after.priority, after.orderedBy], [before.priority, before.orderedBy], 'the old Lead changed nothing');
     assert.strictEqual((await prio(ids.B, 'low', workerT)).status, 200, 'the new Lead');
   });
 
