@@ -3,7 +3,8 @@
 // the relay's own files changed, the relay waits until no session is in a turn,
 // then fast-forwards and restarts, brings every session back, and the page reloads when it answers
 // again. If the new relay failed its check and the supervisor went back to the last good commit,
-// the page says so.
+// the page says so. It says so too when the session host speaks an older version of its messages than
+// the relay, until the office is stopped and started.
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -73,6 +74,7 @@
     }, LOOK_EVERY);
     if (r.update) { tell(waitingWords(r.update)); follow(); return; }
     const b = r.rollback;
+    if (!b && r.host) tell(r.host, true);
     if (b) tell('The new relay on ' + b.failed.slice(0, 7) + ' failed its check: ' + b.why + '. Update went back to ' + b.running.slice(0, 7) + ', the last commit that passed, and the relay runs that now. The relay\'s folder is on that commit, not ' + r.branch + ', so Update pulls nothing until you fix ' + r.branch + ' and check it out there.', true);
   });
 })();
