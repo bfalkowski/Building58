@@ -44,7 +44,7 @@
   <table>
     <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
     <tbody>
-      <tr><td><code>RELAY_KEY</code></td><td class="plain">random, printed at start</td><td>The key every call to <code>/channels/...</code> must send. The relay takes it out of its own environment when it starts, so nothing it runs is given it.</td></tr>
+      <tr><td><code>RELAY_KEY</code></td><td class="plain">random, printed at start</td><td>The key every call to <code>/channels/...</code> must send. The supervisor hands it to the relay it starts, and both take it out of their own environments, so nothing they run is given it: not a session, not git or <code>gh</code>, not the git a rollback runs, and not the session host.</td></tr>
       <tr><td><code>PORT</code></td><td class="plain"><code>8787</code>, or the world's <code>port</code></td><td>Port to listen on. With <code>RELAY_WORLD</code>, the default is the <code>port</code> in that world's <code>world.json</code>.</td></tr>
       <tr><td><code>RELAY_WORLD</code></td><td class="plain">none: every world</td><td>A world's folder. The relay serves that world alone, and loads the room's parts only if its <code>world.json</code> says <code>"sessions": true</code>. <code>npm run world -- &lt;folder&gt;</code> sets it, and <code>npm run office</code> sets it to <code>office</code>. See <a href="relay.html#one-relay">One relay per world</a>.</td></tr>
       <tr><td><code>HOST</code></td><td class="plain"><code>127.0.0.1</code></td><td>Address to listen on. A tunnel connects locally, so this can stay as it is.</td></tr>

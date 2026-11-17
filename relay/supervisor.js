@@ -11,6 +11,9 @@
 // While RELAY_ROLLBACK=1, it checks each relay it starts, and goes back to the last commit that
 // passed when the relay fails on an Update's new code (relay/rollback.js).
 //
+// Only the relay it starts gets the key. This takes the key out of its own environment, so the git it
+// runs for a rollback and the session host never see it.
+//
 // It loads once and runs until you stop the relay, so a change here needs a stop and start by hand.
 // Keep it small.
 'use strict';
@@ -24,6 +27,7 @@ const RESTART = 75;
 function supervise(file) {
   const env = Object.assign({}, process.env, { RELAY_WORKER: '1', RELAY_SUPERVISED: '1' });
   if (!env.RELAY_KEY) { env.RELAY_KEY = crypto.randomBytes(12).toString('hex'); env.RELAY_KEY_RANDOM = '1'; }
+  delete process.env.RELAY_KEY; delete process.env.RELAY_KEY_RANDOM;
   const guard = rollback.ON();
   let child = null, stopping = false, host = null;
   const hostGone = () => !host || host.child.exitCode !== null || host.child.signalCode !== null;
