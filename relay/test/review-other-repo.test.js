@@ -77,7 +77,11 @@ test('a PR of another project gets no automatic review and tells nobody', async 
     await until(() => /shares no history/.test(R.output()), 'the checkout to refuse it', 300);
     await sleep(QUIET);
     assert.strictEqual(R.output().match(/shares no history/g).length, 1, 'one try, no retry');
-    await nobodyTold(pr);
+    assert.deepStrictEqual(await reviewersOf(pr), [], 'no reviewer');
+    const r = await reviews();
+    assert.strictEqual(r.prs.find((x) => x.pr === pr), undefined, 'no review is queued or kept');
+    assert.ok(r.news.some((x) => JSON.stringify(x).includes('No review of PR #2: it is of another project.')), 'the panel says it was dropped');
+    assert.deepStrictEqual(saved().filter((x) => (x.text || '').includes(pr) || (x.key || '').includes(pr)), [], 'no message for the Lead or anyone');
     const row = (await R.call('GET', '/floor')).body.sessions.find((x) => x.terminal === d.id);
     assert.strictEqual(row.reviewWaits, false, 'the Floor does not say it waits on the person');
     await stop(d.id);

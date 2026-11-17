@@ -6,7 +6,8 @@
 //   once the PR's pipeline is green (relay/pipeline.js). A hook from a session the room does not run counts
 //   only for a PR of a repo the room has a clone of (roomKnows in relay/checkouts.js). Any other PR is
 //   ignored with a log line, since the person's global hooks report every session on this computer (T-192).
-//   A review the checkout refuses as unrelated, of another project, is dropped and not tried again.
+//   A review the checkout refuses as unrelated, of another project, is dropped and not tried again, and the
+//   panel says so once, since a line may already say its review starts.
 //   A follow-up review. While Review again after each push is on (it starts off, article 5), a reviewed
 //   PR whose head is not the commit its last review read owes one (followUpOwed in office/reviews.js).
 //   Each tick compares the head the pipeline last heard with that commit, so a push whose hook was lost,
@@ -131,7 +132,7 @@ async function firstReview(channel, pr, held) {
   if (!rec) return;
   rec.count = Math.max(0, rec.count - 1);
   if (rec.count || rec.head) { save(); return; }
-  if (out.error === 'unrelated') { delete c.prs[pr]; delivery.drop(channel, 'pipeline ' + pr); save(); return; }
+  if (out.error === 'unrelated') { delete c.prs[pr]; delivery.drop(channel, 'pipeline ' + pr); save(); say(channel, 'No review of PR ' + number(pr) + ': it is of another project.'); return; }
   if (out.error === 'full') {
     rec.first = Object.assign({}, held, { desk: true });
     save();
@@ -291,7 +292,7 @@ function noteHook(channel, ev) {
       checkouts.roomKnows(channel, pr).then((known) => {
         if (!known) ctx.log('PR ' + pr + ' is not of a repo the room works in, so it gets no automatic review.');
         else if (owed()) queueFirst(channel, pr, from, null);
-      });
+      }).catch((e) => ctx.log('No review of ' + pr + ': ' + e.message));
     }
   }
   if (ev.pushed && t) {
