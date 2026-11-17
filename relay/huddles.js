@@ -55,7 +55,7 @@ function pipelineOf(checks) {
 const NO_PR = /no pull requests found|no git remotes|none of the git remotes|not a git repository|no default remote/i;
 async function prOf(cwd, known) {
   if (!fs.existsSync(cwd)) return { failed: 'its folder is gone' };
-  const args = ['pr', 'view'].concat(known ? [known] : [], ['--json', 'number,url,title,state,isDraft,reviewDecision,statusCheckRollup,comments,baseRefName,mergeable,files,changedFiles']);
+  const args = ['pr', 'view'].concat(known ? [known] : [], ['--json', 'number,url,title,state,isDraft,reviewDecision,statusCheckRollup,comments,baseRefName,mergeable,files,changedFiles,headRefOid']);
   const r = await run(GH, args, cwd, GH_LIMIT);
   if (r.err) {
     if (r.err.code === 'ENOENT') return { failed: 'gh is not installed' };
@@ -65,7 +65,7 @@ async function prOf(cwd, known) {
   }
   try {
     const p = JSON.parse(r.stdout);
-    return { number: p.number, url: p.url, state: p.state, draft: !!p.isDraft, pipeline: pipelineOf(p.statusCheckRollup), review: p.reviewDecision || 'none', comments: Array.isArray(p.comments) ? p.comments.length : 0, decision: decisionOf(p) };
+    return { number: p.number, url: p.url, state: p.state, draft: !!p.isDraft, pipeline: pipelineOf(p.statusCheckRollup), review: p.reviewDecision || 'none', comments: Array.isArray(p.comments) ? p.comments.length : 0, head: typeof p.headRefOid === 'string' ? p.headRefOid : null, decision: decisionOf(p) };
   } catch (e) { return { failed: 'gh sent something unreadable' }; }
 }
 
@@ -107,12 +107,17 @@ function waitingOn(row, prs) {
     if (pr.pipeline === 'failing') return on('someone to fix the pipeline');
     if (pr.review === 'CHANGES_REQUESTED') return on('someone to make the changes');
     if (pr.pipeline === 'running') return { on: 'the pipeline' };
-    if (pr.review === 'APPROVED' && prs.leadMerges && !pr.decision) return on('the Lead to merge, under the merge rung');
-    if (pr.review === 'APPROVED') return Object.assign(on('you to merge'), { mergeWhy: worked ? null : 'approved and ready for you to merge' + (prs.leadMerges && pr.decision ? ', since ' + pr.decision : '') });
+    const passed = pr.review === 'APPROVED' ? 'approved' : prs.mergeVerdict(pr) ? 'reviewed' : null;
+    if (passed && prs.leadMerges && !pr.decision) return on('the Lead to merge, under the merge rung');
+    if (passed) return Object.assign(on('you to merge'), { mergeWhy: worked ? null : passed + ' and ready for you to merge' + (prs.leadMerges && pr.decision ? ', since ' + pr.decision : '') });
     return { on: pr.comments ? 'you to read its review and merge, or a fix' : 'a review' };
   }
   if (row.pr && row.pr.failed) return { on: 'unknown, gh did not answer' };
   return { on: 'a prompt' };
+}
+function mergeVerdictOn(channel, pr) {
+  const v = pr.head ? require('./autopilot.js').verdictOf(channel, pr.url) : null;
+  return !!(v && v.posted && v.kind === 'merge' && v.commit === pr.head);
 }
 function lineOf(row) {
   const parts = [row.who + (row.lead && row.who !== 'Lead' ? ' (Lead)' : '')];
@@ -154,7 +159,7 @@ async function gather(channel, h) {
   const taskOf = (t) => taskList.find((x) => x.owner && x.owner.terminal === t.id) || null;
   const gone = taskList.filter((task) => task.state !== 'done' && !terminal.find(channel, task.owner && task.owner.terminal));
   const rows = await Promise.all([...list.map((t) => rowOf(channel, t, taskOf(t), names, lead && lead.id)), ...gone.map(goneRow)]);
-  const prs = { leadMerges: !!(lead && lead.merge), worked: new Set(rows.filter((r) => r.status === 'working' && r.pr && r.pr.url).map((r) => r.pr.url)) };
+  const prs = { leadMerges: !!(lead && lead.merge), mergeVerdict: (pr) => mergeVerdictOn(channel, pr), worked: new Set(rows.filter((r) => r.status === 'working' && r.pr && r.pr.url).map((r) => r.pr.url)) };
   for (const row of rows) { row.answer = h.answerFor(row); finishRow(row, h.noteFor(row), prs); }
   const items = listOf(require('./needs-you.js').stateOf(channel, Date.now(), { rows }));
   for (const row of rows) needsOf(row, items);
