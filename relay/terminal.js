@@ -438,9 +438,9 @@ const CSI = /\x1b\[[0-?]*[ -/]*[@-~]/, OSC = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/
 const CHARSET = /\x1b[()][A-Za-z0-9]/, ANY_OTHER_ESCAPE = /\x1b./;
 const ANSI = new RegExp([CSI, OSC, DCS, CHARSET, ANY_OTHER_ESCAPE].map((r) => r.source).join('|'), 'g');
 const X10_MOUSE = /\x1b\[M[\s\S]{3}/g;
-let updating = () => false, restarting = () => false;
-const holdWhileUpdating = (fn, restartFn) => { updating = fn; if (restartFn) restarting = restartFn; };
-const heldForUpdate = (t, brief) => (brief === 'prompt' ? restarting() : updating() && !t.refresh);
+let updating = () => false, restarting = () => false, holding = () => false;
+const holdWhileUpdating = (fns) => { ({ updating, restarting, holding } = fns); };
+const heldForUpdate = (t, brief) => (brief === 'prompt' ? restarting() : holding() && !t.refresh);
 
 function owePrompt(t, text) {
   t.owesPrompt = text || null;

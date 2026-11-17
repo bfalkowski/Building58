@@ -24,8 +24,10 @@
 // to a session it was typed into watches it again, from when it was typed. A task's brief is both.
 // The Lead's brief is first only: a Lead with no hooks reaching the relay is still briefed.
 //
-// An update holds a first brief saved until a turn begins (a task's brief, and every first prompt) only
-// while it restarts, not while it waits for a quiet moment, which can take hours (T-147, T-299).
+// An update holds every first brief (a task's, the Lead's, and every first prompt) only while it
+// restarts, not while it waits for a quiet moment, which can take hours (T-147, T-299, T-198). Other
+// saved messages it holds while it waits only for RELAY_UPDATE_HOLD_MS (Settings) from when the wait
+// began, then they go in and the update waits for their turns (relay/update.js).
 // A first prompt (promptOnce) for a reviewer, the PM or the COO is a first brief saved until a turn
 // begins, with two differences. It gives up if it was not typed within RELAY_READY_LIMIT
 // (Settings), counted again from when a relay comes back, or if its session ends while the relay runs. And it is tried PROMPT_TRIES times before
@@ -104,7 +106,7 @@ function drop(channel, key) {
   if (d) remove(channel, d);
   callbacks.delete(channel + '/' + key);
 }
-const how = (d) => (d.prompt || (d.first && d.untilTurn) ? 'prompt' : !!d.first);
+const how = (d) => (d.prompt || d.first ? 'prompt' : false);
 const isTarget = (t, d) => t.id === d.terminal || (!!d.sessionId && t.sessionId === d.sessionId);
 function targetOf(channel, d) {
   if (d.to !== 'lead') return terminal.all(channel).find((t) => isTarget(t, d)) || null;
