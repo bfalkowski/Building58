@@ -534,7 +534,7 @@ function noteHook(channel, ev) {
     if (moved && sid && !((Number(ev.at) || Date.now()) < (moved.hookAt || 0))) {
       moved.hooked = true;
       const was = moved.sessionId;
-      moved.sessionId = UUID.test(ev.full_session_id || '') ? ev.full_session_id : sid; moved.talked = ev.source === 'resume' || (ev.source === 'compact' && moved.sessionId === was && moved.talked); if (!moved.task && !moved.role) moved.title = null;
+      moved.sessionId = UUID.test(ev.full_session_id || '') ? ev.full_session_id : sid; moved.talked = ev.source === 'resume' || (ev.source === 'compact' && moved.sessionId === was && moved.talked); if (!moved.task && !moved.role && !(ev.source === 'compact' && moved.sessionId === was)) moved.title = null;
       if ((moved.board || moved.starts || moved.merge) && moved.sessionId !== was) { try { clearSavedGrants(channel); } catch (e) { console.error('Could not save the Lead: ' + e.message); } }
       if (moved.sessionId !== was) { moved.state = 'idle'; moved.message = null; moved.customTitle = null; }
       if (moved.who && namer) namer(channel, moved);

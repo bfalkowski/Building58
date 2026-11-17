@@ -97,3 +97,17 @@ test('the relay keeps each session\'s customTitle, sends it, and brings it back 
     await until(async () => (await named(R, id)) === null, 'the title to go');
   });
 });
+
+test('a plain session keeps its title after /compact, and loses it after /clear', async (t) => {
+  const R = await relay();
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = (await R.call('POST', '/terminals', { cwd: R.home, title: 'Mine' })).body;
+  const title = async () => (await terminals(R)).find((x) => x.id === s.id).title;
+  const start = (source, sid) => hook(R, sid, 'SessionStart', { source, terminal: s.id, full_session_id: sid });
+  await hook(R, s.sessionId, 'UserPromptSubmit');
+  await start('compact', s.sessionId);
+  await sleep(150);
+  assert.strictEqual(await title(), 'Mine', '/compact keeps the same conversation');
+  await start('clear', '0a0b0c0d-1111-4222-8333-444455556666');
+  await until(async () => (await title()) === null, '/clear to take the title away');
+});
