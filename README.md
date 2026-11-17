@@ -69,7 +69,8 @@ The tests need `python3` and `git`. Lint checks for mistakes only, not style, so
 `npm test` runs each test file with its own empty home folder, so the tests never touch your
 room's files, and several checkouts can run it at the same time. A file that has not ended after
 10 minutes (`TEST_FILE_SECONDS` sets it) is stopped with everything it started, and fails, so one
-stuck file cannot hang the run. A file you run with `node --test`
+stuck file cannot hang the run. A file that has ended, but whose output a process it started
+still holds 5 seconds later, also fails at once, with a message that says so. A file you run with `node --test`
 yourself gets your own home folder.
 
 The browser tests open the room page in a headless Chromium, against a real relay. They need
