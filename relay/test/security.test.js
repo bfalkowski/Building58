@@ -116,7 +116,7 @@ test('Ask security: a session with its brief, whose report is saved and shown, a
   assert.strictEqual(officer.role, 'security');
   assert.strictEqual(officer.work.role, 'security', 'so the org chart shows it on the security card of its Officers row');
 
-  const screen = await until(async () => { const s = await R.screen(officer.id); return s.includes('GOT[') && s; }, 'the brief');
+  const screen = await until(async () => { const s = await R.screen(officer.id); return /GOT\[You are the security officer[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
   const brief = screen.match(/GOT\[(You are the security officer[^\]\r\n]*)\]/)[1];
   for (const words of ['do not decide', 'propose only', 'docs/constitution.md', 'article 7', 'rungs 3 and 4', 'names only', 'never print', 'at most 3 recommendations', 'node "' + CLI + '" access', 'access-report in place of access']) {
     assert.ok(brief.includes(words), 'The brief says: ' + words);

@@ -114,7 +114,8 @@ test('the PR watch moves an open task PR to its next step, once for each head an
     assert.match(row.state, /^stuck: told/);
     // A turn that begins clears stuck. The watch does not tell it again for the same head and cause.
     await o.finish(o.dev);
-    const line = await until(async () => { const l = await o.line(); return l.owner === 'Dev' && l; }, 'the line to say it waits on the Dev');
+    // The watch looks again on its own clock, so a line from while the turn ran (Its Dev is at work) can come first.
+    const line = await until(async () => { const l = await o.line(); return l.owner === 'Dev' && /blocking findings/.test(l.words) && l; }, 'the line to say it waits on the Dev for the findings');
     assert.match(line.words, /^waits on the Dev for 0 min: The review of [0-9a-f]{7} has blocking findings\.$/);
     await sleep(3000);
     assert.strictEqual(await told(o, 'has blocking findings'), 1, 'told once for this head and cause');

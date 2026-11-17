@@ -180,10 +180,10 @@ async function createTask(channel, body, ctx) {
     await git(top, ['worktree', 'add', '-b', branch, worktree, checked.start]);
   } catch (e) { return [500, { ok: false, error: 'git', message: e.message }]; }
   const baseNote = BASE_NOTES[checked.state] ? BASE_NOTES[checked.state](base, checked.remote) : null;
-  const by = String(body.by || 'you').slice(0, 40);
+  const by = String(body.by || 'you').slice(0, 40), at = now();
   const task = { id, title, brief, baseNote, briefed: false, by, ticket: body.ticket ? String(body.ticket) : null, ticketAt: body.ticketAt || null, state: 'building', repo: top, base, branch, worktree, pr: null, round: 0, owner: null,
-    createdAt: now(), updatedAt: now(), history: [] };
-  record(task, { type: 'created', to: 'building', by });
+    createdAt: at, updatedAt: at, history: [] };
+  record(task, { at, type: 'created', to: 'building', by });
   if (checked.state === 'behind') record(task, { type: 'note', note: 'Local ' + base + ' was behind ' + checked.remote + ', so this started from ' + checked.remote + '/' + base + '.' });
   else if (baseNote) record(task, { type: 'note', note: baseNote });
   const started = startWorker(channel, task, ctx, body);

@@ -59,7 +59,7 @@ async function rig(t) {
     await say(r.body.sessionId, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-1' } });
     await say(r.body.sessionId, 'Stop');
   };
-  const parked = () => until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the task to wait on you', 200);
+  const parked = () => until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the task to wait on you');
   const lastMove = (x) => x.history.filter((h) => h.type === 'moved').pop();
   return { R, dev, taskOf, ap, say, merged, openPr, reviewSaysMerge, parked, lastMove };
 }

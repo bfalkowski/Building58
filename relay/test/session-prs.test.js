@@ -85,7 +85,7 @@ test('review news reaches a session with no task', async (t) => {
     api['repos/o/r/pulls/11'] = { state: 'closed' };
     say();
     await until(() => !saved().some((w) => w.pr === pr(11)), 'the watch to end');
-    assert.match(R.output(), /Stopped watching https:\/\/github\.com\/o\/r\/pull\/11 for session [0-9a-f]{8}: the PR is merged or closed\./);
+    await until(() => /Stopped watching https:\/\/github\.com\/o\/r\/pull\/11 for session [0-9a-f]{8}: the PR is merged or closed\./.test(R.output()), 'the log line');
   });
   await t.test('a session the person stops is no longer watched', async () => {
     const other = await worker();
@@ -93,6 +93,6 @@ test('review news reaches a session with no task', async (t) => {
     await until(() => saved().some((w) => w.pr === pr(12)), 'the watch saved');
     await R.call('POST', '/terminals/' + other.id + '/stop', {});
     await until(() => !saved().some((w) => w.pr === pr(12)), 'the watch to end');
-    assert.match(R.output(), /Stopped watching https:\/\/github\.com\/o\/r\/pull\/12 for session [0-9a-f]{8}: the session was stopped\./);
+    await until(() => /Stopped watching https:\/\/github\.com\/o\/r\/pull\/12 for session [0-9a-f]{8}: the session was stopped\./.test(R.output()), 'the log line');
   });
 });
