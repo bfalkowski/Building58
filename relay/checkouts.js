@@ -13,7 +13,7 @@ const state = require('./state.js');
 const terminal = require('./terminal.js');
 const delivery = require('./delivery.js');
 const tasks = require('./tasks.js');
-const { git, excludeWorktrees, mainCheckout, WORKTREES } = tasks;
+const { git, excludeWorktrees, linkModules, mainCheckout, WORKTREES } = tasks;
 const history = require('./ticket-history.js');
 const { claim } = require('./lockfile.js');
 
@@ -239,6 +239,7 @@ async function make(channel, body, ctx, ask) {
     await excludeWorktrees(repo);
     const refused = pr ? await forReview(c, top, pr, unlessAt) : await forWorker(c, top);
     if (refused) return refused;
+    await linkModules(repo, c.path);
   } catch (e) {
     if (c.ref) await git(repo, ['update-ref', '-d', c.ref]).catch(() => {});
     return [500, { ok: false, error: 'git', message: e.message }];
@@ -279,6 +280,7 @@ async function forPm(channel, { top, base, title, cols, rows }, ctx) {
       c.commit = await git(repo, ['rev-parse', checked.start + '^{commit}']);
       await excludeWorktrees(repo);
       await git(repo, ['worktree', 'add', '--detach', c.path, c.commit]);
+      await linkModules(repo, c.path);
     } catch (e) {
       ctx.log('The PM reads ' + top + ' itself, with no checkout of its own: ' + unsecret(e.message));
       const r = terminal.start(channel, own, ctx);
