@@ -546,3 +546,37 @@ test('an approved, green PR waits on the Lead when it may merge', async (t) => {
     });
   }
 });
+
+// Office reviewers post from the PR author's own GitHub account, which cannot approve its own PR, so their
+// kept verdict counts as the review. It counts only for the commit the reviewer read.
+test('a green PR with a merge verdict on its head and no GitHub approval waits on the Lead', async (t) => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-huddle-verdict-')));
+  const file = path.join(home, 'autopilot.json');
+  const HEAD = 'a'.repeat(40), OLD = 'b'.repeat(40);
+  const keep = (kind, commit) => fs.writeFileSync(file, JSON.stringify({ t: { on: false, only: null, day: null, merged: 0, notes: [], prs: {
+    [PR]: { verdicts: [{ kind, commit, sessionId: 'reviewer-' + kind + commit, at: new Date().toISOString(), posted: PR + '#issuecomment-1' }] }
+  } } }));
+  const pr = { ...green, reviewDecision: '', headRefOid: HEAD, baseRefName: 'main', mergeable: 'MERGEABLE', files: [{ path: 'relay/huddles.js' }], changedFiles: 1, comments: [{ body: 'review' }] };
+  const cases = [
+    ['a merge verdict on its head', 'merge', HEAD, {}, /^the Lead to merge/, null],
+    ['a merge verdict on an older commit', 'merge', OLD, {}, /^you to read its review and merge, or a fix/, null],
+    ['a fix verdict on its head', 'fix', HEAD, {}, /^you to read its review and merge, or a fix/, null],
+    ['a merge verdict on its head and a change to CLAUDE.md', 'merge', HEAD, { files: [{ path: 'CLAUDE.md' }] }, /^you to merge/, /reviewed and ready for you to merge, since it changes CLAUDE\.md/],
+  ];
+  for (const [what, kind, commit, over, on, why] of cases) {
+    await t.test('with ' + what, async (t2) => {
+      keep(kind, commit);
+      const o = await office(t2, { RELAY_AUTOPILOT_FILE: file });
+      execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: o.repo });
+      o.answers({ prs: { feature: { ...pr, ...over } } });
+      const dev = await o.add();
+      await o.finished(dev);
+      const lead = await o.add({ cwd: fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-huddle-lead-'))) });
+      await o.finished(lead);
+      assert.strictEqual((await o.R.call('POST', '/terminals/lead', { terminal: lead.id, merge: true })).status, 200);
+      const r = o.rowOf(await o.huddle({ lead: false }), dev);
+      assert.match(r.waitingOn, on);
+      if (why) assert.match(r.mergeWhy, why);
+    });
+  }
+});
