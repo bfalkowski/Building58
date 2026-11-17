@@ -17,7 +17,7 @@ test('moving the board', async (t) => {
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const pull = (n, repoName) => 'https://github.com/' + (repoName || 'o/r') + '/pull/' + n;
   const prs = {};
-  for (const n of [32, 40, 41, 42, 43]) prs[pull(n)] = { state: 'MERGED', url: pull(n) };
+  for (const n of [32, 33, 34, 40, 41, 42, 43]) prs[pull(n)] = { state: 'MERGED', url: pull(n) };
   Object.assign(prs, { [pull(50)]: { state: 'OPEN', url: pull(50) }, [pull(51)]: { state: 'CLOSED', url: pull(51) },
     [pull(5, 'x/y')]: { state: 'MERGED', url: pull(5, 'x/y') }, [pull(52, 'O/R')]: { state: 'MERGED', url: pull(52) }, [pull(40, 'O/R')]: { state: 'MERGED', url: pull(40) },
     [pull(6, 'p/q')]: { state: 'MERGED', url: pull(6, 'p/q') }, [pull(8, 'm/r')]: { state: 'MERGED', url: pull(8, 'm/r') }, [pull(54)]: { state: 'MERGED', url: pull(54, 'o/r-renamed') } });
@@ -144,6 +144,26 @@ test('moving the board', async (t) => {
     assert.match(again.body.message, new RegExp('already the PR of ticket ' + first.id + ' · First'));
     assert.strictEqual((await R.call('GET', '/tickets/' + unrelated.id)).body.ticket.status, 'triage');
     assert.strictEqual((await moveDone(unrelated.id, 'https://github.com/o/r/pull/43')).status, 200, 'its own PR still works');
+  });
+  await t.test('Merged elsewhere refuses the PR of a task that was cleaned up', async () => {
+    const moveDone = (id, pr) => R.call('POST', '/tickets/' + id + '/move', { to: 'done', pr }, leadToken);
+    const ticket = await fileAs(undefined, 'Shipped then cleaned');
+    const done = (await R.call('POST', '/tickets/' + ticket.id + '/start', {})).body.task;
+    for (const n of [33, 34]) await R.hook({ hook_event_name: 'PostToolUse', session_id: done.owner.sessionId.slice(0, 12), pr_url: pull(n), cwd: done.worktree });
+    await until(async () => (await R.call('GET', '/tasks/' + done.id)).body.task.pr === pull(34), 'the second PR');
+    await R.call('POST', '/terminals/' + done.worker.terminal + '/stop', {});
+    await until(async () => !(await R.call('GET', '/tasks/' + done.id)).body.task.worker, 'the worker to go');
+    await R.call('POST', '/tasks/' + done.id + '/move', { to: 'done' });
+    assert.strictEqual((await R.call('POST', '/tasks/' + done.id + '/clean', {})).status, 200);
+    const unrelated = await fileAs(otherToken, 'Unrelated to the cleaned task');
+    for (const pr of [pull(34), pull(33)]) {
+      const r = await moveDone(unrelated.id, pr);
+      assert.deepStrictEqual([r.status, r.body.error], [409, 'pr_taken'], pr + ': ' + JSON.stringify(r.body));
+      assert.match(r.body.message, new RegExp('already the PR of ticket ' + ticket.id + ' · Shipped then cleaned'));
+    }
+    assert.strictEqual((await R.call('GET', '/tickets/' + unrelated.id)).body.ticket.status, 'triage');
+    const after = (await R.call('GET', '/tickets/' + ticket.id)).body.ticket;
+    assert.deepStrictEqual([after.status, after.pr, after.taskPrs], ['done', undefined, [pull(33), pull(34)]], 'it does not read as merged outside the room');
   });
   // A Lead is an agent and can paste the wrong link, so its move to Done holds only for a PR that gh says
   // merged, in the ticket's repo (T-91). A person's move does not ask gh (relay/test/tickets.test.js).
