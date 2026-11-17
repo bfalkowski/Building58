@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, sleep, ROOT } = require('./helpers.js');
+const { relay, sleep, removeDir, ROOT } = require('./helpers.js');
 const rollback = require('../rollback.js');
 
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -146,4 +146,21 @@ test('a rollback never touches changes to tracked files', async (t) => {
   assert.strictEqual(rollback.plan({ newCode: true, again: false, good: a, head: rollback.head(), dirty: rollback.changed() }).rollback, false);
   assert.throws(() => rollback.checkout(a), 'git refuses to check out over it');
   assert.strictEqual(fs.readFileSync(path.join(r, 'a.txt'), 'utf8'), 'by hand\n');
+});
+
+// A session in the room runs the tests with RELAY_ROLLBACK=1 in its environment, and CI does not. The
+// supervisor runs git before it starts the relay while the check is on, so a git that writes down each
+// call outside the relay shows whether the check was on, with no wait.
+test('a test relay runs no rollback check unless the test asks, even from a shell with RELAY_ROLLBACK=1', async (t) => {
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-rollback-off-')));
+  const bin = path.join(tmp, 'bin'), log = path.join(tmp, 'git.log');
+  fs.mkdirSync(bin);
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  fs.writeFileSync(path.join(bin, 'git'), '#!/bin/sh\n[ -n "$RELAY_WORKER" ] || echo "$@" >> "$GIT_LOG"\nexec "' + realGit + '" "$@"\n', { mode: 0o755 });
+  const was = process.env.RELAY_ROLLBACK;
+  process.env.RELAY_ROLLBACK = '1';
+  let R;
+  try { R = await relay({ PATH: bin + ':' + process.env.PATH, GIT_LOG: log }); } finally { if (was === undefined) delete process.env.RELAY_ROLLBACK; else process.env.RELAY_ROLLBACK = was; }
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(tmp); });
+  assert.strictEqual(fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '', '', 'the supervisor ran git, so its rollback check was on');
 });
