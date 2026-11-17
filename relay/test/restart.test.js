@@ -652,28 +652,32 @@ test('Update waits for a session answered at its question while it still prints,
   await until(async () => { try { return (await R.call('GET', '/update')).body.run !== r.body.run; } catch (e) { return false; } }, 'the relay to restart');
 });
 
-test('the relay key reaches no git or gh the relay starts', async (t) => {
-  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-env-')));
-  const bin = path.join(tmp, 'bin'), log = path.join(tmp, 'env.log'), gh = path.join(tmp, 'gh');
-  fs.mkdirSync(bin); fs.mkdirSync(gh);
-  fs.writeFileSync(path.join(gh, 'answers.json'), JSON.stringify({ prs: {} }));
-  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
-  // Each writes down the environment it was given, then does the real work.
-  fs.writeFileSync(path.join(bin, 'git'), '#!/bin/sh\nenv >> "$ENV_LOG"\nexec "' + realGit + '" "$@"\n', { mode: 0o755 });
-  fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\nenv >> "$ENV_LOG"\nexec "' + process.execPath + '" "' + path.join(__dirname, 'fake-gh.js') + '" "$@"\n', { mode: 0o755 });
-  // No RELAY_KEY, so the supervisor picks a random one.
-  const { R, repo } = await updatable({ RELAY_KEY: '', PATH: bin + ':' + process.env.PATH, ENV_LOG: log, GH_CMD: path.join(bin, 'gh'), FAKE_GH_DIR: gh });
-  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(tmp); });
-  const key = (await until(() => R.output().match(/Key: ([0-9a-f]{24})/), 'the key'))[1];
-  const call = (method, p, body) => R.call(method, p, body, { Authorization: 'Bearer ' + key });
-  assert.strictEqual((await call('POST', '/terminals', { cwd: repo })).status, 201);
-  assert.strictEqual((await call('POST', '/huddle', {})).status, 200);
-  await call('POST', '/update', {});
-  const seen = fs.readFileSync(log, 'utf8');
-  assert.match(seen, /ENV_LOG=/, 'git and gh ran');
-  assert.ok(!seen.includes(key), 'the key is in the environment of git or gh');
-  assert.doesNotMatch(seen, /^RELAY_KEY/m);
-});
+// RELAY_ROLLBACK=1 makes the supervisor run git itself, before and after each start of the relay.
+for (const [name, chosen] of [['a random key', ''], ['a chosen key', 'chosen-key-5f3a9c']]) {
+  test('the relay key reaches no git or gh the relay starts, with ' + name, async (t) => {
+    const tmp = fs.realpathSync(fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-env-')));
+    const bin = path.join(tmp, 'bin'), log = path.join(tmp, 'env.log'), gh = path.join(tmp, 'gh');
+    fs.mkdirSync(bin); fs.mkdirSync(gh);
+    fs.writeFileSync(path.join(gh, 'answers.json'), JSON.stringify({ prs: {} }));
+    const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+    // Each writes down the environment it was given, then does the real work.
+    fs.writeFileSync(path.join(bin, 'git'), '#!/bin/sh\nenv >> "$ENV_LOG"\nexec "' + realGit + '" "$@"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\nenv >> "$ENV_LOG"\nexec "' + process.execPath + '" "' + path.join(__dirname, 'fake-gh.js') + '" "$@"\n', { mode: 0o755 });
+    const { R, repo } = await updatable({ RELAY_KEY: chosen, RELAY_ROLLBACK: '1', PATH: bin + ':' + process.env.PATH, ENV_LOG: log, GH_CMD: path.join(bin, 'gh'), FAKE_GH_DIR: gh });
+    t.after(async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(tmp); });
+    const key = chosen || (await until(() => R.output().match(/Key: ([0-9a-f]{24})/), 'the key'))[1];
+    await until(() => /passed its check/.test(R.output()), 'the rollback check');
+    const call = (method, p, body) => R.call(method, p, body, { Authorization: 'Bearer ' + key });
+    assert.strictEqual((await call('POST', '/terminals', { cwd: repo })).status, 201);
+    assert.strictEqual((await call('POST', '/huddle', {})).status, 200);
+    await call('POST', '/update', {});
+    const seen = fs.readFileSync(log, 'utf8');
+    assert.match(seen, /ENV_LOG=/, 'git and gh ran');
+    assert.match(seen, /PWD=.*relay-folder/, 'the supervisor ran git in the relay folder');
+    assert.ok(!seen.includes(key), 'the key is in the environment of git or gh');
+    assert.doesNotMatch(seen, /^RELAY_KEY/m);
+  });
+}
 
 test('a failed task worker comes back as its task', async (t) => {
   let R = await relay(RESUME);
