@@ -72,9 +72,18 @@ async function excludeWorktrees(top) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.appendFileSync(file, (text && !text.endsWith('\n') ? '\n' : '') + line + '\n');
 }
+const MODULES = 'node_modules';
+async function linkModules(top, folder) {
+  const own = path.join(folder, MODULES), main = path.join(top, MODULES);
+  if (!fs.existsSync(main) || fs.existsSync(own) || isLink(own)) return false;
+  if (!(await git(folder, ['check-ignore', '-q', MODULES]).then(() => true, () => false))) return false;
+  try { fs.symlinkSync(path.relative(folder, main), own); return true; } catch (e) { return false; }
+}
+function isLink(file) { try { return fs.lstatSync(file).isSymbolicLink(); } catch (e) { return false; } }
 async function statusOf(folder) {
   const out = await git(folder, ['status', '--porcelain', '-z', '--ignored']);
-  return out ? out.split('\0').filter(Boolean) : [];
+  const ourLink = isLink(path.join(folder, MODULES)) ? '!! ' + MODULES : null;
+  return out ? out.split('\0').filter((e) => e && e !== ourLink) : [];
 }
 async function refuseNested(repo, folder) {
   const inside = (await git(repo, ['worktree', 'list', '--porcelain'])).split('\n').map((l) => l.replace(/^worktree /, '')).find((p) => p.startsWith(folder + path.sep));
@@ -178,6 +187,7 @@ async function createTask(channel, body, ctx) {
     checked = await checkRemote(top, base);
     await excludeWorktrees(top);
     await git(top, ['worktree', 'add', '-b', branch, worktree, checked.start]);
+    await linkModules(top, worktree);
   } catch (e) { return [500, { ok: false, error: 'git', message: e.message }]; }
   const baseNote = BASE_NOTES[checked.state] ? BASE_NOTES[checked.state](base, checked.remote) : null;
   const by = String(body.by || 'you').slice(0, 40), at = now();
@@ -414,4 +424,4 @@ const list = (channel) => tasksOf(channel);
 
 const channels = () => Object.keys(store);
 
-module.exports = { handle, checkRemote, noteHook, noteMerged, ofHook, setState, moveBack, record, save, channels, create, resume, pipelineOf, busy: () => [...creating.values()].reduce((a, b) => a + b, 0), building, leadRefusal, list, ofTicket, workOf, mainCheckout, branchOf, defaultBranch, hasBranch, baseProblem, git, excludeWorktrees, statusOf, refuseNested, unagreedIgnored, events, onClean, wipLimit, WORKTREES, STATES };
+module.exports = { handle, checkRemote, noteHook, noteMerged, ofHook, setState, moveBack, record, save, channels, create, resume, pipelineOf, busy: () => [...creating.values()].reduce((a, b) => a + b, 0), building, leadRefusal, list, ofTicket, workOf, mainCheckout, branchOf, defaultBranch, hasBranch, baseProblem, git, excludeWorktrees, linkModules, statusOf, refuseNested, unagreedIgnored, events, onClean, wipLimit, WORKTREES, STATES };
