@@ -16,7 +16,7 @@ const SETTINGS = [
   { name: 'stallMinutes', group: 'Work', label: 'A session is stuck after', unit: 'minutes', env: 'RELAY_STALL_MS', scale: 1 / 60000, def: 30, min: 5, max: 600,
     what: 'A session in a turn that sends no hook and prints nothing for this long is stuck. If it still prints, it is quiet instead, since Claude Code\'s spinner prints while it thinks. The Floor, Autopilot and the COO all use this time (relay/liveness.js).' },
   { name: 'leadStops', group: 'The Lead', label: 'Let the Lead stop sessions', kind: 'bool', env: 'RELAY_LEAD_STOPS', def: false,
-    what: 'The Lead can stop a session that is done or idle, with ticket.js stop. The relay first checks that the session is safe to stop. The Lead must also have Let the Lead move the board. Like Let the Lead set priority and Let the Lead start reviews, and unlike the Lead\'s other switches, this one stays on when you make a different session the Lead.' },
+    what: 'The Lead can stop a session that is done or idle, with ticket.js stop. The relay first checks that the session is safe to stop. The Lead must also have Let the Lead move the board. Like Let the Lead set priority, and unlike Let the Lead move the board, this one stays on when you make a different session the Lead.' },
   { name: 'leadStopLimit', group: 'The Lead', label: 'Lead stops an hour', unit: 'stops', env: 'RELAY_LEAD_STOP_LIMIT', def: 6, min: 1, max: 60,
     what: 'The most sessions that the Lead can stop in one hour, on each channel. After that, the Lead gives the other sessions to you to stop.' },
   { name: 'leadOrder', group: 'The Lead', label: 'Let the Lead set priority', kind: 'bool', def: false,
