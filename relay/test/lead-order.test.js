@@ -12,6 +12,21 @@ const H = require('./helpers.js');
 const PR = 'https://github.com/o/r/pull/7';
 const switchTo = (R, on) => R.call('POST', '/settings', { values: { leadOrder: on } });
 const switchNow = async (R) => (await R.call('GET', '/settings')).body.settings.find((s) => s.name === 'leadOrder').value;
+// T-180: the line the Lead's brief has while the switch is on, and only then.
+const { ORDER } = require('../lead-brief.js');
+const LINE = 'When the person asks, order Triage or Ready tickets with ticket.js priority and order; never undo one set by the person.';
+const briefs = (screen) => screen.split('GOT[You are the Lead of this room.').slice(1).map((x) => x.split(']')[0]);
+
+test('the Lead\'s brief names priority and order only while the switch is on', () => {
+  const { leadBrief } = require('../lead-brief.js');
+  assert.strictEqual(ORDER, LINE + ' ');
+  for (const opts of [{}, { merge: true }, { autopilot: true }]) {
+    const off = leadBrief('/r/relay', opts), on = leadBrief('/r/relay', { ...opts, order: true });
+    assert.ok(on.includes(LINE), JSON.stringify(opts));
+    assert.ok(!off.includes(LINE) && !/ticket\.js priority|set by the person/.test(off), 'off, it says nothing more: ' + JSON.stringify(opts));
+    assert.strictEqual(on.replace(ORDER, ''), off, 'the switch adds the line and changes nothing else');
+  }
+});
 
 test('the Lead sets priority and order only with the switch on, only in Triage or Ready, and never a status', async (t) => {
   const R = await H.relay({});
@@ -123,6 +138,20 @@ test('the Lead sets priority and order only with the switch on, only in Triage o
   await t.test('turned off again, the Lead gets 403', async () => {
     assert.strictEqual((await switchTo(R, false)).status, 200);
     assert.strictEqual((await prio(ids.B, 'high', workerT)).status, 403);
+  });
+
+  await t.test('turning the switch on or off types the Lead\'s brief again, with the line only while it is on', async () => {
+    const said = async () => briefs(await R.screen(worker.id)).map((b) => b.includes(LINE));
+    const before = (await said()).length;
+    const told = (list) => H.until(async () => JSON.stringify((await said()).slice(before)) === JSON.stringify(list), 'briefs ' + list.join(', '));
+    await talk(worker); await R.hook({ hook_event_name: 'Stop', session_id: worker.sessionId.slice(0, 12) });
+    assert.strictEqual((await switchTo(R, true)).status, 200);
+    await told([true]);
+    assert.strictEqual((await switchTo(R, false)).status, 200);
+    await told([true, false]);
+    await R.call('POST', '/settings', { values: { leadReviews: true } });
+    await H.sleep(1500);
+    assert.strictEqual((await said()).length, before + 2, 'another setting does not brief it again');
   });
 });
 
