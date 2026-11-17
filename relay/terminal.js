@@ -773,7 +773,7 @@ async function connectHost(log) {
     log('The session host stopped, so every session ended with it. ' + (supervised ? 'The relay restarts and brings them back.' : 'The relay stops. Start it again and they come back.'));
     closing = true; process.exit(supervised ? require('./supervisor.js').RESTART : 1);
   });
-  await link.connect();
+  await link.connect(log);
 }
 function stillRunning(channel, saved) {
   const back = saved && saved.terminal ? link.peek(saved.terminal) : null;

@@ -18,6 +18,7 @@ const checkouts = require('./checkouts.js');
 const huddles = require('./huddles.js');
 const { RESTART } = require('./supervisor.js');
 const coo = require('./coo.js');
+const hostLink = require('./host-link.js');
 const rollback = require('./rollback.js');
 const config = require('./config.js');
 const { livenessOf, jobsOf } = require('./liveness.js');
@@ -173,7 +174,7 @@ async function handle(req, res, channel, rest, ctx) {
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'Update needs the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
   let out;
-  if (req.method === 'GET') out = [200, { ok: true, dir: DIR, branch: BRANCH, run: RUN, update: view(), note: lastNote, rollback: rolledBack() }];
+  if (req.method === 'GET') out = [200, { ok: true, dir: DIR, branch: BRANCH, run: RUN, update: view(), note: lastNote, rollback: rolledBack(), host: hostLink.gapWords() }];
   else if (req.method === 'POST') out = await update(await ctx.readJson(req), ctx, channel);
   if (!out) { ctx.problem(res, 404, 'not_found', 'Unknown update route.'); return true; }
   ctx.send(res, out[0], out[1]);

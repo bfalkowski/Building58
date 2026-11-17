@@ -5,7 +5,7 @@ const fs = require('fs');
 const net = require('net');
 const test = require('node:test');
 const assert = require('node:assert');
-const { launch } = require('../session-host.js');
+const { launch, VERSION } = require('../session-host.js');
 const { until } = require('./helpers.js');
 
 // A connection to the host, as a relay makes one: lines of JSON each way.
@@ -47,7 +47,9 @@ test('a session outlives the connection that started it, and ends with the host'
     assert.ok(alive(pid), 'still running');
     const second = await connect(host.socket);
     second.send({ op: 'list' });
-    const list = (await until(() => second.got.find((m) => m.op === 'list'), 'the list')).sessions;
+    const reply = await until(() => second.got.find((m) => m.op === 'list'), 'the list');
+    assert.strictEqual(reply.version, VERSION, 'it says which version of its messages it speaks');
+    const list = reply.sessions;
     assert.strictEqual(list.length, 1);
     assert.deepStrictEqual([list[0].id, list[0].exited, list[0].meta], ['aaaaaaaaaaaa', false, { channel: 't', token: 'x' }]);
     const before = Buffer.from(list[0].out, 'base64').toString();
