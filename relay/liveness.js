@@ -2,8 +2,8 @@
 // (t.state, t.lastActAt), when it last printed (t.lastOutAt, which comes from the session host through
 // relay/host-link.js), whether its process ended (t.exited, t.stopped), and whether relay/delivery.js
 // found that it did not start on what it was told (t.stuck). The Floor (relay/floor.js, relay/desk.js),
-// Autopilot's stall check (relay/autopilot.js) and the COO's stall count (relay/coo.js) ask this, and
-// none of them reads hooks for it. Plain, so the tests can run it on its own.
+// Autopilot's stall check (relay/autopilot.js), the COO's stall count (relay/coo.js) and huddles
+// (relay/huddles.js) ask this, and none of them reads hooks for it. Plain, so the tests can run it on its own.
 //
 //   livenessOf(t, now, stallMs) -> { state, since, cause }
 //

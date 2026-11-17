@@ -61,8 +61,6 @@ const SETTINGS = [
     what: 'If a session was busy when someone mentioned it in the chat, the relay tries again to give it the mention after this long.' },
   { name: 'huddleAnswerSeconds', group: 'Chat and huddles', label: 'Wait for huddle answers for', unit: 'seconds', env: 'RELAY_HUDDLE_ANSWER_SECONDS', def: 180, min: 30, max: 1800,
     what: 'How long a huddle waits for each session to answer. After this time, the report shows the session with no answer.' },
-  { name: 'huddleQuietMinutes', group: 'Chat and huddles', label: 'Quiet in a huddle after', unit: 'minutes', env: 'RELAY_HUDDLE_QUIET_MINUTES', def: 15, min: 1, max: 240,
-    what: 'In a huddle report, a session that did nothing for this long shows as quiet.' },
   { name: 'cooGraceSeconds', group: 'COO and PM', label: 'The COO leaves after', unit: 'seconds', env: 'RELAY_COO_GRACE_MS', scale: 1 / 1000, def: 10, min: 1, max: 600,
     what: 'After the COO saves its report and its turn ends, the relay waits this long, then ends the COO\'s session.' },
   { name: 'securityGraceSeconds', group: 'COO and PM', label: 'The security officer leaves after', unit: 'seconds', env: 'RELAY_SECURITY_GRACE_MS', scale: 1 / 1000, def: 10, min: 1, max: 600,

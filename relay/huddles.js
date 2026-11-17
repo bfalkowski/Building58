@@ -15,12 +15,12 @@ const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const delivery = require('./delivery.js');
 const { listOf } = require('./needs-you-plan.js');
+const { livenessOf } = require('./liveness.js');
 
 const GH = process.env.GH_CMD || 'gh';
 const GH_LIMIT = 10000, GIT_LIMIT = 5000;
 const config = require('./config.js');
 const ANSWER_LIMIT = () => config.get('huddleAnswerSeconds') * 1000;
-const QUIET_LIMIT = () => config.get('huddleQuietMinutes') * 60;
 const LEAD_KEEP = 60 * 60 * 1000;
 const MAX_TO_LEAD = 6000;
 const LEAD_KEY = 'huddle-lead', QUESTION_KEY = /^huddle-[0-9a-f]{6}-/;
@@ -98,7 +98,8 @@ function waitingOn(row, prs) {
   }
   if (row.status === 'waiting') return { on: 'you: ' + (row.message || 'needs your OK') };
   if (row.taskState === 'waiting_on_you' && !(pr && ['failing', 'running'].includes(pr.pipeline))) return { on: 'you' };
-  if (row.quiet && row.status === 'working') return { on: 'nobody knows' };
+  if (row.live === 'quiet') return { on: 'nobody knows' };
+  if (row.live === 'stuck') return { on: 'you to look at its session' };
   if (row.status !== 'finished' && row.status !== 'unknown') return { on: row.status === 'new' ? 'its first prompt' : 'nothing' };
   if (pr && pr.state === 'MERGED') return { on: 'nothing, its PR is merged' };
   if (pr) {
@@ -129,7 +130,8 @@ function lineOf(row) {
   const git = row.git ? [row.git.changed ? row.git.changed + ' uncommitted' : '', row.git.ahead ? row.git.ahead + ' unpushed' : '', !row.git.pushed && row.git.branch ? 'branch not pushed' : ''].filter(Boolean).join(', ') : '';
   if (git) parts.push(git);
   parts.push('waiting on ' + row.waitingOn);
-  if (row.lastSeconds !== null) parts.push((row.quiet ? 'QUIET ' : 'last did anything ') + ago(row.lastSeconds) + (row.quiet ? '' : ' ago'));
+  const flag = row.live === 'quiet' || row.live === 'stuck' ? row.live.toUpperCase() + ' ' : null;
+  if (row.lastSeconds !== null) parts.push(flag ? flag + ago(row.lastSeconds) : 'last did anything ' + ago(row.lastSeconds) + ' ago');
   if (row.ask) parts.push(row.ask);
   return parts.join(' · ');
 }
@@ -137,13 +139,14 @@ async function rowOf(channel, t, task, names, leadId) {
   const git = await gitState(t.cwd);
   const known = (task && task.pr) || t.pr;
   const pr = known && PR_URL.test(known) ? await prOf(t.cwd, known) : git && git.branch ? await prOf(t.cwd, null) : null;
-  const lastSeconds = Math.max(0, Math.round((Date.now() - t.lastActAt) / 1000));
+  const now = Date.now(), lastSeconds = Math.max(0, Math.round((now - t.lastActAt) / 1000));
+  const live = livenessOf(t, now).state;
   const status = statusOf(t);
-  return { terminal: t.id, who: clean(names[t.id] || t.who, 40) || 'Session ' + t.sessionId.slice(0, 8), lead: t.id === leadId, role: t.role, ticket: task ? task.ticket : null, title: clean(task ? task.title : t.title, 60) || null, taskId: task ? task.id : null, taskState: task ? task.state : null, status, message: clean(t.message, 160) || null, git, pr, lastSeconds, quiet: status !== 'new' && lastSeconds >= QUIET_LIMIT() };
+  return { terminal: t.id, who: clean(names[t.id] || t.who, 40) || 'Session ' + t.sessionId.slice(0, 8), lead: t.id === leadId, role: t.role, ticket: task ? task.ticket : null, title: clean(task ? task.title : t.title, 60) || null, taskId: task ? task.id : null, taskState: task ? task.state : null, status, message: clean(t.message, 160) || null, git, pr, lastSeconds, live, quiet: live === 'quiet' };
 }
 async function goneRow(task) {
   const pr = task.pr && PR_URL.test(task.pr) ? await prOf(task.repo, task.pr) : null;
-  return { terminal: null, who: 'Worker on ' + (task.ticket || 'task ' + task.id), lead: false, role: null, ticket: task.ticket, title: clean(task.title, 60), taskId: task.id, taskState: task.state, status: 'gone', message: null, git: null, pr, lastSeconds: null, quiet: false };
+  return { terminal: null, who: 'Worker on ' + (task.ticket || 'task ' + task.id), lead: false, role: null, ticket: task.ticket, title: clean(task.title, 60), taskId: task.id, taskState: task.state, status: 'gone', message: null, git: null, pr, lastSeconds: null, live: 'gone', quiet: false };
 }
 function finishRow(row, ask, prs) {
   const w = waitingOn(row, prs);
@@ -169,7 +172,7 @@ async function gather(channel, h) {
   const count = (s) => rows.filter((r) => r.status === s).length;
   const needs = items.length;
   const headline = (needs ? needs + ' need' + (needs === 1 ? 's' : '') + ' you' : 'Nothing needs you') + ', ' + count('working') + ' working, ' + count('finished') + ' finished' + (count('gone') ? ', ' + count('gone') + ' gone' : '') + '.';
-  return { at: new Date().toISOString(), headline, ghProblem: failures.length ? failures[0] : null, rows, quietLimitMinutes: QUIET_LIMIT() / 60 };
+  return { at: new Date().toISOString(), headline, ghProblem: failures.length ? failures[0] : null, rows };
 }
 
 const QUESTION = (id) => 'Huddle question from the room, marker HUDDLE-' + id + '. In one line, say what you are on, what is next, and what you are waiting on, if anything. Do not run any tools or change anything for this. Start the line with HUDDLE-' + id + ': and then carry on as you were.';
