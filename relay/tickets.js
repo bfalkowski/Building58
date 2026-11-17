@@ -67,7 +67,10 @@ tasks.onClean(async (channel, task) => {
   if (!task.ticket) return;
   const t = await store.get(channel, task.ticket);
   const prs = [...new Set((task.history || []).filter((h) => h.type === 'pr' && h.pr).map((h) => h.pr).concat(task.pr ? [task.pr] : []))];
-  if (t && t.createdAt === task.ticketAt) await store.update(channel, t.id, Object.assign({ status: 'done' }, prs.length ? { taskPrs: prs } : {}));
+  if (!t || t.createdAt !== task.ticketAt) return;
+  await store.update(channel, t.id, { status: 'done' });
+  if (!prs.length) return;
+  try { await store.update(channel, t.id, { taskPrs: prs }); } catch (e) { console.error('Ticket store (' + store.name + ') could not keep the PRs of its task on ' + t.id + ', so Merged elsewhere will not refuse them: ' + e.message); }
 });
 
 if (store.local) chat.onTicketSummary(async (channel, id, ticketAt, summary) => {
