@@ -160,6 +160,10 @@ async function roomCloneOf(channel, owner, name) {
   }
   return null;
 }
+async function roomKnows(channel, pr) {
+  const m = String(pr).match(PR_URL);
+  return !!(m && await roomCloneOf(channel, m[1], m[2]).catch(() => null));
+}
 async function reviewTop(channel, top, from, pr, log) {
   const [, owner, name] = pr.match(PR_URL);
   if (await isCloneOf(top, owner, name)) return top;
@@ -348,4 +352,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { forPm, pmBaseOf, parseRemote, unsecret, quietEnv, handle, create, sweep, onExitFor, onReview, useAsk, busy: () => making };
+module.exports = { forPm, pmBaseOf, parseRemote, roomKnows, unsecret, quietEnv, handle, create, sweep, onExitFor, onReview, useAsk, busy: () => making };
