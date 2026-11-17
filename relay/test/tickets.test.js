@@ -399,6 +399,22 @@ test('a store that fails during Clean up keeps the task, so the ticket can still
   assert.ok(fs.existsSync(task.worktree));
   assert.strictEqual((await R.call('GET', '/tasks/' + task.id)).status, 200);
 });
+// The GitHub store refuses taskPrs on an issue whose note another key signed (relay/test/ticket-stores.test.js).
+test('a store that cannot keep the task PRs still lets Clean up finish, and says so', async (t) => {
+  const R = await relay(path.join(__dirname, 'failing-store.js')); t.after(R.stop);
+  const a = (await R.call('POST', '/tickets', { title: 'no-prs', repo: R.repo })).body.ticket;
+  const task = (await R.call('POST', '/tickets/' + a.id + '/start', {})).body.task;
+  await R.hook({ hook_event_name: 'PostToolUse', session_id: task.owner.sessionId.slice(0, 12), pr_url: 'https://github.com/o/r/pull/7', cwd: task.worktree });
+  await until(async () => (await R.call('GET', '/tasks/' + task.id)).body.task.pr === 'https://github.com/o/r/pull/7', 'the PR');
+  await R.call('POST', '/terminals/' + task.worker.terminal + '/stop', {});
+  await until(async () => !(await R.call('GET', '/tasks/' + task.id)).body.task.worker, 'the worker to go');
+  await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' });
+  const r = await R.call('POST', '/tasks/' + task.id + '/clean', {});
+  assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  const ticket = (await R.call('GET', '/tickets/' + a.id)).body.ticket;
+  assert.deepStrictEqual([ticket.status, ticket.taskPrs], ['done', undefined]);
+  await until(() => R.output().includes('could not keep the PRs of its task on ' + a.id), 'the log line');
+});
 test('moves respect the limit only where they add to it', async (t) => {
   const R = await relay(); t.after(R.stop);
   const make = async (title) => (await R.call('POST', '/tasks', { title, repo: R.repo })).body.task;

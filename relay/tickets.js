@@ -66,7 +66,11 @@ tasks.events.on('state', async (channel, task) => {
 tasks.onClean(async (channel, task) => {
   if (!task.ticket) return;
   const t = await store.get(channel, task.ticket);
-  if (t && t.createdAt === task.ticketAt) await store.update(channel, t.id, { status: 'done' });
+  const prs = [...new Set((task.history || []).filter((h) => h.type === 'pr' && h.pr).map((h) => h.pr).concat(task.pr ? [task.pr] : []))];
+  if (!t || t.createdAt !== task.ticketAt) return;
+  await store.update(channel, t.id, { status: 'done' });
+  if (!prs.length) return;
+  try { await store.update(channel, t.id, { taskPrs: prs }); } catch (e) { console.error('Ticket store (' + store.name + ') could not keep the PRs of its task on ' + t.id + ', so Merged elsewhere will not refuse them: ' + e.message); }
 });
 
 if (store.local) chat.onTicketSummary(async (channel, id, ticketAt, summary) => {
@@ -202,7 +206,7 @@ function prOwner(channel, pr, ticket, all) {
   const same = (x) => typeof x === 'string' && x.toLowerCase() === pr.toLowerCase();
   const task = tasks.list(channel).find((x) => same(x.pr) || (x.history || []).some((h) => h.type === 'pr' && same(h.pr)));
   if (task) return 'task ' + task.id + (task.ticket ? ' (' + task.ticket + ')' : '') + ' · ' + task.title;
-  const other = all.find((t) => t.id !== ticket.id && same(t.pr));
+  const other = all.find((t) => t.id !== ticket.id && (same(t.pr) || (t.taskPrs || []).some(same)));
   return other ? 'ticket ' + other.id + ' · ' + other.title : null;
 }
 
