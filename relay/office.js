@@ -8,7 +8,7 @@
 //    room alone (RELAY_WORLD=office), so other worlds run on relays of their own.
 //    With --demo, that relay stops when the demo ends; without it, Ctrl+C stops it.
 // 2. If no room page on channel CHANNEL is connected and on screen, it opens one in your
-//    browser and waits for it to connect.
+//    browser and waits for it to connect. The link it prints has a placeholder for the key.
 // 3. With --demo, it sends the sessions in office/demo-session.js through the relay, as the
 //    real hook (relay/office-hook.js) would, one event at a time.
 //
@@ -27,7 +27,9 @@ const KEY = process.env.RELAY_KEY;
 const DEMO = process.argv.includes('--demo');
 const SPEED = Math.max(0.1, Number(process.env.DEMO_SPEED || 1));
 if (!KEY) { console.error('Set RELAY_KEY to a key, for example: RELAY_KEY=pick-a-key npm run office' + (DEMO ? ':demo' : '')); process.exit(1); }
-const PAGE = RELAY + '/office/?channel=' + encodeURIComponent(CHANNEL) + '&key=' + encodeURIComponent(KEY);
+const PAGE_BASE = RELAY + '/office/?channel=' + encodeURIComponent(CHANNEL) + '&key=';
+const PAGE = PAGE_BASE + encodeURIComponent(KEY);
+const SHOWN = PAGE_BASE + '<your relay key>';
 const AUTH = { Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -64,11 +66,11 @@ process.on('SIGTERM', () => { stopRelay(); process.exit(143); });
 
   if (!(ch.body && ch.body.pagesVisible > 0)) {
     const opener = process.env.OPEN_CMD || (process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open');
-    console.log('Opening the office: ' + PAGE);
+    console.log('Opening the office: ' + SHOWN);
     execFile(opener, [PAGE], () => {});
     let ok = false;
     for (let i = 0; i < 120 && !ok; i++) { await sleep(500); const c = await get('/channels/' + CHANNEL); ok = c.body && c.body.pagesVisible > 0; }
-    if (!ok) { console.log('The room page did not connect within a minute. Open this link and keep it on screen:\n  ' + PAGE); if (DEMO) { stopRelay(); process.exit(1); } }
+    if (!ok) { console.log('The room page did not connect within a minute. Open this link, with your relay key in place of <your relay key>,\nand keep it on screen:\n  ' + SHOWN); if (DEMO) { stopRelay(); process.exit(1); } }
     else console.log('The room is connected.');
   } else console.log('A room page is already connected on channel "' + CHANNEL + '".');
 
