@@ -16,7 +16,7 @@ async function office(t, env, existingHome) {
   const home = existingHome || fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-huddle-')));
   const gh = path.join(home, 'gh');
   fs.mkdirSync(gh, { recursive: true });
-  const S = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_HUDDLE_ANSWER_SECONDS: '4', RELAY_HUDDLE_QUIET_MINUTES: '60', ...(env || {}) }, home);
+  const S = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_HUDDLE_ANSWER_SECONDS: '4', ...(env || {}) }, home);
   t.after(async () => { await S.kill().catch(() => {}); await S.remove(); });
   const answers = (a) => fs.writeFileSync(path.join(gh, 'answers.json'), JSON.stringify(a));
   const calls = () => { try { return fs.readFileSync(path.join(gh, 'calls.log'), 'utf8').split('\n').filter(Boolean); } catch (e) { return []; } };
@@ -160,18 +160,38 @@ test('a clean checkout with no branch has no empty part', async (t) => {
   assert.match(line, /no PR · finished its turn · waiting on/);
 });
 
-test('quiet sessions are flagged', async (t) => {
-  const o = await office(t, { RELAY_HUDDLE_QUIET_MINUTES: '0.01' }), { add, talk, huddle, rowOf, answers } = o;
+test('quiet and stuck in a huddle follow the same rule as the Floor', async (t) => {
+  const STALL = 1500;
+  const o = await office(t, { RELAY_STALL_MS: String(STALL) }), { R, add, talk, huddle, rowOf, answers } = o;
   answers({ prs: {} });
-  const a = await add();
-  await talk(a);
-  await sleep(1500);
-  const r = rowOf(await huddle(), a);
-  assert.strictEqual(r.status, 'working', 'it is still reported as what the hooks last said');
-  assert.ok(r.quiet);
-  assert.strictEqual(r.waitingOn, 'nobody knows');
-  assert.strictEqual(r.needs, null, 'a quiet session may still be at work, so the Needs you list does not name it');
-  assert.match(r.line, /QUIET \d+s/);
+  const spinning = await add(), silent = await add();
+  for (const s of [spinning, silent]) await until(async () => (await R.screen(s.id)).includes('❯'), 'its prompt');
+  await R.call('POST', '/terminals/' + spinning.id + '/input', { data: '/spin\r' });
+  await until(async () => (await R.screen(spinning.id)).includes('Thinking'), 'the spinner');
+  for (const s of [spinning, silent]) await talk(s);
+  await sleep(STALL + 1000);
+  const report = await huddle();
+  const floor = (await R.call('GET', '/floor')).body.sessions;
+  const floorState = (s) => floor.find((r) => r.terminal === s.id).desk.doing.state;
+
+  await t.test('hooks stop while its output goes on: quiet, as on the Floor', () => {
+    const r = rowOf(report, spinning);
+    assert.strictEqual(floorState(spinning), 'quiet');
+    assert.strictEqual(r.status, 'working', 'it is still reported as what the hooks last said');
+    assert.strictEqual(r.live, 'quiet');
+    assert.ok(r.quiet);
+    assert.strictEqual(r.waitingOn, 'nobody knows');
+    assert.strictEqual(r.needs, null, 'a quiet session may still be at work, so the Needs you list does not name it');
+    assert.match(r.line, /QUIET \d+s/);
+  });
+  await t.test('neither hooks nor output: stuck, as on the Floor', () => {
+    const r = rowOf(report, silent);
+    assert.strictEqual(floorState(silent), 'stuck');
+    assert.strictEqual(r.live, 'stuck');
+    assert.ok(!r.quiet);
+    assert.strictEqual(r.waitingOn, 'you to look at its session');
+    assert.match(r.line, /STUCK \d+s/);
+  });
 });
 
 test('a stopped task whose PR is merged', async (t) => {
