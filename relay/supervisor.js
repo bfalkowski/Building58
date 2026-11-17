@@ -6,7 +6,9 @@
 // While RELAY_TERMINAL=1 it also starts the session host (relay/session-host.js), which runs the
 // sessions, and names its socket to each relay it starts. A restart leaves the host and its sessions
 // running. When this stops, it stops the host after the relay, and the sessions end. If the host
-// stops by itself, the relay restarts, and this starts a new host first.
+// stops by itself, the relay restarts, and this starts a new host first. A relay from before the host
+// (no relay/session-host.js beside it) gets no host, and a rollback to one stops the host after the
+// relay has stopped and saved its list, so that relay brings each session back once.
 //
 // While RELAY_ROLLBACK=1, it checks each relay it starts, and goes back to the last commit that
 // passed when the relay fails on an Update's new code (relay/rollback.js).
@@ -19,6 +21,8 @@
 'use strict';
 const { spawn } = require('child_process');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const rollback = require('./rollback.js');
 const sessionHost = require('./session-host.js');
 
@@ -31,10 +35,12 @@ function supervise(file) {
   const guard = rollback.ON();
   let child = null, stopping = false, host = null;
   const hostGone = () => !host || host.child.exitCode !== null || host.child.signalCode !== null;
+  const hostOnDisk = () => fs.existsSync(path.join(path.dirname(file), 'session-host.js'));
   const finish = (code) => { if (host) host.stop(() => process.exit(code)); else process.exit(code); };
   function run(newCode, again) {
     const commit = guard ? rollback.head() : null;
-    if (env.RELAY_TERMINAL === '1' && hostGone()) { host = sessionHost.launch(); env.RELAY_HOST_SOCKET = host.socket; }
+    if (env.RELAY_TERMINAL !== '1' || !hostOnDisk()) delete env.RELAY_HOST_SOCKET;
+    else if (hostGone()) { host = sessionHost.launch(); env.RELAY_HOST_SOCKET = host.socket; }
     const me = child = spawn(process.execPath, [file].concat(process.argv.slice(2)), { env, stdio: 'inherit', detached: true });
     let checking = guard, back = null;
     function failed(why) {
@@ -50,7 +56,9 @@ function supervise(file) {
         }
         rollback.noteRollback(commit, good, why);
         console.error('Rolled back to ' + good.slice(0, 7) + ', the last commit that passed. Starting the relay again.');
-        run(false, true);
+        if (hostOnDisk() || hostGone()) { run(false, true); return; }
+        console.error(good.slice(0, 7) + ' has no session host, so its relay would start each session a second time. Stopping the host first, which ends the sessions, and that relay brings them back.');
+        host.stop(() => { if (stopping) finish(0); else run(false, true); });
       };
       if (me.exitCode === null && me.signalCode === null) { me.kill('SIGTERM'); setTimeout(() => { if (me.exitCode === null && me.signalCode === null) me.kill('SIGKILL'); }, 10000).unref(); }
     }
