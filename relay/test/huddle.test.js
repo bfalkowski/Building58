@@ -21,7 +21,7 @@ async function office(t, env, existingHome) {
   const answers = (a) => fs.writeFileSync(path.join(gh, 'answers.json'), JSON.stringify(a));
   const calls = () => { try { return fs.readFileSync(path.join(gh, 'calls.log'), 'utf8').split('\n').filter(Boolean); } catch (e) { return []; } };
   const repo = fs.existsSync(path.join(S.home, 'repo')) ? path.join(S.home, 'repo') : makeRepo(S.home);
-  const add = async (over) => (await S.call('POST', '/terminals', { cwd: repo, ...(over || {}) })).body;
+  const add = (over) => S.start({ cwd: repo, ...(over || {}) });
   const sid = (t2) => t2.sessionId.slice(0, 12);
   const finished = async (t2) => { await talk(t2); await S.hook({ hook_event_name: 'Stop', session_id: sid(t2) }); };
   const talk = async (t2) => { await S.hook({ hook_event_name: 'UserPromptSubmit', session_id: sid(t2) }); };
@@ -516,7 +516,7 @@ test('a saved message survives a relay restart', async (t) => {
   await until(async () => !(await again.R.call('GET', '/terminals')).body.terminals.length, 'it to stop');
   // That took back the waiting report. A new one waits for Bring back, which makes it the Lead again.
   assert.strictEqual((await again.huddle()).leadNews.state, 'none');
-  const back = (await again.R.call('POST', '/terminals', { cwd: again.repo, resume: lead.sessionId, lead: true })).body;
+  const back = await again.add({ resume: lead.sessionId, lead: true });
   assert.strictEqual(back.lead, true);
   await again.R.hook({ hook_event_name: 'SessionStart', source: 'resume', session_id: sid(back), full_session_id: back.sessionId, terminal: back.id });
   assert.strictEqual((await again.huddle()).leadNews.state, 'saved');

@@ -106,6 +106,12 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
     return [...text.matchAll(/event: out\ndata: "([^"]+)"/g)].map((m) => Buffer.from(m[1], 'base64').toString()).join('');
   };
   const hook = (event) => call('POST', '/commands', { action: 'hook', wait: false, event });
+  // A refused start fails here with the relay's reason, not later as an undefined id (T-188).
+  const start = async (body) => {
+    const r = await call('POST', '/terminals', body);
+    if (r.status !== 201) throw new Error('The relay refused to start the session: ' + r.status + ' ' + r.body.error + ': ' + r.body.message);
+    return r.body;
+  };
   // A relay that does not end on SIGTERM within 5 seconds is killed, so the test file can still end.
   const kill = async () => {
     stopping = true;
@@ -127,7 +133,7 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   if (!onHome.has(home)) onHome.set(home, new Set());
   onHome.get(home).add(kill);
   child.once('exit', () => onHome.get(home).delete(kill));
-  return { call, home, port, base, screen, hook, kill, stop, remove, health, child, output: () => output };
+  return { call, home, port, base, screen, hook, start, kill, stop, remove, health, child, output: () => output };
 }
 // A session's token never appears in the API, so the fake writes it to a file in the relay's home
 // (relay/test/fake-claude.sh), one line per start: session id, pid, token. Only homes this test file
