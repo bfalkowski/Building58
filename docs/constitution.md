@@ -279,6 +279,16 @@ reviews. After that the Floor and the Lead say its next review waits on the pers
 2026-11-03, when PRs 28 and 29 sat fixed and green overnight, because nothing started a review of
 their new commits and the Lead may merge only after a review of the current head.
 
+*Today (2026-11-18):* the reviewer marks each finding with one of three kinds. Blocking is a bug, or
+something that does not do what the pull request says. Fix now is small and safe to fix in the same
+pull request, such as a wording fix, a missing test case, a named const or a doc line. Follow-up is
+real work outside the pull request. A review with any blocking or fix-now finding asks for fixes,
+and the Dev fixes both kinds before the next review. The Dev files a ticket for a follow-up finding
+only when it is a real bug or risk outside the pull request, and replies on the pull request to the
+rest. Before this, every review that said merge sent its findings to one follow-up ticket. That
+made 66 tickets by 2026-11-18, about a third of the Board, and each needed a full Dev and reviewer
+cycle for what was often a two-line fix.
+
 *Enforced by:* CI for lint and tests. `relay/reviews.js` starts the automatic reviews and holds
 the limit, and `relay/test/auto-review.test.js` checks both with no page open.
 
@@ -322,7 +332,7 @@ Lead runs `gh pr merge` with the person's full GitHub login, not with only the a
 
 1. A review of the current head is posted. If commits land after the review, the Lead asks for a
    follow-up review first.
-2. Every blocking finding is fixed, and the Lead checked each fix in the code.
+2. Every blocking and fix-now finding is fixed, and the Lead checked each fix in the code.
 3. The pipeline is green on the current head.
 4. The base is `main`, and GitHub says the pull request merges cleanly into it. A pull request
    with any other base goes to the person.
@@ -436,8 +446,8 @@ It is off by default. The person turns it on with **Autopilot**, and can list th
 start. The relay, not a brief, holds it to these:
 - It starts only a Ready ticket a person approved, whose blockers are done, in Board order, and one
   at a time (`RELAY_AUTOPILOT_AT_ONCE`, 1).
-- Each review gives a verdict, merge or fix, from the reviewer's own token. A verdict counts once
-  its review is posted, and only for the commit the reviewer read. A follow-up review reads only
+- Each review gives a verdict, merge or fix, from the reviewer's own token. It says fix while any
+  finding is blocking or fix now (article 4). A verdict counts once its review is posted, and only for the commit the reviewer read. A follow-up review reads only
   the commits since the last one, and for a merge of main only how its conflicts were resolved.
   This replaces "a review of the current head" for a merge it makes: a commit after a merge
   verdict needs a follow-up that says merge.
