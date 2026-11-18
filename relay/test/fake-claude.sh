@@ -31,7 +31,14 @@ if [ -n "$FAKE_CLAUDE_SLOW_START" ]; then
   early="$early$piece"  # a newer bash keeps what came before the time ran out, with no newline
   [ -n "$early" ] && echo "EARLY[$early]"
 fi
-printf '\xe2\x9d\xaf \n'
+# With FAKE_CLAUDE_NO_PROMPT set, it draws no prompt at start, as a relay that took a real one back after a
+# restart can keep only its status line. Like a real one, it draws its prompt when the terminal is resized,
+# and says REDRAWN so a test can count the redraws.
+if [ -n "$FAKE_CLAUDE_NO_PROMPT" ]; then
+  ( trap 'printf "REDRAWN\n\xe2\x9d\xaf \n"' WINCH; while kill -0 $$ 2>/dev/null; do sleep 0.2; done ) &
+else
+  printf '\xe2\x9d\xaf \n'
+fi
 # With FAKE_CLAUDE_SLOW_EXIT=<seconds>, it takes that long to end once the relay hangs it up, so a test
 # can see a session that is stopped but still ending. A value that is not a number means one second.
 # While it ends it ignores more hang-ups and SIGTERM. The relay sends SIGTERM to pty-bridge.py 1.5
