@@ -399,6 +399,29 @@ test('a store that fails during Clean up keeps the task, so the ticket can still
   assert.ok(fs.existsSync(task.worktree));
   assert.strictEqual((await R.call('GET', '/tasks/' + task.id)).status, 200);
 });
+test('an ignored file that turns up while the ticket store answers Clean up is asked about too', async (t) => {
+  const held = fs.mkdtempSync(path.join(os.tmpdir(), 'office-hold-'));
+  const R = await H.relay({ RELAY_WIP_LIMIT: '2', RELAY_TICKET_STORE: path.join(__dirname, 'failing-store.js'), FAKE_STORE_HOLD: held }); t.after(R.stop);
+  R.repo = H.makeRepo(R.home);
+  fs.appendFileSync(path.join(R.repo, '.git', 'info', 'exclude'), '.env\nbuild/\n');
+  const a = (await R.call('POST', '/tickets', { title: 'held', repo: R.repo })).body.ticket;
+  const task = (await R.call('POST', '/tickets/' + a.id + '/start', {})).body.task;
+  fs.writeFileSync(path.join(task.worktree, '.env'), 'SECRET=1\n');
+  await R.call('POST', '/terminals/' + task.worker.terminal + '/stop', {});
+  await until(async () => !(await R.call('GET', '/tasks/' + task.id)).body.task.worker, 'the worker to go');
+  await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' });
+  fs.writeFileSync(path.join(held, 'armed'), '');
+  const cleaning = R.call('POST', '/tasks/' + task.id + '/clean', { ignored: ['.env'] });
+  await until(() => fs.existsSync(path.join(held, 'reading')), 'the store to read the ticket');
+  fs.mkdirSync(path.join(task.worktree, 'build')); fs.writeFileSync(path.join(task.worktree, 'build', 'x'), 'x');
+  fs.writeFileSync(path.join(held, 'go'), '');
+  const r = await cleaning;
+  assert.strictEqual(r.body.error, 'ignored', JSON.stringify(r.body));
+  assert.deepStrictEqual(r.body.ignored.sort(), ['.env', 'build/']);
+  assert.ok(fs.existsSync(path.join(task.worktree, 'build', 'x')));
+  assert.strictEqual((await R.call('POST', '/tasks/' + task.id + '/clean', { ignored: r.body.ignored })).status, 200);
+});
+
 // The GitHub store refuses taskPrs on an issue whose note another key signed (relay/test/ticket-stores.test.js).
 test('a store that cannot keep the task PRs still lets Clean up finish, and says so', async (t) => {
   const R = await relay(path.join(__dirname, 'failing-store.js')); t.after(R.stop);
