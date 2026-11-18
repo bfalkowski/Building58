@@ -44,7 +44,7 @@ test('a reviewer whose first Enter is dropped still starts its turn, with no per
   await until(async () => (await R.screen(reviewer.id)).includes('❯ Review PR 9 for T-209'), 'the prompt typed, and left in the box');
   assert.strictEqual(await sent(), 0, 'not sent by the first Enter');
   // The relay's check finds no turn began, sees the text still shows, and presses Enter again.
-  await until(async () => (await sent()) === 1, 'the prompt sent by the relay\'s second Enter', 100);
+  await until(async () => (await sent()) === 1, 'the prompt sent by the relay\'s second Enter');
   await R.hook({ hook_event_name: 'UserPromptSubmit', session_id: reviewer.sessionId.slice(0, 12) });
   await sleep(4000);  // past two more of the relay's checks
   assert.strictEqual(await sent(), 1, 'sent once, and not typed again once a turn began');
@@ -58,7 +58,7 @@ test('a reviewer that never takes its first prompt is handed to the person, with
   const { R, reviewer, sent, row, owes } = await reviewerOn('all');
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
   await until(async () => (await R.screen(reviewer.id)).includes('❯ Review PR 9 for T-209'), 'the prompt typed');
-  const stuck = await until(async () => { const r = await row(); return r.stuck && r; }, 'stuck after its tries', 200);
+  const stuck = await until(async () => { const r = await row(); return r.stuck && r; }, 'stuck after its tries');
   assert.match(stuck.state, /^stuck: told 0 min ago and did not start, the note is still in its prompt, not sent$/);
   assert.strictEqual(stuck.desk.next.text, 'Waiting on you: it did not start on its first prompt, the note is still in its prompt, not sent. Open its session and press Enter if the prompt is still in its box, or answer what is on its screen. Stopping it drops the prompt');
   // Each try was Enter, since the text still showed: nothing was typed a second time.
@@ -69,7 +69,7 @@ test('a reviewer that never takes its first prompt is handed to the person, with
   const posts = ((await R.call('GET', '/chat/office')).body.posts || []).map((p) => p.text);
   assert.ok(posts.some((x) => / did not start on its first prompt, the review of PR #9, so it is stuck: the note is still in its prompt, not sent\. The relay stopped trying after 3 more tries\. Open its session and press Enter if the prompt is still in its box, or answer what is on its screen\. Stopping it drops the prompt\.$/.test(x)), JSON.stringify(posts));
   // Past the told check after the last Enter, the stop verdict no longer says a hook may still come.
-  const said = await until(async () => { const r = await row(); return /did not go in/.test(r.why) && r.why; }, 'the stop verdict to say it did not go in', 200);
+  const said = await until(async () => { const r = await row(); return /did not go in/.test(r.why) && r.why; }, 'the stop verdict to say it did not go in');
   assert.match(said, /^Enter was pressed 0 min ago and no turn began, so its first prompt did not go in$/);
   await sleep(4000);
   assert.strictEqual((await R.screen(reviewer.id)).split('❯ Review PR 9 for T-209').length - 1, 4, 'then it stops trying');

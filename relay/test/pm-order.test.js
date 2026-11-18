@@ -162,7 +162,7 @@ test('the PM\'s brief asks for a priority on each ticket, and orders the work on
   const briefOf = async (idea) => {
     const r = await R.call('POST', '/tickets/ask', { idea, repo });
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
-    const screen = await H.until(async () => { const s = await R.screen(r.body.terminal); return s.includes('GOT[') && s; }, 'the brief');
+    const screen = await H.until(async () => { const s = await R.screen(r.body.terminal); return /GOT\[You are the product manager[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
     assert.ok(screen.includes('PASTED GOT[You are the product manager'), 'it went in as one paste');
     return screen.match(/GOT\[(You are the product manager[^\]\r\n]*)\]/)[1];
   };

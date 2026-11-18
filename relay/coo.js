@@ -350,7 +350,7 @@ function ask(channel, body, ctx) {
   return [201, { ok: true, terminal: r.body.id }];
 }
 function endAfterReport(t) {
-  const talkedTo = () => !!(t.keyedAt && t.keyedAt > t.reportedAt);
+  const talkedTo = () => !!t.keyedAt;
   if (t.ending || t.exited || talkedTo()) return;
   t.ending = setTimeout(() => { t.ending = null; if (!talkedTo()) terminal.stop(t); }, GRACE());
 }
@@ -361,7 +361,7 @@ async function saveReport(channel, body, agent) {
   const { measures } = await measuresOf(channel);
   const s = of(channel), report = { id: require('crypto').randomBytes(4).toString('hex'), at: new Date().toISOString(), by: agent ? nameOf(agent) : 'you', text, measures };
   s.reports.push(report); cap(s.reports, MAX_REPORTS); save();
-  if (agent && agent.role === 'coo') agent.reportedAt = Date.now();
+  if (agent && agent.role === 'coo') { agent.reportedAt = Date.now(); agent.keyedAt = 0; }
   return [201, { ok: true, report: { id: report.id, at: report.at } }];
 }
 const lastReport = (channel) => { const r = of(channel).reports, x = r[r.length - 1]; return x ? { id: x.id, at: x.at, by: x.by, text: x.text } : null; };

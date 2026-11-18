@@ -47,7 +47,7 @@ test('a session that was told something and did not start shows as stuck', async
     const before = ((await R.screen(dev.id)).match(/GOT\[/g) || []).length;
     await R.call('POST', '/chat/' + ticket.id, { text: '@' + name + ' two' });
     await until(async () => ((await R.screen(dev.id)).match(POINTER) || []).length === 2, 'the pointer');
-    const row = await until(async () => { const r = await rowOf(dev.id); return r.stuck && r; }, 'stuck', 100);
+    const row = await until(async () => { const r = await rowOf(dev.id); return r.stuck && r; }, 'stuck');
     assert.match(row.state, /^stuck: told 0 min ago and did not start, /);
     assert.match(row.desk.doing.words, /^stuck: told 0 min ago, did not start$/);
     assert.match(row.desk.next.text, /^Waiting on you: it did not start on what it was told, .*Bring it back$/);

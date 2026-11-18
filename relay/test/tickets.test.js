@@ -159,7 +159,7 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       task = r.body.task;
       assert.strictEqual(task.ticket, first.id);
       assert.strictEqual(task.brief, 'Do it.');
-      const screen = await until(async () => { const s = await R.screen(r.body.task.worker.terminal); return s.includes('GOT[') && s; }, 'the brief');
+      const screen = await until(async () => { const s = await R.screen(r.body.task.worker.terminal); return /GOT\[[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
       assert.match(screen, /build this now: First\. Do it\./);
       assert.ok(fs.existsSync(task.worktree));
       assert.strictEqual((await call('POST', '/tickets/' + first.id + '/start', {})).body.error, 'started');
@@ -288,7 +288,7 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       assert.strictEqual(r.status, 201, JSON.stringify(r.body));
       const pm = (await call('GET', '/terminals')).body.terminals.find((x) => x.id === r.body.terminal);
       assert.strictEqual(pm.role, 'pm');
-      const screen = await until(async () => { const s = await R.screen(pm.id); return s.includes('GOT[') && s; }, 'the brief');
+      const screen = await until(async () => { const s = await R.screen(pm.id); return /GOT\[[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
       assert.match(screen, /product manager[\s\S]*ticket\.js create[\s\S]*A radio/);
       // Claude Code reads about 1024 bytes at a time (T-34). The brief is longer than that since it says
       // how to order the work (T-46), so the relay types it as one paste, which arrives whole.
@@ -398,6 +398,22 @@ test('a store that fails during Clean up keeps the task, so the ticket can still
   assert.strictEqual(r.status, 502);
   assert.ok(fs.existsSync(task.worktree));
   assert.strictEqual((await R.call('GET', '/tasks/' + task.id)).status, 200);
+});
+// The GitHub store refuses taskPrs on an issue whose note another key signed (relay/test/ticket-stores.test.js).
+test('a store that cannot keep the task PRs still lets Clean up finish, and says so', async (t) => {
+  const R = await relay(path.join(__dirname, 'failing-store.js')); t.after(R.stop);
+  const a = (await R.call('POST', '/tickets', { title: 'no-prs', repo: R.repo })).body.ticket;
+  const task = (await R.call('POST', '/tickets/' + a.id + '/start', {})).body.task;
+  await R.hook({ hook_event_name: 'PostToolUse', session_id: task.owner.sessionId.slice(0, 12), pr_url: 'https://github.com/o/r/pull/7', cwd: task.worktree });
+  await until(async () => (await R.call('GET', '/tasks/' + task.id)).body.task.pr === 'https://github.com/o/r/pull/7', 'the PR');
+  await R.call('POST', '/terminals/' + task.worker.terminal + '/stop', {});
+  await until(async () => !(await R.call('GET', '/tasks/' + task.id)).body.task.worker, 'the worker to go');
+  await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' });
+  const r = await R.call('POST', '/tasks/' + task.id + '/clean', {});
+  assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  const ticket = (await R.call('GET', '/tickets/' + a.id)).body.ticket;
+  assert.deepStrictEqual([ticket.status, ticket.taskPrs], ['done', undefined]);
+  await until(() => R.output().includes('could not keep the PRs of its task on ' + a.id), 'the log line');
 });
 test('moves respect the limit only where they add to it', async (t) => {
   const R = await relay(); t.after(R.stop);
@@ -517,18 +533,26 @@ test('the default branch is the one the remote names, even when the main folder 
 test('the PM asked from a linked worktree reads that branch and files against it', async (t) => {
   const R = await relay(); t.after(R.stop);
   const wt = branchedRepo(R, 'feature');
-  const r = await R.call('POST', '/tickets/ask', { idea: 'A radio', repo: wt });
+  fs.mkdirSync(path.join(wt, 'inner'));
+  const r = await R.call('POST', '/tickets/ask', { idea: 'A radio', repo: path.join(wt, 'inner') });
   assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   const pm = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === r.body.terminal);
   // Since T-40 it reads that branch in a checkout of its own, not in the folder you gave.
   assert.ok(fs.existsSync(path.join(pm.cwd, 'only-here.txt')), 'it reads that branch');
   assert.strictEqual(gitIn(pm.cwd, 'rev-parse', 'HEAD'), gitIn(wt, 'rev-parse', 'HEAD'));
+  assert.strictEqual(fs.realpathSync(gitIn(pm.cwd, 'rev-parse', '--show-toplevel')), fs.realpathSync(pm.cwd), 'asked from a subfolder, the PM starts at the top of its checkout');
   const filed = (await R.call('POST', '/tickets', { title: 'From the PM' }, await until(() => { try { return agentHeaders(sessionToken(pm.sessionId)); } catch (e) { return null; } }, 'the PM'))).body.ticket;
   assert.strictEqual(filed.base, 'feature');
   assert.strictEqual(filed.repo, R.repo, 'the ticket still belongs to the repo');
   assert.strictEqual(filed.createdBy, 'PM');
   // A plain session in the same folder still files against the default branch.
   assert.strictEqual((await R.call('POST', '/tickets', { title: 'From a worker' }, await sessionIn(R, wt))).body.ticket.base, 'main');
+  gitIn(wt, 'checkout', '-q', '-b', 'fix#12');
+  const later = (await R.call('POST', '/tickets', { title: 'Later from the PM' }, agentHeaders(sessionToken(pm.sessionId)))).body.ticket;
+  assert.strictEqual(later.base, 'feature', 'the branch is read when you ask, so switching the folder later does not change it');
+  const badName = await R.call('POST', '/tickets/ask', { idea: 'A lamp', repo: wt });
+  assert.strictEqual(badName.status, 400, JSON.stringify(badName.body));
+  assert.strictEqual(badName.body.error, 'bad_base');
   gitIn(wt, 'checkout', '-q', '--detach');
   const detached = await R.call('POST', '/tickets/ask', { idea: 'A clock', repo: wt });
   assert.strictEqual(detached.status, 400);
@@ -590,6 +614,20 @@ test('with no remote, or a remote that cannot be reached, the PM reads the local
   assert.strictEqual(gitIn(pm2.cwd, 'rev-parse', 'HEAD'), head);
   await until(() => /The PM reads main as it is here: origin could not be reached/.test(R.output()), 'the log line');
   await stopPm(R, pm2);
+});
+// T-153: a PM checkout left with a file waits for Clean up, and the checkouts route says it was the PM's.
+test('a PM that leaves a file keeps its checkout, and the checkouts route names the PM', async (t) => {
+  const R = await relay(); t.after(R.stop);
+  const r = await R.call('POST', '/tickets/ask', { idea: 'A radio', repo: R.repo });
+  assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+  const pm = await pmOf(R, r);
+  fs.writeFileSync(path.join(pm.cwd, 'notes.txt'), 'kept\n');
+  await R.call('POST', '/terminals/' + pm.id + '/stop', {});
+  const c = await until(async () => (await R.call('GET', '/checkouts')).body.checkouts.find((x) => x.path === pm.cwd && x.left), 'the relay to keep it');
+  assert.strictEqual(c.kind, 'pm');
+  assert.strictEqual(c.owner, 'the PM');
+  assert.match(c.left, /notes\.txt/);
+  assert.ok(fs.existsSync(path.join(pm.cwd, 'notes.txt')));
 });
 test('with no remote and no main or master, a session files against the main folder\'s branch', async (t) => {
   const R = await relay(); t.after(R.stop);

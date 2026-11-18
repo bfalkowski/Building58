@@ -69,6 +69,9 @@ terminal](../docs/manual/running.html#own-terminal) and [What the hook sends](..
   on tickets in Triage or Ready.
 - [The Lead sets priority](../docs/manual/roles.html#lead-order): **Let the Lead set priority** (off by
   default) lets the Lead run the same two commands, on tickets in Triage or Ready.
+- [The Lead starts a review](../docs/manual/roles.html#lead-review): **Let the Lead start reviews** (off by
+  default) lets the Lead run `ticket.js review <PR link>` for a task's PR. The relay starts the reviewer Get a
+  review starts, and counts it toward the 3 reviews a PR gets. The Lead never reviews in its own session.
 - [Editing a ticket](../docs/manual/roles.html#edit): **Edit** on a Triage or Ready card changes its title, body
   and priority. The PM and the Lead run `ticket.js edit T-5 --title "New title"`. Each edit is in the ticket's history.
 - [The COO](../docs/manual/roles.html#coo): what **Ask the COO** does (a one-page report on how the room

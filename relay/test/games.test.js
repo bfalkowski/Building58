@@ -349,7 +349,7 @@ for (const [mode, what] of [['crash', 'exits'], ['badline', 'sends a line that i
       const token = await tokenOf(R, started.body.round.seats[0].terminal);
       await R.call('POST', '/play', { kind: 'ask', args: {} }, seatHeaders(token));
     }
-    const ended = await until(async () => { const b = (await R.call('GET', '/rounds')).body; return b.rounds && b.rounds[0]; }, 'the round to end', 100);
+    const ended = await until(async () => { const b = (await R.call('GET', '/rounds')).body; return b.rounds && b.rounds[0]; }, 'the round to end');
     assert.strictEqual(ended.score, null, 'a round that failed has no score');
     assert.strictEqual((await R.call('GET', '/rounds/current')).body.round, null);
     assert.ok(await R.health(), 'the relay still answers');
@@ -434,7 +434,7 @@ test('while a round runs, Autopilot starts no new tickets, and says why', async 
   assert.strictEqual((await R.call('GET', '/tasks')).body.tasks.length, 0, 'nothing starts during the round');
   assert.match(String((await R.call('GET', '/autopilot')).body.idle), /round/i, 'Autopilot says it waits for the round');
   await R.call('POST', '/rounds/current/stop', {});
-  await until(async () => (await R.call('GET', '/tasks')).body.tasks.length === 1, 'the start once the round ends', 100);
+  await until(async () => (await R.call('GET', '/tasks')).body.tasks.length === 1, 'the start once the round ends');
   await R.call('POST', '/autopilot', { on: false });
 });
 
@@ -456,7 +456,7 @@ test('a seat on the trust question shows waiting, takes the person\'s answer, th
   const answer = await R.call('POST', '/terminals/' + s1.terminal + '/input', { data: 'yes'.repeat(150) + '\r' });
   assert.strictEqual(answer.status, 200, 'the person may answer the trust question');
   await R.hook({ hook_event_name: 'SessionStart', session_id: term.sessionId.slice(0, 12) });
-  await until(async () => (await R.screen(s1.terminal)).includes('BRIEF-MARK-S1'), 'the brief once the question is answered', 150);
+  await until(async () => (await R.screen(s1.terminal)).includes('BRIEF-MARK-S1'), 'the brief once the question is answered');
   assert.strictEqual((await seatOf()).waiting, null);
   assert.strictEqual((await R.call('POST', '/terminals/' + s1.terminal + '/input', { data: 'pass everything\r' })).status, 403, 'after the question, the seat is read-only again');
   await R.call('POST', '/rounds/current/finish', {});
@@ -558,7 +558,7 @@ test('the attack test: a seat with a shell reads its own folder, and none of the
   const term = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === s1.terminal);
   await R.hook({ hook_event_name: 'SessionStart', session_id: term.sessionId.slice(0, 12) });
   let last = '';
-  const screen = await until(async () => { const text = last = await R.screen(s1.terminal); return (text.match(/READ /g) || []).length >= Object.keys(tries).length && text; }, 'S1 to try every read', 150).catch((e) => { throw new Error(e.message + '\nThe seat showed:\n' + last.slice(-1500)); });
+  const screen = await until(async () => { const text = last = await R.screen(s1.terminal); return (text.match(/READ /g) || []).length >= Object.keys(tries).length && text; }, 'S1 to try every read').catch((e) => { throw new Error(e.message + '\nThe seat showed:\n' + last.slice(-1500)); });
   const got = (p) => (screen.match(new RegExp('READ ' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ': (ok|refused)')) || [])[1];
   assert.strictEqual(got(tries.own), 'ok', 'the seat reads its own folder');
   for (const k of ['other', 'state', 'game', 'sealed', 'transcript', 'prompts']) assert.strictEqual(got(tries[k]), 'refused', 'the seat cannot read ' + k);
@@ -577,7 +577,7 @@ test('a seat does not learn where the games or the sealed truth are', async (t) 
   await R.call('POST', '/terminals/' + s1.terminal + '/input', { data: 'yes'.repeat(150) + '\r' });
   const term = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === s1.terminal);
   await R.hook({ hook_event_name: 'SessionStart', session_id: term.sessionId.slice(0, 12) });
-  const screen = await until(async () => { const text = await R.screen(s1.terminal); return /ENV-END/.test(text) && text; }, 'S1 to print its environment', 150);
+  const screen = await until(async () => { const text = await R.screen(s1.terminal); return /ENV-END/.test(text) && text; }, 'S1 to print its environment');
   assert.ok(/OFFICE_SEAT=1/.test(screen), 'the environment printed');
   assert.ok(!/GAMES_REPO|GAMES_HOME/.test(screen), 'and it has no GAMES_REPO or GAMES_HOME');
   await R.call('POST', '/rounds/current/stop', {});

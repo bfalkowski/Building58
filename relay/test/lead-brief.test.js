@@ -13,6 +13,8 @@ const BRIEF = 'GOT[You are the Lead of this room.';
 const briefs = (screen) => screen.split(BRIEF).length - 1;
 // Every brief the Lead can get: merging off and on, each with Autopilot off and on.
 const KINDS = [{}, { merge: true }, { autopilot: true }, { autopilot: true, merge: true }];
+// Each of those with Let the Lead set priority on too (T-180).
+const ALL = KINDS.concat(KINDS.map((k) => ({ ...k, order: true })));
 
 // Claude Code reads keys about 1024 bytes at a time and keeps only the last piece (T-34), so text that
 // could be that long goes in as one paste (relay/typed.js). The brief names full paths, so it grows with
@@ -23,7 +25,7 @@ test('the Lead\'s brief goes in as one paste, whatever the length of the checkou
   const pasted = (text) => asTyped(text) === '\x1b[200~' + text + '\x1b[201~';
   for (const length of [1, 120, 250, 1000]) {
     const root = path.join('/', 'r'.repeat(length - 1));
-    for (const opts of KINDS) {
+    for (const opts of ALL) {
       const brief = leadBrief(path.join(root, 'relay'), opts);
       // Keys go in whole only within one read. A short root gives a brief that short, and that is fine.
       assert.ok(pasted(brief) || Buffer.byteLength(brief) < 1024, 'root of ' + length + ', ' + JSON.stringify(opts));
@@ -45,7 +47,7 @@ test('the Lead\'s brief goes in as one paste, whatever the length of the checkou
 // The relay watches only the PRs of tasks, so a session with no task gets no reviews from it (T-244).
 test('the Lead\'s brief leaves reviews to the relay and checks that Devs act on them', () => {
   const { leadBrief } = require('../lead-brief.js');
-  for (const opts of KINDS) {
+  for (const opts of ALL) {
     const brief = leadBrief(path.join(ROOT, 'relay'), opts);
     assert.doesNotMatch(brief, /Pass reviews/, 'it does not carry reviews: ' + JSON.stringify(opts));
     assert.ok(brief.includes('Pass decisions on.'), 'it still passes decisions on');
@@ -57,12 +59,30 @@ test('the Lead\'s brief leaves reviews to the relay and checks that Devs act on 
 // Claude Code reads a typed line about 1024 bytes at a time (T-34). The brief now goes in as a paste
 // (T-85), but it is kept under one read from a checkout root of 120 characters, so it stays short to
 // read after each /clear and compact. Merging on is the longest, and Autopilot replaces that part.
-test('every brief the Lead can get is under 1024 bytes from a checkout root of 120 characters', () => {
+test('every brief the Lead can get with Let the Lead set priority off is under 1024 bytes from a checkout root of 120 characters', () => {
   const { leadBrief } = require('../lead-brief.js');
   const relayDir = path.join('/', 'r'.repeat(119), 'relay');
   for (const opts of KINDS) {
     const bytes = Buffer.byteLength(leadBrief(relayDir, opts));
     assert.ok(bytes < 1024, bytes + ' bytes: ' + JSON.stringify(opts));
+  }
+});
+
+// Let the Lead set priority adds one line and nothing else (relay/test/lead-order.test.js). With merging on
+// that passes 1024 bytes from a root of 120, and the paste test above covers it, so the line is kept short.
+test('the line for Let the Lead set priority stays under 128 bytes', () => {
+  const { ORDER } = require('../lead-brief.js');
+  assert.ok(Buffer.byteLength(ORDER) < 128, Buffer.byteLength(ORDER) + ' bytes');
+});
+
+// T-98: the Lead reviewed PR 42 with a subagent in its own session, which the Floor could not see. Every
+// brief sends it to the relay for a reviewer of its own, and the test above keeps each under 1024 bytes.
+test('the Lead\'s brief starts reviews through the relay, never in its own session', () => {
+  const { leadBrief } = require('../lead-brief.js');
+  for (const opts of ALL) {
+    const brief = leadBrief(path.join(ROOT, 'relay'), opts);
+    assert.ok(brief.includes('ticket.js has move, tasks, task, start, stop, review <PR>'), JSON.stringify(opts));
+    assert.ok(brief.includes('Never review yourself or by subagent.'), JSON.stringify(opts));
   }
 });
 

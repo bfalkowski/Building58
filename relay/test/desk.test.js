@@ -73,6 +73,10 @@ test('a Dev in review: its column, CI and review, and who moves it next', async 
     const d = deskOf(Object.assign({}, base, { pipeline: { state: 'green' }, review: { count: 0, waits: false, held: false, desk: true } }));
     assert.deepStrictEqual([d.review, d.next], ['review waits for a desk', { text: 'The review of PR #31 starts when a desk is free', owner: 'reviewer' }]);
   });
+  await t.test('a first review that could not start tries again', () => {
+    const d = deskOf(Object.assign({}, base, { pipeline: { state: 'green' }, review: { count: 0, waits: false, held: false, retry: true } }));
+    assert.deepStrictEqual([d.review, d.next], ['review tries again', { text: 'The review of PR #31 tries again soon', owner: 'reviewer' }]);
+  });
   await t.test('a first review that could not start waits on the person', () => {
     const d = deskOf(Object.assign({}, base, { pipeline: { state: 'green' }, review: { count: 0, waits: false, held: false, failed: true } }));
     assert.deepStrictEqual([d.review, d.next], ['automatic review could not start', { text: 'Waiting on you: review PR #31, its automatic review could not start', owner: 'you' }]);
@@ -177,6 +181,7 @@ test('a Dev\'s status icon says where its PR stands, with a label to read it by 
   });
   await t.test('a verdict on an older commit no longer speaks: the push waits for its review', () => {
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, autopilot: { verdict: 'merge', verdictAt: OLD } }), ['review_waits', 'waiting for a review']);
+    assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, autopilot: { verdict: 'fix', verdictAt: OLD } }, { state: 'changes_requested' }), ['review_waits', 'waiting for a review'], 'a fix pushed while the card is still in Changes requested');
   });
   await t.test('a review running wins over CI, and a failed CI over an old verdict', () => {
     assert.strictEqual(status({ pipeline: { state: 'pending' }, reviewing: true, reviewer: 'Ada' }).key, 'reviewing');

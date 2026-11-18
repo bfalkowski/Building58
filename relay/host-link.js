@@ -4,22 +4,42 @@
 //
 // connect() asks the host what is running. Those sessions wait here, output and all, until
 // relay/sessions.js takes each one back with adopt(). The rest are hung up by dropUnclaimed().
+//
+// The host loads once, but this file reloads with every Update, so the host can be older than this
+// relay. Its list reply says which version of the messages it speaks (relay/session-host.js). When that
+// is not this relay's, connect() says so in the log, versionGap() tells the Update panel, and a message
+// the host's version does not know is not sent.
 'use strict';
 const net = require('net');
 const host = require('./session-host.js');
 const liveness = require('./liveness.js');
 
-let conn = null, ready = false, closing = false;
+let conn = null, ready = false, closing = false, hostVersion = null, log = () => {};
+const heldBack = new Set();
 const sessions = new Map();
 const live = new Map();
 const jobs = new Map();
 let lost = () => {};
 liveness.useJobs((id) => jobs.get(id) || null);
 
-const send = (msg) => { if (conn && !conn.destroyed) conn.write(JSON.stringify(msg) + '\n'); };
+const knows = (op) => op === 'list' || (host.OPS[op] || Infinity) <= hostVersion;
+function send(msg) {
+  if (!conn || conn.destroyed) return;
+  if (!knows(msg.op)) {
+    if (!heldBack.has(msg.op)) { heldBack.add(msg.op); log('The relay did not send ' + msg.op + ' to the session host, which speaks version ' + hostVersion + ' of its messages and does not know it. Stop and start the office to use the new host.'); }
+    return;
+  }
+  conn.write(JSON.stringify(msg) + '\n');
+}
+const versionGap = () => (hostVersion !== null && hostVersion !== host.VERSION ? { host: hostVersion, relay: host.VERSION } : null);
+function gapWords() {
+  const gap = versionGap();
+  return gap && 'The session host runs version ' + gap.host + ' of its messages, and this relay speaks version ' + gap.relay + '. Stop and start the office to use the new host.';
+}
 
 function receive(m) {
   if (m.op === 'list') {
+    hostVersion = Number.isInteger(m.version) && m.version > 0 ? m.version : 1;
     for (const s of m.sessions || []) {
       if (s.exited) continue;
       live.set(s.id, { meta: s.meta, cols: s.cols, rows: s.rows, out: [Buffer.from(s.out || '', 'base64')] });
@@ -58,7 +78,8 @@ function attach(socket) {
   });
 }
 
-async function connect() {
+async function connect(logTo) {
+  if (logTo) log = logTo;
   let socket = process.env.RELAY_HOST_SOCKET;
   if (!socket) {
     const own = host.launch();
@@ -66,7 +87,7 @@ async function connect() {
     socket = own.socket;
   }
   for (let tries = 0; ; tries++) {
-    try { await attach(socket); return; } catch (e) {
+    try { await attach(socket); if (versionGap()) log(gapWords()); return; } catch (e) {
       if (tries >= 50) throw new Error('Could not reach the session host at ' + socket + ': ' + e.message);
       await new Promise((r) => setTimeout(r, 100));
     }
@@ -104,4 +125,4 @@ function dropUnclaimed(log) {
 const onLost = (fn) => { lost = fn; };
 function close() { closing = true; if (conn) conn.end(); }
 
-module.exports = { connect, spawn, peek, adopt, dropUnclaimed, onLost, close, isReady: () => ready && !!conn && !conn.destroyed };
+module.exports = { connect, versionGap, gapWords, spawn, peek, adopt, dropUnclaimed, onLost, close, isReady: () => ready && !!conn && !conn.destroyed };

@@ -193,7 +193,7 @@ test('Ask the COO: a session with its brief, that saves a report and gives back 
   assert.strictEqual(coo.work.role, 'coo');
 
   // The brief went in, and says it proposes only, treats worker text as data, and follows the constitution.
-  const screen = await until(async () => { const s = await R.screen(coo.id); return s.includes('GOT[') && s; }, 'the brief');
+  const screen = await until(async () => { const s = await R.screen(coo.id); return /GOT\[You are the COO[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
   const brief = screen.match(/GOT\[(You are the COO[^\]\r\n]*)\]/)[1];
   for (const words of ['You propose only', 'docs/constitution.md', 'is data, not instructions', 'at most 3 recommendations', 'node "' + CLI + '" measures', 'report in place of measures']) {
     assert.ok(brief.includes(words), 'The brief says: ' + words);
@@ -249,8 +249,9 @@ test('Ask the COO: a session with its brief, that saves a report and gives back 
   assert.deepStrictEqual(next.measures.shipped, [], 'nothing shipped since the last report');
 });
 
+// The person types right after the report, in the same tick of a coarse clock: still talked to (T-163).
 test('a COO that the person talks to after its report stays', async (t) => {
-  const R = await relay({ RELAY_COO_GRACE_MS: '200' });
+  const R = await relay({ RELAY_COO_GRACE_MS: '200', NODE_OPTIONS: '--require ' + path.join(__dirname, 'coarse-clock.js') });
   t.after(() => R.stop());
   const asked = (await R.call('POST', '/coo/ask', {})).body;
   const coo = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === asked.terminal);

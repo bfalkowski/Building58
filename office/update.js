@@ -3,10 +3,11 @@
 // the relay's own files changed, the relay waits until no session is in a turn,
 // then fast-forwards and restarts, brings every session back, and the page reloads when it answers
 // again. If the new relay failed its check and the supervisor went back to the last good commit,
-// the page says so. While RELAY_ROLLBACK=1, Update goes through the merges one at a time, and the
-// bar says which step it is on, such as "Update: 2 of 5, PR 41". Its stop button then stops the loop
-// between merges, and a merge that changes only pages reloads the page. A page that loads within
-// NOTE_FOR of the end of an update says how it ended.
+// the page says so. It says so too when the session host speaks an older version of its messages than
+// the relay, until the office is stopped and started. While RELAY_ROLLBACK=1, Update goes through the
+// merges one at a time, and the bar says which step it is on, such as "Update: 2 of 5, PR 41". Its stop
+// button then stops the loop between merges, and a merge that changes only pages reloads the page. A page
+// that loads within NOTE_FOR of the end of an update says how it ended.
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -100,6 +101,7 @@
     if (r.update) { tell(waitingWords(r.update)); follow(r.update); return; }
     if (r.note && r.noteAt && Date.now() - r.noteAt < NOTE_FOR) { tell(r.note, !!r.rollback || /failed|stopped/i.test(r.note)); return; }
     const b = r.rollback;
+    if (!b && r.host) tell(r.host, true);
     if (b) tell('The new relay on ' + b.failed.slice(0, 7) + ' failed its check: ' + b.why + '. Update went back to ' + b.running.slice(0, 7) + ', the last commit that passed, and the relay runs that now. The relay\'s folder is on that commit, not ' + r.branch + ', so Update pulls nothing until you fix ' + r.branch + ' and check it out there.', true);
   });
 })();

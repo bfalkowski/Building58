@@ -46,6 +46,7 @@ const PR_URL = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)$/;
 const ITEM_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+#(?:issuecomment-|pullrequestreview-|discussion_r)\d+$/;
 const DEV_MARK = '<!-- office:dev -->', TOLD_MARK = '<!-- office:told-dev -->';
 const HOLD_MARK = '<!-- office:hold -->';
+const READY_MARK = require('./ready-plan.js').MARK;
 const KEY = (task) => 'review-' + task.id;
 const KEY_ID = /^review-([0-9a-f]{6}|session-[\w-]+)$/;
 const ENDED = 'Review waiting, Dev session has ended';
@@ -93,7 +94,7 @@ async function itemsOf(pr) {
 
 function isNews(r, item) {
   if (r.own.includes(item.url)) return false;
-  if (item.body.startsWith(DEV_MARK) || item.body.startsWith(TOLD_MARK)) return false;
+  if (item.body.startsWith(DEV_MARK) || item.body.startsWith(TOLD_MARK) || item.body.startsWith(READY_MARK)) return false;
   if (item.kind === 'r' && item.state === 'COMMENTED' && !item.body.trim()) return false;
   return true;
 }
@@ -345,4 +346,4 @@ config.every('reviewPollSeconds', poll, 5000);
 setInterval(tick, TICK).unref();
 
 
-module.exports = { noteHook, tell, poll, checkNow, reviewPosted, useVerdicts, useHolds, useHandOvers, DEV_MARK, TOLD_MARK, HOLD_MARK };
+module.exports = { noteHook, tell, poll, checkNow, reviewPosted, useVerdicts, useHolds, useHandOvers, isNews, DEV_MARK, TOLD_MARK, HOLD_MARK };

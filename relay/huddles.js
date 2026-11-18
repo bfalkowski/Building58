@@ -15,12 +15,12 @@ const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const delivery = require('./delivery.js');
 const { listOf } = require('./needs-you-plan.js');
+const { livenessOf } = require('./liveness.js');
 
 const GH = process.env.GH_CMD || 'gh';
 const GH_LIMIT = 10000, GIT_LIMIT = 5000;
 const config = require('./config.js');
 const ANSWER_LIMIT = () => config.get('huddleAnswerSeconds') * 1000;
-const QUIET_LIMIT = () => config.get('huddleQuietMinutes') * 60;
 const LEAD_KEEP = 60 * 60 * 1000;
 const MAX_TO_LEAD = 6000;
 const LEAD_KEY = 'huddle-lead', QUESTION_KEY = /^huddle-[0-9a-f]{6}-/;
@@ -55,7 +55,7 @@ function pipelineOf(checks) {
 const NO_PR = /no pull requests found|no git remotes|none of the git remotes|not a git repository|no default remote/i;
 async function prOf(cwd, known) {
   if (!fs.existsSync(cwd)) return { failed: 'its folder is gone' };
-  const args = ['pr', 'view'].concat(known ? [known] : [], ['--json', 'number,url,title,state,isDraft,reviewDecision,statusCheckRollup,comments,baseRefName,mergeable,files,changedFiles']);
+  const args = ['pr', 'view'].concat(known ? [known] : [], ['--json', 'number,url,title,state,isDraft,reviewDecision,statusCheckRollup,comments,baseRefName,mergeable,files,changedFiles,headRefOid']);
   const r = await run(GH, args, cwd, GH_LIMIT);
   if (r.err) {
     if (r.err.code === 'ENOENT') return { failed: 'gh is not installed' };
@@ -65,7 +65,7 @@ async function prOf(cwd, known) {
   }
   try {
     const p = JSON.parse(r.stdout);
-    return { number: p.number, url: p.url, state: p.state, draft: !!p.isDraft, pipeline: pipelineOf(p.statusCheckRollup), review: p.reviewDecision || 'none', comments: Array.isArray(p.comments) ? p.comments.length : 0, decision: decisionOf(p) };
+    return { number: p.number, url: p.url, state: p.state, draft: !!p.isDraft, pipeline: pipelineOf(p.statusCheckRollup), review: p.reviewDecision || 'none', comments: Array.isArray(p.comments) ? p.comments.length : 0, head: typeof p.headRefOid === 'string' ? p.headRefOid : null, decision: decisionOf(p) };
   } catch (e) { return { failed: 'gh sent something unreadable' }; }
 }
 
@@ -98,7 +98,8 @@ function waitingOn(row, prs) {
   }
   if (row.status === 'waiting') return { on: 'you: ' + (row.message || 'needs your OK') };
   if (row.taskState === 'waiting_on_you' && !(pr && ['failing', 'running'].includes(pr.pipeline))) return { on: 'you' };
-  if (row.quiet && row.status === 'working') return { on: 'nobody knows' };
+  if (row.live === 'quiet') return { on: 'nobody knows' };
+  if (row.live === 'stuck') return { on: 'you to look at its session' };
   if (row.status !== 'finished' && row.status !== 'unknown') return { on: row.status === 'new' ? 'its first prompt' : 'nothing' };
   if (pr && pr.state === 'MERGED') return { on: 'nothing, its PR is merged' };
   if (pr) {
@@ -107,12 +108,17 @@ function waitingOn(row, prs) {
     if (pr.pipeline === 'failing') return on('someone to fix the pipeline');
     if (pr.review === 'CHANGES_REQUESTED') return on('someone to make the changes');
     if (pr.pipeline === 'running') return { on: 'the pipeline' };
-    if (pr.review === 'APPROVED' && prs.leadMerges && !pr.decision) return on('the Lead to merge, under the merge rung');
-    if (pr.review === 'APPROVED') return Object.assign(on('you to merge'), { mergeWhy: worked ? null : 'approved and ready for you to merge' + (prs.leadMerges && pr.decision ? ', since ' + pr.decision : '') });
+    const passed = pr.review === 'APPROVED' ? 'approved' : prs.mergeVerdict(pr) ? 'reviewed' : null;
+    if (passed && prs.leadMerges && !pr.decision) return on('the Lead to merge, under the merge rung');
+    if (passed) return Object.assign(on('you to merge'), { mergeWhy: worked ? null : passed + ' and ready for you to merge' + (prs.leadMerges && pr.decision ? ', since ' + pr.decision : '') });
     return { on: pr.comments ? 'you to read its review and merge, or a fix' : 'a review' };
   }
   if (row.pr && row.pr.failed) return { on: 'unknown, gh did not answer' };
   return { on: 'a prompt' };
+}
+function mergeVerdictOn(channel, pr) {
+  const v = pr.head ? require('./autopilot.js').verdictOf(channel, pr.url) : null;
+  return !!(v && v.posted && v.kind === 'merge' && v.commit === pr.head);
 }
 function lineOf(row) {
   const parts = [row.who + (row.lead && row.who !== 'Lead' ? ' (Lead)' : '')];
@@ -124,7 +130,8 @@ function lineOf(row) {
   const git = row.git ? [row.git.changed ? row.git.changed + ' uncommitted' : '', row.git.ahead ? row.git.ahead + ' unpushed' : '', !row.git.pushed && row.git.branch ? 'branch not pushed' : ''].filter(Boolean).join(', ') : '';
   if (git) parts.push(git);
   parts.push('waiting on ' + row.waitingOn);
-  if (row.lastSeconds !== null) parts.push((row.quiet ? 'QUIET ' : 'last did anything ') + ago(row.lastSeconds) + (row.quiet ? '' : ' ago'));
+  const flag = row.live === 'quiet' || row.live === 'stuck' ? row.live.toUpperCase() + ' ' : null;
+  if (row.lastSeconds !== null) parts.push(flag ? flag + ago(row.lastSeconds) : 'last did anything ' + ago(row.lastSeconds) + ' ago');
   if (row.ask) parts.push(row.ask);
   return parts.join(' · ');
 }
@@ -132,13 +139,14 @@ async function rowOf(channel, t, task, names, leadId) {
   const git = await gitState(t.cwd);
   const known = (task && task.pr) || t.pr;
   const pr = known && PR_URL.test(known) ? await prOf(t.cwd, known) : git && git.branch ? await prOf(t.cwd, null) : null;
-  const lastSeconds = Math.max(0, Math.round((Date.now() - t.lastActAt) / 1000));
+  const now = Date.now(), lastSeconds = Math.max(0, Math.round((now - t.lastActAt) / 1000));
+  const live = livenessOf(t, now).state;
   const status = statusOf(t);
-  return { terminal: t.id, who: clean(names[t.id] || t.who, 40) || 'Session ' + t.sessionId.slice(0, 8), lead: t.id === leadId, role: t.role, ticket: task ? task.ticket : null, title: clean(task ? task.title : t.title, 60) || null, taskId: task ? task.id : null, taskState: task ? task.state : null, status, message: clean(t.message, 160) || null, git, pr, lastSeconds, quiet: status !== 'new' && lastSeconds >= QUIET_LIMIT() };
+  return { terminal: t.id, who: clean(names[t.id] || t.who, 40) || 'Session ' + t.sessionId.slice(0, 8), lead: t.id === leadId, role: t.role, ticket: task ? task.ticket : null, title: clean(task ? task.title : t.title, 60) || null, taskId: task ? task.id : null, taskState: task ? task.state : null, status, message: clean(t.message, 160) || null, git, pr, lastSeconds, live, quiet: live === 'quiet' };
 }
 async function goneRow(task) {
   const pr = task.pr && PR_URL.test(task.pr) ? await prOf(task.repo, task.pr) : null;
-  return { terminal: null, who: 'Worker on ' + (task.ticket || 'task ' + task.id), lead: false, role: null, ticket: task.ticket, title: clean(task.title, 60), taskId: task.id, taskState: task.state, status: 'gone', message: null, git: null, pr, lastSeconds: null, quiet: false };
+  return { terminal: null, who: 'Worker on ' + (task.ticket || 'task ' + task.id), lead: false, role: null, ticket: task.ticket, title: clean(task.title, 60), taskId: task.id, taskState: task.state, status: 'gone', message: null, git: null, pr, lastSeconds: null, live: 'gone', quiet: false };
 }
 function finishRow(row, ask, prs) {
   const w = waitingOn(row, prs);
@@ -154,7 +162,7 @@ async function gather(channel, h) {
   const taskOf = (t) => taskList.find((x) => x.owner && x.owner.terminal === t.id) || null;
   const gone = taskList.filter((task) => task.state !== 'done' && !terminal.find(channel, task.owner && task.owner.terminal));
   const rows = await Promise.all([...list.map((t) => rowOf(channel, t, taskOf(t), names, lead && lead.id)), ...gone.map(goneRow)]);
-  const prs = { leadMerges: !!(lead && lead.merge), worked: new Set(rows.filter((r) => r.status === 'working' && r.pr && r.pr.url).map((r) => r.pr.url)) };
+  const prs = { leadMerges: !!(lead && lead.merge), mergeVerdict: (pr) => mergeVerdictOn(channel, pr), worked: new Set(rows.filter((r) => r.status === 'working' && r.pr && r.pr.url).map((r) => r.pr.url)) };
   for (const row of rows) { row.answer = h.answerFor(row); finishRow(row, h.noteFor(row), prs); }
   const items = listOf(require('./needs-you.js').stateOf(channel, Date.now(), { rows }));
   for (const row of rows) needsOf(row, items);
@@ -164,7 +172,7 @@ async function gather(channel, h) {
   const count = (s) => rows.filter((r) => r.status === s).length;
   const needs = items.length;
   const headline = (needs ? needs + ' need' + (needs === 1 ? 's' : '') + ' you' : 'Nothing needs you') + ', ' + count('working') + ' working, ' + count('finished') + ' finished' + (count('gone') ? ', ' + count('gone') + ' gone' : '') + '.';
-  return { at: new Date().toISOString(), headline, ghProblem: failures.length ? failures[0] : null, rows, quietLimitMinutes: QUIET_LIMIT() / 60 };
+  return { at: new Date().toISOString(), headline, ghProblem: failures.length ? failures[0] : null, rows };
 }
 
 const QUESTION = (id) => 'Huddle question from the room, marker HUDDLE-' + id + '. In one line, say what you are on, what is next, and what you are waiting on, if anything. Do not run any tools or change anything for this. Start the line with HUDDLE-' + id + ': and then carry on as you were.';

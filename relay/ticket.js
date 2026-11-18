@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Files a ticket from inside a session the room started. What it files waits in Triage.
-//   node relay/ticket.js create "Radio clips at high volume" --body "What to do" --priority high --blocked-by T-1,T-2
+//   node relay/ticket.js create "Radio clips at high volume" --priority high --blocked-by T-1,T-2 --body - <<'EOF'
 //   (blocked-by takes the ids that list and create print: T-1 on the local store, 12 on GitHub issues)
 //   node relay/ticket.js create "Decide the layout" --shapes T-7,T-9 --body - <<'EOF'
 //   (a design ticket: while it is open, Autopilot and the Lead start none of the tickets it shapes, which must be in Triage)
@@ -29,10 +29,21 @@
 //                                              (from Triage or Ready, for work that merged without a task)
 //   node relay/ticket.js tasks                 (every task's id, including those with no ticket)
 //   node relay/ticket.js task 63e175 in_review (building, in_review, changes_requested, waiting_on_you or done)
+// Only a session you made the Lead, while you have turned on Let the Lead start reviews, can ask the relay
+// for a review of a task's PR. The relay starts a reviewer in its own checkout, as Get a review does. It
+// refuses a PR that is no task's, one a reviewer is on, an ask with no desk free, and a PR past its reviews:
+//   node relay/ticket.js review https://github.com/owner/repo/pull/12
 // Only a session you made the Lead and let start tickets can start one. The relay refuses past your limit:
 //   node relay/ticket.js start T-1             (from Ready, one at a time, in Board order, while few enough are building)
 // And, while the person runs the relay with RELAY_LEAD_STOPS=1, stop a session the floor calls safe to stop:
 //   node relay/ticket.js stop Theo             (the name ticket.js floor shows, or a task id such as 63e175)
+// The Lead marks a PR ready to merge: the relay checks it, posts the note and adds the label (relay/ready.js).
+// Run it bare to see what it checks and what the note says:
+//   node relay/ticket.js ready https://github.com/owner/repo/pull/12 4f2c1ab --body - <<'EOF'
+//   Reviews: ...
+//   Findings: ...
+//   Hand checks still open: ...
+//   EOF
 // Only the person, the PM and the Lead can edit a ticket in Triage or Ready: its title, its body and its
 // priority, each optional. A new priority needs the switch below. A session's edit to the title or body of
 // a ticket the person approved takes the approval back:
@@ -75,7 +86,7 @@ function flags(args) {
   return out;
 }
 async function readBody(f) {
-  if (f.twice) { console.error('Give the body once: --body "text", --body - for stdin, or --body-file <path>.'); return false; }
+  if (f.twice) { console.error('Give the body once: --body - for stdin, --body-file <path>, or --body text.'); return false; }
   if ((f.bodyFrom === 'file' || f.bodyFrom === 'text') && f.body === undefined) { console.error('Say what follows ' + (f.bodyFrom === 'file' ? '--body-file: a path, or - for stdin.' : '--body: the text, or - for stdin.')); return false; }
   if (f.bodyFrom === 'file') {
     try { f.body = fs.readFileSync(f.body, 'utf8'); } catch (e) { console.error('Could not read the body file ' + f.body + ': ' + e.code); return false; }
@@ -169,6 +180,12 @@ async function main() {
       : 'The relay does not know yet. The Lead\'s status line sends the number after each reply, and none has come since its last /clear or refresh. ' + scale);
     return 0;
   }
+  if (cmd === 'review' && args[0]) {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/reviews/lead'), { method: 'POST', headers, body: JSON.stringify({ pr: args[0] }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log('Review started: ' + r.pr + '  ' + (r.reviewer || 'a reviewer') + ' reviews it in its own checkout, posts and leaves  (' + r.count + ' of ' + r.max + ' for this PR)');
+    return 0;
+  }
   if (cmd === 'start' && args[0]) {
     const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/start', { method: 'POST', headers, body: '{}' })).json();
     if (!r.ok) { console.error(r.message); return 1; }
@@ -181,6 +198,16 @@ async function main() {
     const s = r.stopped;
     console.log('Stopped: ' + s.name + ' (' + [s.role, s.task && 'task ' + s.task, 'session ' + s.sessionId].filter(Boolean).join(', ') + '): ' + s.why);
     console.log(s.task ? 'To bring it back: Bring back on task ' + s.task + '.' : 'To bring it back: Resume with session id ' + s.sessionId + '.');
+    return 0;
+  }
+  if (cmd === 'ready') {
+    const f = flags(args);
+    if (f.bodyFrom && !(await readBody(f))) return 1;
+    const [pr, head] = f.rest;
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/ready'), { method: 'POST', headers, body: JSON.stringify({ pr, head, text: f.body || '' }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    if (r.again) console.log('Already marked ' + r.pr + ' ready to merge at ' + r.head.slice(0, 7) + ': ' + r.comment + '. No new note; the "' + r.label + '" label is on.');
+    else console.log('Marked ' + r.pr + ' ready to merge at ' + r.head.slice(0, 7) + ': ' + r.comment + '. Who merges: ' + r.who + ' A new commit takes the "' + r.label + '" label off.');
     return 0;
   }
   if (cmd === 'measures') {
@@ -251,7 +278,7 @@ async function main() {
     console.log('Moved: ' + moved.id + '  ' + (r.ticket ? moved.status : moved.state) + (r.ticket && r.ticket.pr ? '  ' + r.ticket.pr : ''));
     return 0;
   }
-  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
+  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js ready (run it bare to see how), ticket.js review <PR link>, or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
   return 1;
 }
 main().then((code) => { process.exitCode = code; }, (e) => { console.error('The relay did not answer: ' + e.message); process.exitCode = 1; });

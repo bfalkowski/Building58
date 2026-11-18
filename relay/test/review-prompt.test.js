@@ -16,7 +16,7 @@ test('a reviewer started with a prompt gets it once claude is ready, however slo
   const r = await R.call('POST', '/terminals', { cwd: repo, title: 'Review', role: 'reviewer', prompt: BRIEF });
   assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   const reviewer = r.body;
-  await until(async () => (await R.screen(reviewer.id)).includes('GOT[' + BRIEF + ']'), 'the brief typed and sent', 200);
+  await until(async () => (await R.screen(reviewer.id)).includes('GOT[' + BRIEF + ']'), 'the brief typed and sent');
   const screen = await R.screen(reviewer.id);
   assert.ok(!screen.includes('EARLY['), 'nothing typed before claude was ready: ' + screen);
   assert.strictEqual(screen.split('GOT[' + BRIEF + ']').length - 1, 1, 'typed once');
