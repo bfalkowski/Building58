@@ -2,7 +2,8 @@
 // when relay/terminal.js says nothing is going on in that session, and the check runs right before
 // typing, because typed text can answer a permission prompt. It survives a relay restart, and finds a
 // session brought back with the same id. This is the only module that types a message into a session
-// for the relay, a first brief and a first prompt included. Refresh the Lead types its own steps.
+// for the relay, a first brief and a first prompt included. Refresh the Lead types its own steps, and
+// asks sendNow for the Lead's brief when the Lead still owes it.
 //
 //   save(channel, { key, terminal, sessionId, text, expiresAt, on, first, untilTurn })  a new save with the same key replaces the old one
 //   save(channel, { key, to: 'lead', text, ... })                     for whichever session is the Lead when it is typed
@@ -11,6 +12,8 @@
 //   dropWhere(test)                                                   drops every one whose key passes
 //   pending(channel)                                                  what is still waiting, and why
 //   promptOnce(channel, terminal, text, done, was)                    a reviewer's, the PM's or the COO's first prompt (below)
+//   sendNow(channel, key, done)                                       types that one now, with the same checks, without waiting
+//                                                                     for the next round; returns why not, or null and done(problem) once typed
 //
 // `on` runs once: on ('delivered') or on ('expired', why). It is not saved, so after a restart a
 // delivery still goes in and nobody is told, unless its caller saves it again: a save that changes
@@ -54,7 +57,7 @@ const { claim } = require('./lockfile.js');
 const { TOLD_CHECK } = require('./stop-verdict.js');
 
 const FILE = state.file('deliveries.json', 'RELAY_DELIVERIES_FILE');
-const EVERY = 500;
+const EVERY = Number(process.env.RELAY_DELIVERY_EVERY_MS) >= 1 ? Number(process.env.RELAY_DELIVERY_EVERY_MS) : 500;
 const NEVER = 24 * 60 * 60 * 1000;
 
 const ownsFile = claim(FILE);
@@ -199,20 +202,36 @@ function pump() {
       if (t && d.heldFor === t.id && !t.stuck) { remove(channel, d); continue; }
       if (d.untilTurn && landing(channel, d, t)) continue;
       if (!t || typing.has(t.id) || heldBy(channel, t, d) || terminal.notSafeToType(t, how(d))) continue;
-      typing.add(t.id);
-      const at = Date.now();
-      terminal.typeIfSafe(t, d.text, () => listOf(channel).includes(d) && targetOf(channel, d) === t, (problem) => {
-        typing.delete(t.id);
-        if (problem || !listOf(channel).includes(d)) return;
-        watch(channel, d, t, at);
-        if (d.untilTurn) { d.typedAt = at; d.typedTo = t.id; persist(); return; }
-        remove(channel, d);
-        if (!d.heldFor) tell(channel, d.key, 'delivered');
-      }, how(d));
+      type(channel, d, t, () => {});
     }
   }
 }
+function type(channel, d, t, done) {
+  typing.add(t.id);
+  const at = Date.now();
+  terminal.typeIfSafe(t, d.text, () => listOf(channel).includes(d) && targetOf(channel, d) === t, (problem) => {
+    typing.delete(t.id);
+    if (problem || !listOf(channel).includes(d)) { done(problem || 'dropped'); return; }
+    watch(channel, d, t, at);
+    if (d.untilTurn) { d.typedAt = at; d.typedTo = t.id; persist(); done(null); return; }
+    remove(channel, d);
+    if (!d.heldFor) tell(channel, d.key, 'delivered');
+    done(null);
+  }, how(d));
+}
 setInterval(pump, EVERY).unref();
+function sendNow(channel, key, done) {
+  const d = listOf(channel).find((x) => x.key === key);
+  if (!d) return 'gone';
+  const t = targetOf(channel, d);
+  if (!t) return 'ended';
+  if (typing.has(t.id)) return 'busy_typing';
+  if (d.untilTurn && d.typedAt) return 'typed';
+  const problem = heldBy(channel, t, d) || terminal.notSafeToType(t, how(d));
+  if (problem) return problem;
+  type(channel, d, t, done);
+  return null;
+}
 
 const PROMPT_KEY = (id) => 'first-prompt ' + id;
 function promptOnce(channel, id, text, done, was) {
@@ -235,4 +254,4 @@ terminal.onEnd((channel, t, code, closing) => {
   tell(channel, d.key, 'expired', d.typedAt ? 'the session ended after its prompt was typed, before a hook said a turn began' : 'the session ended first');
 });
 
-module.exports = { save, drop, dropWhere, pending, onStuck, promptOnce, TOLD_CHECK, PROMPT_TRIES };
+module.exports = { save, drop, dropWhere, pending, onStuck, promptOnce, sendNow, WHY, TOLD_CHECK, PROMPT_TRIES };
