@@ -16,12 +16,12 @@ async function office(t, env, existingHome) {
   const home = existingHome || fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-huddle-')));
   const gh = path.join(home, 'gh');
   fs.mkdirSync(gh, { recursive: true });
-  const S = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_HUDDLE_ANSWER_SECONDS: '4', RELAY_HUDDLE_QUIET_MINUTES: '60', ...(env || {}) }, home);
+  const S = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_HUDDLE_ANSWER_SECONDS: '4', ...(env || {}) }, home);
   t.after(async () => { await S.kill().catch(() => {}); await S.remove(); });
   const answers = (a) => fs.writeFileSync(path.join(gh, 'answers.json'), JSON.stringify(a));
   const calls = () => { try { return fs.readFileSync(path.join(gh, 'calls.log'), 'utf8').split('\n').filter(Boolean); } catch (e) { return []; } };
   const repo = fs.existsSync(path.join(S.home, 'repo')) ? path.join(S.home, 'repo') : makeRepo(S.home);
-  const add = async (over) => (await S.call('POST', '/terminals', { cwd: repo, ...(over || {}) })).body;
+  const add = (over) => S.start({ cwd: repo, ...(over || {}) });
   const sid = (t2) => t2.sessionId.slice(0, 12);
   const finished = async (t2) => { await talk(t2); await S.hook({ hook_event_name: 'Stop', session_id: sid(t2) }); };
   const talk = async (t2) => { await S.hook({ hook_event_name: 'UserPromptSubmit', session_id: sid(t2) }); };
@@ -160,18 +160,38 @@ test('a clean checkout with no branch has no empty part', async (t) => {
   assert.match(line, /no PR · finished its turn · waiting on/);
 });
 
-test('quiet sessions are flagged', async (t) => {
-  const o = await office(t, { RELAY_HUDDLE_QUIET_MINUTES: '0.01' }), { add, talk, huddle, rowOf, answers } = o;
+test('quiet and stuck in a huddle follow the same rule as the Floor', async (t) => {
+  const STALL = 1500;
+  const o = await office(t, { RELAY_STALL_MS: String(STALL) }), { R, add, talk, huddle, rowOf, answers } = o;
   answers({ prs: {} });
-  const a = await add();
-  await talk(a);
-  await sleep(1500);
-  const r = rowOf(await huddle(), a);
-  assert.strictEqual(r.status, 'working', 'it is still reported as what the hooks last said');
-  assert.ok(r.quiet);
-  assert.strictEqual(r.waitingOn, 'nobody knows');
-  assert.strictEqual(r.needs, null, 'a quiet session may still be at work, so the Needs you list does not name it');
-  assert.match(r.line, /QUIET \d+s/);
+  const spinning = await add(), silent = await add();
+  for (const s of [spinning, silent]) await until(async () => (await R.screen(s.id)).includes('❯'), 'its prompt');
+  await R.call('POST', '/terminals/' + spinning.id + '/input', { data: '/spin\r' });
+  await until(async () => (await R.screen(spinning.id)).includes('Thinking'), 'the spinner');
+  for (const s of [spinning, silent]) await talk(s);
+  await sleep(STALL + 1000);
+  const report = await huddle();
+  const floor = (await R.call('GET', '/floor')).body.sessions;
+  const floorState = (s) => floor.find((r) => r.terminal === s.id).desk.doing.state;
+
+  await t.test('hooks stop while its output goes on: quiet, as on the Floor', () => {
+    const r = rowOf(report, spinning);
+    assert.strictEqual(floorState(spinning), 'quiet');
+    assert.strictEqual(r.status, 'working', 'it is still reported as what the hooks last said');
+    assert.strictEqual(r.live, 'quiet');
+    assert.ok(r.quiet);
+    assert.strictEqual(r.waitingOn, 'nobody knows');
+    assert.strictEqual(r.needs, null, 'a quiet session may still be at work, so the Needs you list does not name it');
+    assert.match(r.line, /QUIET \d+s/);
+  });
+  await t.test('neither hooks nor output: stuck, as on the Floor', () => {
+    const r = rowOf(report, silent);
+    assert.strictEqual(floorState(silent), 'stuck');
+    assert.strictEqual(r.live, 'stuck');
+    assert.ok(!r.quiet);
+    assert.strictEqual(r.waitingOn, 'you to look at its session');
+    assert.match(r.line, /STUCK \d+s/);
+  });
 });
 
 test('a stopped task whose PR is merged', async (t) => {
@@ -496,7 +516,7 @@ test('a saved message survives a relay restart', async (t) => {
   await until(async () => !(await again.R.call('GET', '/terminals')).body.terminals.length, 'it to stop');
   // That took back the waiting report. A new one waits for Bring back, which makes it the Lead again.
   assert.strictEqual((await again.huddle()).leadNews.state, 'none');
-  const back = (await again.R.call('POST', '/terminals', { cwd: again.repo, resume: lead.sessionId, lead: true })).body;
+  const back = await again.add({ resume: lead.sessionId, lead: true });
   assert.strictEqual(back.lead, true);
   await again.R.hook({ hook_event_name: 'SessionStart', source: 'resume', session_id: sid(back), full_session_id: back.sessionId, terminal: back.id });
   assert.strictEqual((await again.huddle()).leadNews.state, 'saved');
@@ -543,6 +563,40 @@ test('an approved, green PR waits on the Lead when it may merge', async (t) => {
       const r = rowOf(await huddle({ lead: false }), dev);
       assert.match(r.waitingOn, /^you to merge/);
       assert.match(r.mergeWhy, why);
+    });
+  }
+});
+
+// Office reviewers post from the PR author's own GitHub account, which cannot approve its own PR, so their
+// kept verdict counts as the review. It counts only for the commit the reviewer read.
+test('a green PR with a merge verdict on its head and no GitHub approval waits on the Lead', async (t) => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-huddle-verdict-')));
+  const file = path.join(home, 'autopilot.json');
+  const HEAD = 'a'.repeat(40), OLD = 'b'.repeat(40);
+  const keep = (kind, commit) => fs.writeFileSync(file, JSON.stringify({ t: { on: false, only: null, day: null, merged: 0, notes: [], prs: {
+    [PR]: { verdicts: [{ kind, commit, sessionId: 'reviewer-' + kind + commit, at: new Date().toISOString(), posted: PR + '#issuecomment-1' }] }
+  } } }));
+  const pr = { ...green, reviewDecision: '', headRefOid: HEAD, baseRefName: 'main', mergeable: 'MERGEABLE', files: [{ path: 'relay/huddles.js' }], changedFiles: 1, comments: [{ body: 'review' }] };
+  const cases = [
+    ['a merge verdict on its head', 'merge', HEAD, {}, /^the Lead to merge/, null],
+    ['a merge verdict on an older commit', 'merge', OLD, {}, /^you to read its review and merge, or a fix/, null],
+    ['a fix verdict on its head', 'fix', HEAD, {}, /^you to read its review and merge, or a fix/, null],
+    ['a merge verdict on its head and a change to CLAUDE.md', 'merge', HEAD, { files: [{ path: 'CLAUDE.md' }] }, /^you to merge/, /reviewed and ready for you to merge, since it changes CLAUDE\.md/],
+  ];
+  for (const [what, kind, commit, over, on, why] of cases) {
+    await t.test('with ' + what, async (t2) => {
+      keep(kind, commit);
+      const o = await office(t2, { RELAY_AUTOPILOT_FILE: file });
+      execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: o.repo });
+      o.answers({ prs: { feature: { ...pr, ...over } } });
+      const dev = await o.add();
+      await o.finished(dev);
+      const lead = await o.add({ cwd: fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-huddle-lead-'))) });
+      await o.finished(lead);
+      assert.strictEqual((await o.R.call('POST', '/terminals/lead', { terminal: lead.id, merge: true })).status, 200);
+      const r = o.rowOf(await o.huddle({ lead: false }), dev);
+      assert.match(r.waitingOn, on);
+      if (why) assert.match(r.mergeWhy, why);
     });
   }
 });

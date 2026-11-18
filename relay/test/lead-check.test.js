@@ -54,7 +54,7 @@ test('the Lead gets the check on the relay\'s timer while a task is worked', asy
   assert.strictEqual(task.state, 'building');
 
   await t.test('with one building task, an idle Lead gets about one check each interval', async () => {
-    await until(async () => count(await typed()) >= 1, 'the first check', 150);
+    await until(async () => count(await typed()) >= 1, 'the first check');
     const from = count(await typed());
     await sleep(EVERY * 3);
     const got = count(await typed()) - from;
@@ -83,12 +83,12 @@ test('the Lead gets the check on the relay\'s timer while a task is worked', asy
     const briefs = (await typed()).split('GOT[You are the Lead').length;
     await R.hook({ hook_event_name: 'SessionStart', session_id: 'b2c3d4e5f6a7', full_session_id: 'b2c3d4e5-f6a7-4b8c-9d0e-f1a2b3c4d5e6', terminal: lead.id, source: 'clear' });
     await until(async () => (await typed()).split('GOT[You are the Lead').length > briefs, 'the brief after /clear');
-    await until(async () => count(await typed()) > was, 'a check after /clear', 150);
+    await until(async () => count(await typed()) > was, 'a check after /clear');
   });
 
   await t.test('with every task done, it gets no check, and one still waiting is taken back', async () => {
     await R.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'b2c3d4e5-f6a' });
-    await until(() => saved().length === 1, 'a check to wait for the busy Lead', 150);
+    await until(() => saved().length === 1, 'a check to wait for the busy Lead');
     const typedBefore = count(await typed());
     // An hour between ticks, so only the move itself can take the waiting check back.
     assert.strictEqual((await R.call('POST', '/settings', { values: { leadCheckMinutes: 60 } })).status, 200);
@@ -114,7 +114,7 @@ test('a check left waiting by the last relay is taken back at startup when it is
   await R.hook({ hook_event_name: 'UserPromptSubmit', session_id: lead.sessionId.slice(0, 12) });
   await until(async () => (await R.call('POST', '/terminals/lead', { terminal: lead.id })).status === 200, 'the Lead to be made');
   await R.call('POST', '/tasks', { title: 'Build a thing', repo });
-  await until(() => saved().length === 1, 'a check to wait for the busy Lead', 150);
+  await until(() => saved().length === 1, 'a check to wait for the busy Lead');
   await R.kill();
   assert.strictEqual(saved().length, 1, 'the check is kept through the restart');
   const again = await relay({ RELAY_LEAD_CHECK_MS: '0' }, R.home);

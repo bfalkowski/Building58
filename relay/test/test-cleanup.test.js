@@ -7,7 +7,7 @@ const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 const { spawn, spawnSync } = require('child_process');
-const { relay } = require('./helpers.js');
+const { relay, until } = require('./helpers.js');
 
 test('removing a home stops every relay still on it first', async (t) => {
   const R = await relay(); t.after(R.stop);
@@ -17,7 +17,7 @@ test('removing a home stops every relay still on it first', async (t) => {
   assert.ok(!fs.existsSync(R.home), 'and the home is gone');
 });
 
-test('a test file that never ends fails with a clear message, and does not hang the run', () => {
+test('a test file that never ends fails with a clear message, and does not hang the run', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-hang-'));
   const pidFile = path.join(dir, 'pid');
   try {
@@ -29,8 +29,25 @@ test('a test file that never ends fails with a clear message, and does not hang 
     assert.match(r.stdout, /hang\.fixture\.js did not end within 3 seconds, so it was stopped/);
     const pid = Number(fs.readFileSync(pidFile, 'utf8'));
     const alive = () => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
-    assert.ok(!alive(), 'what the file left running is stopped too');
+    await until(() => !alive(), 'what the file left running to be stopped too');  // a killed process is gone once the system reaps it
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a test file that ends while a process it started holds its output fails at once, and does not wait for it', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-held-'));
+  const pidFile = path.join(dir, 'pid');
+  const kill = () => { try { process.kill(Number(fs.readFileSync(pidFile, 'utf8')), 'SIGKILL'); } catch (e) { /* gone, or never started */ } };
+  try {
+    const env = { ...process.env, TEST_FILE_SECONDS: '300', HANG_PID_FILE: pidFile };
+    delete env.NODE_TEST_CONTEXT;
+    const started = Date.now();
+    const r = spawnSync(process.execPath, [path.join(__dirname, 'run.js'), path.join(__dirname, 'held.fixture.js')],
+      { env, encoding: 'utf8', timeout: 90000 });
+    assert.strictEqual(r.status, 1, 'the run ends, and fails: ' + r.stdout + r.stderr);
+    assert.ok(Date.now() - started < 60000, 'it did not wait for the time limit');
+    assert.match(r.stdout, /held\.fixture\.js ended, but a process it started still held its output/);
+    assert.match(r.stdout, /# held\.fixture\.js \(\d+s, FAIL\)/);
+  } finally { kill(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 // A fake gh child, or the relay's last gh poll, can still write into its folder as a test ends, so a

@@ -88,8 +88,8 @@ test('review comments reach the Dev', async (t) => {
     api[REVIEWS].push({ id: 6, html_url: PR + '#pullrequestreview-6', body: 'Changes needed.', state: 'CHANGES_REQUESTED' });
     api[INLINE].push({ id: 77, html_url: PR + '#discussion_r77', body: 'This line is wrong.' });
     say();
-    await until(async () => (await get(task.id)).reviews.pending, 'the news to be saved');
-    assert.strictEqual((await get(task.id)).reviews.pending.count, 2);
+    // A check already running when the answers changed can save the inline comment alone, and the next adds the review.
+    await until(async () => { const p = (await get(task.id)).reviews.pending; return p && p.count === 2; }, 'both comments to be saved');
     // The COO's measures count these as comments, and the review that requested changes as blocking (relay/coo.js).
     const q = (await R.call('GET', '/coo/measures')).body.measures.quality.prs.find((p) => p.pr === PR);
     assert.strictEqual(q.blocking, 1);
@@ -98,7 +98,9 @@ test('review comments reach the Dev', async (t) => {
     assert.strictEqual(await told(task), 1, 'nothing typed while it works');
     await R.hook({ hook_event_name: 'Stop', session_id: sid(task) });
     await until(async () => (await told(task)) === 2, 'the Dev to be told');
-    assert.match(await R.screen(task.worker.terminal), /2 new comments, at https:\/\/github\.com\/o\/r\/pull\/7#pullrequestreview-6 https:\/\/github\.com\/o\/r\/pull\/7#discussion_r77/);
+    const links = (await R.screen(task.worker.terminal)).match(/2 new comments, at (\S+) (\S+)\. Read/);
+    assert.ok(links, 'both comments in one message');
+    assert.deepStrictEqual(links.slice(1).sort(), [PR + '#discussion_r77', PR + '#pullrequestreview-6'], 'the review and the inline comment, in either order');
   });
   await t.test('gh failing is shown and retried, and never reads as no news', async () => {
     api[ISSUE].push(comment(104));
@@ -149,11 +151,13 @@ test('review comments reach the Dev', async (t) => {
   });
   await t.test('a task that is done is left alone', async () => {
     await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' });
-    const asked = calls().length;
+    // A check that was already running when the card moved may still ask gh once, so the count starts after it.
+    await sleep(2500);
+    const asked = calls().filter((c) => c.includes(ISSUE)).length;
     api[ISSUE].push(comment(106));
     say();
     await sleep(2500);
-    assert.strictEqual(calls().filter((c) => c.includes(ISSUE)).length, calls().slice(0, asked).filter((c) => c.includes(ISSUE)).length, 'gh is not asked about it');
+    assert.strictEqual(calls().filter((c) => c.includes(ISSUE)).length, asked, 'gh is not asked about it');
     assert.strictEqual(await told(task), 1);
   });
 });

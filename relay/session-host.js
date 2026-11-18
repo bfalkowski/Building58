@@ -12,10 +12,14 @@
 //
 // The socket is in a folder only you can open, and one connection is served at a time: a new one
 // replaces the last. Each message is one line of JSON.
+// The list reply says the VERSION of these messages the host speaks. A host from before VERSION says
+// none, and counts as 1. OPS says the version each message to the host came in, so a newer relay sends
+// an older host only what it knows (relay/host-link.js). A new message to the host, or a new meaning for
+// one, raises VERSION, and a new message goes in OPS with the new number.
 //   to the host:   { op: 'list' }, { op: 'spawn', id, cwd, env, cmd, cols, rows, meta },
 //                  { op: 'write', id, data (base64) }, { op: 'resize', id, cols, rows },
 //                  { op: 'hangup', id }, { op: 'kill', id, signal }
-//   from the host: { op: 'list', sessions: [{ id, meta, cols, rows, exited, code, out (base64), jobs }] },
+//   from the host: { op: 'list', version, sessions: [{ id, meta, cols, rows, exited, code, out (base64), jobs }] },
 //                  { op: 'out', id, data (base64) }, { op: 'exit', id, code },
 //                  { op: 'jobs', id, count, since }  when the commands its claude started and that still
 //                  run change (relay/jobs.js). jobs in the list is the last of these, or null.
@@ -30,6 +34,8 @@ const jobs = require('./jobs.js');
 const KEEP = 256 * 1024;
 const BRIDGE = path.join(__dirname, 'pty-bridge.py');
 const ENDING = 3000;
+const VERSION = 2;
+const OPS = { list: 1, spawn: 1, write: 1, resize: 1, hangup: 1, kill: 1 };
 
 function serve(socket) {
   const sessions = new Map();
@@ -60,7 +66,7 @@ function serve(socket) {
   function handle(m) {
     const s = sessions.get(m.id);
     if (m.op === 'list') {
-      send({ op: 'list', sessions: [...sessions.values()].map((x) => ({ id: x.id, meta: x.meta, cols: x.cols, rows: x.rows, exited: x.exited, code: x.code, out: Buffer.concat(x.out).toString('base64'), jobs: x.jobs || null })) });
+      send({ op: 'list', version: VERSION, sessions: [...sessions.values()].map((x) => ({ id: x.id, meta: x.meta, cols: x.cols, rows: x.rows, exited: x.exited, code: x.code, out: Buffer.concat(x.out).toString('base64'), jobs: x.jobs || null })) });
       for (const x of sessions.values()) if (x.exited) sessions.delete(x.id);
     } else if (m.op === 'spawn') start(m);
     else if (!s || s.exited) return;
@@ -126,4 +132,4 @@ function launch() {
 
 if (require.main === module) serve(process.argv[2]);
 
-module.exports = { launch };
+module.exports = { launch, VERSION, OPS };

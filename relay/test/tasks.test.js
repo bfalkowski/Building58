@@ -15,7 +15,7 @@ test('tasks', async (t) => {
   await t.test('the brief says to build it, and goes in once', async () => {
     task = (await call('POST', '/tasks', { title: 'Add a radio', brief: 'Keep it small.', repo })).body.task;
     assert.strictEqual(task.briefed, false);
-    const out = await until(async () => { const s = await screen(task.worker.terminal); return s.includes('GOT[') && s; }, 'the brief');
+    const out = await until(async () => { const s = await screen(task.worker.terminal); return /GOT\[[^\]\r\n]*\]/.test(s) && s; }, 'the brief');
     assert.match(out, /build this now: Add a radio\. Keep it small\./);
     assert.doesNotMatch(out, /PR title/, 'a task with no ticket has no number to put in the title');
     // Typed raw, Claude Code reads a long brief about 1024 bytes at a time and keeps only the last piece.
@@ -92,7 +92,7 @@ test('tasks', async (t) => {
   await t.test('and Bring back starts over with the brief', async () => {
     const r = await call('POST', '/tasks/' + quickId + '/resume', {});
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
-    const out = await until(async () => { const s = await screen(r.body.task.worker.terminal); return s.includes('GOT[') && s; }, 'the brief');
+    const out = await until(async () => { const s = await screen(r.body.task.worker.terminal); return /GOT\[[^\]\r\n]*\]/.test(s) && s; }, 'the brief');
     assert.match(out, /Do this\./);
     assert.doesNotMatch(out, /--resume/);
     await stopAndWait(r.body.task.worker.terminal);
@@ -106,7 +106,7 @@ test('tasks', async (t) => {
     assert.ok(gone.history.some((h) => /not delivered: the session ended first/.test(h.note || '')));
     const r = await call('POST', '/tasks/' + one.id + '/resume', {});
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
-    const out = await until(async () => { const s = await screen(r.body.task.worker.terminal); return s.includes('GOT[') && s; }, 'the brief in the worker brought back');
+    const out = await until(async () => { const s = await screen(r.body.task.worker.terminal); return /GOT\[[^\]\r\n]*\]/.test(s) && s; }, 'the brief in the worker brought back');
     assert.match(out, /Do that\./);
     assert.doesNotMatch(out, /--resume/, 'a conversation with no turn in it has nothing to resume');
     await talk(r.body.task.owner.sessionId);

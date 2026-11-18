@@ -148,6 +148,16 @@ test('the relay starts the first review and the follow-ups, with no page open', 
     assert.match(R.output(), /The first review of PR #3 could not start 3 times/);
     const row = (await R.call('GET', '/floor')).body.sessions.find((x) => x.terminal === d.id);
     assert.strictEqual(row.reviewWaits, true, 'the Floor keeps showing it until someone acts');
+    const saved = JSON.parse(fs.readFileSync(path.join(R.home, '.office-world', 'deliveries.json'), 'utf8')).t;
+    assert.ok(saved.find((x) => x.to === 'lead' && x.key === 'review-limit ' + pr), 'a message waits for the Lead');
+    const other = path.join(R.home, 'nowhere.git');
+    sh(R.home, 'init', '-q', '--bare', other);
+    sh(repo, 'push', '-qf', other, 'HEAD:refs/pull/3/head');
+    assert.strictEqual((await R.call('POST', '/reviews', { again: true })).body.again, true);
+    await pushes(d); await say(d, 'Stop');
+    await stop(await newReviewer(pr));
+    const left = JSON.parse(fs.readFileSync(path.join(R.home, '.office-world', 'deliveries.json'), 'utf8')).t;
+    assert.ok(!left.find((x) => x.key === 'review-limit ' + pr), 'the follow-up after the push takes the Lead\'s message with it');
     await stop(d);
   });
 

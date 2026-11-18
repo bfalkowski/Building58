@@ -88,7 +88,7 @@ test('a merge verdict does not merge before the comment check has told the Dev o
   await t.test('once a check sees it, the Dev is told, and the merge comes only after that', async () => {
     c.failApi = null; c.answer();
     assert.strictEqual((await c.R.call('POST', '/settings', { values: { reviewPollSeconds: 1 } })).status, 200);
-    await until(() => c.merged().includes(PR + ' --merge --match-head-commit ' + c.head), 'the merge', 200);
+    await until(() => c.merged().includes(PR + ' --merge --match-head-commit ' + c.head), 'the merge');
     assert.ok((await c.task()).history.some((h) => h.type === 'review' && /^Told the Dev/.test(h.note || '')), 'the Dev was told before the merge');
   });
 });
@@ -102,7 +102,7 @@ test('a review GitHub lists late holds the merge until a check lists it', async 
   await held(c);
   c.api['repos/acme/widgets/issues/7/comments'] = c.review; c.answer();
   assert.strictEqual((await c.R.call('POST', '/settings', { values: { reviewPollSeconds: 1 } })).status, 200);
-  await until(() => c.merged().includes(PR + ' --merge --match-head-commit ' + c.head), 'the merge', 200);
+  await until(() => c.merged().includes(PR + ' --merge --match-head-commit ' + c.head), 'the merge');
   assert.ok((await c.task()).history.some((h) => h.type === 'review' && /^Told the Dev/.test(h.note || '')), 'the Dev was told before the merge');
 });
 

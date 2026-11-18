@@ -161,7 +161,7 @@ test('every desk is taken and an ending session hangs: Autopilot stops its own D
     assert.ok(a.notes.some((x) => /^Stopped .*task \w+\) to free a desk: its task is Done, /.test(x.text)), JSON.stringify(a.notes));
     assert.ok(!(await o.terminals()).some((x) => x.id === mine.id), 'its own Done Dev was stopped');
     assert.strictEqual((await o.started(next)).by, 'Autopilot');
-  } finally { process.kill(bridge, 'SIGCONT'); }
+  } finally { try { process.kill(bridge, 'SIGCONT'); } catch (e) { /* the relay may have ended it by then */ } }
 });
 
 // The WIP limit counts every task being built, Autopilot's or not, while Autopilot's own limit counts

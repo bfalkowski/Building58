@@ -66,7 +66,11 @@ tasks.events.on('state', async (channel, task) => {
 tasks.onClean(async (channel, task) => {
   if (!task.ticket) return;
   const t = await store.get(channel, task.ticket);
-  if (t && t.createdAt === task.ticketAt) await store.update(channel, t.id, { status: 'done' });
+  const prs = [...new Set((task.history || []).filter((h) => h.type === 'pr' && h.pr).map((h) => h.pr).concat(task.pr ? [task.pr] : []))];
+  if (!t || t.createdAt !== task.ticketAt) return;
+  await store.update(channel, t.id, { status: 'done' });
+  if (!prs.length) return;
+  try { await store.update(channel, t.id, { taskPrs: prs }); } catch (e) { console.error('Ticket store (' + store.name + ') could not keep the PRs of its task on ' + t.id + ', so Merged elsewhere will not refuse them: ' + e.message); }
 });
 
 if (store.local) chat.onTicketSummary(async (channel, id, ticketAt, summary) => {
@@ -202,7 +206,7 @@ function prOwner(channel, pr, ticket, all) {
   const same = (x) => typeof x === 'string' && x.toLowerCase() === pr.toLowerCase();
   const task = tasks.list(channel).find((x) => same(x.pr) || (x.history || []).some((h) => h.type === 'pr' && same(h.pr)));
   if (task) return 'task ' + task.id + (task.ticket ? ' (' + task.ticket + ')' : '') + ' · ' + task.title;
-  const other = all.find((t) => t.id !== ticket.id && same(t.pr));
+  const other = all.find((t) => t.id !== ticket.id && (same(t.pr) || (t.taskPrs || []).some(same)));
   return other ? 'ticket ' + other.id + ' · ' + other.title : null;
 }
 
@@ -296,10 +300,7 @@ const notReady = (agent, what, state) => [agent ? 403 : 409, { ok: false, error:
 const setBy = (agent, what) => ({ orderedBy: !agent ? 'you' : agent.lead ? 'Lead' : 'PM', orderedWhat: what });
 const NOT_YOURS = 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.';
 function sessionMayOrder(channel, agent) {
-  if (agent.lead) {
-    if (!config.get('leadOrder')) return 'The person has not let the Lead set priority. They turn it on with Let the Lead set priority in Settings. Until then, recommend an order and let them set it.';
-    return terminal.all(channel).includes(agent) ? null : 'This session is no longer running as the Lead.';
-  }
+  if (agent.lead) return config.get('leadOrder') ? null : 'The person has not let the Lead set priority. They turn it on with Let the Lead set priority in Settings. Until then, recommend an order and let them set it.';
   if (agent.role !== 'pm') return NOT_YOURS;
   if (!config.get('pmOrder')) return 'The person has not let the PM set the order. They turn it on with Let the PM set the order in Settings. Until then, recommend an order and let them set it.';
   const newest = terminal.all(channel).filter((t) => t.role === 'pm').sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))[0];

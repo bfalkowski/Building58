@@ -7,6 +7,11 @@
 // a relay or other child that no cleanup stopped keeps the file running after its last test. So each
 // file also has a time limit of its own, TEST_FILE_SECONDS (600). A file still running then is stopped
 // with everything it started, and fails with a message that says so, and the run goes on (T-184).
+// Each file runs as node <file>, not under node --test, so the file's own process is the child here.
+// node --test waits for every process that holds its child's output, so a file that left one running
+// in a group of its own (as the session host is) never ended, and its time limit stopped only the
+// group. Now a file whose process has ended, but whose output something still holds after
+// HELD_SECONDS (5), fails with a message that says so, and the run goes on (T-170).
 // Each file runs with its own empty HOME, removed when it ends, and without the room settings of
 // the session that runs the tests (OFFICE_*, RELAY_*, PORT, HOST). Some tests load relay modules in their
 // own process, and those keep their files under ~/.office-world, so with your HOME they would read
@@ -25,6 +30,7 @@ const inFolder = (dir) => fs.readdirSync(dir).filter((f) => f.endsWith('.test.js
 const files = asked.length ? asked.map((f) => path.resolve(f)).flatMap((f) => (fs.statSync(f).isDirectory() ? inFolder(f) : [f])) : inFolder(__dirname);
 const JOBS = Math.max(1, Number(process.env.TEST_JOBS) || 6);
 const LIMIT = Math.max(1, Number(process.env.TEST_FILE_SECONDS) || 600);
+const HELD_SECONDS = 5;
 // Playwright looks for its browser under HOME, so the browser tests are told where it is under yours.
 const CACHE = { darwin: path.join(os.homedir(), 'Library', 'Caches'), win32: process.env.LOCALAPPDATA }[process.platform] || process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
 const BROWSERS = process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(CACHE || os.homedir(), 'ms-playwright');
@@ -43,25 +49,32 @@ function runOne(file) {
     const started = Date.now();
     let out = '';
     const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-test-home-')));
-    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(OFFICE_|RELAY_)/.test(k) && k !== 'PORT' && k !== 'HOST'));
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(OFFICE_|RELAY_)/.test(k) && !['PORT', 'HOST', 'NODE_TEST_CONTEXT'].includes(k)));
     // Its own process group, so a file that runs out of time is stopped with every process it started.
     // Those hold its output open, and the file is not over until they let go. Windows has no groups.
     const group = process.platform !== 'win32';
-    const child = spawn(process.execPath, ['--test', ...timeout, file], { env: { ...env, HOME: home, PLAYWRIGHT_BROWSERS_PATH: BROWSERS }, stdio: ['ignore', 'pipe', 'pipe'], detached: group });
+    const child = spawn(process.execPath, [...timeout, file], { env: { ...env, HOME: home, PLAYWRIGHT_BROWSERS_PATH: BROWSERS }, stdio: ['ignore', 'pipe', 'pipe'], detached: group });
     if (group) running.add(child.pid);
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { out += d; });
-    let late = false;
-    const limit = setTimeout(() => {
-      late = true;
-      try { if (group) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch (e) { /* already gone */ }
-    }, LIMIT * 1000);
-    child.on('close', (code) => {
-      clearTimeout(limit); running.delete(child.pid);
+    let late = false, held = false, wait = null, over = false;
+    const stopAll = () => { try { if (group) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch (e) { /* already gone */ } };
+    const limit = setTimeout(() => { late = true; stopAll(); }, LIMIT * 1000);
+    const end = (code) => {
+      if (over) return;
+      over = true; clearTimeout(limit); clearTimeout(wait); running.delete(child.pid);
       if (late) out += '\n' + path.basename(file) + ' did not end within ' + LIMIT + ' seconds, so it was stopped. A test may have left a relay or other process running.\n';
       fs.rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-      resolve({ file, ok: code === 0 && !late, out, seconds: Math.round((Date.now() - started) / 1000) });
+      resolve({ file, ok: code === 0 && !late && !held, out, seconds: Math.round((Date.now() - started) / 1000) });
+    };
+    child.on('exit', (code) => {
+      wait = setTimeout(() => {
+        held = true;
+        out += '\n' + path.basename(file) + ' ended, but a process it started still held its output ' + HELD_SECONDS + ' seconds later, so the file failed. A test may have left a relay, session host or other process running in a group of its own.\n';
+        stopAll(); child.stdout.destroy(); child.stderr.destroy(); end(code);
+      }, HELD_SECONDS * 1000);
     });
+    child.on('close', (code) => end(code));
   });
 }
 

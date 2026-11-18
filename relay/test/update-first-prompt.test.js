@@ -73,7 +73,7 @@ test('a reviewer started while an update waits gets its first prompt then, and o
 
   await t.test('after the restart the reviewer is back, and its prompt is not typed again', async () => {
     await say(reviewer.sessionId, 'Stop');
-    await until(async () => { try { return (await update()).run !== run; } catch (e) { return false; } }, 'the relay to restart', 200);
+    await until(async () => { try { return (await update()).run !== run; } catch (e) { return false; } }, 'the relay to restart');
     const back = await until(async () => { try { return (await R.call('GET', '/terminals')).body.terminals.find((x) => x.sessionId === reviewer.sessionId); } catch (e) { return null; } }, 'the reviewer to come back');
     await sleep(2500);  // time for a prompt still owed to be typed
     assert.strictEqual(await typed(back.id), 1, 'typed once');

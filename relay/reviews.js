@@ -22,8 +22,9 @@
 //
 // Each PR gets at most MAX_AUTO_REVIEWS automatic reviews, the first one included. A push after that
 // waits on the person: the Floor says so, and the Lead gets a saved message. Get a review is the
-// person's own and is not counted, though it asks for a verdict like an automatic review. Which review starts, and when, is office/reviews.js, which the page
-// also loads for Get a review. The switches, the counts and the commit each PR's last review read are
+// person's own and is not counted, though it asks for a verdict like an automatic review. Which
+// review starts, and when, is office/reviews.js, which the page also loads for Get a review. The
+// switches, the counts and the commit each PR's last review read are
 // kept in RELAY_REVIEWS_FILE, so a restart keeps them.
 //
 // The Lead asks for a review (T-98): POST /reviews/lead with { pr }, from ticket.js review, while the person's
@@ -294,7 +295,7 @@ checkouts.onReview((channel, pr, commit, reviewer) => {
   const c = chOf(channel);
   const rec = c.prs[pr] || (c.prs[pr] = { count: 0, head: null, pending: null, waits: false });
   rec.head = commit; rec.reviewedAt = Date.now();
-  delete rec.failed;
+  if (rec.failed) { delete rec.failed; delivery.drop(channel, 'review-limit ' + pr); }
   if (!starting.has(channel + ' ' + pr)) { rec.waits = false; delete rec.first; rec.why = null; delivery.drop(channel, 'review-limit ' + pr); delivery.drop(channel, 'pipeline ' + pr); }
   save();
 });
@@ -408,8 +409,8 @@ function owe(channel, pr, { from, dev, head }) {
 
 function deskOf(channel, pr) {
   const r = pr && recOf(channel, pr);
-  const desk = !!(r && r.first && r.first.desk), retry = !!(r && r.first && r.first.tries);
-  return r ? { count: r.count || 0, waits: !!r.waits, held: !desk && !retry && !!(r.first || (r.pending && r.why)), desk, failed: !!r.failed } : null;
+  const desk = !!(r && r.first && r.first.desk), retry = !desk && !!(r && r.first && r.first.tries);
+  return r ? { count: r.count || 0, waits: !!r.waits, held: !desk && !retry && !!(r.first || (r.pending && r.why)), desk, retry, failed: !!r.failed } : null;
 }
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, startText, stateOf, owe };
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe };

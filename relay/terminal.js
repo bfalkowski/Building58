@@ -186,7 +186,7 @@ const briefHeld = (t) => t.state !== 'idle' || (t.spoke && !t.hooked);
 const autopilotOn = (channel) => require('./autopilot.js').isOn(channel);
 function briefLead(channel, t) {
   t.owesBrief = true;
-  delivery().save(channel, { key: BRIEF_KEY, to: 'lead', terminal: t.id, sessionId: t.sessionId, first: true, text: (leadBrief(__dirname, { merge: !!t.merge, autopilot: autopilotOn(channel) }) + skills.brief('lead')).trim(), on: (what, why) => {
+  delivery().save(channel, { key: BRIEF_KEY, to: 'lead', terminal: t.id, sessionId: t.sessionId, first: true, text: (leadBrief(__dirname, { merge: !!t.merge, autopilot: autopilotOn(channel), order: !!config.get('leadOrder') }) + skills.brief('lead')).trim(), on: (what, why) => {
     t.owesBrief = false; saveSessions();
     if (what !== 'delivered') { console.error('The Lead was not briefed: ' + why); return; }
     if (t.lead && UUID.test(t.sessionId)) { try { saveLead(channel, t); } catch (e) { console.error('Could not save the Lead: ' + e.message); } }
@@ -196,6 +196,7 @@ function rebriefLead(channel) {
   const t = leadOf(channel);
   if (t && !t.exited) briefLead(channel, t);
 }
+config.onChange((names) => { if (names.includes('leadOrder')) for (const channel of channels.keys()) rebriefLead(channel); });
 const SESSIONS_FILE = state.file('sessions.json', 'RELAY_SESSIONS_FILE');
 let lastRun = {};
 try { lastRun = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8')); } catch (e) { lastRun = {}; }
@@ -437,9 +438,9 @@ const CSI = /\x1b\[[0-?]*[ -/]*[@-~]/, OSC = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/
 const CHARSET = /\x1b[()][A-Za-z0-9]/, ANY_OTHER_ESCAPE = /\x1b./;
 const ANSI = new RegExp([CSI, OSC, DCS, CHARSET, ANY_OTHER_ESCAPE].map((r) => r.source).join('|'), 'g');
 const X10_MOUSE = /\x1b\[M[\s\S]{3}/g;
-let updating = () => false, restarting = () => false;
-const holdWhileUpdating = (fn, restartFn) => { updating = fn; if (restartFn) restarting = restartFn; };
-const heldForUpdate = (t, brief) => (brief === 'prompt' ? restarting() : updating() && !t.refresh);
+let updating = () => false, restarting = () => false, holding = () => false;
+const holdWhileUpdating = (fns) => { ({ updating, restarting, holding } = fns); };
+const heldForUpdate = (t, brief) => (brief === 'prompt' ? restarting() : holding() && !t.refresh);
 
 function owePrompt(t, text) {
   t.owesPrompt = text || null;
@@ -533,7 +534,7 @@ function noteHook(channel, ev) {
     if (moved && sid && !((Number(ev.at) || Date.now()) < (moved.hookAt || 0))) {
       moved.hooked = true;
       const was = moved.sessionId;
-      moved.sessionId = UUID.test(ev.full_session_id || '') ? ev.full_session_id : sid; moved.talked = ev.source === 'resume' || (ev.source === 'compact' && moved.sessionId === was && moved.talked); if (!moved.task && !moved.role) moved.title = null;
+      moved.sessionId = UUID.test(ev.full_session_id || '') ? ev.full_session_id : sid; moved.talked = ev.source === 'resume' || (ev.source === 'compact' && moved.sessionId === was && moved.talked); if (!moved.task && !moved.role && !(ev.source === 'compact' && moved.sessionId === was)) moved.title = null;
       if ((moved.board || moved.starts || moved.merge) && moved.sessionId !== was) { try { clearSavedGrants(channel); } catch (e) { console.error('Could not save the Lead: ' + e.message); } }
       if (moved.sessionId !== was) { moved.state = 'idle'; moved.message = null; moved.customTitle = null; }
       if (moved.who && namer) namer(channel, moved);
@@ -773,7 +774,7 @@ async function connectHost(log) {
     log('The session host stopped, so every session ended with it. ' + (supervised ? 'The relay restarts and brings them back.' : 'The relay stops. Start it again and they come back.'));
     closing = true; process.exit(supervised ? require('./supervisor.js').RESTART : 1);
   });
-  await link.connect();
+  await link.connect(log);
 }
 function stillRunning(channel, saved) {
   const back = saved && saved.terminal ? link.peek(saved.terminal) : null;

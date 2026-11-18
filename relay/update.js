@@ -5,7 +5,8 @@
 // folder stays as it was, so the old relay never serves new pages, the global hooks never run new code
 // against the old relay, and calling the restart off leaves nothing behind. The sessions keep running
 // in the session host, and the new relay takes each one back (relay/sessions.js).
-// See docs/manual/running.html#update.
+// While it waits, it holds saved messages only for RELAY_UPDATE_HOLD_MS, and it never gives up waiting.
+// See docs/manual/running.html#update and #update-hold.
 //
 // It runs git on this computer, so like the terminal it answers only the room page on this machine,
 // and only while RELAY_TERMINAL=1.
@@ -18,6 +19,7 @@ const checkouts = require('./checkouts.js');
 const huddles = require('./huddles.js');
 const { RESTART } = require('./supervisor.js');
 const coo = require('./coo.js');
+const hostLink = require('./host-link.js');
 const rollback = require('./rollback.js');
 const config = require('./config.js');
 const { livenessOf, jobsOf } = require('./liveness.js');
@@ -35,7 +37,12 @@ function rolledBack() { const r = rollback.read().rollback; return r && LOADED &
 let job = null;
 let pulling = false;
 let lastNote = null;
-terminal.holdWhileUpdating(() => !!job, () => !!job && job.state === 'restarting');
+const HOLD = () => config.get('updateHoldMinutes') * 60 * 1000;
+terminal.holdWhileUpdating({
+  updating: () => !!job,
+  restarting: () => !!job && job.state === 'restarting',
+  holding: () => !!job && (job.state === 'restarting' || Date.now() - Date.parse(job.startedAt) < HOLD())
+});
 
 const isRelayFile = (f) => f.startsWith('relay/') && !f.startsWith('relay/test/');
 const LOADED_ONCE = ['relay/supervisor.js', 'relay/session-host.js', 'relay/pty-bridge.py'];
@@ -173,7 +180,7 @@ async function handle(req, res, channel, rest, ctx) {
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'Update needs the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
   let out;
-  if (req.method === 'GET') out = [200, { ok: true, dir: DIR, branch: BRANCH, run: RUN, update: view(), note: lastNote, rollback: rolledBack() }];
+  if (req.method === 'GET') out = [200, { ok: true, dir: DIR, branch: BRANCH, run: RUN, update: view(), note: lastNote, rollback: rolledBack(), host: hostLink.gapWords() }];
   else if (req.method === 'POST') out = await update(await ctx.readJson(req), ctx, channel);
   if (!out) { ctx.problem(res, 404, 'not_found', 'Unknown update route.'); return true; }
   ctx.send(res, out[0], out[1]);

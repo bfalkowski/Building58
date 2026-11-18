@@ -13,7 +13,7 @@ const state = require('./state.js');
 const terminal = require('./terminal.js');
 const delivery = require('./delivery.js');
 const tasks = require('./tasks.js');
-const { git, excludeWorktrees, mainCheckout, WORKTREES } = tasks;
+const { git, excludeWorktrees, linkModules, mainCheckout, WORKTREES } = tasks;
 const history = require('./ticket-history.js');
 const { claim } = require('./lockfile.js');
 
@@ -216,13 +216,13 @@ const onReview = (fn) => { reviewSeen = fn; };
 let askOf = () => '';
 const useAsk = (fn) => { askOf = fn; };
 let making = 0;
-async function create(channel, body, ctx) {
+async function create(channel, body, ctx, ask) {
   making++;
-  try { return await make(channel, body, ctx); } finally { making--; }
+  try { return await make(channel, body, ctx, ask); } finally { making--; }
 }
-async function make(channel, body, ctx) {
+async function make(channel, body, ctx, ask) {
   const from = terminal.expand(body.from), pr = body.pr ? String(body.pr) : null;
-  const prompt = body.prompt ? String(body.prompt) + (pr ? require('./skills.js').brief('reviewer').trimEnd() : '') : '';
+  const prompt = body.prompt ? String(body.prompt) : '';
   const unlessAt = /^[0-9a-f]{40}$/.test(String(body.unlessAt || '')) ? String(body.unlessAt) : null;
   if (pr && !PR_URL.test(pr)) return [400, { ok: false, error: 'bad_pr', message: 'A PR link looks like https://github.com/owner/repo/pull/1.' }];
   if (prompt.length > MAX_PROMPT) return [400, { ok: false, error: 'bad_prompt', message: 'Keep the prompt to ' + MAX_PROMPT + ' characters.' }];
@@ -239,6 +239,7 @@ async function make(channel, body, ctx) {
     await excludeWorktrees(repo);
     const refused = pr ? await forReview(c, top, pr, unlessAt) : await forWorker(c, top);
     if (refused) return refused;
+    await linkModules(repo, c.path);
   } catch (e) {
     if (c.ref) await git(repo, ['update-ref', '-d', c.ref]).catch(() => {});
     return [500, { ok: false, error: 'git', message: e.message }];
@@ -256,7 +257,8 @@ async function make(channel, body, ctx) {
   save();
   if (pr && reviewSeen) reviewSeen(channel, pr, c.commit, started.body.id);
   if (pr) noteReviewer(channel, pr, started.body.id, body.by === 'Lead' ? 'Lead' : body.auto ? 'automatic review' : 'you');
-  if (prompt) delivery.promptOnce(channel, started.body.id, prompt, (problem) => { if (problem) ctx.log('The review of ' + pr + ' did not get its prompt: ' + problem); });
+  const typed = prompt && pr ? prompt + require('./skills.js').brief('reviewer').trimEnd() + (ask ? askOf(channel) : '') : prompt;
+  if (typed) delivery.promptOnce(channel, started.body.id, typed, (problem) => { if (problem) ctx.log('The review of ' + pr + ' did not get its prompt: ' + problem); });
   return [201, Object.assign({}, started.body, { checkout: view(channel, c) })];
 }
 const PM_NOTES = {
@@ -278,6 +280,7 @@ async function forPm(channel, { top, base, title, cols, rows }, ctx) {
       c.commit = await git(repo, ['rev-parse', checked.start + '^{commit}']);
       await excludeWorktrees(repo);
       await git(repo, ['worktree', 'add', '--detach', c.path, c.commit]);
+      await linkModules(repo, c.path);
     } catch (e) {
       ctx.log('The PM reads ' + top + ' itself, with no checkout of its own: ' + unsecret(e.message));
       const r = terminal.start(channel, own, ctx);
@@ -303,7 +306,8 @@ function noteReviewer(channel, pr, id, by) {
   const t = terminal.find(channel, id);
   if (on && t) history.add(channel, on, { stage: 'reviewer', role: 'reviewer', by, task: on.task, pr }, t);
 }
-const view = (channel, c) => Object.assign({}, c, { running: terminal.runningIn(c.path) });
+const ownerOf = (c) => (c.kind === 'pm' ? 'the PM' : null);
+const view = (channel, c) => Object.assign({}, c, { running: terminal.runningIn(c.path), owner: ownerOf(c) });
 const clean = (channel, c, body) => inTurn(c, async () => {
   if (!listOf(channel).includes(c)) return [200, { ok: true, removed: c.id, branches: [] }];
   if (terminal.runningIn(c.path)) return [409, { ok: false, error: 'in_use', message: 'A session is still running in this checkout. Stop it first.' }];
@@ -330,8 +334,7 @@ async function handle(req, res, channel, rest, ctx) {
   if (!id && req.method === 'GET') out = [200, { ok: true, checkouts: listOf(channel).map((c) => view(channel, c)) }];
   else if (!id && req.method === 'POST') {
     const body = await ctx.readJson(req);
-    if (body.pr && body.prompt) body.prompt = String(body.prompt) + askOf(channel);
-    out = await create(channel, body, ctx);
+    out = await create(channel, body, ctx, !body.auto);
     if (body.pr && out[0] >= 400) ctx.log('No reviewer for ' + body.pr + ': ' + out[1].message);
     const task = body.pr && out[0] < 400 && !out[1].unchanged && tasks.list(channel).find((x) => x.pr === body.pr);
     if (task) { tasks.record(task, { type: 'review_asked', by: ctx.agent ? 'Lead' : 'you' }); tasks.save(); }

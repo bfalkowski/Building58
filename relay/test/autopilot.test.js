@@ -267,6 +267,12 @@ test('Get a review asks for a verdict, and its merge verdict merges, while one w
     const reviews = (await R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR);
     assert.strictEqual(reviews.count, 0, 'Get a review is not counted toward the automatic review limit');
   });
+
+  await t.test('the brief and the ask do not count toward the prompt limit, which is only for what the page sends', async () => {
+    const r = await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: 'x'.repeat(8000) });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual((await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: 'x'.repeat(8001) })).status, 400);
+  });
 });
 
 // T-186: June's fixes were still uncommitted when PR 141 merged, so they needed another PR. Before a merge,
@@ -363,7 +369,7 @@ test('a Dev reply with the hold mark sends a merge-verdict PR to the person, eve
   await until(async () => (await ap()).prs.some((p) => p.verdict === 'merge' && /^Its Dev is working/.test(p.why || '')), 'the wait for the Dev');
   assert.strictEqual(asked(), 0, 'no comment check while they are off');
   assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 3600 } })).status, 200);
-  await until(async () => ((await task()).reviews || {}).checkedAt, 'the first comment check to end', 150);
+  await until(async () => ((await task()).reviews || {}).checkedAt, 'the first comment check to end');
   assert.strictEqual(asked(), 1, 'one comment check read the comments');
   // The Dev's reply, after the last poll: a finding marked non-blocking is a bug. It pushes nothing, and stops.
   const n = asked();
@@ -412,13 +418,16 @@ test('a merge review of a newer commit clears a Dev\'s hand-over and merges, and
     head = sh(wt, 'rev-parse', 'HEAD'); answer();
   };
   const review = async (id) => {
-    const r = (await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: prBrief(PR) })).body;
+    const got = await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: prBrief(PR) }), r = got.body;
+    assert.strictEqual(got.status, 201, JSON.stringify(r));
     const token = { 'X-Office-Token': await until(() => { try { return sessionToken(r.sessionId); } catch (e) { return null; } }, 'its token') };
     assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, token)).status, 200);
     await say(r, 'UserPromptSubmit');
     await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-' + id } });
     await say(r, 'Stop');
     await until(async () => !(await terminals()).some((y) => y.id === r.id), 'the reviewer to leave');
+    // Its checkout is removed after that, and a fetch for the next review while git removes it can fail.
+    await until(async () => !(await R.call('GET', '/checkouts')).body.checkouts.some((c) => c.id === r.checkout.id), 'its checkout to go');
   };
   commit();
   await say(dev, 'UserPromptSubmit');  // the Dev is in a turn, so the first merge verdict waits for it
