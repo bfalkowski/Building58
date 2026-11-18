@@ -47,6 +47,8 @@ function labelsFrom(value, all, agent) {
 const MOVES = { triage: ['ready', 'rejected', 'done'], ready: ['rejected', 'done'], rejected: ['triage'] };
 const PR_LINK = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/[1-9]\d{0,9}$/;
 const MAX_TITLE = 80, MAX_BODY = 8000, MAX_TRIAGE = 20;
+const PM_PARTS = ['What to build', 'Acceptance criteria', 'Blocked by', 'Out of scope'];
+const partsMissing = (text) => PM_PARTS.filter((part) => !new RegExp('^[\\s#*_>-]*' + part + '\\b', 'im').test(text));
 const CLI = path.join(__dirname, 'ticket.js');
 
 function openStore() {
@@ -117,6 +119,8 @@ async function create(channel, body, agent) {
   if (title.length > MAX_TITLE) return [400, { ok: false, error: 'bad_title', message: 'Keep the title to ' + MAX_TITLE + ' characters.' }];
   const text = clean(body.body);
   if (text.length > MAX_BODY) return [400, { ok: false, error: 'bad_body', message: 'Keep the body to ' + MAX_BODY + ' characters.' }];
+  const missing = agent && agent.role === 'pm' ? partsMissing(text) : [];
+  if (missing.length) return [400, { ok: false, error: 'bad_body', message: 'A PM ticket\'s body has the parts What to build, Acceptance criteria, Blocked by and Out of scope, each at the start of its own line, such as "Blocked by: none". Missing: ' + missing.join(', ') + '.' }];
   const priority = body.priority === undefined ? 'normal' : String(body.priority);
   if (!PRIORITIES.includes(priority)) return [400, { ok: false, error: 'bad_priority', message: 'Priority is one of: ' + PRIORITIES.join(', ') + '.' }];
   const from = agent ? agent.cwd : terminal.expand(body.repo);
@@ -140,9 +144,11 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   if (error) return error;
   const { labels, error: badLabels } = labelsFrom(askedLabels, all, agent);
   if (badLabels) return badLabels;
-  const blockedBy = [...new Set((Array.isArray(asked) ? asked : []).map(String))];
+  const blockedBy = [...new Set((Array.isArray(asked) ? asked : []).map((id) => String(id).trim()))];
+  const spaced = blockedBy.filter((id) => /\s/.test(id));
+  if (spaced.length) return [400, { ok: false, error: 'bad_blocker', message: 'Separate blocker ids with commas, not spaces: --blocked-by ' + blockedBy.flatMap((id) => id.split(/[\s,]+/)).filter(Boolean).join(',') + '.' }];
   const unknown = blockedBy.filter((id) => !all.some((t) => t.id === id));
-  if (unknown.length) return [400, { ok: false, error: 'bad_blocker', message: 'No such ticket: ' + unknown.join(', ') + '.' }];
+  if (unknown.length) return [400, { ok: false, error: 'bad_blocker', message: 'No such ticket: ' + unknown.join(', ') + '. Run ticket.js list to see the ids, and give each one that exists, separated by commas.' }];
   const { shapes, error: badShapes } = shapesFrom(askedShapes, all, null);
   if (badShapes) return badShapes;
   const live = all.filter((t) => t.status !== 'done' && t.status !== 'rejected');
@@ -481,7 +487,7 @@ function pmBrief(idea, mayOrder, notes) {
   return ('You are the product manager for this repo. Do not change any code, commit, or open a pull request. ' +
     'First read CLAUDE.md and docs/constitution.md, each if there is one. ' + notes + 'Then split the idea below into tickets, each one pull request for one developer. ' +
     'Write each body in four parts: What to build (the behavior the user sees), Acceptance criteria (each checked on its own, naming the seams to test at), Blocked by (tickets it waits for, or none), Out of scope. Describe behavior, not file paths. ' +
-    'File each with: node ' + CLI + ' create "Title" --body - <<\'EOF\', the body, then EOF; before << add --priority high, normal or low on each, --kind docs, tests, bug or feature (or another that ticket.js kinds lists) when you know it, and --blocked-by ID if one waits for another. ' +
+    'File each with: node ' + CLI + ' create "Title" --body - <<\'EOF\', the body, then EOF; before << add --priority high, normal or low on each, --kind docs, tests, bug or feature (or another that ticket.js kinds lists) when you know it, and --blocked-by ID,ID if one waits for others. ' +
     'File code tickets without changes to CLAUDE.md or docs/constitution.md: only a person merges a PR that changes them, so the code would wait too. ' +
     'Gather wording changes to those two files into one open ticket, the one in Triage or Ready whose title starts with "' + WORDING_TICKET + '", not one ticket per change: add each change to its body with node ' + CLI + ' edit ID --body - <<\'EOF\', the whole body, then EOF, keeping what is there. If none is open, file "' + WORDING_TICKET + '". If create says Already filed because that title has started or was rejected, file it as "' + WORDING_TICKET + ', " and today\'s date, with --blocked-by the started one if it started. ' +
     'Each change you add takes back the person\'s approval, so the ticket waits for it again. Once the person merges it, the next change starts a new one. ' +
