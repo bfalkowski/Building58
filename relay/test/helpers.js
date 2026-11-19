@@ -36,6 +36,12 @@ function makeRepo(home, name) {
   execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init'], { cwd: repo });
   return repo;
 }
+// A session in a room runs the tests with the room's settings in its shell: RELAY_ROLLBACK, RELAY_WORLD,
+// OFFICE_* and CLAUDE_CODE_*. CI has none of them, so a test relay starts without them, and a test that
+// wants one sets it in extraEnv (T-222, relay/test/room-env.test.js). relay/test/run.js uses the same list,
+// and so does a test that runs the real hook, or the hook would send its event to the shell's own room.
+const ROOM_VARS = /^(RELAY_|OFFICE_|CLAUDE_CODE_)/;
+const withoutRoom = (env) => Object.fromEntries(Object.entries(env).filter(([k]) => !ROOM_VARS.test(k)));
 // Every test relay uses the same key, so a relay that lost its port to another run (a parallel
 // checkout, or another file here) would let the test talk to that run's relay instead. So the test
 // waits until its own child says it listens on its port, and tries a new port if it lost this one.
@@ -64,7 +70,8 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   // The supervisor runs no rollback check, and so no git of its own, unless a test sets RELAY_ROLLBACK: '1'
   // (relay/test/rollback.test.js), as an office session's shell does.
   // HOST is set here, so a HOST of your own (0.0.0.0, say) cannot move it off the address the test checks.
-  const env = { ...process.env, HOME: home, HOST: '127.0.0.1', PORT: String(port), RELAY_KEY: 'test-key', RELAY_TERMINAL: '1', RELAY_RESUME: '0', RELAY_LEAD: '0', RELAY_ROLLBACK: '0', RELAY_REVIEW_POLL_SECONDS: '0', RELAY_CHAT_POLL_SECONDS: '0', RELAY_MAIN_POLL_SECONDS: '0', RELAY_PIPELINE_POLL_SECONDS: '0', RELAY_LEAD_CHECK_MS: '0', RELAY_TOLD_CHECK_MS: '3600000', CLAUDE_CMD: path.join(__dirname, 'fake-claude.sh'), ...(extraEnv || {}) };
+  // Nor does the room of the shell that runs the test reach the relay: see withoutRoom.
+  const env = { ...withoutRoom(process.env), HOME: home, HOST: '127.0.0.1', PORT: String(port), RELAY_KEY: 'test-key', RELAY_TERMINAL: '1', RELAY_RESUME: '0', RELAY_LEAD: '0', RELAY_ROLLBACK: '0', RELAY_REVIEW_POLL_SECONDS: '0', RELAY_CHAT_POLL_SECONDS: '0', RELAY_MAIN_POLL_SECONDS: '0', RELAY_PIPELINE_POLL_SECONDS: '0', RELAY_LEAD_CHECK_MS: '0', RELAY_TOLD_CHECK_MS: '3600000', CLAUDE_CMD: path.join(__dirname, 'fake-claude.sh'), ...(extraEnv || {}) };
   let output = '', stopping = false;
   // options.root runs a copy of the relay from another folder (relay/test/rollback.test.js).
   const child = spawn('node', ['relay/server.js'], { cwd: (options && options.root) || ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -154,4 +161,4 @@ function sessionToken(sessionId) {
   if (!token) throw new Error('No token found for session ' + sessionId);
   return token;
 }
-module.exports = { relay, makeRepo, removeDir, sleep, until, sessionToken, sessionTokens, ROOT };
+module.exports = { relay, withoutRoom, makeRepo, removeDir, sleep, until, sessionToken, sessionTokens, ROOT };

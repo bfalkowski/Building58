@@ -13,7 +13,7 @@
 // group. Now a file whose process has ended, but whose output something still holds after
 // HELD_SECONDS (5), fails with a message that says so, and the run goes on (T-170).
 // Each file runs with its own empty HOME, removed when it ends, and without the room settings of
-// the session that runs the tests (OFFICE_*, RELAY_*, PORT, HOST). Some tests load relay modules in their
+// the session that runs the tests (OFFICE_*, RELAY_*, CLAUDE_CODE_*, PORT, HOST). Some tests load relay modules in their
 // own process, and those keep their files under ~/.office-world, so with your HOME they would read
 // your room's files and fight every other checkout that runs the tests at the same time.
 // Every run on this computer shares TEST_SLOTS (12) test slots, so at most that many files run at once
@@ -28,6 +28,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const { slots, DIR } = require('./slots.js');
+const { withoutRoom } = require('./helpers.js');
 
 const [major, minor] = process.versions.node.split('.').map(Number);
 const timeout = major > 21 || (major === 21 && minor >= 2) || (major === 20 && minor >= 11) ? ['--test-timeout=120000'] : [];
@@ -58,7 +59,7 @@ function runOne(file) {
     const started = Date.now();
     let out = '';
     const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-test-home-')));
-    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(OFFICE_|RELAY_)/.test(k) && !['PORT', 'HOST', 'NODE_TEST_CONTEXT'].includes(k)));
+    const env = Object.fromEntries(Object.entries(withoutRoom(process.env)).filter(([k]) => !['PORT', 'HOST', 'NODE_TEST_CONTEXT'].includes(k)));
     // Its own process group, so a file that runs out of time is stopped with every process it started.
     // Those hold its output open, and the file is not over until they let go. Windows has no groups.
     const group = process.platform !== 'win32';
