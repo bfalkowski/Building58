@@ -83,7 +83,7 @@
       <tr><td><code>RELAY_CHAT_KEEP</code></td><td class="plain"><code>200</code></td><td>How many posts each chat channel keeps. Older ones are dropped. See <a href="roles.html#chat">The chat board</a>.</td></tr>
       <tr><td><code>RELAY_CHAT_POLL_SECONDS</code></td><td class="plain"><code>60</code></td><td>How often the chat board asks <code>gh</code> about each task's PR, for a failing pipeline, a merge or a close. <code>0</code> turns it off.</td></tr>
       <tr><td><code>RELAY_MAIN_POLL_SECONDS</code></td><td class="plain"><code>60</code></td><td>How often the relay runs <code>git ls-remote --symref origin HEAD</code> in its own folder, the one <a href="running.html#update">Update</a> pulls into, to say in #office when origin's default branch moved. <code>0</code> turns it off. See <a href="roles.html#chat">The chat board</a>.</td></tr>
-      <tr><td><code>RELAY_CHAT_RETRY_MS</code></td><td class="plain"><code>30000</code></td><td>How often the relay tries again to delete a ticket's chat channel whose summary could not be kept.</td></tr>
+      <tr><td><code>RELAY_CHAT_RETRY_MS</code></td><td class="plain"><code>30000</code></td><td>How often the relay tidies the chat board: it forgets mention notes that went in and hands no longer raised.</td></tr>
     </tbody>
   </table>
 

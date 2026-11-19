@@ -81,6 +81,9 @@ if (store.local) chat.onTicketSummary(async (channel, id, ticketAt, summary) => 
   return true;
 });
 
+chat.onFindTicket((channel, id) => store.get(channel, id));
+const chatOf = (t) => ({ ticket: t.id, ticketAt: t.createdAt, title: t.title });
+
 const queues = new Map();
 function inTurn(channel, fn) {
   const run = (queues.get(channel) || Promise.resolve()).then(fn, fn);
@@ -157,6 +160,7 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   const rank = lastRank(all, priority, Date.now());
   const ticket = await store.create(channel, Object.assign({ title, body: text, priority, rank, repo, base, blockedBy }, shapes.length ? { shapes } : {}, kind ? { kind } : {}, labels.length ? { labels } : {}, { status: agent ? 'triage' : 'ready', createdBy: agent ? agentName(agent) : 'you' }, agent ? {} : { approvedBy: 'you' }));
   history.add(channel, ticket, { stage: 'filed', by: ticket.createdBy }, agent || null);
+  chat.openTicketRoom(channel, chatOf(ticket));
   filed(channel, ticket, agent, ticket.createdAt);
   return [201, { ok: true, ticket: await view(channel, ticket, all.concat(ticket)), likely: likelyTwins(ticket, live) }];
 }
@@ -181,6 +185,8 @@ async function move(channel, ticket, body, agent) {
     if (owner) return [409, { ok: false, error: 'pr_taken', message: pr + ' is already the PR of ' + owner + ', so it cannot mark ' + now.id + ' done. Give the PR that delivered ' + now.id + '.' }];
     const changes = Object.assign({ status: to }, now.proposal && (to === 'rejected' || to === 'done') ? { proposal: null } : {}, now.closedAs && to === 'triage' ? { closedAs: null, closedFor: null } : {}, to === 'done' ? { pr } : {}, to === 'ready' ? { approvedBy: agent ? 'Lead' : 'you' } : now.status === 'ready' ? { approvedBy: 'none' } : {});
     const moved = await store.update(channel, now.id, changes);
+    if (to === 'done' || to === 'rejected') chat.archiveTicketRoom(channel, now.id, now.createdAt, to === 'done' ? 'the ticket moved to Done' : 'the ticket was rejected');
+    else if (now.status === 'rejected') chat.openTicketRoom(channel, chatOf(moved));
     history.add(channel, now, to === 'ready' ? { stage: 'approved', by: agent ? 'Lead' : 'you' } : { stage: 'moved', from: now.status, to, by: agent ? 'Lead' : 'you' }, agent || null);
     return [200, { ok: true, ticket: await view(channel, moved, all) }];
   });
@@ -363,6 +369,7 @@ function edit(channel, ticket, body, agent) {
     const approvalTaken = !!agent && now.status === 'ready' && personApproved(now) && (what.includes('title') || what.includes('body'));
     if (approvalTaken) changes.approvedBy = 'none';
     const edited = await store.update(channel, now.id, changes);
+    if (what.includes('title')) chat.openTicketRoom(channel, chatOf(edited));
     history.add(channel, now, { stage: 'edited', by: !agent ? 'you' : agent.lead ? 'Lead' : 'PM', what }, agent || null);
     return [200, Object.assign({ ok: true, edited: what, ticket: await view(channel, edited, all.map((t) => (t.id === now.id ? edited : t))) }, approvalTaken ? { approvalTaken } : {})];
   });

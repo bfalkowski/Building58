@@ -5,9 +5,9 @@
 //   #office    the relay's own news: a ticket started, a PR opened, review comments, a pipeline that
 //              failed, a PR merged or closed, main moved on origin, a hand raised, the relay started.
 //              Sessions cannot post here.
-//   ticket     one per ticket, such as #T-39, made when the ticket starts. It is deleted when its PR
-//              merges or its task moves to Done. A short summary goes on the ticket first, and the
-//              posts themselves are not kept.
+//   ticket     one per ticket, such as #T-39, made when the ticket is filed. It is archived when its
+//              PR merges, its task moves to Done, or the ticket is done or rejected: kept to read, with
+//              no new posts. When the person deletes it, a short summary goes on the ticket first.
 //   fun        made and deleted by the person, such as #random. A session may post once a minute.
 //
 // The rules, which the tests in relay/test/chat.test.js hold it to:
@@ -18,6 +18,7 @@
 //   3. Every route answers only the room page and sessions on this computer (localOnly).
 //   4. Each chat channel keeps its newest KEEP posts, and drops older ones.
 //   5. The person can read and post from the page, and delete any chat channel.
+//   6. Nobody posts in an archived chat channel. It opens again when its ticket moves back.
 //
 // Like the terminal, this answers only while RELAY_TERMINAL=1.
 'use strict';
@@ -36,7 +37,7 @@ const { claim } = require('./lockfile.js');
 const FILE = state.file('chat.json', 'RELAY_CHAT_FILE');
 const config = require('./config.js');
 const KEEP = () => config.get('chatKeep');
-const MAX_TEXT = 500, MAX_FUN = 10, CLOSE_TRIES = 5, CLOSED_EVERY = 10;
+const MAX_TEXT = 500, MAX_FUN = 10, CLOSED_EVERY = 10;
 const GAP = { ticket: 5 * 1000, fun: 60 * 1000 };
 const MENTION_KEEP = 60 * 60 * 1000;
 const GH = process.env.GH_CMD || 'gh';
@@ -90,51 +91,65 @@ function announce(channel, text, ticket) {
   const words = clean(text, MAX_TEXT);
   add(roomOf(channel, 'office') || boardOf(channel).rooms[0], { from: 'office', by: 'relay', text: words });
   const room = ticket && roomOf(channel, ticket);
-  if (room && room.kind === 'ticket') add(room, { from: 'office', by: 'relay', text: words });
+  if (room && room.kind === 'ticket' && !room.archived) add(room, { from: 'office', by: 'relay', text: words });
   save();
 }
 
+const OPEN = ['triage', 'ready', 'started'];
 function openTicketRoom(channel, task) {
   if (!task.ticket || !/^[\w-]{1,64}$/.test(task.ticket)) return null;
-  const old = roomOf(channel, task.ticket);
-  if (old && old.kind === 'ticket' && old.ticketAt === task.ticketAt) return old;
+  const old = roomOf(channel, task.ticket), title = clean(task.title, 80);
+  if (old && old.kind === 'ticket' && old.ticketAt === task.ticketAt) {
+    const reopened = !!old.archived;
+    if (reopened) { old.archived = null; add(old, { from: 'office', by: 'relay', text: 'Open again for new posts.' }); }
+    if (title && old.title !== title) old.title = title;
+    save();
+    return reopened ? old : null;
+  }
   if (old) boardOf(channel).rooms = boardOf(channel).rooms.filter((r) => r !== old);
-  const room = newRoom(task.ticket, 'ticket', 'relay', { ticket: task.ticket, ticketAt: task.ticketAt, title: clean(task.title, 80) });
+  const room = newRoom(task.ticket, 'ticket', 'relay', { ticket: task.ticket, ticketAt: task.ticketAt, title, archived: null });
   boardOf(channel).rooms.push(room);
-  add(room, { from: 'office', by: 'relay', text: 'This is the chat channel for ' + task.ticket + ': ' + room.title + '. It is deleted when its PR merges or its task is Done. ' + (keepsSummary ? 'Only a short summary is kept, on the ticket.' : 'Nothing from it is kept.') });
+  add(room, { from: 'office', by: 'relay', text: 'This is the chat channel for ' + task.ticket + ': ' + room.title + '. When its PR merges or the ticket is done, it is archived: kept to read, with no new posts.' });
   save();
   return room;
 }
-let keepOnTicket = null, keepsSummary = false;
-const onTicketSummary = (fn) => { keepOnTicket = fn; keepsSummary = !!fn; };
-const removing = new Set();
-async function closeTicketRoom(channel, ticket, ticketAt, why, retry) {
+function archiveTicketRoom(channel, ticket, ticketAt, why) {
   const room = roomOf(channel, ticket);
-  if (!room || room.kind !== 'ticket' || (ticketAt && room.ticketAt !== ticketAt)) return false;
+  if (!room || room.kind !== 'ticket' || room.archived || (ticketAt && room.ticketAt !== ticketAt)) return false;
+  add(room, { from: 'office', by: 'relay', text: 'Archived because ' + why + '. It is kept to read, with no new posts.' });
+  room.archived = { at: new Date().toISOString(), why };
+  delete room.closeWhy; delete room.closeTries;
+  announce(channel, 'Archived #' + room.name + ' because ' + why + '. It is kept to read.');
+  log('Archived chat #' + room.name + ': ' + why + '.');
+  return true;
+}
+let keepOnTicket = null, findTicket = null;
+const onTicketSummary = (fn) => { keepOnTicket = fn; };
+const onFindTicket = (fn) => { findTicket = fn; };
+async function roomOrTicket(channel, name) {
+  const room = roomOf(channel, name);
+  if (room || !findTicket || !/^T-\d{1,9}$/i.test(name)) return room;
+  const t = await findTicket(channel, name.toUpperCase()).catch(() => null);
+  return t && OPEN.includes(t.status) ? openTicketRoom(channel, { ticket: t.id, ticketAt: t.createdAt, title: t.title }) || roomOf(channel, name) : null;
+}
+const removing = new Set();
+async function deleteTicketRoom(channel, room) {
   const key = channel + '/' + room.name;
   if (removing.has(key)) return 'busy';
   removing.add(key);
   try {
     let kept = false;
     if (keepOnTicket) {
-      try { kept = await keepOnTicket(channel, room.ticket, room.ticketAt, summaryOf(room, why)) === true; } catch (e) {
-        log('Could not keep a summary of #' + room.name + ' on its ticket, so the chat channel stays for now: ' + e.message);
-        if (!retry) return false;
-        room.closeTries = (room.closeTries || 0) + 1;
-        if (room.closeTries < CLOSE_TRIES) room.closeWhy = why;
-        else {
-          delete room.closeWhy; delete room.closeTries;
-          announce(channel, 'Could not keep a summary on ' + room.ticket + ' after ' + CLOSE_TRIES + ' tries, so #' + room.name + ' stays. Delete it on the page to try again.');
-        }
-        save();
+      try { kept = await keepOnTicket(channel, room.ticket, room.ticketAt, summaryOf(room, 'the person deleted it')) === true; } catch (e) {
+        log('Could not keep a summary of #' + room.name + ' on its ticket, so the chat channel stays: ' + e.message);
         return false;
       }
     }
     boardOf(channel).rooms = boardOf(channel).rooms.filter((r) => r !== room);
     save();
     const left = kept ? 'A short summary is on ' + room.ticket + '.' : keepOnTicket ? room.ticket + ' is gone, so nothing from it is kept.' : 'Nothing from it is kept.';
-    announce(channel, 'Deleted #' + room.name + ' because ' + why + '. ' + left);
-    log('Deleted chat #' + room.name + ': ' + why + '.');
+    announce(channel, 'Deleted #' + room.name + ' because the person deleted it. ' + left);
+    log('Deleted chat #' + room.name + ': the person deleted it.');
     return true;
   } finally { removing.delete(key); }
 }
@@ -170,9 +185,10 @@ function mention(channel, t, room) {
 }
 
 const lastPost = new Map();
-function post(channel, name, body, agent) {
-  const room = roomOf(channel, name);
+async function post(channel, name, body, agent) {
+  const room = await roomOrTicket(channel, name);
   if (!room) return [404, { ok: false, error: 'no_chat', message: 'There is no chat channel #' + name + '.' }];
+  if (room.archived) return [409, { ok: false, error: 'archived', message: '#' + room.name + ' was archived because ' + room.archived.why + '. It is kept to read, with no new posts.' }];
   const text = clean(body.text, MAX_TEXT + 1);
   if (!text) return [400, { ok: false, error: 'bad_text', message: 'A post needs some text.' }];
   if (text.length > MAX_TEXT) return [400, { ok: false, error: 'bad_text', message: 'Keep a post to ' + MAX_TEXT + ' characters.' }];
@@ -205,12 +221,9 @@ async function remove(channel, name) {
   const room = roomOf(channel, name);
   if (!room) return [404, { ok: false, error: 'no_chat', message: 'There is no chat channel #' + name + '.' }];
   if (room.kind === 'ticket') {
-    const done = await closeTicketRoom(channel, room.ticket, room.ticketAt, 'the person deleted it', false);
+    const done = await deleteTicketRoom(channel, room);
     if (done === 'busy') return [409, { ok: false, error: 'busy', message: 'The relay is deleting #' + room.name + ' already. Look again in a moment.' }];
-    if (!done) {
-      const later = room.closeWhy ? 'The relay is still trying to delete it by itself, because ' + room.closeWhy + '.' : 'It is deleted later only when its PR merges or its task moves to Done.';
-      return [502, { ok: false, error: 'store', message: 'Could not keep a summary on ' + room.ticket + ', so #' + room.name + ' stays. ' + later + ' Try again.' }];
-    }
+    if (!done) return [502, { ok: false, error: 'store', message: 'Could not keep a summary on ' + room.ticket + ', so #' + room.name + ' stays. Try again.' }];
   } else { boardOf(channel).rooms = boardOf(channel).rooms.filter((r) => r !== room); save(); }
   return [200, { ok: true, removed: room.name }];
 }
@@ -218,10 +231,10 @@ async function remove(channel, name) {
 const KIND_WORDS = { office: 'the relay\'s news', ticket: 'one ticket', fun: 'fun' };
 function roomView(room) {
   const last = room.posts[room.posts.length - 1];
-  return { name: room.name, kind: room.kind, about: room.kind === 'ticket' ? room.ticket + ' · ' + room.title : KIND_WORDS[room.kind], ticket: room.ticket, title: room.title, createdAt: room.createdAt, posts: room.posts.length, last: last ? last.n : 0, lastAt: last ? last.at : null };
+  return { name: room.name, kind: room.kind, about: room.kind === 'ticket' ? room.ticket + ' · ' + room.title : KIND_WORDS[room.kind], ticket: room.ticket, title: room.title, archived: room.archived || null, createdAt: room.createdAt, posts: room.posts.length, last: last ? last.n : 0, lastAt: last ? last.at : null };
 }
-function read(channel, name, url) {
-  const room = roomOf(channel, name);
+async function read(channel, name, url) {
+  const room = await roomOrTicket(channel, name);
   if (!room) return [404, { ok: false, error: 'no_chat', message: 'There is no chat channel #' + name + '.' }];
   const since = Number(url.searchParams.get('since')) || 0;
   const limit = Math.min(KEEP(), Math.max(1, Number(url.searchParams.get('limit')) || KEEP()));
@@ -258,12 +271,8 @@ tasks.events.on('pr', (channel, task) => {
 });
 tasks.events.on('state', (channel, task, from) => {
   if (!task.ticket) return;
-  if (task.state === 'done') closeTicketRoom(channel, task.ticket, task.ticketAt, 'its task moved to Done', true).catch((e) => log('Chat: ' + e.message));
-  else if (from === 'done') {
-    const old = roomOf(channel, task.ticket);
-    if (old && old.kind === 'ticket' && old.ticketAt === task.ticketAt) { delete old.closeWhy; delete old.closeTries; save(); return; }
-    if (openTicketRoom(channel, task)) announce(channel, task.ticket + ' moved back out of Done, so #' + task.ticket + ' is open again.', task.ticket);
-  }
+  if (task.state === 'done') archiveTicketRoom(channel, task.ticket, task.ticketAt, 'its task moved to Done');
+  else if (from === 'done' && openTicketRoom(channel, task)) announce(channel, task.ticket + ' moved back out of Done, so #' + task.ticket + ' is open again.', task.ticket);
 });
 function reviewNews(channel, task, count) {
   announce(channel, count + ' new review comment' + (count === 1 ? '' : 's') + ' on ' + prName(task.pr) + ' for ' + ticketWords(task) + '.', task.ticket);
@@ -292,7 +301,7 @@ async function checkPr(channel, task) {
   if (now.state === 'MERGED') tasks.noteMerged(task, now.mergedAt);
   if (now.state === 'MERGED' && (!was || was.state !== 'MERGED')) {
     announce(channel, prName(task.pr) + ' merged: ' + ticketWords(task) + '.');
-    if (task.ticket) await closeTicketRoom(channel, task.ticket, task.ticketAt, prName(task.pr) + ' merged', true);
+    if (task.ticket) archiveTicketRoom(channel, task.ticket, task.ticketAt, prName(task.pr) + ' merged');
   }
 }
 const prMerged = (channel, pr) => !!(pr && store[channel] && store[channel].prs && store[channel].prs[pr] && store[channel].prs[pr].state === 'MERGED');
@@ -318,9 +327,7 @@ const BACK_MS = 5 * 60 * 1000, began = Date.now();
 function tick() {
   for (const channel of Object.keys(store)) {
     const board = boardOf(channel);
-    for (const room of board.rooms.filter((r) => r.closeWhy)) {
-      closeTicketRoom(channel, room.ticket, room.ticketAt, room.closeWhy, true).catch((e) => log('Chat: ' + e.message));
-    }
+    for (const room of board.rooms.filter((r) => r.closeWhy)) archiveTicketRoom(channel, room.ticket, room.ticketAt, room.closeWhy);
     let changed = false;
     const notes = new Set(delivery.pending(channel).map((d) => d.key));
     for (const sid of Object.keys(board.mentions || {})) if (!notes.has('chat-' + sid)) { delete board.mentions[sid]; changed = true; }
@@ -349,12 +356,12 @@ async function handle(req, res, channel, rest, ctx) {
   let out;
   if (!name && req.method === 'GET') out = [200, { ok: true, keep: KEEP(), rooms: boardOf(channel).rooms.map(roomView) }];
   else if (!name && req.method === 'POST') out = create(channel, await ctx.readJson(req));
-  else if (name && !verb && req.method === 'GET') out = read(channel, name, url);
-  else if (name && !verb && req.method === 'POST') out = post(channel, name, await ctx.readJson(req), ctx.agent);
+  else if (name && !verb && req.method === 'GET') out = await read(channel, name, url);
+  else if (name && !verb && req.method === 'POST') out = await post(channel, name, await ctx.readJson(req), ctx.agent);
   else if (name && verb === 'delete' && req.method === 'POST') out = await remove(channel, name);
   if (!out) { ctx.problem(res, 404, 'not_found', 'Unknown chat route.'); return true; }
   ctx.send(res, out[0], out[1]);
   return true;
 }
 
-module.exports = { handle, noteHook, reviewNews, onTicketSummary, started, poll, announce, announceAll, prMerged, nameOf };
+module.exports = { handle, noteHook, reviewNews, onTicketSummary, onFindTicket, openTicketRoom, archiveTicketRoom, started, poll, announce, announceAll, prMerged, nameOf };
