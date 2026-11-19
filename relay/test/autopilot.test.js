@@ -258,9 +258,12 @@ test('Get a review asks for a verdict, and its merge verdict merges, while one w
 
   await t.test('a Get a review asks for a verdict with the automatic review\'s words, and merge merges', async () => {
     const r2 = await getAReview();
-    await until(async () => (await R.screen(r2.id)).includes('verdict merge if nothing blocks'), 'the verdict ask in the brief')
+    await until(async () => (await R.screen(r2.id)).includes('verdict merge only if no finding is blocking or fix now'), 'the verdict ask in the brief')
       .catch(async (e) => { console.log('SCREEN:', JSON.stringify(await R.screen(r2.id))); throw e; });
-    assert.match(await R.screen(r2.id), /Mark each finding blocking or not/);
+    const ask = (await R.screen(r2.id)).replace(/\s+/g, ' ');
+    assert.match(ask, /Mark each finding blocking, fix now or follow-up\./);
+    assert.match(ask, /Fix now: small and safe to fix in this PR, such as a wording fix, a missing test case, a named const or a doc line\./);
+    assert.match(ask, /or verdict fix if one is, so the Dev fixes it in this PR\./);
     assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, await token(r2))).status, 200);
     await post(r2);
     await until(() => merged().includes(PR + ' --merge --match-head-commit ' + head), 'the merge');

@@ -115,8 +115,9 @@ function gh(args, cwd) {
 }
 const git = (cwd, args) => new Promise((resolve, reject) => execFile('git', args, { cwd, timeout: 10000 }, (e, out) => (e ? reject(e) : resolve(out.trim()))));
 
-const verdictAsk = () => ' Mark each finding blocking or not: only a bug, or something that does not do what the PR says, blocks. Before you post, run node ' +
-  JSON.stringify(tickets.CLI) + ' verdict merge if nothing blocks, or verdict fix if something does. Then post.';
+const verdictAsk = () => ' Mark each finding blocking, fix now or follow-up. Blocking: a bug, or something that does not do what the PR says. ' +
+  'Fix now: small and safe to fix in this PR, such as a wording fix, a missing test case, a named const or a doc line. Follow-up: real work outside this PR. ' +
+  'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post.';
 reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(),
   since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; },
   freed: (channel, pr, text) => {
@@ -308,7 +309,7 @@ function askToMergeMain(channel, task, rec, pr) {
   if (rec.conflictAt === pr.headRefOid) return;
   rec.conflictAt = pr.headRefOid; save();
   delivery.save(channel, { key: 'autopilot-conflict ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
-    text: 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s non-blocking findings. A follow-up review checks how you resolved it.' });
+    text: 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s follow-up findings. A follow-up review checks how you resolved it.' });
   note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
 }
 const WAITS_FOR_ROOM = ['wip_limit', 'full', 'running'];

@@ -66,7 +66,7 @@ test('ticket.js ready', async (t) => {
   await t.test('run bare, it says what to check and what the note says', () => {
     const r = ready([]);
     assert.strictEqual(r.status, 1);
-    for (const words of ['a review of its current head is posted', 'every blocking finding is fixed', 'Reviews:', 'Findings:', 'Hand checks still open:', 'A new commit takes the label off']) assert.ok(r.stderr.includes(words), words);
+    for (const words of ['a review of its current head is posted', 'every blocking and fix-now finding is fixed', 'Reviews:', 'Findings:', 'Hand checks still open:', 'A new commit takes the label off']) assert.ok(r.stderr.includes(words), words);
     assert.strictEqual(read('posted.log'), '');
   });
 
