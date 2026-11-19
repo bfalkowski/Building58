@@ -15,9 +15,10 @@
 //      frees one of its own sessions the Lead may stop (freeADesk). If none is, it waits for a desk and
 //      tries again on its next look. It turns itself off only for a start that fails for another reason.
 // Reviews: relay/reviews.js starts the first review and, while Autopilot is on, a follow-up after each
-// push. Each review asks the reviewer for a verdict, merge or fix, which it gives with
-// ticket.js verdict before it posts. A verdict counts once its review is posted, and covers only the
-// commit the reviewer read. After MAX_ROUNDS verdicts that still say fix, the person decides.
+// push. A review that waits for a desk goes before a start, and is not a stall: it frees a desk by itself,
+// and the PR's line says whom it stopped, or that it may stop none (deskLine). Each review asks the
+// reviewer for a verdict, merge or fix, which it gives with ticket.js verdict before it posts. A verdict
+// counts once its review is posted, and covers only the commit the reviewer read. After MAX_ROUNDS verdicts that still say fix, the person decides.
 // It merges at most MAX_MERGES_A_DAY PRs a day, and never one that changes CLAUDE.md or the
 // constitution. After a merge it pulls main into the relay's folder (relay/update.js), which
 // restarts the relay once no session is busy if relay files changed. While that update waits, Autopilot
@@ -120,7 +121,14 @@ const verdictAsk = () => ' Mark each finding blocking, fix now or follow-up. Blo
   'Fix now: small and safe to fix in this PR, such as a wording fix, a missing test case, a named const or a doc line. Follow-up: real work outside this PR. ' +
   'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post.';
 reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(),
-  since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; } });
+  since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; },
+  freed: (channel, pr, text) => {
+    const task = tasks.list(channel).find((x) => x.pr === pr);
+    if (!isOn(channel) || !task || !mineTask(task)) return;
+    const rec = recOf(channel, pr);
+    rec.why = text; rec.act = 'wait'; save();
+    note(channel, (task.ticket || 'Task ' + task.id) + ': ' + text);
+  } });
 
 async function giveVerdict(channel, agent, kind) {
   const pr = agent.reviewOf || agent.pr;
@@ -164,6 +172,7 @@ terminal.onReviewTurnEnd(async (channel, t) => {
     const url = plan.reviewPostFor(comments, { login, since, commit: v.commit });
     if (!url || v.posted || rec.verdicts.some((x) => x.posted === url)) return;
     v.posted = url; save(); holdPushes(channel);
+    terminal.reviewFound(channel, t, url);
     prComments.reviewPosted(channel, t.reviewOf, url);
     note(channel, 'The review of PR ' + number(t.reviewOf) + ' at ' + v.commit.slice(0, 7) + ' is on the PR, though its post was not seen, so its verdict counts: ' + url);
   } catch (e) {
@@ -312,6 +321,7 @@ async function lookAt(channel, task) {
   const v = latest(rec);
   let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
   rec.why = d.why; rec.act = d.act;
+  if (d.act === 'wait') rec.why = reviews.deskLine(channel, task.pr) || rec.why;
   if (d.act === 'done') markDone(channel, task);
   else if (d.act === 'merge') {
     const c = chOf(channel);
@@ -403,6 +413,8 @@ async function maybeStart(channel) {
     const waitWip = (message) => { c.idle = 'Waiting for room under the WIP limit: ' + message; };
     const building = tasks.building(channel);
     if (building >= tasks.wipLimit()) { waitWip(building + (building === 1 ? ' task is' : ' tasks are') + ' being built, and the limit is ' + tasks.wipLimit() + '.'); return; }
+    const queued = reviews.deskQueue(channel);
+    if (queued.length) { c.idle = 'Waiting for a free desk: the review of PR ' + number(queued[0]) + ' goes first.'; return; }
     const wasWaiting = /^Waiting for a free desk/.test(c.idle || '');
     c.idle = null;
     let [status, out] = await tickets.startBy(channel, next, BY, ctx);
@@ -471,7 +483,8 @@ function stalled(channel) {
     const devBusy = dev && ['working', 'quiet', 'waiting', 'job'].includes(livenessOf(dev, Date.now()).state);
     const reviewing = task.pr && terminal.all(channel).some((t) => t.reviewOf === task.pr && livenessOf(t, Date.now()).state !== 'gone');
     const waitsOnCi = rec && /CI|GitHub says|PRs today/.test(rec.why || '');
-    const stuck = !devBusy && !reviewing && !waitsOnCi;
+    const waitsForDesk = !!task.pr && reviews.deskQueue(channel).includes(task.pr);
+    const stuck = !devBusy && !reviewing && !waitsOnCi && !waitsForDesk;
     const key = channel + ' ' + task.id;
     if (!stuck) { stuckSince.delete(key); continue; }
     if (!stuckSince.has(key)) { stuckSince.set(key, Date.now()); continue; }

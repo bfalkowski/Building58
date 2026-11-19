@@ -22,9 +22,9 @@ const GREEN = [{ name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' }]
 const HOLD = 'No comment check has listed the latest posted review on the PR yet, so its Dev was not told of it.';
 const REVIEWS = 'repos/acme/widgets/pulls/7/reviews';
 
-async function ready(t) {
+async function ready(t, env) {
   const ghDir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
-  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '60000', RELAY_REVIEW_POLL_SECONDS: '3600' }, null, { autoReview: true });
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '60000', RELAY_REVIEW_POLL_SECONDS: '3600', ...env }, null, { autoReview: true });
   t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
@@ -111,4 +111,13 @@ test('a post the hook never reported holds the merge from when Autopilot finds i
   await c.say(c.r, 'Stop');
   await until(async () => (await c.ap()).notes.some((n) => /though its post was not seen, so its verdict counts/.test(n.text)), 'the post found on the PR');
   await held(c);
+});
+
+// T-374: a reviewer whose post only this look found stayed at its desk, since only a post the hook saw
+// ended it. Ada, a reviewer of PR 107, held a desk for a day that way.
+test('a post the hook never reported still ends its reviewer once its turn is over', async (t) => {
+  const c = await ready(t, { RELAY_REVIEW_GRACE_MS: '1000' });
+  await c.say(c.r, 'Stop');
+  await until(async () => (await c.ap()).notes.some((n) => /though its post was not seen, so its verdict counts/.test(n.text)), 'the post found on the PR');
+  await until(async () => !(await c.R.call('GET', '/terminals')).body.terminals.some((x) => x.id === c.r.id), 'the reviewer to leave');
 });

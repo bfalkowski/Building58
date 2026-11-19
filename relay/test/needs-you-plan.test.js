@@ -177,7 +177,21 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+});
+
+// T-374: reviews waited for a desk, and every desk was held by a session the relay may not stop.
+test('reviews wait for a desk and the relay may stop no session: one line names the wait, after the questions', () => {
+  const desks = { prs: [PR, 'https://github.com/o/r/pull/9'], taken: 9 };
+  const asker = seat({ live: 'waiting', message: 'Go on?' });
+  const items = listOf({ seats: [asker], tasks: [task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })], desks });
+  assert.deepStrictEqual(kinds(items), ['question', 'desks', 'merge']);
+  const item = items[1];
+  assert.strictEqual(item.line, 'Stop a session to free a desk: the reviews of PR #12 and #9 wait for one. All 9 desks are taken, and the relay may stop none of them. ' +
+    'It stops only a reviewer whose review is posted, or an idle Dev whose PR merged, whose task is Done, or whose PR waits on a review.');
+  assert.deepStrictEqual([item.who, item.terminal, item.task, item.pr, item.link], ['the relay', null, null, PR, {}]);
+  assert.match(listOf({ desks: { prs: [PR], taken: 9 } })[0].line, /^Stop a session to free a desk: the review of PR #12 waits for one\. /);
+  assert.deepStrictEqual(listOf({ desks: { prs: [], taken: 9 } }), [], 'no review waits');
 });
 
 test('another relay on the room\'s state folder: stop it, with its Stop button, before anything else', () => {
