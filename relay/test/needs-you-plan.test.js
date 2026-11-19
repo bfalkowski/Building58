@@ -177,7 +177,21 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+});
+
+test('another relay on the room\'s state folder: stop it, with its Stop button, before anything else', () => {
+  const asker = seat({ live: 'waiting', message: 'Claude needs your permission to use Bash' });
+  const relays = [{ pid: 48435, file: '~/repo/Building58/relay/server.js', port: 8787, started: '2026-11-12T14:16:24.000Z', paused: true, worker: false }];
+  const items = listOf({ seats: [asker], relays });
+  assert.deepStrictEqual(kinds(items), ['relay', 'permission']);
+  assert.deepStrictEqual(items[0], { kind: 'relay', who: 'relay 48435', terminal: null, task: null, ticket: null, pr: null,
+    line: 'Stop the other relay, pid 48435: it runs ~/repo/Building58/relay/server.js on port 8787 since 2026-11-12 14:16 UTC. It uses this room\'s state folder, so it can erase what this relay saves. It is paused, and can wake up later.',
+    link: { stop: 48435 } });
+  const bare = listOf({ relays: [{ pid: 7, file: null, port: 8790, started: null, paused: false, worker: false }] })[0];
+  assert.strictEqual(bare.line, 'Stop the other relay, pid 7: on port 8790. It uses this room\'s state folder, so it can erase what this relay saves. It has no relay process left to answer, only its supervisor.');
+  assert.strictEqual(listOf({ relays: [{ pid: 'x\n1' }, { pid: 0 }, null] }).length, 0, 'only a real pid gets a line');
+  assert.strictEqual(listOf({ relays: [{ pid: 9, file: 'a\nb', port: 1, worker: true }] })[0].line, 'Stop the other relay, pid 9: it runs a b on port 1. It uses this room\'s state folder, so it can erase what this relay saves.', 'a path is cleaned to one line');
 });
 
 test('text from a session is cleaned to one line', () => {
