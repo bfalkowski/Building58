@@ -366,6 +366,8 @@ test('a ticket filed on GitHub with only a label lists, works in the relay\'s fo
   t.after(async () => { await R.kill(); await R.remove(); });
   const [ticket] = (await R.call('GET', '/tickets')).body.tickets;
   assert.deepStrictEqual([ticket.id, ticket.status, ticket.repo, ticket.base, ticket.createdBy], ['1', 'ready', repo, undefined, 'someone on GitHub']);
+  const shown = execFileSync('node', [path.join(ROOT, 'relay', 'ticket.js'), 'show', '1'], { env: { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: (await sessionIn(R, repo))['X-Office-Token'] }, encoding: 'utf8' });
+  assert.match(shown, /^Status: ready\. Priority: normal\. Filed by: someone on GitHub\.$/m, 'a person on GitHub is not a session (T-206)');
   const r = await R.call('POST', '/tickets/1/start', {});
   assert.strictEqual(r.status, 200, JSON.stringify(r.body));
   assert.strictEqual(r.body.ticket.status, 'started');
@@ -740,6 +742,40 @@ for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..'
     assert.strictEqual(late.status, 409, 'not once it has started');
     assert.strictEqual(late.body.error, 'not_ready');
     assert.strictEqual((await R.call('GET', '/tickets/' + docs.id)).body.ticket.kind, 'bug');
+  });
+}
+// ticket.js list shows titles only, so a PM or Lead could not read a ticket before it recommended a close
+// or a merge (T-206). ticket.js show reads one from the same list, so any session that can list can show.
+for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..', 'ticket-stores', 'github.js')]]) {
+  test('ticket.js show prints a ticket\'s title, status, priority, filer, blockers and body (' + name + ')', async (t) => {
+    const R = await relay(store); t.after(R.stop);
+    const agent = await sessionIn(R, R.repo);
+    const env = { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: agent['X-Office-Token'] };
+    const cli = (...args) => execFileSync('node', [path.join(ROOT, 'relay', 'ticket.js'), ...args], { env, encoding: 'utf8', stdio: 'pipe' });
+
+    const first = (await R.call('POST', '/tickets', { title: 'Lay the floor', body: 'Tiles first.', repo: R.repo, priority: 'high' })).body.ticket;
+    const body = 'What to build: a "quoted" word and a `backtick`.\n\nAcceptance criteria:\n- it shows';
+    const filed = cli('create', 'Paint the walls', '--priority', 'low', '--blocked-by', first.id, '--body', body).match(/Filed: (\S+)/)[1];
+    const by = (await R.call('GET', '/tickets/' + filed)).body.ticket.createdBy;
+
+    const out = cli('show', filed);
+    assert.strictEqual(out, [
+      filed + '  Paint the walls',
+      'Status: triage. Priority: low. Filed by: ' + by + ' (a session).',
+      'Blocked by: ' + first.id + ' (ready, «Lay the floor»).',
+      '',
+      body,
+      '',
+    ].join('\n'));
+    assert.strictEqual(cli('show', filed.toLowerCase()), out, 'the id in any case');
+    assert.match(cli('show', first.id), new RegExp('^' + first.id + ' {2}Lay the floor\nStatus: ready\\. Priority: high\\. Filed by: the person\\.\nBlocked by: nothing\\.\n\nTiles first\\.\n$'));
+
+    const quiet = (await R.call('POST', '/tickets', { title: 'No words', repo: R.repo })).body.ticket;
+    assert.match(cli('show', quiet.id), /\n\n\(no body\)\n$/);
+
+    const fails = (...args) => { try { cli(...args); } catch (e) { return e.stderr; } assert.fail('it showed: ' + args.join(' ')); };
+    assert.match(fails('show', 'T-999'), /No ticket T-999 on this board\. ticket\.js list shows the ids\./);
+    assert.match(fails('show'), /Use: ticket\.js create/);
   });
 }
 // A ticket's labels sort the Board. The person adds and changes them at any status; a session files
