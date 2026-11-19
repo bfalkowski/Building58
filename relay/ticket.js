@@ -187,6 +187,7 @@ async function main() {
   if (cmd === 'floor') {
     const r = await (await fetch(URL_.replace(/\/tickets$/, '/floor'), { headers })).json();
     if (!r.ok) { console.error(r.message); return 1; }
+    if (r.leadEnded) console.log(r.leadEnded.says);
     if (!r.sessions.length) console.log('No sessions are running.');
     for (const s of r.sessions) console.log(floorLine(s));
     return 0;
