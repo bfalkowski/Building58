@@ -237,13 +237,14 @@ async function handle(req, res) {
     (agent.role === 'security' && ((req.method === 'GET' && m[2] === '/security/measures') || (req.method === 'POST' && m[2] === '/security/report'))) ||
     ((agent.role === 'reviewer' || !!agent.reviewOf) && req.method === 'POST' && m[2] === '/autopilot/verdict') ||
     ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) ||
-    ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) ||
+    ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(edit|propose)$/.test(m[2] || '')) ||
     (agent.lead && req.method === 'POST' && m[2] === '/reviews/lead') ||
     (req.method === 'POST' && m[2] === '/terminals/context') ||
     (req.method === 'POST' && m[2] === '/commands'))));
   if (!authorized(req, url) && !tokenMay && (seat || (office && plays))) { problem(res, 403, 'forbidden', seat ? 'A seat in a round only plays, with node "$OFFICE_PLAY".' : 'Only a seat in the round that runs can play.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person, the PM and the Lead edit a ticket.'); return; }
+  if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/propose$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the PM and the Lead propose to replace, merge or close a ticket, or to change its blockers. File a ticket instead.'); return; }
   if (!authorized(req, url) && agent && agent.role === 'pm' && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(move|start|base|kind)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'The PM does not move or start a ticket, or change its base or kind. It edits the title and body of tickets in Triage or Ready, and with Let the PM set the order on, their priority and place.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && m[2] === '/floor') { problem(res, 401, 'unauthorized', 'Only the Lead can read the floor.'); return; }
   if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : (givenKey(req, url) ? 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>.')); return; }

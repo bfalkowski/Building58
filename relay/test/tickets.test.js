@@ -295,7 +295,7 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       assert.ok(screen.includes('PASTED GOT[You are the product manager'), 'the brief went in as one paste');
       const brief = screen.match(/GOT\[(You are the product manager[^\]\r\n]*)\]/)[1];
       assert.ok(brief.endsWith('The idea: A radio'), 'the idea comes last, so a cut line loses only its tail');
-      for (const part of ['CLAUDE.md', 'docs/constitution.md', 'CLAUDE.md and docs/constitution.md, each if there is one', 'What to build', 'Acceptance criteria', 'seams to test at', 'Blocked by', 'Out of scope', 'not file paths'])
+      for (const part of ['CLAUDE.md', 'docs/constitution.md', 'CLAUDE.md and docs/constitution.md, each if there is one', 'What to build', 'Acceptance criteria', 'seams to test at', 'Blocked by', 'Out of scope', 'not file paths', ' replace ID --by ID,ID', 'merge ID --into ID', 'close ID', 'blockers ID --blocked-by ID,ID', 'approves or declines each one', "--why 'the reason'"])
         assert.ok(brief.includes(part), 'the brief names ' + part);
       assert.match(brief, /Do not change any code, commit, or open a pull request/);
       assert.match(brief, /stop once they are filed/);
