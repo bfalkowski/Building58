@@ -68,7 +68,7 @@ test('Let the Lead merge', async (t) => {
   let R = await relay({ RELAY_WIP_LIMIT: '5', RELAY_TYPE_SETTLE_MS: '1500' });
   const home = R.home, repo = makeRepo(home), file = path.join(home, '.office-world', 'lead.json');
   const saved = () => JSON.parse(fs.readFileSync(file, 'utf8')).t;
-  const start = async (extra) => (await R.call('POST', '/terminals', { cwd: repo, ...extra })).body;
+  const start = (extra) => R.start({ cwd: repo, ...extra });
   const hook = async (s, event) => { await R.hook({ session_id: s.slice(0, 12), ...event }); await sleep(200); };
   const talk = async (s) => { await hook(s, { hook_event_name: 'UserPromptSubmit', title: '' }); await hook(s, { hook_event_name: 'Stop' }); };
   const terminal = async (id) => (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === id);
