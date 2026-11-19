@@ -10,8 +10,9 @@
 // where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
 // spoke says a turn of it has begun, and fresh says it started under a minute ago with no turn yet.
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
-// handedOver, onlyYouMerge }, where owner is the terminal of its Dev while that session runs, and pipelineWaits
-// says its open PR's pipeline is running or failing.
+// handedOver, reviewedSince, onlyYouMerge }, where owner is the terminal of its Dev while that session runs,
+// pipelineWaits says its open PR's pipeline is running or failing, and reviewedSince is the last review posted
+// after Autopilot's hand-over: { kind, commit, url, current }, where current says the PR's head is that commit.
 // A wait is one saved message (relay/delivery.js) that has not gone in for a long time: { terminal, who, minutes,
 // why }, where terminal is the running session it is for, and why says in plain words what holds it.
 //
@@ -20,7 +21,8 @@
 //   permission   a session waits on the person, and its message asks for permission
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   merge        an open PR that only the person may merge
-//   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason
+//   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or with the next
+//                step a review posted after the hand-over gives
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
@@ -53,11 +55,21 @@ function seatItem(s, t) {
   return null;
 }
 
+function reviewedLine(t, dev, item) {
+  const r = t.reviewedSince, pr = t.pr, n = numberOf(pr), at = oneLine(r.commit, 40).slice(0, 7), url = oneLine(r.url, 300);
+  const where = url ? ' ' + url : '';
+  if (r.current === false) return item('handed-over', 'Get a review of PR ' + n + ' (' + nameOf(t) + '): the review of ' + at + ' says ' + (r.kind === 'merge' ? 'merge' : 'fix') + ', but newer commits came after it.', { url: pr });
+  if (r.kind === 'merge') return item('handed-over', 'Merge PR ' + n + ' (' + nameOf(t) + '), or move its card: the review of ' + at + ' says merge.' + where, { url: pr });
+  if (!dev) return item('handed-over', 'Bring back the worker on ' + nameOf(t) + ' to fix PR ' + n + ': the review of ' + at + ' says fix, and its session has ended.' + where, { ticket: t.ticket || t.id });
+  return item('handed-over', 'Move ' + nameOf(t) + ' out of Waiting on you: the review of ' + at + ' on PR ' + n + ' says fix, and ' + (oneLine(dev.who, 40) ? 'its Dev ' + oneLine(dev.who, 40) : 'its Dev') + ' is running to fix it.' + where, { ticket: t.ticket || t.id });
+}
+
 function taskItem(t, dev) {
   const who = dev ? oneLine(dev.who, 40) || 'its Dev' : 'Worker on ' + nameOf(t);
   const pr = t.pr || null;
   const item = (kind, line, link) => ({ kind, who, terminal: dev ? dev.terminal : null, task: t.id, ticket: t.ticket || null, pr, line, link });
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
+  if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), { url: pr });
   if (t.state === 'waiting_on_you') {
     if (t.reviewRuns || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;
