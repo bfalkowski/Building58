@@ -5,8 +5,10 @@
 // A checkout nobody can miss goes when its session ends. The rest wait in the panel for Clean up.
 //
 // A copy of a ref, such as refs/stash 2, that iCloud or Finder made in a synced folder, makes git fetch fail with
-// bad object. A ref name with a space is never valid, so a review's fetch or checkout removes such a file, logs
-// what it held, and tries again (mending). Any other bad ref is named, with its file, in the error the review gives.
+// bad object, even when the commit it holds exists. A review's fetch or checkout takes such a file away and tries
+// again (mending). It deletes the file when its commit is missing or another ref already reaches it. Otherwise it
+// moves the commit to a valid name under refs/office/rescued/, so git gc cannot prune it. The log says which, and an
+// error after a move names it too. Any other bad ref is named, with its file, in the error the review gives.
 // Like the terminal, this answers only the room page on this machine, while RELAY_TERMINAL=1.
 'use strict';
 const { execFile } = require('child_process');
@@ -188,25 +190,53 @@ async function refFile(top, ref) {
   const file = path.resolve(common, ref);
   return file.startsWith(path.join(common, 'refs') + path.sep) ? file : null;
 }
-async function mendCopy(top, message, log) {
+const HASH = /^[0-9a-f]{40}([0-9a-f]{24})?$/, RESCUED = 'refs/office/rescued/';
+const reachedElsewhere = (top, held) => git(top, ['for-each-ref', '--contains', held, '--format=%(refname)'])
+  .then((out) => out.split('\n').some((r) => r && !/\s/.test(r) && !r.startsWith('refs/office/review/')), () => false);
+async function rescue(top, ref, held) {
+  const name = RESCUED + ref.slice('refs/'.length).replace(/\s+/g, '-');
+  for (const to of [name, name + '-' + held.slice(0, 7)]) {
+    if (await git(top, ['update-ref', to, held, '']).then(() => true, () => false)) return to;
+  }
+  return null;
+}
+async function mendCopy(top, message, log, rescued) {
   const ref = (String(message).match(BAD_REF) || [])[1];
   if (!ref || !COPY.test(ref)) return false;
   const file = await refFile(top, ref);
   const held = file && (() => { try { return fs.lstatSync(file).isFile() && fs.readFileSync(file, 'utf8').trim(); } catch (e) { return null; } })();
   if (held === null || held === false || !file) return false;
+  const why = 'a copy of a ref that iCloud or Finder made, since git cannot read a ref with a space in its name';
+  if (!HASH.test(held)) {
+    if (held && !held.startsWith('ref: ')) return false;
+    fs.unlinkSync(file);
+    log('Removed ' + file + ', ' + why + '. It held ' + (held || 'nothing') + ', no commit of its own.');
+    return true;
+  }
+  const missing = await git(top, ['cat-file', '-e', held]).then(() => false, () => true);
+  if (missing || await reachedElsewhere(top, held)) {
+    fs.unlinkSync(file);
+    log('Removed ' + file + ', ' + why + '. It held ' + held + (missing ? ', which this repo does not have.' : ', which another ref already reaches.'));
+    return true;
+  }
+  const to = await rescue(top, ref, held);
+  if (!to) return false;
   fs.unlinkSync(file);
-  log('Removed ' + file + ', a copy of a ref that iCloud or Finder made, since git cannot read a ref with a space in its name. It held ' + (held || 'nothing') + '.');
+  rescued.push(file + ' to ' + to);
+  log('Moved ' + file + ', ' + why + ', to ' + to + '. It held ' + held + ', which no other ref reaches, so the commit is kept there.');
   return true;
 }
-async function named(top, e) {
+async function named(top, e, rescued) {
   const ref = (String(e.message).match(BAD_REF) || [])[1], file = ref && await refFile(top, ref).catch(() => null);
   if (file) e.message += ' The broken ref is the file ' + file + '. Remove it if nothing needs it, then press Get a review.';
+  if (rescued.length) e.message += ' The relay moved ' + rescued.join(', ') + ', so their commits are kept.';
   return e;
 }
 async function mending(top, args, opts, log) {
+  const rescued = [];
   for (let left = MENDS; ; left--) {
     try { return await git(top, args, opts); } catch (e) {
-      if (!(left > 0 && await mendCopy(top, e.message, log).catch(() => false))) throw await named(top, e);
+      if (!(left > 0 && await mendCopy(top, e.message, log, rescued).catch(() => false))) throw await named(top, e, rescued);
     }
   }
 }
