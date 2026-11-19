@@ -124,6 +124,8 @@ test('a PR opened while the relay is down gets its first review once it is back'
   execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/acme/widgets.git'], { cwd: repo });
   execFileSync('git', ['push', '-qf', origin, 'HEAD:refs/pull/7/head'], { cwd: repo });
   const pr = 'https://github.com/acme/widgets/pull/7';
+  // A session started by hand counts only for a PR of a repo the room works in (T-192), so a ticket names it.
+  assert.strictEqual((await R.call('POST', '/tickets', { title: 'Work in widgets', repo })).status, 201);
   await R.kill();
   // As the hook queues it for a session started by hand: with the key, for this relay's port.
   queue.append(path.join(home, '.office-world'), { to: 'http://127.0.0.1:' + port + '/channels/t/commands', auth: queue.hash('test-key'),
