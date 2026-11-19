@@ -12,7 +12,8 @@
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
 // handedOver, reviewedSince, onlyYouMerge }, where owner is the terminal of its Dev while that session runs,
 // pipelineWaits says its open PR's pipeline is running or failing, and reviewedSince is the last review posted
-// after Autopilot's hand-over: { kind, commit, url, current }, where current says the PR's head is that commit.
+// after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current says
+// the PR's head is that commit.
 // A wait is one saved message (relay/delivery.js) that has not gone in for a long time: { terminal, who, minutes,
 // why }, where terminal is the running session it is for, and why says in plain words what holds it.
 //
@@ -21,8 +22,8 @@
 //   permission   a session waits on the person, and its message asks for permission
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   merge        an open PR that only the person may merge
-//   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or with the next
-//                step a review posted after the hand-over gives
+//   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
+//                with the next step a review posted after it gives
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it

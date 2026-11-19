@@ -3,8 +3,8 @@
 // page can read it often. relay/needs-you-plan.js holds the rules. See docs/manual/roles.html#needs-you.
 //
 // What it reads: each running session (relay/terminal.js) with its state from relay/liveness.js and any
-// question on its screen; each task that is not done (relay/tasks.js); Autopilot's hand-over reason and the
-// last review posted after it (relay/autopilot.js); whether a review of a PR runs; whether a PR merged or
+// question on its screen; each task that is not done (relay/tasks.js); Autopilot's hand-over reason and, for a
+// stall, the last review posted after it (relay/autopilot.js); whether a review of a PR runs; whether a PR merged or
 // closed (relay/floor.js, relay/pipeline.js); and who may merge a PR, from the PR watch (relay/pr-watch.js) and the last huddle
 // report (relay/huddles.js), when they have looked; and each saved message (relay/delivery.js) that has waited
 // UNDELIVERED for a running session, unless that session is in a turn, waits on an answer, or has ended. The

@@ -551,7 +551,7 @@ function deskOf(channel, task) {
   const r = task && task.pr && store[channel] && store[channel].prs[task.pr];
   const v = r ? latest(r) : null;
   const handed = r && r.handedOver && !handedBack(task, r) ? r.handedOver : null;
-  const since = handed && r.verdicts.filter((x) => Date.parse(x.at) > Date.parse(r.handedOverAt) && postOf(channel, x)).pop();
+  const since = handed && handedReasonOf(r) === 'stalled' && r.verdicts.filter((x) => Date.parse(x.at) > Date.parse(r.handedOverAt) && postOf(channel, x)).pop();
   const reviewedSince = since ? { kind: since.kind, commit: since.commit, url: postOf(channel, since) } : null;
   return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, reviewedSince };
 }
