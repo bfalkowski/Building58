@@ -652,6 +652,25 @@ test('Update waits for a session answered at its question while it still prints,
   await until(async () => { try { return (await R.call('GET', '/update')).body.run !== r.body.run; } catch (e) { return false; } }, 'the relay to restart');
 });
 
+test('a new question after an answer is not answered yet, so it holds nothing', async (t) => {
+  const { R, repo, relayChange } = await updatable({});
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = (await R.call('POST', '/terminals', { cwd: repo })).body;
+  const sid = s.sessionId.slice(0, 12);
+  await talk(R, s.sessionId);
+  await R.hook({ hook_event_name: 'Notification', session_id: sid, message: 'Claude needs your permission to use Bash' });
+  await sleep(200);
+  await R.call('POST', '/terminals/' + s.id + '/input', { data: '/spin\r' });
+  await until(async () => /Thinking/.test(await R.screen(s.id)), 'the spinner');
+  // A second question comes with no hook between, while the screen still moves.
+  await R.hook({ hook_event_name: 'Notification', session_id: sid, message: 'Claude needs your permission to use Edit' });
+  await sleep(200);
+  relayChange(2);
+  const r = await R.call('POST', '/update', {});
+  assert.ok(!((r.body.update || {}).waitingOn || []).some((w) => w.terminal === s.id), JSON.stringify(r.body));
+  await until(async () => { try { return (await R.call('GET', '/update')).body.run !== r.body.run; } catch (e) { return false; } }, 'the relay to restart');
+});
+
 test('a Notification that is not a question leaves a session in its turn working, and Update still waits for it', async (t) => {
   const { R, repo, relayChange } = await updatable({});
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });

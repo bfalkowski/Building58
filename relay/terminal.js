@@ -574,7 +574,7 @@ function noteHook(channel, ev) {
   if (name === 'UserPromptSubmit' || (name === 'PreToolUse' && !ev.agent_id)) { t.state = 'working'; t.message = null; t.turnAt = Date.now(); t.stuck = null; }
   else if (name === 'PreToolUse') { if (t.state === 'waiting') { t.state = 'working'; t.message = null; } }
   else if (name === 'Stop' || name === 'StopFailure' || name === 'SessionEnd') { t.state = 'idle'; t.message = null; }
-  else if (name === 'Notification' && asksQuestion(ev)) { if (t.state !== 'waiting') t.waitingAt = Date.now(); t.state = 'waiting'; t.message = ev.message || null; }
+  else if (name === 'Notification' && asksQuestion(ev)) { if (t.state !== 'waiting') t.waitingAt = Date.now(); t.answeredAt = null; t.state = 'waiting'; t.message = ev.message || null; }
   if (t.lead) keepLeadSaved(channel, t);
   saveSessions();
   if (t.reviewOf) noteReview(channel, t, name, ev);
