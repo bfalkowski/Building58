@@ -7,7 +7,8 @@
 // stall, the last review posted after it (relay/autopilot.js); whether a Dev still owes the continue prompt a
 // restart saved for it (relay/sessions.js); whether a review of a PR runs; whether a PR merged or closed
 // (relay/floor.js, relay/pipeline.js); and who may merge a PR, from the PR watch (relay/pr-watch.js) and the last huddle
-// report (relay/huddles.js), when they have looked; and each saved message (relay/delivery.js) that has waited
+// report (relay/huddles.js), when they have looked; reviews that wait for a desk the relay could not free
+// (relay/reviews.js); and each saved message (relay/delivery.js) that has waited
 // UNDELIVERED for a running session, unless that session is in a turn, waits on an answer, or has ended. The
 // huddle counts its headline from the same list, and boardOf gives the Board each task's item, so its Waiting
 // on you column holds the tickets the list names.
@@ -17,6 +18,7 @@
 const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const autopilot = require('./autopilot.js');
+const reviews = require('./reviews.js');
 const prWatch = require('./pr-watch.js');
 const huddles = require('./huddles.js');
 const pipeline = require('./pipeline.js');
@@ -75,7 +77,7 @@ function stateOf(channel, now, lastReport) {
     .filter((d) => d.target && !d.typed && d.blocked && !NOT_STUCK.has(d.blocked) && d.savedAt && now - d.savedAt > UNDELIVERED)
     .sort((a, b) => a.savedAt - b.savedAt)
     .map((d) => ({ terminal: d.target, who: chat.nameOf(terminal.find(channel, d.target)), minutes: Math.floor((now - d.savedAt) / 60000), why: delivery.whyWaits(d.blocked) }));
-  return { seats, tasks: out, waits };
+  return { seats, tasks: out, waits, desks: reviews.deadlockOf(channel) };
 }
 
 async function handle(req, res, channel, rest, ctx) {

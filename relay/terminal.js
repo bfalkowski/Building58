@@ -656,6 +656,12 @@ function noteReview(channel, t, name, ev) {
   } else if (name === 'Stop' && !t.posted) tell(turnEndFns, channel, t, 'After a review\'s turn ended');
   else if (name === 'Stop' && !t.ending && !t.exited) t.ending = setTimeout(() => { t.ending = null; reviewDone(channel, t); }, REVIEW_GRACE());
 }
+function reviewFound(channel, t, url) {
+  if (t.exited || t.stopped || t.posted || !t.reviewOf) return;
+  t.posted = { kind: 'comment', url };
+  console.log('The review of ' + t.reviewOf + ' is on the PR. Its session ends ' + REVIEW_GRACE() / 1000 + ' seconds after its turn does.');
+  if (t.state !== 'working' && !t.ending) t.ending = setTimeout(() => { t.ending = null; reviewDone(channel, t); }, REVIEW_GRACE());
+}
 function tell(fns, channel, t, what) { for (const fn of fns) { try { fn(channel, t); } catch (e) { console.error(what + ': ' + e.message); } } }
 function pauseReview(t) { clearTimeout(t.ending); t.ending = null; }
 function keepReviewer(t) { pauseReview(t); t.posted = null; }
@@ -826,4 +832,4 @@ function agentFor(req) {
 const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited);
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit, MAX_PROMPT };
+module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, reviewFound, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit, MAX_PROMPT };
