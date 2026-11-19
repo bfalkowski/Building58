@@ -16,11 +16,18 @@
 // the session that runs the tests (OFFICE_*, RELAY_*, PORT, HOST). Some tests load relay modules in their
 // own process, and those keep their files under ~/.office-world, so with your HOME they would read
 // your room's files and fight every other checkout that runs the tests at the same time.
+// Every run on this computer shares TEST_SLOTS (12) test slots, so at most that many files run at once
+// across all checkouts (relay/test/slots.js). Four Devs once ran the suite together, 24 files at a time,
+// and the runs took 20 minutes instead of 6, with files failing on the slow machine (T-351). A run
+// that must wait says so once, and when slots free, the run that started first goes first. TEST_SLOTS=0
+// turns the limit off. Each file runs with TEST_SLOTS=0, so a run inside a test never waits behind its own
+// parent. TEST_SLOTS_DIR moves the slots' folder, for the runner's own tests.
 'use strict';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const { slots } = require('./slots.js');
 
 const [major, minor] = process.versions.node.split('.').map(Number);
 const timeout = major > 21 || (major === 21 && minor >= 2) || (major === 20 && minor >= 11) ? ['--test-timeout=120000'] : [];
@@ -31,6 +38,8 @@ const files = asked.length ? asked.map((f) => path.resolve(f)).flatMap((f) => (f
 const JOBS = Math.max(1, Number(process.env.TEST_JOBS) || 6);
 const LIMIT = Math.max(1, Number(process.env.TEST_FILE_SECONDS) || 600);
 const HELD_SECONDS = 5;
+const SLOTS = process.env.TEST_SLOTS === undefined || process.env.TEST_SLOTS === '' ? 12 : Math.max(0, Number(process.env.TEST_SLOTS) || 0);
+const pool = SLOTS ? slots({ dir: process.env.TEST_SLOTS_DIR || undefined, size: SLOTS }) : null;
 // Playwright looks for its browser under HOME, so the browser tests are told where it is under yours.
 const CACHE = { darwin: path.join(os.homedir(), 'Library', 'Caches'), win32: process.env.LOCALAPPDATA }[process.platform] || process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
 const BROWSERS = process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(CACHE || os.homedir(), 'ms-playwright');
@@ -53,7 +62,7 @@ function runOne(file) {
     // Its own process group, so a file that runs out of time is stopped with every process it started.
     // Those hold its output open, and the file is not over until they let go. Windows has no groups.
     const group = process.platform !== 'win32';
-    const child = spawn(process.execPath, [...timeout, file], { env: { ...env, HOME: home, PLAYWRIGHT_BROWSERS_PATH: BROWSERS }, stdio: ['ignore', 'pipe', 'pipe'], detached: group });
+    const child = spawn(process.execPath, [...timeout, file], { env: { ...env, HOME: home, PLAYWRIGHT_BROWSERS_PATH: BROWSERS, TEST_SLOTS: '0' }, stdio: ['ignore', 'pipe', 'pipe'], detached: group });
     if (group) running.add(child.pid);
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { out += d; });
@@ -80,11 +89,21 @@ function runOne(file) {
 
 (async () => {
   const queue = files.slice(), failed = [];
+  let told = false;
+  const tell = () => {
+    if (told) return;
+    told = true;
+    process.stdout.write('# waiting for a test slot: files from other runs on this computer use all ' + SLOTS + ' (TEST_SLOTS)\n');
+  };
+  const slot = () => (pool ? pool.take(tell) : Promise.resolve(() => {}));
   const worker = async () => {
+    let release = null;
     for (let file = queue.shift(); file; file = queue.shift()) {
+      if (!release) release = await slot();
       const r = await runOne(file);
       process.stdout.write('\n# ' + path.basename(r.file) + ' (' + r.seconds + 's, ' + (r.ok ? 'pass' : 'FAIL') + ')\n' + r.out);
       if (!r.ok) failed.push(path.basename(r.file));
+      if (!queue.length || (pool && pool.olderWaiting())) { release(); release = null; }
     }
   };
   await Promise.all(Array.from({ length: Math.min(JOBS, files.length) }, worker));
