@@ -95,3 +95,36 @@ test('a port something listens on is passed over', async (t) => {
   const second = await stubEnv.write(top, folder, '.worktrees');
   assert.ok(!second.ports.includes(first.ports[0]), JSON.stringify(second));
 });
+
+function scratch(t, names) {
+  const top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'stub-env-')));
+  t.after(() => fs.rmSync(top, { recursive: true, force: true }));
+  return names.map((name) => { const folder = path.join(top, '.worktrees', name); fs.mkdirSync(folder, { recursive: true }); return { top, folder }; });
+}
+
+test('a stub a session changed still holds its ports', async (t) => {
+  const [a, b] = scratch(t, ['a', 'b']);
+  const first = await stubEnv.write(a.top, a.folder, '.worktrees');
+  fs.appendFileSync(path.join(a.folder, '.env'), 'DEBUG=1\n');
+  assert.strictEqual(stubEnv.ours(a.folder), null, 'the seal is broken');
+  const second = await stubEnv.write(b.top, b.folder, '.worktrees');
+  assert.ok(!second.ports.some((p) => first.ports.includes(p)), JSON.stringify([first, second]));
+});
+
+test('a port of an outside service keeps its example, and each own port name gets its own port', async (t) => {
+  const [a] = scratch(t, ['a']);
+  fs.writeFileSync(path.join(a.folder, '.env.example'), 'DB_PORT=5432\nREDIS_PORT=6379\nPORT=3000\nVITE_PORT=5173\nE2E_PORT=9000\n');
+  const got = await stubEnv.write(a.top, a.folder, '.worktrees');
+  const text = read(a.folder);
+  assert.strictEqual(value(text, 'DB_PORT'), '5432');
+  assert.strictEqual(value(text, 'REDIS_PORT'), '6379');
+  assert.deepStrictEqual(['PORT', 'VITE_PORT', 'E2E_PORT'].map((k) => Number(value(text, k))), got.ports);
+  assert.strictEqual(new Set(got.ports).size, 3);
+});
+
+test('stubs written at the same moment get different ports', async (t) => {
+  const folders = scratch(t, ['a', 'b', 'c', 'd']);
+  const got = await Promise.all(folders.map((f) => stubEnv.write(f.top, f.folder, '.worktrees')));
+  const all = got.flatMap((g) => g.ports);
+  assert.strictEqual(new Set(all).size, all.length, JSON.stringify(got));
+});
