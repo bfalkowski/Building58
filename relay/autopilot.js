@@ -7,7 +7,9 @@
 //      a fix or a conflict needs one and none runs (bringBack), hand it to the person (Waiting on you,
 //      with the reason), or wait. Before a merge, relay/merge-hold.js asks whether
 //      the PR holds all its Dev's work: a Dev still at work waits, and one idle or gone with work in its
-//      checkout that is not pushed goes to the person.
+//      checkout that is not pushed goes to the person. A PR handed over only because it changes a file
+//      only a person merges is still read at each look (follow): its reason follows its review, CI and
+//      GitHub, and says ready for your merge when the same merge test passes. It is never merged here.
 //   2. While fewer than RELAY_AUTOPILOT_AT_ONCE tasks (1) are open, it starts the next Ready ticket a
 //      person approved, in Board order. With "only" set, just those tickets. When every desk is taken, it
 //      frees one of its own sessions the Lead may stop (freeADesk). If none is, it waits for a desk and
@@ -256,25 +258,59 @@ async function look(channel) {
   holdPushes(channel);
   for (const task of tasks.list(channel).filter(mineTask)) track(channel, task);
   for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done')) {
-    if (held(channel, task)) await mergedYet(channel, task); else await lookAt(channel, task);
+    if (!held(channel, task)) await lookAt(channel, task);
+    else if (handedReasonOf(recOf(channel, task.pr)) === 'protected-file') await follow(channel, task);
+    else await mergedYet(channel, task);
   }
   stalled(channel);
   await maybeStart(channel);
 }
-async function lookAt(channel, task) {
-  const rec = recOf(channel, task.pr);
+async function readPr(task, rec) {
   let pr = null, files = null;
-  try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid,mergeStateStatus,statusCheckRollup'], task.repo)); } catch (e) { rec.why = 'gh pr view failed: ' + e.message; return; }
-  if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
+  try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid,mergeStateStatus,statusCheckRollup'], task.repo)); } catch (e) { rec.why = 'gh pr view failed: ' + e.message; return null; }
   if (pr.state === 'OPEN') {
     const m = task.pr.match(/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/);
-    try { files = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/pulls/' + m[2] + '/files?per_page=100'], task.repo)).flat().flatMap((f) => [f.filename, f.previous_filename]).filter(Boolean); } catch (e) { rec.why = 'Could not list the PR\'s files: ' + e.message; return; }
+    try { files = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/pulls/' + m[2] + '/files?per_page=100'], task.repo)).flat().flatMap((f) => [f.filename, f.previous_filename]).filter(Boolean); } catch (e) { rec.why = 'Could not list the PR\'s files: ' + e.message; return null; }
   }
-  const v = latest(rec);
+  return { pr, files };
+}
+function mergeTest(channel, task, rec, decide) {
   const dev = terminal.find(channel, task.owner && task.owner.terminal);
-  let d = plan.forPr(pr, files, v, roundsOf(rec), MAX_ROUNDS(), !dev || dev.exited);
-  const hold = d.act === 'merge' ? holdOf(task, terminal.find(channel, task.owner && task.owner.terminal), Date.now()) : null;
-  if (hold) d = hold;
+  const d = decide(latest(rec), !dev || dev.exited);
+  return (d.act === 'merge' && holdOf(task, dev, Date.now())) || d;
+}
+function forPersonMerge(channel, task, rec, pr, locked) {
+  const v = latest(rec);
+  return plan.forPersonMerge(pr, locked, v, mergeTest(channel, task, rec, (x, gone) => plan.forReviewed(pr, x, roundsOf(rec), MAX_ROUNDS(), gone)));
+}
+async function follow(channel, task) {
+  const rec = recOf(channel, task.pr), got = await readPr(task, rec);
+  if (!got) return;
+  if (got.pr.state === 'MERGED') { markDone(channel, task); return; }
+  const locked = plan.lockedOf(got.files);
+  if (got.pr.state !== 'OPEN' || !locked.length) return;
+  const f = forPersonMerge(channel, task, rec, got.pr, locked);
+  if (f.why !== rec.handedOver) {
+    rec.handedOver = f.why; save();
+    tasks.record(task, { type: 'note', note: 'Autopilot: ' + f.why }); tasks.save();
+  }
+  readyNow(channel, task, rec, f);
+}
+function readyNow(channel, task, rec, f) {
+  if (rec.ready === f.ready) return;
+  rec.ready = f.ready; save();
+  if (!f.ready || rec.readyTold === f.ready) return;
+  rec.readyTold = f.ready; save();
+  note(channel, (task.ticket || 'Task ' + task.id) + ', PR ' + number(task.pr) + ': ' + f.why);
+}
+async function lookAt(channel, task) {
+  const rec = recOf(channel, task.pr);
+  const got = await readPr(task, rec);
+  if (!got) return;
+  const { pr, files } = got;
+  if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
+  const v = latest(rec);
+  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
   rec.why = d.why; rec.act = d.act;
   if (d.act === 'done') markDone(channel, task);
   else if (d.act === 'merge') {
@@ -293,7 +329,11 @@ async function lookAt(channel, task) {
     note(channel, 'Merged PR ' + number(task.pr) + ' (' + (task.ticket || task.title) + '): ' + d.why);
   } else if (d.act === 'conflict') askToMergeMain(channel, task, rec, pr);
   else if (d.act === 'bring-back') bringBack(channel, task, rec, d, d.for === 'fix' ? v.commit : pr.headRefOid, pr);
-  else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason, (v && v.commit) || pr.headRefOid);
+  else if (d.act === 'person' && d.reason === 'protected-file') {
+    const f = forPersonMerge(channel, task, rec, pr, plan.lockedOf(files));
+    handOver(channel, task, rec, f.why, d.reason, pr.headRefOid);
+    readyNow(channel, task, rec, f);
+  } else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason, (v && v.commit) || pr.headRefOid);
 }
 function askToMergeMain(channel, task, rec, pr) {
   if (rec.conflictAt === pr.headRefOid) return;
@@ -491,7 +531,7 @@ function view(channel) {
   const c = chOf(channel);
   const prs = tasks.list(channel).filter((t) => mineTask(t) && t.pr && c.prs[t.pr]).map((t) => {
     const r = c.prs[t.pr];
-    return { pr: t.pr, ticket: t.ticket, task: t.id, state: t.state, rounds: roundsOf(r), verdict: (latest(r) || {}).kind || null, act: r.act || null, why: r.handedOver || r.why || null };
+    return { pr: t.pr, ticket: t.ticket, task: t.id, state: t.state, rounds: roundsOf(r), verdict: (latest(r) || {}).kind || null, act: r.act || null, why: r.handedOver || r.why || null, ready: (r.handedOver && r.ready) || null };
   });
   const all = Object.values(c.runs || {}).sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1));
   const record = { today: runs.dayOf(all, today()), keptDays: runs.KEEP_DAYS, recent: all.slice(-10).map(runs.viewOf) };
