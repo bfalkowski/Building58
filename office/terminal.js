@@ -408,9 +408,20 @@
     const now = (r.prs || []).filter((p) => p.state !== 'done').map((p) => (p.ticket || p.pr.split('/').pop()) + ': ' + (p.why || p.act || ''));
     apSays.textContent = [r.on ? ([...now, r.idle].filter(Boolean).join(' · ') || 'Starting the next ticket.') + ' · merged today: ' + r.mergedToday + ' of ' + r.maxMerges : '', runsLine(r.runs)].filter(Boolean).join(' · ');
     apRow.what.textContent = 'The relay starts the next approved Ready ticket, one at a time. Each push to its PR gets a review, and the findings go to the Dev. When the review says merge and all checks pass, the relay merges the PR and starts the next ticket. After ' + r.maxRounds + ' review rounds that still ask for fixes, the task goes to Waiting on you. It merges at most ' + r.maxMerges + ' PRs a day. It never merges a change to CLAUDE.md or the constitution. It needs Review PRs automatically on. When you turn it off, work already started stays where it is.';
+    tellReady(r.prs || []);
     summaryOn.autopilot = !!r.on;
     summary.autopilot = r.on ? 'Autopilot on' + (r.only && r.only.length ? ' for ' + r.only.join(', ') : '') : 'Autopilot off';
     drawSummary();
+  }
+  let readySeen = null;
+  function tellReady(prs) {
+    if (!readySeen) { try { readySeen = new Set(JSON.parse(store(localStorage, 'office.readySeen') || '[]')); } catch (e) { readySeen = new Set(); } }
+    const fresh = prs.filter((p) => p.ready && p.state !== 'done' && !readySeen.has(p.pr + ' ' + p.ready));
+    if (!fresh.length) return;
+    for (const p of fresh) readySeen.add(p.pr + ' ' + p.ready);
+    store(localStorage, 'office.readySeen', JSON.stringify([...readySeen].slice(-50)));
+    const p = fresh[fresh.length - 1];
+    tell((p.ticket ? p.ticket + ', ' : '') + 'PR #' + p.pr.split('/').pop() + ': ' + p.why, '');
   }
   const syncAutopilot = () => api('', undefined, '/autopilot').then(drawAutopilot);
   if (window.run) window.run.on('hook', (e) => {
