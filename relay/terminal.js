@@ -168,7 +168,7 @@ function leadIn(dir) {
 }
 function restoreOf(channel) {
   const lead = offered.get(channel);
-  return lead && ![...termsOf(channel).values()].some((t) => t.sessionId === lead.sessionId) ? lead : null;
+  return lead && !leadOf(channel) && ![...termsOf(channel).values()].some((t) => t.sessionId === lead.sessionId) ? lead : null;
 }
 function leadOf(channel) {
   return [...termsOf(channel).values()].find((t) => !t.exited && t.lead) || null;
@@ -333,6 +333,7 @@ function startLead(channel, cwd, ctx) {
   offered.delete(channel);
   const startNew = (why) => {
     if (leadOf(channel) || closing) return;
+    offered.delete(channel);
     const r = start(channel, { cwd }, ctx, null, { newLead: true });
     ctx.log(r.status < 400 ? why + 'Started a new Lead in ' + cwd + ' on ' + channel + '.' : why + 'Could not start a Lead on ' + channel + ': ' + r.body.message);
   };

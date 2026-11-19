@@ -96,7 +96,11 @@
       stream.close(); if (es === stream) es = null;
       const wasLead = !!(current && current.lead);
       current = null; store(sessionStorage, 'office.terminal', null); show(); stopAsk.hidden = true;
-      if (wasLead) { tell('The Lead\'s session ' + (e.stopped ? 'was stopped' : 'ended' + (e.code ? ' (exit ' + e.code + ')' : '')) + '. No session is the Lead now. To return it as the Lead, press Bring back as the Lead.', 'off'); sync(); }
+      if (wasLead) {
+        const how = 'The Lead\'s session ' + (e.stopped ? 'was stopped' : 'ended' + (e.code ? ' (exit ' + e.code + ')' : '')) + '. No session is the Lead now. ';
+        tell(how, 'off');
+        sync().then((r) => tell(how + (r && r.restore ? 'To return it as the Lead, press Bring back as the Lead.' : 'It had no saved conversation, so it cannot come back. Make another session the Lead with Make this the Lead.'), 'off'));
+      }
       else say((e.stopped ? 'Stopped' : 'Ended' + (e.code ? ' (exit ' + e.code + ')' : '')) + '. Click a worker, or add one.', 'off');
       term.write('\r\n\x1b[2m[Claude Code ' + (e.stopped ? 'stopped' : 'ended') + ']\x1b[0m\r\n');
     });
@@ -700,7 +704,11 @@
     say('That session did not come back. Its conversation may be gone.', 'off');
   });
   askNo.addEventListener('click', () => { offerLead(null); api('/lead', { asked: true }); });
-  window.addEventListener('office:bring-back-lead', () => { if (offer && !askYes.disabled) askYes.click(); });
+  window.addEventListener('office:bring-back-lead', async () => {
+    if (!offer) await sync();
+    if (!offer) { tell('There is no Lead to bring back now.', 'off'); return; }
+    if (!askYes.disabled) askYes.click();
+  });
 
   window.addEventListener('office:session', (ev) => {
     const id = ev.detail && ev.detail.terminal;
