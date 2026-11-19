@@ -365,6 +365,8 @@ test('a ticket filed on GitHub with only a label lists, works in the relay\'s fo
   t.after(async () => { await R.kill(); await R.remove(); });
   const [ticket] = (await R.call('GET', '/tickets')).body.tickets;
   assert.deepStrictEqual([ticket.id, ticket.status, ticket.repo, ticket.base, ticket.createdBy], ['1', 'ready', repo, undefined, 'someone on GitHub']);
+  const shown = execFileSync('node', [path.join(ROOT, 'relay', 'ticket.js'), 'show', '1'], { env: { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: (await sessionIn(R, repo))['X-Office-Token'] }, encoding: 'utf8' });
+  assert.match(shown, /^Status: ready\. Priority: normal\. Filed by: someone on GitHub\.$/m, 'a person on GitHub is not a session (T-206)');
   const r = await R.call('POST', '/tickets/1/start', {});
   assert.strictEqual(r.status, 200, JSON.stringify(r.body));
   assert.strictEqual(r.body.ticket.status, 'started');

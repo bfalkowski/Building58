@@ -130,9 +130,10 @@ async function main() {
     const key = (id) => String(id).replace(/^#/, '').toUpperCase();
     const t = r.tickets.find((x) => key(x.id) === key(args[0]));
     if (!t) { console.error('No ticket ' + args[0] + ' on this board. ticket.js list shows the ids.'); return 1; }
-    const blocker = (id) => { const b = r.tickets.find((x) => String(x.id) === String(id)); return b ? id + ' (' + b.status + ', «' + b.title + '»)' : id; };
+    const blocker = (id) => { const b = r.tickets.find((x) => key(x.id) === key(id)); return b ? id + ' (' + b.status + ', «' + b.title + '»)' : id; };
+    const by = t.createdBy === 'you' ? 'the person' : !t.createdBy ? 'not recorded' : t.createdBy === 'GitHub' || / on GitHub$/.test(t.createdBy) ? t.createdBy : t.createdBy + ' (a session)';
     console.log(t.id + '  ' + t.title);
-    console.log('Status: ' + t.status + '. Priority: ' + t.priority + '. Filed by: ' + (t.createdBy === 'you' ? 'the person' : (t.createdBy || 'unknown') + ' (a session)') + '.');
+    console.log('Status: ' + t.status + '. Priority: ' + t.priority + '. Filed by: ' + by + '.');
     console.log('Blocked by: ' + ((t.blockedBy || []).length ? t.blockedBy.map(blocker).join(', ') : 'nothing') + '.');
     console.log('\n' + (t.body && t.body.trim() ? t.body : '(no body)'));
     return 0;
