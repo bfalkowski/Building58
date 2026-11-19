@@ -747,7 +747,7 @@
   stopAskYes.textContent = 'Stop the Lead'; stopAskRefresh.textContent = 'Refresh the Lead instead'; stopAskNo.textContent = 'Keep it running';
   stopAskText.textContent = 'This session is the Lead. A stop loses its turn in progress, and no session is the Lead until you bring it back. Its handoff notes are kept. To get it back, press Bring back as the Lead. If the Lead is slow or forgets things, Refresh the Lead instead: it writes its notes, starts a clean conversation, and stays the Lead.';
   stopAsk.append(stopAskText, stopAskYes, stopAskRefresh, stopAskNo);
-  note.after(stopAsk);
+  notes.append(stopAsk);
   stopBtn.addEventListener('click', () => {
     if (!current) return;
     if (leadShown()) { stopAsk.hidden = false; stopAskNo.focus(); return; }
