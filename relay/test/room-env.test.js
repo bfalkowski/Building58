@@ -1,6 +1,8 @@
-// A session in a room runs the tests with the room's settings in its shell, and CI does not. Once,
-// RELAY_ROLLBACK and RELAY_WORLD from an office shell failed 4 tests in relay/test/restart.test.js that
-// passed in CI (T-222). So the test helpers start each relay, and the runner each file, without them.
+// A session in a room runs the tests with the room's settings in its shell, and CI does not. Once, 3
+// reviewer tests in relay/test/restart.test.js failed in an office shell and passed in CI (T-222): the real
+// hook took the shell's OFFICE_HOOK_URL and OFFICE_TICKET_TOKEN and sent its events to the real room, not
+// the test relay. So the test helpers start each relay, the runner each file, and a test the real hook,
+// without RELAY_*, OFFICE_* and CLAUDE_CODE_* from the shell.
 'use strict';
 const fs = require('fs');
 const os = require('os');
