@@ -540,6 +540,9 @@ function noteTyping(t, data) {
   else if (/\x03|\x15/.test(plain)) t.drafting = false;
 }
 
+const QUESTION_KINDS = ['permission_prompt', 'elicitation_dialog'];
+const asksQuestion = (ev) => ev.notification_type ? QUESTION_KINDS.includes(ev.notification_type) : !/waiting for your input|idle/i.test(ev.message || '');
+
 function noteHook(channel, ev) {
   if (!ev || !ev.hook_event_name) return;
   const terms = [...termsOf(channel).values()];
@@ -571,7 +574,7 @@ function noteHook(channel, ev) {
   if (name === 'UserPromptSubmit' || (name === 'PreToolUse' && !ev.agent_id)) { t.state = 'working'; t.message = null; t.turnAt = Date.now(); t.stuck = null; }
   else if (name === 'PreToolUse') { if (t.state === 'waiting') { t.state = 'working'; t.message = null; } }
   else if (name === 'Stop' || name === 'StopFailure' || name === 'SessionEnd') { t.state = 'idle'; t.message = null; }
-  else if (name === 'Notification' && !/waiting for your input|idle/i.test((ev.message || '') + ' ' + (ev.notification_type || ''))) { if (t.state !== 'waiting') t.waitingAt = Date.now(); t.state = 'waiting'; t.message = ev.message || null; }
+  else if (name === 'Notification' && asksQuestion(ev)) { if (t.state !== 'waiting') t.waitingAt = Date.now(); t.state = 'waiting'; t.message = ev.message || null; }
   if (t.lead) keepLeadSaved(channel, t);
   saveSessions();
   if (t.reviewOf) noteReview(channel, t, name, ev);

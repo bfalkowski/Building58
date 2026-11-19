@@ -652,6 +652,51 @@ test('Update waits for a session answered at its question while it still prints,
   await until(async () => { try { return (await R.call('GET', '/update')).body.run !== r.body.run; } catch (e) { return false; } }, 'the relay to restart');
 });
 
+test('a Notification that is not a question leaves a session in its turn working, and Update still waits for it', async (t) => {
+  const { R, repo, relayChange } = await updatable({});
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = (await R.call('POST', '/terminals', { cwd: repo })).body;
+  const sid = s.sessionId.slice(0, 12);
+  const state = async () => (await terminals(R)).find((x) => x.id === s.id).state;
+  await talk(R, s.sessionId);
+  await R.hook({ hook_event_name: 'Notification', session_id: sid, message: 'Signed in to Claude', notification_type: 'auth_success' });
+  await sleep(200);
+  assert.strictEqual(await state(), 'working', 'an auth_success mid-turn is not a question');
+  relayChange(2);
+  const r = await R.call('POST', '/update', {});
+  assert.strictEqual(r.status, 202, JSON.stringify(r.body));
+  assert.deepStrictEqual(r.body.update.waitingOn.map((w) => [w.terminal, w.why]), [[s.id, 'in a turn']]);
+  await sleep(1500);
+  const u = (await R.call('GET', '/update')).body;
+  assert.strictEqual(u.run, r.body.run, 'no restart while its turn goes on');
+  assert.strictEqual(u.update.state, 'waiting');
+  // Its Stop reaches this relay, and only then does the restart go on.
+  await idle(R, s.sessionId);
+  await until(async () => { try { return (await R.call('GET', '/update')).body.run !== r.body.run; } catch (e) { return false; } }, 'the relay to restart');
+});
+
+test('only the question kinds of Notification, or a question message with no kind, put a session at a question', async (t) => {
+  const { R, repo } = await updatable({});
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = (await R.call('POST', '/terminals', { cwd: repo })).body;
+  const sid = s.sessionId.slice(0, 12);
+  const state = async () => (await terminals(R)).find((x) => x.id === s.id).state;
+  const cases = [
+    [{ message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' }, 'waiting'],
+    [{ message: 'Claude has a question for you', notification_type: 'elicitation_dialog' }, 'waiting'],
+    [{ message: 'Claude needs your permission to use Bash' }, 'waiting'],
+    [{ message: 'Signed in to Claude', notification_type: 'auth_success' }, 'working'],
+    [{ message: 'Claude is waiting for your input', notification_type: 'idle_prompt' }, 'working'],
+    [{ message: 'Claude is waiting for your input' }, 'working'],
+  ];
+  for (const [ev, want] of cases) {
+    await talk(R, s.sessionId);
+    await R.hook({ hook_event_name: 'Notification', session_id: sid, ...ev });
+    await sleep(200);
+    assert.strictEqual(await state(), want, JSON.stringify(ev));
+  }
+});
+
 // RELAY_ROLLBACK=1 makes the supervisor run git itself, before and after each start of the relay.
 for (const [name, chosen] of [['a random key', ''], ['a chosen key', 'chosen-key-5f3a9c']]) {
   test('the relay key reaches no git or gh the relay starts, with ' + name, async (t) => {
