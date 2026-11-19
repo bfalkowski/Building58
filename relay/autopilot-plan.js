@@ -12,7 +12,7 @@ function ciOf(rollup) {
   return state === 'none' ? 'pending' : state;
 }
 
-function forPr(pr, files, verdict, rounds, maxRounds) {
+function forPr(pr, files, verdict, rounds, maxRounds, devGone) {
   if (!pr) return { act: 'wait', why: 'GitHub has not answered about the PR yet.' };
   if (pr.state === 'MERGED') return { act: 'done', why: 'The PR merged.' };
   if (pr.state === 'CLOSED') return { act: 'person', reason: 'pr-closed', why: 'The PR was closed without merging.' };
@@ -23,10 +23,12 @@ function forPr(pr, files, verdict, rounds, maxRounds) {
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
     if (rounds >= maxRounds) return { act: 'person', reason: 'rounds', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };
+    if (devGone && verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review asked for fixes, so a follow-up review checks them.' };
+    if (devGone) return { act: 'bring-back', for: 'fix', why: 'The last review asks for fixes, but its Dev is not running, so Autopilot brings it back to fix them.' };
     return { act: 'wait', why: 'The Dev is fixing what the last review found. A follow-up review checks the fixes after the push.' };
   }
   if (verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review said merge, so a follow-up review checks them first.' };
-  if (pr.mergeStateStatus === 'DIRTY') return { act: 'conflict', why: 'It conflicts with main.' };
+  if (pr.mergeStateStatus === 'DIRTY') return devGone ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main, but its Dev is not running, so Autopilot brings it back to merge main.' } : { act: 'conflict', why: 'It conflicts with main.' };
   const ci = ciOf(pr.statusCheckRollup);
   if (ci === 'red') return { act: 'person', reason: 'ci-red', why: 'CI failed on the reviewed commit.' };
   if (ci === 'pending') return { act: 'wait', why: 'Waiting for CI.' };
