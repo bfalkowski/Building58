@@ -3,8 +3,9 @@
 //
 // While it is on, every RELAY_AUTOPILOT_TICK_MS (20 seconds):
 //   1. Each task's PR is read with gh pr view, and relay/autopilot-plan.js says what to do with it:
-//      merge it, mark its task done, tell its Dev to merge main for a conflict, hand it to the
-//      person (Waiting on you, with the reason), or wait. Before a merge, relay/merge-hold.js asks whether
+//      merge it, mark its task done, tell its Dev to merge main for a conflict, bring back its Dev when
+//      a fix or a conflict needs one and none runs (bringBack), hand it to the person (Waiting on you,
+//      with the reason), or wait. Before a merge, relay/merge-hold.js asks whether
 //      the PR holds all its Dev's work: a Dev still at work waits, and one idle or gone with work in its
 //      checkout that is not pushed goes to the person.
 //   2. While fewer than RELAY_AUTOPILOT_AT_ONCE tasks (1) are open, it starts the next Ready ticket a
@@ -269,7 +270,8 @@ async function lookAt(channel, task) {
     try { files = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/pulls/' + m[2] + '/files?per_page=100'], task.repo)).flat().flatMap((f) => [f.filename, f.previous_filename]).filter(Boolean); } catch (e) { rec.why = 'Could not list the PR\'s files: ' + e.message; return; }
   }
   const v = latest(rec);
-  let d = plan.forPr(pr, files, v, roundsOf(rec), MAX_ROUNDS());
+  const dev = terminal.find(channel, task.owner && task.owner.terminal);
+  let d = plan.forPr(pr, files, v, roundsOf(rec), MAX_ROUNDS(), !dev || dev.exited);
   const hold = d.act === 'merge' ? holdOf(task, terminal.find(channel, task.owner && task.owner.terminal), Date.now()) : null;
   if (hold) d = hold;
   rec.why = d.why; rec.act = d.act;
@@ -288,13 +290,32 @@ async function lookAt(channel, task) {
     }
     counted(channel, task, rec, pr.headRefOid);
     note(channel, 'Merged PR ' + number(task.pr) + ' (' + (task.ticket || task.title) + '): ' + d.why);
-  } else if (d.act === 'conflict') {
-    if (rec.conflictAt === pr.headRefOid) return;
-    rec.conflictAt = pr.headRefOid; save();
-    delivery.save(channel, { key: 'autopilot-conflict ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
-      text: 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s non-blocking findings. A follow-up review checks how you resolved it.' });
-    note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
-  } else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason, (v && v.commit) || pr.headRefOid);
+  } else if (d.act === 'conflict') askToMergeMain(channel, task, rec, pr);
+  else if (d.act === 'bring-back') bringBack(channel, task, rec, d, d.for === 'fix' ? v.commit : pr.headRefOid, pr);
+  else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason, (v && v.commit) || pr.headRefOid);
+}
+function askToMergeMain(channel, task, rec, pr) {
+  if (rec.conflictAt === pr.headRefOid) return;
+  rec.conflictAt = pr.headRefOid; save();
+  delivery.save(channel, { key: 'autopilot-conflict ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
+    text: 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s non-blocking findings. A follow-up review checks how you resolved it.' });
+  note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
+}
+const WAITS_FOR_ROOM = ['wip_limit', 'full', 'running'];
+function bringBack(channel, task, rec, d, commit, pr) {
+  const name = task.ticket || 'Task ' + task.id, what = d.for === 'fix' ? 'the fixes the last review asks for' : 'a merge of main';
+  const step = ' Press Bring back on its task, then move its card back to Autopilot.';
+  const key = d.for + ' ' + commit;
+  if (rec.broughtBack === key) { handOver(channel, task, rec, 'Its Dev was brought back once for ' + what + ' at ' + commit.slice(0, 7) + ', and is not running again.' + step, 'dev-gone', commit); return; }
+  if (d.for === 'conflict') askToMergeMain(channel, task, rec, pr);
+  const [status, out] = tasks.resume(channel, task, {}, ctx, BY);
+  if (status < 400) {
+    rec.broughtBack = key; rec.act = 'wait'; rec.why = 'Autopilot brought its Dev back for ' + what + '.'; save();
+    note(channel, name + ': its Dev was not running, so Autopilot brought it back for ' + what + '.');
+    return;
+  }
+  if (WAITS_FOR_ROOM.includes(out.error)) { rec.act = 'wait'; rec.why = 'Its Dev is not running, and Autopilot brings it back for ' + what + ' once it can: ' + out.message; return; }
+  handOver(channel, task, rec, 'Its Dev is not running, and Autopilot could not bring it back for ' + what + ': ' + out.message + step, 'dev-gone', commit);
 }
 function counted(channel, task, rec, head) {
   const c = chOf(channel), run = runOf(channel, task);
