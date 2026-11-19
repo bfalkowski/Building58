@@ -161,6 +161,28 @@ pageTest('a card shows its kind, and Change kind sets it', get, async (p) => {
   assert.deepStrictEqual(p.errors, []);
 });
 
+// A proposal shows on its card, and Approve proposal rejects the ticket
+// as replaced, which the Rejected list says (T-200).
+pageTest('a proposal shows on its card, and Approve proposal rejects the ticket as replaced', get, async (p) => {
+  const repo = makeRepo(o.R.home, 'proposal-repo');
+  const ids = [];
+  for (const title of ['Proposal old', 'Proposal new one', 'Proposal new two']) ids.push((await o.R.call('POST', '/tickets', { title, repo })).body.ticket.id);
+  assert.strictEqual((await o.R.call('POST', '/tickets/' + ids[0] + '/propose', { action: 'replace', ids: [ids[1], ids[2]], why: 'Split in two.' })).status, 200);
+  await p.open(); await unfold(p, 'board');
+  const sel = '#board-cols li[data-ticket="' + ids[0] + '"]';
+  await until(p, (s) => !!document.querySelector(s + ' .proposal'), sel);
+  await p.page.evaluate((s) => { const g = document.querySelector(s).parentElement.closest('details'); if (g) g.open = true; }, sel);
+  const card = p.page.locator(sel);
+  assert.strictEqual(await card.locator('.proposal').innerText(), 'You propose to replace ' + ids[0] + ' with ' + ids[1] + ', ' + ids[2] + '. Why: Split in two.');
+  await card.getByRole('button', { name: 'Approve proposal' }).click();
+  await card.waitFor({ state: 'detached' });
+  const rejected = p.page.locator('#board-rejected li[data-ticket="' + ids[0] + '"]');
+  assert.match(await rejected.textContent(), new RegExp('\\(replaced by ' + ids[1] + ', ' + ids[2] + '\\)'));
+  assert.strictEqual((await o.R.call('GET', '/tickets/' + ids[0])).body.ticket.status, 'rejected');
+  for (const id of ids.slice(1)) await o.R.call('POST', '/tickets/' + id + '/move', { to: 'rejected' });
+  assert.deepStrictEqual(p.errors, []);
+});
+
 // The room page gets the Board on its relay stream (relay/board-push.js), so it does not ask for it.
 // A change to one ticket replaces that card's element only: the other cards stay the same elements.
 pageTest('the relay pushes a change to the room page\'s Board, which replaces only that card and asks for no tickets', get, async (p) => {

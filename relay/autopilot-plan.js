@@ -55,7 +55,15 @@ function forPersonMerge(pr, locked, verdict, d) {
 
 const MARKS = ['hold', 'replaced'];
 const OPEN = ['triage', 'ready', 'started'];
+function proposalWords(p, id) {
+  const ids = (p.ids || []).join(', ');
+  if (p.action === 'replace') return 'replace ' + id + ' with ' + ids;
+  if (p.action === 'merge') return 'merge ' + id + ' into ' + ids;
+  if (p.action === 'close') return 'close ' + id;
+  return 'set the blockers of ' + id + ' to ' + (ids || 'none');
+}
 function heldBack(t, all) {
+  if (t.proposal) return 'A proposal to ' + proposalWords(t.proposal, t.id) + ' waits on you. Nothing starts it by itself until you approve or decline it.';
   const after = ' Nothing starts it by itself until you clear the mark.';
   if (t.mark === 'hold') return 'On hold.' + after;
   if (t.mark === 'replaced') return 'Replaced' + (t.replacedBy ? ' by ' + t.replacedBy : '') + '.' + after;
@@ -103,4 +111,4 @@ function reviewPostFor(comments, { login, since, commit }) {
   return found;
 }
 
-module.exports = { forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
