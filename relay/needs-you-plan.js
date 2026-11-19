@@ -4,7 +4,7 @@
 // list, so all three agree. A plain function with no side effects, so the tests run it without a relay.
 // See docs/manual/roles.html#needs-you.
 //
-//   listOf({ seats, tasks }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
+//   listOf({ seats, tasks, waits }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
 //
 // A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh },
 // where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
@@ -12,6 +12,8 @@
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
 // handedOver, onlyYouMerge }, where owner is the terminal of its Dev while that session runs, and pipelineWaits
 // says its open PR's pipeline is running or failing.
+// A wait is one saved message (relay/delivery.js) that has not gone in for a long time: { terminal, who, minutes,
+// why }, where terminal is the running session it is for, and why says in plain words what holds it.
 //
 // One rule for each kind. A session gives at most one item, and so does a task. A task whose Dev already has an
 // item gives none, since answering the Dev is the one move. The kinds, most urgent first:
@@ -22,13 +24,14 @@
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
+//   undelivered  a saved message for a running session has waited long, unless that session has another item
 //   prompt       an idle Dev on a task in Building or Changes requested with no PR, unless it has just started
 //   gone         a task in Building or Changes requested with no PR whose session has ended
 // link says what the page opens: { terminal } for a session, { url } for a PR, { ticket } for a Board card.
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'prompt', 'gone'];
+const KINDS = ['permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -82,6 +85,12 @@ function listOf(input) {
     if (dev && items.some((i) => i.terminal === dev.terminal)) continue;
     const it = taskItem(t, dev);
     if (it) items.push(it);
+  }
+  for (const w of (input && input.waits) || []) {
+    if (!w || !w.terminal || items.some((i) => i.terminal === w.terminal)) continue;
+    const who = oneLine(w.who, 40) || 'a session';
+    const minutes = Math.max(1, Math.floor(Number(w.minutes) || 0));
+    items.push({ kind: 'undelivered', who, terminal: w.terminal, task: null, ticket: null, pr: null, line: 'Open the session of ' + who + ': a message from the relay has waited ' + minutes + (minutes === 1 ? ' minute' : ' minutes') + ' for it and is not typed in, because ' + (oneLine(w.why, 160) || 'the relay cannot tell why') + '.', link: { terminal: w.terminal } });
   }
   return items.map((it, i) => [it, i]).sort((a, b) => KINDS.indexOf(a[0].kind) - KINDS.indexOf(b[0].kind) || a[1] - b[1]).map((x) => x[0]);
 }

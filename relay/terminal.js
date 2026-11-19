@@ -10,6 +10,9 @@
 // localhost or 127.0.0.1 (not a tunnel's name), and a browser request must come from the
 // relay's own page (its Origin). Other websites, tunnels and other computers get 403, even
 // with the right key.
+//
+// redraw(t) makes a session draw its whole screen again, as a resize does. It widens the terminal by one
+// column, and puts the width back at the next output, or after REDRAW_BACK. t.cols and t.rows do not change.
 'use strict';
 const crypto = require('crypto');
 const fs = require('fs');
@@ -375,6 +378,7 @@ function start(channel, body, ctx, onExit, own) {
   const emitOut = (buf) => {
     t.out.push(buf); t.outSize += buf.length;
     t.lastOutAt = Date.now(); t.tail = (t.tail + buf.toString('latin1')).slice(-TAIL);
+    if (t.redrawing) widthBack(t);
     if (t.sinceKey !== null) t.sinceKey = (t.sinceKey + buf.toString('latin1')).slice(-TAIL);
     while (t.outSize > KEEP && t.out.length > 1) t.outSize -= t.out.shift().length;
     t.pendingOut.push(buf);
@@ -496,6 +500,17 @@ function typeIfSafe(t, text, wanted, done, brief) {
     t.io.write('\r'); t.spoke = true; t.relayTyped = Date.now(); t.lastEnterAt = Date.now(); t.sinceKey = '';
     done(null);
   }, TYPE_SETTLE);
+}
+
+const REDRAW_BACK = 1000;
+function widthBack(t) {
+  clearTimeout(t.redrawing); t.redrawing = null;
+  if (!t.exited && !t.stopped) t.io.resize(t.cols, t.rows);
+}
+function redraw(t) {
+  if (!t || t.exited || t.stopped || t.redrawing) return;
+  t.redrawing = setTimeout(() => widthBack(t), REDRAW_BACK);
+  t.io.resize(t.cols + 1, t.rows);
 }
 
 const NOTE_SEEN = 30;
@@ -811,4 +826,4 @@ function agentFor(req) {
 const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited);
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit, MAX_PROMPT };
+module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit, MAX_PROMPT };
