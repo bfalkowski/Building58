@@ -8,6 +8,12 @@
 // While it waits, it holds saved messages only for RELAY_UPDATE_HOLD_MS, and it never gives up waiting.
 // See docs/manual/running.html#update and #update-hold.
 //
+// While RELAY_ROLLBACK=1, it takes main forward one merge at a time instead. A merge that changes no
+// relay file goes in at once and is checked on this relay. One that changes relay files restarts the
+// relay, and the next relay carries the loop on once the supervisor's check passes (begin, called from
+// relay/server.js). The loop stops at the first failed check, at its limit, or when the person stops it
+// between steps (relay/update-steps.js, docs/manual/running.html#update-steps).
+//
 // It runs git on this computer, so like the terminal it answers only the room page on this machine,
 // and only while RELAY_TERMINAL=1.
 'use strict';
@@ -21,6 +27,7 @@ const { RESTART } = require('./supervisor.js');
 const coo = require('./coo.js');
 const hostLink = require('./host-link.js');
 const rollback = require('./rollback.js');
+const steps = require('./update-steps.js');
 const config = require('./config.js');
 const { livenessOf, jobsOf } = require('./liveness.js');
 const noteForCoo = (channel, kind, detail) => { if (channel) coo.noteEvent(channel, kind, detail); };
@@ -29,14 +36,16 @@ const DIR = path.resolve(process.env.RELAY_UPDATE_DIR || path.join(__dirname, '.
 const BRANCH = 'main';
 const PULL = { timeout: 60000, env: Object.assign({}, process.env, { GIT_TERMINAL_PROMPT: '0' }) };
 const SUPERVISED = process.env.RELAY_SUPERVISED === '1';
+const STEPPING = () => SUPERVISED && rollback.ON();
 
 const RUN = require('crypto').randomBytes(6).toString('hex');
 let LOADED = null;
 try { LOADED = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: DIR, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch (e) { /* not a git folder: Update says so when pressed */ }
-function rolledBack() { const r = rollback.read().rollback; return r && LOADED && r.running === LOADED && !rollback.onBranch() ? r : null; }
+function rolledBack() { const r = rollback.read().rollback; return r && LOADED && (r.running === LOADED || r.running === rollback.head()) && !rollback.onBranch() ? r : null; }
 let job = null;
 let pulling = false;
-let lastNote = null;
+let lastNote = null, noteAt = null;
+let lastReloads = 0;
 const HOLD = () => config.get('updateHoldMinutes') * 60 * 1000;
 terminal.holdWhileUpdating({
   updating: () => !!job,
@@ -70,8 +79,14 @@ function whoIsBusy() {
 function view() {
   if (!job) return null;
   const waiting = job.state === 'waiting';
-  return { state: job.state, from: job.from, to: job.to, files: job.files, startedAt: job.startedAt, waitingOn: waiting ? whoIsBusy() : [] };
+  const v = { state: job.state, from: job.from, to: job.to, files: job.files, startedAt: job.startedAt, waitingOn: waiting ? whoIsBusy() : [] };
+  if (job.steps) {
+    const s = job.steps[Math.min(job.at, job.steps.length - 1)];
+    v.step = { at: Math.min(job.at + 1, job.steps.length), of: job.steps.length, sha: s.sha, pr: s.pr, name: steps.name(s), later: job.later, reloads: job.reloads, stopping: !!job.stop };
+  }
+  return v;
 }
+const note = (ctx, text, channel, kind) => { lastNote = text; noteAt = Date.now(); ctx.log(text); if (kind) noteForCoo(channel, kind, text); };
 
 async function refusal() {
   const branch = await tasks.git(DIR, ['symbolic-ref', '--short', '-q', 'HEAD']).catch(() => '');
@@ -111,17 +126,22 @@ function restartWhenQuiet(ctx, channel) {
     if (!job || job.state !== 'waiting' || pulling || whoIsBusy().length) return;
     clearInterval(job.timer);
     job.state = 'restarting';
-    ctx.log('Restarting the relay to run ' + job.to.slice(0, 7) + '. Every session keeps running, and the new relay takes it back.');
+    const to = job.next || job.to;
+    ctx.log('Restarting the relay to run ' + to.slice(0, 7) + (job.steps ? ', ' + stepWords() : '') + '. Every session keeps running, and the new relay takes it back.');
     setTimeout(async () => {
       const busy = whoIsBusy();
       if (busy.length) {
-        lastNote = 'The restart was called off, since ' + busy.map((w) => w.title + ' (' + w.why + ')').join(', ') + ' started just before it. The relay\'s folder is as it was. Press Update again to wait for the next quiet moment.';
-        ctx.log(lastNote); noteForCoo(channel, 'update_called_off', lastNote); job = null; return;
+        const who = busy.map((w) => w.title + ' (' + w.why + ')').join(', ');
+        if (job.steps) return endLoop(ctx, stoppedBefore('the restart was called off, since ' + who + ' started just before it.'), 'update_called_off');
+        note(ctx, 'The restart was called off, since ' + who + ' started just before it. The relay\'s folder is as it was. Press Update again to wait for the next quiet moment.', channel, 'update_called_off');
+        job = null; return;
       }
-      try { await fastForward(job.to); } catch (e) {
-        lastNote = 'The restart was called off, since the relay\'s folder could not fast-forward to ' + job.to.slice(0, 7) + ': ' + e.message + ' The folder is as it was.';
-        ctx.log(lastNote); noteForCoo(channel, 'update_failed', lastNote); job = null; return;
+      try { await fastForward(to); } catch (e) {
+        if (job.steps) return endLoop(ctx, stoppedBefore('the relay\'s folder could not fast-forward to ' + to.slice(0, 7) + ': ' + e.message), 'update_failed');
+        note(ctx, 'The restart was called off, since the relay\'s folder could not fast-forward to ' + to.slice(0, 7) + ': ' + e.message + ' The folder is as it was.', channel, 'update_failed');
+        job = null; return;
       }
+      if (job.steps) saveLoop(ctx);
       terminal.close(); process.exit(RESTART);
     }, 300);
   }, 500);
@@ -129,10 +149,14 @@ function restartWhenQuiet(ctx, channel) {
 
 async function update(body, ctx, channel) {
   if (body.cancel) {
+    if (job && job.steps) {
+      if (job.state === 'waiting') endLoop(ctx, stoppedBefore('you stopped it.'), null);
+      else if (job.state !== 'restarting' && !job.stop) { job.stop = true; ctx.log('Update stops after ' + stepWords() + ', as asked.'); }
+      return [200, { ok: true, update: view() }];
+    }
     if (job && job.state === 'waiting') {
       clearInterval(job.timer); job = null;
-      lastNote = 'The restart was called off. Nothing was pulled, so the relay\'s folder is as it was. Press Update again to wait for the next quiet moment.';
-      ctx.log(lastNote);
+      note(ctx, 'The restart was called off. Nothing was pulled, so the relay\'s folder is as it was. Press Update again to wait for the next quiet moment.', channel, null);
     }
     return [200, { ok: true, update: view() }];
   }
@@ -141,7 +165,7 @@ async function update(body, ctx, channel) {
   try { return await pullAndPlan(ctx, channel); } finally { pulling = false; }
 }
 async function pullAndPlan(ctx, channel) {
-  lastNote = null;
+  lastNote = null; noteAt = null;
   const refused = await refusal();
   if (refused) return refused;
   const fetched = await fetchMain();
@@ -161,9 +185,10 @@ async function pullAndPlan(ctx, channel) {
     return null;
   };
   const pulled = from === to ? fetchedWords : 'Pulled ' + from.slice(0, 7) + '..' + to.slice(0, 7) + '.';
+  if (STEPPING() && from !== to) return startLoop(ctx, channel, from, to, files, relayFiles);
   if (!relayFiles.length) return (await pullNow()) || [200, { ok: true, changed: true, from, to, files, reload: true, message: pulled + ' Only page files changed, so the page reloads.' }];
   const once = LOADED_ONCE.filter((f) => relayFiles.includes(f));
-  const note = once.length ? ' ' + once.join(' and ') + (once.length > 1 ? ' changed too. They run' : ' changed too. It runs') + ' until you stop the relay yourself, so stop and start it once to use the new code.' : '';
+  const onceNote = once.length ? ' ' + once.join(' and ') + (once.length > 1 ? ' changed too. They run' : ' changed too. It runs') + ' until you stop the relay yourself, so stop and start it once to use the new code.' : '';
   if (!SUPERVISED) {
     const failed = await pullNow();
     if (failed) return failed;
@@ -171,7 +196,7 @@ async function pullAndPlan(ctx, channel) {
   }
   job = { state: 'waiting', from, to, files: relayFiles, startedAt: new Date().toISOString(), timer: null };
   restartWhenQuiet(ctx, channel);
-  return [202, { ok: true, changed: true, from, to, files, restart: true, run: RUN, message: fetchedWords + ' The relay pulls it and restarts once no session is in a turn. A session at a question stays at it. Until then the folder is as it was. Every session keeps running through it.' + note, update: view() }];
+  return [202, { ok: true, changed: true, from, to, files, restart: true, run: RUN, message: fetchedWords + ' The relay pulls it and restarts once no session is in a turn. A session at a question stays at it. Until then the folder is as it was. Every session keeps running through it.' + onceNote, update: view() }];
 }
 
 async function handle(req, res, channel, rest, ctx) {
@@ -180,7 +205,7 @@ async function handle(req, res, channel, rest, ctx) {
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'Update needs the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
   let out;
-  if (req.method === 'GET') out = [200, { ok: true, dir: DIR, branch: BRANCH, run: RUN, update: view(), note: lastNote, rollback: rolledBack(), host: hostLink.gapWords() }];
+  if (req.method === 'GET') out = [200, { ok: true, dir: DIR, branch: BRANCH, run: RUN, update: view(), note: lastNote, noteAt, reloads: lastReloads, steps: STEPPING(), rollback: rolledBack(), host: hostLink.gapWords() }];
   else if (req.method === 'POST') out = await update(await ctx.readJson(req), ctx, channel);
   if (!out) { ctx.problem(res, 404, 'not_found', 'Unknown update route.'); return true; }
   ctx.send(res, out[0], out[1]);
@@ -188,7 +213,7 @@ async function handle(req, res, channel, rest, ctx) {
 }
 
 const run = (ctx) => (pulling ? Promise.resolve([200, { ok: true, changed: false, message: 'A pull is already under way, and it gets this merge too.' }])
-  : job && job.state === 'waiting' ? pullMore(ctx) : update({}, ctx));
+  : job && job.steps && job.state !== 'restarting' ? pullMoreSteps(ctx) : job && job.state === 'waiting' ? pullMore(ctx) : update({}, ctx));
 const calledOffAsFetched = () => [200, { ok: true, changed: false, restart: false, message: 'The restart was called off as it fetched, so nothing was pulled. Press Update to pull the new code.' }];
 async function pullMore(ctx) {
   pulling = true;
@@ -213,4 +238,147 @@ async function pullMore(ctx) {
 const updating = () => !!job || pulling;
 const restarting = () => !!job && job.state === 'restarting';
 
-module.exports = { handle, isRelayFile, run, updating, restarting, DIR };
+const onceWords = (once) => (once && once.length ? ' ' + once.join(' and ') + (once.length > 1 ? ' changed too. They run' : ' changed too. It runs') + ' until you stop the relay yourself, so stop and start it once to use the new code.' : '');
+const onceIn = (files) => LOADED_ONCE.filter((f) => files.includes(f));
+const stepWords = () => (job.at + 1) + ' of ' + job.steps.length + ', ' + steps.name(job.steps[job.at]);
+const waits = (n) => (n > 1 ? ' wait' : ' waits');
+function whereItStands(i, pass) {
+  const done = job.steps.slice(0, i), wait = job.steps.slice(pass ? i : i + 1);
+  const waitWords = (wait.length ? steps.names(wait) : '') + (job.later ? (wait.length ? ' and ' : '') + job.later + ' more' : '');
+  return (done.length ? ' ' + steps.names(done) + (done.length > 1 ? ' are' : ' is') + ' in.' : '')
+    + (wait.length || job.later ? ' ' + waitWords + waits(wait.length + job.later) + ' for the next Update.' : '');
+}
+const stoppedBefore = (why) => 'Update stopped at ' + stepWords() + ', before its restart: ' + why + whereItStands(job.at, true) + ' The relay\'s folder stays on ' + (job.at ? job.steps[job.at - 1].sha : job.from).slice(0, 7) + ', the commit before it.';
+function endLoop(ctx, text, kind) {
+  if (!job) return;
+  clearInterval(job.timer);
+  steps.clear();
+  lastReloads = job.reloads || 0;
+  const channel = job.channel, once = job.once;
+  job = null;
+  note(ctx, text + onceWords(once), channel, kind);
+}
+function saveLoop(ctx) {
+  job.onceBefore = job.once || [];
+  job.once = [...new Set(job.onceBefore.concat(onceIn(job.files)))];
+  try {
+    steps.write({ dir: DIR, channel: job.channel || null, from: job.from, to: job.to, steps: job.steps, at: job.at, later: job.later, once: job.once, onceBefore: job.onceBefore, startedAt: job.startedAt, restartAt: new Date().toISOString() });
+  } catch (e) { ctx.log('Could not save the Update loop, so it ends with this step: ' + e.message); }
+}
+const stepFailed = (ctx) => (e) => endLoop(ctx, 'Update stopped at ' + stepWords() + ': ' + e.message, 'update_failed');
+
+async function startLoop(ctx, channel, from, to, files, relayFiles) {
+  let all;
+  try { all = await steps.list(DIR, from, to); } catch (e) { return [409, { ok: false, error: 'pull_failed', message: 'Could not list the merges ' + from.slice(0, 7) + '..' + to.slice(0, 7) + ': ' + e.message }]; }
+  const now = all.slice(0, steps.LIMIT());
+  job = { state: 'stepping', from, to: now[now.length - 1].sha, files: [], steps: now, at: 0, later: all.length - now.length, reloads: 0, stop: false, once: [], channel: channel || null, startedAt: new Date().toISOString(), timer: null, next: null };
+  const words = 'Fetched ' + from.slice(0, 7) + '..' + to.slice(0, 7) + ': ' + all.length + (all.length === 1 ? ' merge' : ' merges') + (job.later ? ', ' + now.length + ' of them in this run' : '') + '. Update takes them one at a time, oldest first: ' + steps.names(now) + '.';
+  ctx.log('Update: ' + words);
+  nextStep(ctx).catch(stepFailed(ctx));
+  return [202, { ok: true, changed: true, from, to, files, restart: true, run: RUN, message: words + ' Each one that changes the relay restarts it, and the next goes in only once the new relay passes its check.' + onceWords(onceIn(relayFiles)), update: view() }];
+}
+
+async function nextStep(ctx) {
+  if (!job) return;
+  const all = job.steps.length;
+  if (job.stop) return endLoop(ctx, 'Update stopped after ' + job.at + ' of ' + all + ', as asked.' + whereItStands(job.at, true), null);
+  if (job.at >= all) return endLoop(ctx, 'Update is done: ' + all + (all === 1 ? ' merge' : ' merges') + ' in, one at a time, and each passed its check.' + (job.later ? ' ' + job.later + ' more' + waits(job.later) + ' for the next Update.' : ''), null);
+  const step = job.steps[job.at];
+  job.next = step.sha; job.state = 'stepping';
+  const relayFiles = LOADED ? (await tasks.git(DIR, ['diff', '--name-only', LOADED, step.sha])).split('\n').filter(isRelayFile) : null;
+  if (!job) return;
+  if (relayFiles && !relayFiles.length) return pageStep(ctx, step);
+  job.state = 'waiting'; job.files = relayFiles || [];
+  ctx.log('Update: ' + stepWords() + ' changes relay files, so the relay restarts on it once no session is in a turn.' + onceWords(onceIn(job.files)));
+  restartWhenQuiet(ctx, job.channel);
+}
+
+async function pageStep(ctx, step) {
+  ctx.log('Update: ' + stepWords() + ' changes no relay file, so it goes in with no restart.');
+  try { await fastForward(step.sha); } catch (e) { return endLoop(ctx, stoppedBefore('the relay\'s folder could not fast-forward to ' + step.sha.slice(0, 7) + ': ' + e.message), 'update_failed'); }
+  if (!job) return;
+  job.reloads++;
+  const r = await pageCheck(ctx.port);
+  if (!job) return;
+  if (!r.ok) {
+    const prev = job.at ? job.steps[job.at - 1].sha : job.from;
+    let back = 'Update went back to ' + prev.slice(0, 7) + ', so only that merge is out.';
+    try { rollback.checkout(prev); rollback.noteRollback(step.sha, prev, r.why); } catch (e) { back = 'Update could not go back to ' + prev.slice(0, 7) + ', so the folder is on ' + step.sha.slice(0, 7) + ': ' + e.message; }
+    return endLoop(ctx, 'Update stopped at ' + stepWords() + ' (' + step.sha.slice(0, 7) + '): it failed its check, since ' + r.why + '. ' + back + whereItStands(job.at, false) + ' Fix it on main, check out main in the relay\'s folder, and press Update.', 'update_failed');
+  }
+  rollback.passed(step.sha);
+  job.at++;
+  return nextStep(ctx);
+}
+
+async function pageCheck(port) {
+  const base = 'http://' + rollback.host() + ':' + port, end = Date.now() + 15000;
+  let why = 'it did not answer /health';
+  while (Date.now() < end) {
+    try {
+      const h = await fetch(base + '/health', { signal: AbortSignal.timeout(3000) });
+      if (!h.ok) why = '/health answered ' + h.status;
+      else {
+        const page = await fetch(base + '/office/', { signal: AbortSignal.timeout(3000) });
+        const text = await page.text();
+        if (page.ok && /<html/i.test(text)) return { ok: true };
+        why = 'it answered /health but not the room page (' + page.status + ')';
+      }
+    } catch (e) { why = 'it did not answer: ' + e.message; }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return { ok: false, why };
+}
+
+function begin(ctx) {
+  const loop = steps.read(DIR);
+  if (!loop) return;
+  if (!STEPPING()) { steps.clear(); note(ctx, 'An Update going through merges one at a time ended, since this relay runs without RELAY_ROLLBACK=1.', loop.channel, null); return; }
+  const back = rollback.read().rollback;
+  const r = steps.resume(loop, { loaded: LOADED, back: back && Date.parse(back.at) >= Date.parse(loop.restartAt) ? back : null, now: Date.now() });
+  job = Object.assign({}, loop, { state: 'checking', files: [], reloads: 0, stop: false, timer: null, next: loop.steps[loop.at] && loop.steps[loop.at].sha });
+  if (r.go === 'drop') { job.once = []; endLoop(ctx, 'An Update going through merges one at a time ended, since ' + r.why + '.', null); return; }
+  if (r.go === 'failed') {
+    job.once = loop.onceBefore || [];
+    endLoop(ctx, 'Update stopped at ' + stepWords() + ' (' + r.step.sha.slice(0, 7) + '): the new relay failed its check, since ' + r.why + '. Update went back to ' + String(back.running).slice(0, 7) + ', so only that merge is out.' + whereItStands(job.at, false) + ' Fix it on main, check out main in the relay\'s folder, and press Update.', 'update_failed');
+    return;
+  }
+  job.once = loop.once || [];
+  ctx.log('Update: ' + stepWords() + ' is in. Waiting for the supervisor\'s check of this relay before the next step.');
+  const within = rollback.WITHIN() + 30000, end = Date.now() + within;
+  job.timer = setInterval(() => {
+    if (!job || job.state !== 'checking') return;
+    const g = rollback.read();
+    if (g.commit === LOADED && Date.parse(g.at) >= Date.parse(loop.restartAt)) {
+      clearInterval(job.timer); steps.clear();
+      ctx.log('Update: ' + stepWords() + ' passed its check.');
+      job.at++;
+      nextStep(ctx).catch(stepFailed(ctx));
+    } else if (Date.now() > end) {
+      endLoop(ctx, 'Update stopped at ' + stepWords() + ': the new relay did not pass its check within ' + Math.round(within / 1000) + ' seconds after it took its sessions back, and did not roll back. The terminal where the relay runs says why.' + whereItStands(job.at, false), 'update_failed');
+    }
+  }, 500);
+}
+
+async function pullMoreSteps(ctx) {
+  pulling = true;
+  try {
+    const refused = await refusal();
+    if (refused) return refused;
+    const fetched = await fetchMain();
+    if (fetched.refused) return fetched.refused;
+    if (!job || !job.steps) return calledOffAsFetched();
+    const more = await steps.list(DIR, job.to, fetched.to);
+    if (!job || !job.steps) return calledOffAsFetched();
+    if (!more.length) return [200, { ok: true, changed: false, restart: true, message: 'Already up to date.' }];
+    const take = more.slice(0, Math.max(0, steps.LIMIT() - job.steps.length));
+    job.steps.push(...take); job.later = more.length - take.length;
+    if (take.length) job.to = take[take.length - 1].sha;
+    const words = take.length ? steps.names(take) + ' joined the Update under way, as ' + (job.steps.length - take.length + 1) + (take.length > 1 ? ' to ' + job.steps.length : '') + ' of ' + job.steps.length + '.' : '';
+    const later = job.later ? ' ' + job.later + ' more' + waits(job.later) + ' for the next Update, since a run takes at most ' + steps.LIMIT() + ' merges.' : '';
+    ctx.log('Update: ' + words + later);
+    return [200, { ok: true, changed: true, restart: true, message: (words + later).trim(), update: view() }];
+  } finally { pulling = false; }
+}
+
+module.exports = { handle, isRelayFile, run, updating, restarting, begin, DIR };

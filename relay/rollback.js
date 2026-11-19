@@ -84,4 +84,4 @@ function noteRollback(failed, running, why) {
   write({ dir: DIR(), commit: running, at: read().at || null, rollback: { failed, running, why, at: new Date().toISOString() } });
 }
 
-module.exports = { ON, WITHIN, FILE, DIR, head, changed, onBranch, read, passed, plan, check, checkout, noteRollback };
+module.exports = { ON, WITHIN, FILE, DIR, host, head, changed, onBranch, read, passed, plan, check, checkout, noteRollback };

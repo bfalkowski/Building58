@@ -18,6 +18,7 @@ const config = require('./config.js');
 const pmNotes = require('./pm-notes.js');
 const { boardOrder, lastRank, placeNear } = require('./ticket-order.js');
 const { WORDING_TICKET, heldBack, MARKS, proposalWords } = require('./autopilot-plan.js');
+const { likelyTwins } = require('./ticket-twins.js');
 
 const STATUSES = ['triage', 'ready', 'started', 'done', 'rejected'];
 const PRIORITIES = ['high', 'normal', 'low'];
@@ -157,7 +158,7 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   const ticket = await store.create(channel, Object.assign({ title, body: text, priority, rank, repo, base, blockedBy }, shapes.length ? { shapes } : {}, kind ? { kind } : {}, labels.length ? { labels } : {}, { status: agent ? 'triage' : 'ready', createdBy: agent ? agentName(agent) : 'you' }, agent ? {} : { approvedBy: 'you' }));
   history.add(channel, ticket, { stage: 'filed', by: ticket.createdBy }, agent || null);
   filed(channel, ticket, agent, ticket.createdAt);
-  return [201, { ok: true, ticket: await view(channel, ticket, all.concat(ticket)) }];
+  return [201, { ok: true, ticket: await view(channel, ticket, all.concat(ticket)), likely: likelyTwins(ticket, live) }];
 }
 const agentName = (t) => (t.role === 'pm' ? 'PM' : t.role === 'coo' ? 'COO' : t.lead ? 'Lead' : t.title ? 'Worker on ' + t.title : 'Session ' + t.sessionId.slice(0, 8)).slice(0, 60);
 

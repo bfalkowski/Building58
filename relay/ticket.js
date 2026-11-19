@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Files a ticket from inside a session the room started. What it files waits in Triage.
-//   node relay/ticket.js create "Radio clips at high volume" --body "What to do" --priority high --blocked-by T-1,T-2
+//   node relay/ticket.js create "Radio clips at high volume" --priority high --blocked-by T-1,T-2 --body - <<'EOF'
 //   (blocked-by takes the ids that list and create print: T-1 on the local store, 12 on GitHub issues)
 //   node relay/ticket.js create "Decide the layout" --shapes T-7,T-9 --body - <<'EOF'
 //   (a design ticket: while it is open, Autopilot and the Lead start none of the tickets it shapes, which must be in Triage)
@@ -58,9 +58,9 @@
 // Only the PM and the Lead can propose to replace, merge or close a ticket in Triage or Ready, or to change
 // its blockers. Nothing changes until the person approves the proposal on the Board, and nothing starts
 // the ticket while it waits. A new proposal on a ticket takes the place of the one before:
-//   node relay/ticket.js replace T-10 --by T-18,T-19 --why "Split into two"   (approved, T-10 is rejected as replaced)
-//   node relay/ticket.js merge T-24 --into T-8 --why "Same work"               (approved, T-24 is rejected as merged)
-//   node relay/ticket.js close T-5 --why "No longer needed"                   (approved, T-5 is rejected as closed)
+//   node relay/ticket.js replace T-10 --by T-18,T-19 --why 'Split into two'   (approved, T-10 is rejected as replaced)
+//   node relay/ticket.js merge T-24 --into T-8 --why 'Same work'               (approved, T-24 is rejected as merged)
+//   node relay/ticket.js close T-5 --why 'No longer needed'                   (approved, T-5 is rejected as closed)
 //   node relay/ticket.js blockers T-19 --blocked-by T-18                      (the whole new list, or none)
 // Only the COO can read the room's measures and save its report, which it pipes in:
 //   node relay/ticket.js measures
@@ -96,7 +96,7 @@ function flags(args) {
   return out;
 }
 async function readBody(f) {
-  if (f.twice) { console.error('Give the body once: --body "text", --body - for stdin, or --body-file <path>.'); return false; }
+  if (f.twice) { console.error('Give the body once: --body - for stdin, --body-file <path>, or --body text.'); return false; }
   if ((f.bodyFrom === 'file' || f.bodyFrom === 'text') && f.body === undefined) { console.error('Say what follows ' + (f.bodyFrom === 'file' ? '--body-file: a path, or - for stdin.' : '--body: the text, or - for stdin.')); return false; }
   if (f.bodyFrom === 'file') {
     try { f.body = fs.readFileSync(f.body, 'utf8'); } catch (e) { console.error('Could not read the body file ' + f.body + ': ' + e.code); return false; }
@@ -157,6 +157,11 @@ async function main() {
     const r = await (await fetch(URL_, { method: 'POST', headers, body: JSON.stringify({ title: f.rest.join(' '), body: f.body, priority: f.priority, blockedBy: f.blockedBy, shapes: f.shapes, kind: f.kind, labels: f.labels }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log((r.duplicate ? 'Already filed: ' : 'Filed: ') + r.ticket.id + '  ' + r.ticket.title + (r.duplicate ? '  (' + r.ticket.status + ')' : '  (waiting in ' + r.ticket.status + ')'));
+    const likely = r.likely || [];
+    if (likely.length) {
+      console.log('Likely duplicate' + (likely.length > 1 ? 's' : '') + ' of open tickets:\n' + likely.map((x) => '  ' + x.id + '  ' + x.title + '  (' + x.status + ')').join('\n'));
+      console.log('If ' + r.ticket.id + ' is the same work as one of them, one should be rejected: the Lead runs ticket.js move ' + r.ticket.id + ' rejected, and any other session tells @Lead with ticket.js post, naming both.');
+    }
     return 0;
   }
   if (cmd === 'edit' && args[0]) {
@@ -170,7 +175,7 @@ async function main() {
   }
   if (PROPOSE[cmd] && args[0]) {
     const f = flags(args.slice(1));
-    if (f.rest.length) { console.error('Unknown words: ' + f.rest.join(' ') + '. Put a reason in --why "The reason".'); return 1; }
+    if (f.rest.length) { console.error('Unknown words: ' + f.rest.join(' ') + '. Put a reason in --why \'The reason\'.'); return 1; }
     const ids = cmd === 'replace' ? f.by : cmd === 'merge' ? (f.into ? [f.into] : undefined) : cmd === 'blockers' ? f.blockedBy && f.blockedBy.filter((x) => x.toLowerCase() !== 'none') : [];
     if (!ids) { console.error('Use: ticket.js ' + PROPOSE[cmd]); return 1; }
     const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/propose', { method: 'POST', headers, body: JSON.stringify({ action: cmd, ids, why: f.why }) })).json();

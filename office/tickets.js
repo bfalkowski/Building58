@@ -446,7 +446,7 @@
     remember();
     if (r.duplicate) { say(r.ticket.id + ' already has that title ' + (r.ticket.base ? 'on ' + r.ticket.base : 'in this repo') + '. What you typed is still here.', true); return; }
     $('ticket-title').value = ''; $('ticket-body').value = '';
-    say('Filed ' + r.ticket.id + '.');
+    say('Filed ' + r.ticket.id + '.' + ((r.likely || []).length ? ' It looks like ' + r.likely.map((x) => x.id + ' (' + x.title + ', ' + x.status + ')').join(', ') + '. If it is the same work, reject one.' : ''), (r.likely || []).length > 0);
     refresh();
   });
   $('ticket-pm').addEventListener('click', async () => {
