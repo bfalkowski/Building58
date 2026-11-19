@@ -81,3 +81,26 @@ test('the relay that runs now, and its supervisor, are never in the plan', () =>
   const me = Object.assign({}, ME, { pid: 48435, ppid: 48146 });
   assert.ok(!planOf({ me, procs: psOf(LISTING) }).some((r) => r.pids.includes(48435)));
 });
+
+test('the same file and port on another HOST can listen beside this relay, so it is named, not stopped (review of PR 122)', () => {
+  const listing = LISTING + '\n' + line(70008, 1, 'S', 'Thu Nov 19 10:00:00 2026', NODE + ' ' + MAIN + ' HOME=/u PORT=8787 HOST=0.0.0.0');
+  const r = planOf({ me: ME, procs: psOf(listing) }).find((x) => x.pid === 70008);
+  assert.strictEqual(r.own, false);
+  const same = LISTING + '\n' + line(70009, 1, 'S', 'Thu Nov 19 10:00:00 2026', NODE + ' ' + MAIN + ' HOME=/u PORT=8787 HOST=127.0.0.1');
+  assert.strictEqual(planOf({ me: ME, procs: psOf(same) }).find((x) => x.pid === 70009).own, true, 'HOST=127.0.0.1 is the default HOST');
+  assert.strictEqual(planOf({ me: Object.assign({}, ME, { host: '0.0.0.0' }), procs: psOf(listing) }).find((x) => x.pid === 70008).own, true);
+});
+
+test('a relay that still has a worker may be live, so it is named, not stopped', () => {
+  const listing = LISTING + '\n' + line(70010, 1, 'S', 'Thu Nov 19 10:00:00 2026', NODE + ' ' + MAIN + ' HOME=/u PORT=8787') +
+    '\n' + line(70011, 70010, 'S', 'Thu Nov 19 10:00:01 2026', NODE + ' ' + MAIN + ' HOME=/u PORT=8787 RELAY_WORKER=1');
+  const r = planOf({ me: ME, procs: psOf(listing) }).find((x) => x.pid === 70010);
+  assert.deepStrictEqual([r.worker, r.own], [true, false]);
+});
+
+test('a relative RELAY_STATE_DIR is read against the relay\'s cwd, and left out with no cwd', () => {
+  const listing = LISTING + '\n' + line(70012, 1, 'S', 'Thu Nov 19 10:00:00 2026', NODE + ' ' + MAIN + ' HOME=/elsewhere RELAY_STATE_DIR=.office-world PORT=8788');
+  assert.ok(!planOf({ me: ME, procs: psOf(listing) }).some((r) => r.pid === 70012));
+  const procs = psOf(listing).map((p) => (p.pid === 70012 ? Object.assign(p, { cwd: '/u' }) : p));
+  assert.strictEqual(planOf({ me: ME, procs }).find((r) => r.pid === 70012).own, false);
+});

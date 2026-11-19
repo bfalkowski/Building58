@@ -33,8 +33,10 @@ async function cwdOf(pid) {
 async function scan() {
   const procs = psOf(await run('ps', ['axeww', '-o', 'pid=,ppid=,stat=,lstart=,command=']));
   for (const p of procs) if (path.isAbsolute(p.script)) p.script = realOf(p.script);
+  const relative = (p) => p.env.RELAY_STATE_DIR && !p.env.RELAY_STATE_DIR.startsWith('~') && !path.isAbsolute(p.env.RELAY_STATE_DIR);
+  for (const p of procs) if (relative(p)) p.cwd = await cwdOf(p.pid);
   const unknown = planOf({ me, procs }).filter((r) => !r.file).map((r) => r.pid);
-  for (const p of procs) if (unknown.includes(p.pid)) p.cwd = await cwdOf(p.pid);
+  for (const p of procs) if (unknown.includes(p.pid) && !p.cwd) p.cwd = await cwdOf(p.pid);
   return planOf({ me, procs });
 }
 function signal(pid, sig) { try { process.kill(pid, sig); return true; } catch (e) { return false; } }
@@ -55,8 +57,8 @@ function stop(r, log) {
 }
 const named = (r) => 'pid ' + r.pid + (r.started ? ', started ' + r.started.slice(0, 16).replace('T', ' ') + ' UTC' : '') + ', ' + (r.file ? state.shown(r.file) : 'from a folder ps does not show') + ', port ' + r.port + (r.paused ? ', paused' : '');
 
-async function begin({ port, defaultPort, world, log }) {
-  me = { pid: process.pid, ppid: process.ppid, file: fs.realpathSync(path.join(__dirname, 'server.js')), stateDir: state.dir(), port, defaultPort, world: world || '' };
+async function begin({ port, defaultPort, host, world, log }) {
+  me = { pid: process.pid, ppid: process.ppid, file: fs.realpathSync(path.join(__dirname, 'server.js')), stateDir: state.dir(), port, defaultPort, host, world: world || '' };
   let found;
   try { found = await scan(); } catch (e) { log('Could not look for other relays: ' + e.message); return; }
   for (const r of found.filter((x) => x.own)) {

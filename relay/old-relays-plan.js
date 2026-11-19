@@ -6,17 +6,20 @@
 //   psOf(text) -> [{ pid, ppid, stat, started, script, env, cwd }]   from ps axeww -o pid=,ppid=,stat=,lstart=,command=
 //   planOf({ me, procs }) -> [{ pid, pids, file, port, started, paused, worker, own }]
 //
-// me is the relay that runs now: { pid, ppid, file, stateDir, port, defaultPort, world }. A relay is one
+// me is the relay that runs now: { pid, ppid, file, stateDir, port, defaultPort, host, world }. A relay is one
 // supervisor and the worker it runs, and pid is the top one. It is in the plan when its state folder is
-// this one, and its world is this one or none. own says it runs this same relay/server.js on this same port:
-// this relay holds that port, so the other is an old copy that cannot answer, and it is stopped. Any other
-// is named for the person to stop. A relay whose HOME ps does not show is left out, since its folder is unknown.
+// this one, and its world is this one or none. A relative RELAY_STATE_DIR is read against the relay's cwd.
+// own says it is a supervisor with no worker left, for this same relay/server.js on this same HOST and port:
+// an old copy that cannot answer, and it is stopped. Two relays on one port with different HOSTs can both
+// listen, so any relay with a worker, or with another HOST, is only named for the person to stop. A relay
+// whose HOME ps does not show, or whose folder is relative with no cwd known, is left out.
 'use strict';
 const path = require('path');
 
 const SCRIPT = /^\S*node\s+(\S*relay\/server\.js)(?=\s|$)/;
 const ROW = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.*)$/;
-const NAMES = ['HOME', 'RELAY_STATE_DIR', 'PORT', 'RELAY_WORLD', 'RELAY_WORKER'];
+const DEFAULT_HOST = '127.0.0.1';
+const NAMES = ['HOME', 'RELAY_STATE_DIR', 'PORT', 'HOST', 'RELAY_WORLD', 'RELAY_WORKER'];
 
 function envOf(command) {
   const env = {};
@@ -40,12 +43,12 @@ function psOf(text) {
   return out;
 }
 
-function stateDirOf(env) {
+function stateDirOf(env, cwd) {
   if (!env.HOME) return null;
   const given = env.RELAY_STATE_DIR;
   if (!given) return path.join(env.HOME, '.office-world');
   const p = given === '~' ? env.HOME : given.startsWith('~/') ? path.join(env.HOME, given.slice(2)) : given;
-  return path.isAbsolute(p) ? path.resolve(p) : null;
+  return path.isAbsolute(p) ? path.resolve(p) : cwd ? path.resolve(cwd, p) : null;
 }
 function fileOf(p) {
   if (path.isAbsolute(p.script)) return path.resolve(p.script);
@@ -67,11 +70,12 @@ function planOf({ me, procs }) {
     if (all.some((p) => p.pid === me.pid || p.pid === me.ppid)) continue;
     const worker = members.find((p) => p.env.RELAY_WORKER === '1') || (top.env.RELAY_WORKER === '1' ? top : null);
     const env = Object.assign({}, top.env, worker ? worker.env : {});
-    const dir = stateDirOf(env);
+    const dir = stateDirOf(env, top.cwd);
     if (!dir || dir !== me.stateDir) continue;
     if (env.RELAY_WORLD && me.world && env.RELAY_WORLD !== me.world) continue;
-    const file = fileOf(top), port = Number(env.PORT) || me.defaultPort;
-    out.push({ pid: top.pid, pids: all.map((p) => p.pid), file, port, started: top.started, paused: all.some((p) => p.stat.startsWith('T')), worker: !!worker, own: !!file && file === me.file && port === me.port });
+    const file = fileOf(top), port = Number(env.PORT) || me.defaultPort, host = env.HOST || DEFAULT_HOST;
+    const own = !worker && !!file && file === me.file && port === me.port && host === (me.host || DEFAULT_HOST);
+    out.push({ pid: top.pid, pids: all.map((p) => p.pid), file, port, started: top.started, paused: all.some((p) => p.stat.startsWith('T')), worker: !!worker, own });
   }
   return out.sort((a, b) => a.pid - b.pid);
 }

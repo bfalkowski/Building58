@@ -404,7 +404,7 @@ server.listen(PORT, HOST, async () => {
     if (terminal.ENABLED) {
       try { await terminal.connectHost(log); } catch (e) { console.error(e.message); process.exit(1); }
     }
-    await office.oldRelays.begin({ port: PORT, defaultPort: (ONE && ONE.port) || 8787, world: WORLD, log });
+    await office.oldRelays.begin({ port: PORT, defaultPort: (ONE && ONE.port) || 8787, host: HOST, world: WORLD, log });
     sessions.restoreAll({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     sessions.startLead(LEAD_CHANNEL, { port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     reviews.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
