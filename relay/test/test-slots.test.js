@@ -8,7 +8,7 @@ const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 const { spawn, spawnSync } = require('child_process');
-const { slots } = require('./slots.js');
+const { slots, STALE_MS } = require('./slots.js');
 const { until } = require('./helpers.js');
 
 const tempDir = (t) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'office-slots-')); t.after(() => fs.rmSync(d, { recursive: true, force: true })); return d; };
@@ -97,6 +97,36 @@ test('a run knows when an older run waits, so it lets its slot go after the file
   const next = older.take();
   assert.strictEqual(younger.olderWaiting(), true);
   assert.strictEqual(older.olderWaiting(), false, 'its own wait does not count');
+  held();
+  (await next)();
+});
+
+test('a slot or wait file that nobody touched for a while is taken back, even when its pid is alive', async (t) => {
+  const dir = tempDir(t);
+  const old = new Date(Date.now() - STALE_MS - 1000);
+  for (const f of ['wait-000000000001000-1', 'slot-0']) {
+    fs.writeFileSync(path.join(dir, f), '1');
+    fs.utimesSync(path.join(dir, f), old, old);
+  }
+  const p = slots({ dir, size: 1 }); t.after(p.close);
+  let waited = false;
+  const release = await p.take(() => { waited = true; });
+  assert.strictEqual(waited, false, 'pid 1 is alive, but another process could have its pid after the run that wrote the files died');
+  assert.deepStrictEqual(fs.readdirSync(dir), ['slot-0']);
+  release();
+});
+
+test('a run that waits keeps its wait file fresh, so the order holds while it waits', async (t) => {
+  const dir = tempDir(t);
+  const holder = slots({ dir, size: 1 }), waiter = slots({ dir, size: 1, started: 1000 });
+  t.after(() => { holder.close(); waiter.close(); });
+  const held = await holder.take();
+  const next = waiter.take();
+  const file = path.join(dir, 'wait-000000000001000-' + process.pid);
+  const old = new Date(Date.now() - 60000);
+  fs.utimesSync(file, old, old);
+  await until(() => fs.statSync(file).mtimeMs > Date.now() - 10000, 'the waiting run to touch its wait file');
+  assert.ok(fs.statSync(path.join(dir, 'slot-0')).mtimeMs > Date.now() - 10000, 'and the holder touched its slot');
   held();
   (await next)();
 });

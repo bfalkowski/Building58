@@ -20,14 +20,14 @@
 // across all checkouts (relay/test/slots.js). Four Devs once ran the suite together, 24 files at a time,
 // and the runs took 20 minutes instead of 6, with files failing on the slow machine (T-351). A run
 // that must wait says so once, and when slots free, the run that started first goes first. TEST_SLOTS=0
-// turns the limit off. Each file runs with TEST_SLOTS=0, so a run inside a test never waits behind its own
-// parent. TEST_SLOTS_DIR moves the slots' folder, for the runner's own tests.
+// turns the limit off, and a value that is not a whole number counts as 12. Each file runs with
+// TEST_SLOTS=0, so a run inside a test never waits behind its own parent. TEST_SLOTS_DIR moves the slots' folder, for the runner's own tests.
 'use strict';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
-const { slots } = require('./slots.js');
+const { slots, DIR } = require('./slots.js');
 
 const [major, minor] = process.versions.node.split('.').map(Number);
 const timeout = major > 21 || (major === 21 && minor >= 2) || (major === 20 && minor >= 11) ? ['--test-timeout=120000'] : [];
@@ -38,7 +38,7 @@ const files = asked.length ? asked.map((f) => path.resolve(f)).flatMap((f) => (f
 const JOBS = Math.max(1, Number(process.env.TEST_JOBS) || 6);
 const LIMIT = Math.max(1, Number(process.env.TEST_FILE_SECONDS) || 600);
 const HELD_SECONDS = 5;
-const SLOTS = process.env.TEST_SLOTS === undefined || process.env.TEST_SLOTS === '' ? 12 : Math.max(0, Number(process.env.TEST_SLOTS) || 0);
+const SLOTS = /^\d+$/.test(process.env.TEST_SLOTS || '') ? Number(process.env.TEST_SLOTS) : 12;
 const pool = SLOTS ? slots({ dir: process.env.TEST_SLOTS_DIR || undefined, size: SLOTS }) : null;
 // Playwright looks for its browser under HOME, so the browser tests are told where it is under yours.
 const CACHE = { darwin: path.join(os.homedir(), 'Library', 'Caches'), win32: process.env.LOCALAPPDATA }[process.platform] || process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
@@ -93,7 +93,7 @@ function runOne(file) {
   const tell = () => {
     if (told) return;
     told = true;
-    process.stdout.write('# waiting for a test slot: files from other runs on this computer use all ' + SLOTS + ' (TEST_SLOTS)\n');
+    process.stdout.write('# waiting for a test slot: other runs on this computer hold all ' + SLOTS + ' slots (TEST_SLOTS), or started first and wait too. The slots are files in ' + (process.env.TEST_SLOTS_DIR || DIR) + '\n');
   };
   const slot = () => (pool ? pool.take(tell) : Promise.resolve(() => {}));
   const worker = async () => {

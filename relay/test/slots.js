@@ -4,8 +4,10 @@
 // taken writes wait-<when it started>-<pid> and waits. When a slot frees, the run that started first
 // takes it, so the runs end one after another instead of all late together. A run keeps its slot
 // for its next file while no older run waits, so a younger run cannot take it in between.
-// A run lets go of its slots when it ends, even on Ctrl-C. A slot or wait file whose pid is gone,
-// from a run that was killed, is removed by the next run that finds it. The folder is watched, so a
+// A run lets go of its slots when it ends, even on Ctrl-C. A run touches its own slot and wait files
+// every few seconds. A file whose pid is gone, or that nobody touched for STALE_MS, is from a run that
+// was killed, and the next run that finds it removes it. The time catches a pid that another process
+// took after the run died, which would otherwise look alive and block every younger run. The folder is watched, so a
 // waiting run takes a slot as soon as one frees. A killed run leaves no event, so a waiting run also
 // looks again every few seconds.
 'use strict';
@@ -15,13 +17,19 @@ const path = require('path');
 
 const DIR = path.join(os.tmpdir(), 'building58-test-slots');
 const RECHECK_MS = 3000;
+const STALE_MS = 30000;
 
 function alive(pid) {
   if (!(pid > 0)) return false;
   try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
 }
 const pidIn = (file) => { try { return Number(fs.readFileSync(file, 'utf8')); } catch (e) { return 0; } };
-const removeIfDead = (file) => { const pid = pidIn(file); if (pid && !alive(pid) && pidIn(file) === pid) { try { fs.unlinkSync(file); } catch (e) { /* another run removed it */ } } };
+const touchedAt = (file) => { try { return fs.statSync(file).mtimeMs; } catch (e) { return Date.now(); } };
+const removeIfDead = (file) => {
+  const pid = pidIn(file);
+  if (!pid || (alive(pid) && Date.now() - touchedAt(file) < STALE_MS)) return;
+  if (pidIn(file) === pid) { try { fs.unlinkSync(file); } catch (e) { /* another run removed it */ } }
+};
 
 function slots({ dir = DIR, size, started = Date.now() } = {}) {
   fs.mkdirSync(dir, { recursive: true });
@@ -30,7 +38,13 @@ function slots({ dir = DIR, size, started = Date.now() } = {}) {
   const waitFile = path.join(dir, waitName);
   const held = new Set();
   const waiters = [];
-  let watcher = null, timer = null;
+  let watcher = null, timer = null, waiting = false;
+  const touch = (file) => { const now = new Date(); try { fs.utimesSync(file, now, now); } catch (e) { /* removed */ } };
+  const heartbeat = setInterval(() => {
+    for (const n of held) touch(path.join(dir, 'slot-' + n));
+    if (waiting) touch(waitFile);
+  }, RECHECK_MS);
+  heartbeat.unref();
 
   const olderWaits = () => fs.readdirSync(dir).filter((f) => f.startsWith('wait-') && f < waitName).filter((f) => {
     removeIfDead(path.join(dir, f));
@@ -53,6 +67,7 @@ function slots({ dir = DIR, size, started = Date.now() } = {}) {
   const stopWaiting = () => {
     if (watcher) { watcher.close(); watcher = null; }
     if (timer) { clearInterval(timer); timer = null; }
+    waiting = false;
     try { fs.unlinkSync(waitFile); } catch (e) { /* not there */ }
   };
   const wake = () => {
@@ -65,10 +80,11 @@ function slots({ dir = DIR, size, started = Date.now() } = {}) {
   };
   const startWaiting = () => {
     fs.writeFileSync(waitFile, me);
+    waiting = true;
     if (!watcher) { watcher = fs.watch(dir, wake); watcher.on('error', () => {}); }
     if (!timer) timer = setInterval(wake, RECHECK_MS);
   };
-  const close = () => { for (const n of [...held]) release(n); waiters.length = 0; stopWaiting(); };
+  const close = () => { for (const n of [...held]) release(n); waiters.length = 0; stopWaiting(); clearInterval(heartbeat); };
   process.on('exit', close);
 
   const take = (onWait) => {
@@ -84,4 +100,4 @@ function slots({ dir = DIR, size, started = Date.now() } = {}) {
   return { take, close, olderWaiting };
 }
 
-module.exports = { slots, DIR };
+module.exports = { slots, DIR, STALE_MS };
