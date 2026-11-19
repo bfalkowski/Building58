@@ -4,12 +4,13 @@
 // session brought back with the same id. This is the only module that types a message into a session
 // for the relay, a first brief and a first prompt included. Refresh the Lead types its own steps.
 //
-//   save(channel, { key, terminal, sessionId, text, expiresAt, on, first, untilTurn })  a new save with the same key replaces the old one
+//   save(channel, { key, terminal, sessionId, text, expiresAt, on, first, untilTurn, beforeTurn })  a new save with the same key replaces the old one
 //   save(channel, { key, to: 'lead', text, ... })                     for whichever session is the Lead when it is typed
 //   save(channel, { key, to: 'lead', terminal, sessionId, ... })      for that session, only while it is the Lead
 //   drop(channel, key)                                                takes one back, even mid-typing
 //   dropWhere(test)                                                   drops every one whose key passes
-//   pending(channel)                                                  what is still waiting, and why
+//   pending(channel)                                                  what is still waiting, for which session, since when, and why
+//   whyWaits(blocked)                                                 a pending message's reason, in plain words
 //   promptOnce(channel, terminal, text, done, was)                    a reviewer's, the PM's or the COO's first prompt (below)
 //
 // `on` runs once: on ('delivered') or on ('expired', why). It is not saved, so after a restart a
@@ -23,6 +24,8 @@
 // brought back with the same id gets it again, and a relay restart keeps it. A relay that comes back
 // to a session it was typed into watches it again, from when it was typed. A task's brief is both.
 // The Lead's brief is first only: a Lead with no hooks reaching the relay is still briefed.
+// beforeTurn: a hook that says a turn began after it was saved, and before it was typed, drops it as
+// 'expired', since the session went on without it (the continue after a restart, relay/sessions.js).
 //
 // An update holds every first brief (a task's, the Lead's, and every first prompt) only while it
 // restarts, not while it waits for a quiet moment, which can take hours (T-147, T-299, T-198). Other
@@ -44,6 +47,11 @@
 // stops trying and leaves it to the person. Nothing else is typed into a session while it is stuck. The note is saved again for that session id, so Bring back gets it, but a
 // turn that begins in the stuck session itself drops it: that session has it already.
 //   onStuck(fn)  fn (channel, t) runs when a session becomes stuck
+//
+// An idle Claude Code does not draw its prompt again on its own. A relay that took a session back after a
+// restart can keep only output with no prompt mark in it, and then notSafeToType says no_prompt for good.
+// So when a saved message has waited REDRAW_AFTER on a screen with no prompt, the relay asks the session to
+// draw its screen again (terminal.redraw), at most once each REDRAW_EVERY for one session.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -77,7 +85,7 @@ function persist() {
 const listOf = (channel) => store[channel] || (store[channel] = []);
 const callbacks = new Map();
 
-function save(channel, { key, to, terminal: id, sessionId, text, expiresAt, on, first, untilTurn, prompt }) {
+function save(channel, { key, to, terminal: id, sessionId, text, expiresAt, on, first, untilTurn, beforeTurn, prompt }) {
   const same = listOf(channel).find((x) => x.key === key);
   if (same && same.text === text && same.terminal === (id || null) && same.sessionId === (sessionId || null) && (same.to || null) === (to || null) && !!same.first === !!first && !!same.untilTurn === !!untilTurn && !!same.prompt === !!prompt) {
     if (on) callbacks.set(channel + '/' + key, on);
@@ -85,7 +93,7 @@ function save(channel, { key, to, terminal: id, sessionId, text, expiresAt, on, 
   }
   drop(channel, key);
   listOf(channel).push(Object.assign({ key, to: to || null, terminal: id || null, sessionId: sessionId || null, text, expiresAt: expiresAt || Date.now() + NEVER, savedAt: Date.now() },
-    first ? { first: true } : {}, untilTurn ? { untilTurn: true, typedAt: null, typedTo: null } : {}, prompt ? { prompt: true, readyBy: Date.now() + READY_LIMIT() } : {}));
+    first ? { first: true } : {}, beforeTurn ? { beforeTurn: true } : {}, untilTurn ? { untilTurn: true, typedAt: null, typedTo: null } : {}, prompt ? { prompt: true, readyBy: Date.now() + READY_LIMIT() } : {}));
   if (on) callbacks.set(channel + '/' + key, on);
   persist();
 }
@@ -114,7 +122,7 @@ function targetOf(channel, d) {
   return lead && (!d.terminal || isTarget(lead, d)) ? lead : null;
 }
 function pending(channel) {
-  return listOf(channel).map((d) => { const t = targetOf(channel, d); return { key: d.key, terminal: d.terminal, expiresAt: d.expiresAt, first: !!d.first, typed: !!(d.untilTurn && d.typedAt), blocked: heldBy(channel, t, d) || terminal.notSafeToType(t, how(d)) }; });
+  return listOf(channel).map((d) => { const t = targetOf(channel, d); return { key: d.key, terminal: d.terminal, target: t ? t.id : null, savedAt: d.savedAt || null, expiresAt: d.expiresAt, first: !!d.first, typed: !!(d.untilTurn && d.typedAt), blocked: heldBy(channel, t, d) || terminal.notSafeToType(t, how(d)) }; });
 }
 
 const PROMPT_TRIES = 3;
@@ -127,6 +135,11 @@ const WHY = {
   menu: 'a menu is open on its screen', trust: 'it is asking whether to trust its folder', typing: 'someone has text in its prompt',
   no_prompt: 'its screen shows no prompt', no_hooks: 'no hook reaches the relay from it', settling: 'its screen keeps changing',
 };
+const WAITS = Object.assign({}, WHY, {
+  ended: 'its session is not running', restarting: 'an update is restarting the relay', leaving: 'it is ending', working: 'it is in a turn',
+  waiting: 'it waits on an answer', briefing: 'its first brief has not gone in yet', stuck: 'it is stuck on an earlier message',
+});
+const whyWaits = (blocked) => WAITS[blocked] || 'the relay cannot tell why';
 function whyStuck(t, text, problem) {
   if (problem && WHY[problem]) return WHY[problem];
   const q = terminal.questionOnScreen(t);
@@ -187,8 +200,22 @@ function landing(channel, d, t) {
   return false;
 }
 
+const REDRAW_AFTER = Number(process.env.RELAY_REDRAW_AFTER_MS) > 0 ? Number(process.env.RELAY_REDRAW_AFTER_MS) : 60 * 1000;
+const REDRAW_EVERY = 5 * 60 * 1000;
+const blankSince = new Map();
+function redrawIfBlank(t, seen) {
+  const now = Date.now();
+  seen.add(t.id);
+  if (!blankSince.has(t.id)) blankSince.set(t.id, now);
+  if (now - blankSince.get(t.id) < REDRAW_AFTER || now - (t.redrawnAt || 0) < REDRAW_EVERY) return;
+  t.redrawnAt = now;
+  console.log('A saved message waits for a session whose screen shows no prompt, so the relay asks it to draw its screen again.');
+  terminal.redraw(t);
+}
+
 const typing = new Set();
 function pump() {
+  const seen = new Set();
   for (const channel of Object.keys(store)) {
     for (const d of listOf(channel).slice()) {
       const t = targetOf(channel, d);
@@ -197,8 +224,12 @@ function pump() {
         remove(channel, d); tell(channel, d.key, 'expired', 'the session was not ready after ' + Math.round(READY_LIMIT() / 60000) + ' minutes'); continue;
       }
       if (t && d.heldFor === t.id && !t.stuck) { remove(channel, d); continue; }
+      if (t && d.beforeTurn && !d.typedAt && (t.turnAt || 0) >= d.savedAt) { remove(channel, d); tell(channel, d.key, 'expired', 'a turn began before it went in'); continue; }
       if (d.untilTurn && landing(channel, d, t)) continue;
-      if (!t || typing.has(t.id) || heldBy(channel, t, d) || terminal.notSafeToType(t, how(d))) continue;
+      if (!t || typing.has(t.id) || heldBy(channel, t, d)) continue;
+      const problem = terminal.notSafeToType(t, how(d));
+      if (problem === 'no_prompt') redrawIfBlank(t, seen);
+      if (problem) continue;
       typing.add(t.id);
       const at = Date.now();
       terminal.typeIfSafe(t, d.text, () => listOf(channel).includes(d) && targetOf(channel, d) === t, (problem) => {
@@ -211,6 +242,7 @@ function pump() {
       }, how(d));
     }
   }
+  for (const id of [...blankSince.keys()]) if (!seen.has(id)) blankSince.delete(id);
 }
 setInterval(pump, EVERY).unref();
 
@@ -235,4 +267,4 @@ terminal.onEnd((channel, t, code, closing) => {
   tell(channel, d.key, 'expired', d.typedAt ? 'the session ended after its prompt was typed, before a hook said a turn began' : 'the session ended first');
 });
 
-module.exports = { save, drop, dropWhere, pending, onStuck, promptOnce, TOLD_CHECK, PROMPT_TRIES };
+module.exports = { save, drop, dropWhere, pending, whyWaits, onStuck, promptOnce, TOLD_CHECK, PROMPT_TRIES, REDRAW_EVERY };

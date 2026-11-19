@@ -35,4 +35,4 @@ function names(base) {
   };
 }
 
-module.exports = { build, names, REMOVED, ADDED };
+module.exports = { build, names, REMOVED, ADDED, LOGIN_LIKE };

@@ -3,7 +3,11 @@
 //
 //   The first review. A session runs gh pr create, and its hook sends the PR. While Review PRs
 //   automatically is on (it starts on), the relay starts a reviewer in its own checkout of the PR,
-//   once the PR's pipeline is green (relay/pipeline.js).
+//   once the PR's pipeline is green (relay/pipeline.js). A hook from a session the room does not run counts
+//   only for a PR of a repo the room has a clone of (roomKnows in relay/checkouts.js). Any other PR is
+//   ignored with a log line, since the person's global hooks report every session on this computer (T-192).
+//   A review the checkout refuses as unrelated, of another project, is dropped and not tried again, and the
+//   panel says so once, since a line may already say its review starts.
 //   A follow-up review. While Review again after each push is on (it starts off, article 5), a reviewed
 //   PR whose head is not the commit its last review read owes one (followUpOwed in office/reviews.js).
 //   Each tick compares the head the pipeline last heard with that commit, so a push whose hook was lost,
@@ -28,7 +32,8 @@
 // kept in RELAY_REVIEWS_FILE, so a restart keeps them.
 //
 // The Lead asks for a review (T-98): POST /reviews/lead with { pr }, from ticket.js review, while the person's
-// switch Let the Lead start reviews is on (off by default, article 5). Only the Lead's token reaches it
+// switch Let the Lead start reviews is on (off by default, article 5), or while Autopilot is on whatever the
+// switch says (T-333; autopilot.follows, from relay/autopilot.js, says it is on). Only the Lead's token reaches it
 // (relay/server.js); the person's key gets 403, since the page has Get a review. It is the review Get a review
 // starts on a session with a PR: the same checkouts.create, brief and verdict ask, in its own checkout, and the
 // reviewer posts and leaves. The relay refuses a PR that is no task's, one that a reviewer is reviewing or is
@@ -128,6 +133,7 @@ async function firstReview(channel, pr, held) {
   if (!rec) return;
   rec.count = Math.max(0, rec.count - 1);
   if (rec.count || rec.head) { save(); return; }
+  if (out.error === 'unrelated') { delete c.prs[pr]; delivery.drop(channel, 'pipeline ' + pr); save(); say(channel, 'No review of PR ' + number(pr) + ': it is of another project.'); return; }
   if (out.error === 'full') {
     rec.first = Object.assign({}, held, { desk: true });
     save();
@@ -150,6 +156,7 @@ async function followUp(channel, pr, from) {
   if (out.ok && !out.unchanged) { startedNews(channel, out, 'a follow-up review of PR ' + number(pr)); return; }
   rec.count = Math.max(0, rec.count - 1);
   if (out.ok) { save(); say(channel, 'PR ' + number(pr) + ' has no new commits since its last review, so no follow-up review started.'); return; }
+  if (out.error === 'unrelated') { save(); return; }
   const tries = (p.tries || 0) + 1;
   if (tries >= MAX_TRIES) say(channel, 'The follow-up review of PR ' + number(pr) + ' could not start ' + MAX_TRIES + ' times: ' + (out.message || '') + ' Press Get a review on its session.', 'off');
   else if (!rec.pending) rec.pending = Object.assign({}, p, { tries, notBefore: Date.now() + RETRY_MS() });
@@ -202,6 +209,9 @@ function holdFirst(channel, pr, from, t) {
   save();
   pipeline.soon(pr, from);
   say(channel, 'PR ' + number(pr) + ' is open. Its review starts once its pipeline passes.', 'wait');
+}
+function queueFirst(channel, pr, from, t) {
+  if (pipeline.on()) holdFirst(channel, pr, from, t); else firstReview(channel, pr, { from, dev: t ? t.id : null, at: Date.now() });
 }
 const deskFree = (channel) => terminal.all(channel).filter((t) => !t.exited).length < terminal.DESKS;
 function firstReviews(channel, c) {
@@ -276,9 +286,14 @@ function noteHook(channel, ev) {
   if (t && isReviewer(t)) return;
   if (ev.pr_url && PR_URL.test(ev.pr_url)) {
     if (t) opened.set(t.id, ev.pr_url);
-    const from = ev.cwd || (t && t.cwd);
-    if (from && switchesOf(channel).auto && !recOf(channel, ev.pr_url)) {
-      if (pipeline.on()) holdFirst(channel, ev.pr_url, from, t); else firstReview(channel, ev.pr_url, { from, dev: t ? t.id : null, at: Date.now() });
+    const from = ev.cwd || (t && t.cwd), pr = ev.pr_url;
+    const owed = () => from && switchesOf(channel).auto && !recOf(channel, pr);
+    if (owed() && t) queueFirst(channel, pr, from, t);
+    else if (owed()) {
+      checkouts.roomKnows(channel, pr).then((known) => {
+        if (!known) ctx.log('PR ' + pr + ' is not of a repo the room works in, so it gets no automatic review.');
+        else if (owed()) queueFirst(channel, pr, from, null);
+      }).catch((e) => ctx.log('No review of ' + pr + ': ' + e.message));
     }
   }
   if (ev.pushed && t) {
@@ -312,7 +327,7 @@ terminal.onWork((channel, t) => {
 
 const refuse = (status, error, message) => [status, { ok: false, error, message }];
 async function leadReview(channel, body, agent) {
-  if (!config.get('leadReviews')) return refuse(403, 'forbidden', 'The person has not let the Lead start reviews. They turn it on with Let the Lead start reviews in Settings. Until then, tell them which PR needs a review, so they press Get a review. Never review it in your own session.');
+  if (!config.get('leadReviews') && !autopilot.follows(channel)) return refuse(403, 'forbidden', 'The person has not let the Lead start reviews. They turn it on with Let the Lead start reviews in Settings, or turn on Autopilot. Until then, tell them which PR needs a review, so they press Get a review. Never review it in your own session.');
   if (!agent.lead || !terminal.all(channel).includes(agent)) return refuse(403, 'forbidden', 'This session is no longer running as the Lead.');
   const pr = String((body && body.pr) || '').trim();
   if (!PR_URL.test(pr)) return refuse(400, 'bad_pr', 'A PR link looks like https://github.com/owner/repo/pull/1.');
@@ -394,7 +409,7 @@ function owe(channel, pr, { from, dev, head }) {
   if (!switchesOf(channel).auto) return 'Review PRs automatically is off';
   const rec = recOf(channel, pr);
   if (!rec) {
-    if (pipeline.on()) holdFirst(channel, pr, from, dev); else firstReview(channel, pr, { from, dev: dev ? dev.id : null, at: Date.now() });
+    queueFirst(channel, pr, from, dev);
     return 'its first review';
   }
   if (rec.first || rec.pending) return 'a review waits to start';

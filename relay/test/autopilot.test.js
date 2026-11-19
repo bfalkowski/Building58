@@ -622,3 +622,47 @@ test('Autopilot\'s list takes ticket ids and labels', async (t) => {
   assert.strictEqual((await R.call('POST', '/autopilot', { only: 'flaky!' })).status, 400, 'not a label');
   assert.strictEqual((await R.call('POST', '/autopilot', { on: false })).body.only, null, 'off clears it');
 });
+
+// T-347: PR #113 had a fix verdict while its Dev was stopped, and Autopilot said the Dev was fixing,
+// so nothing moved until a person pressed Bring back.
+test('a fix verdict whose Dev is not running brings the Dev back to fix it', async (t) => {
+  const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' }, null, { autoReview: true });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
+  const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
+  sh(R.home, 'init', '-q', '--bare', origin);
+  fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
+  sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+  sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/' + sh(repo, 'symbolic-ref', '--short', 'HEAD'));
+  const terminals = async () => (await R.call('GET', '/terminals')).body.terminals;
+  const say = (s, event, extra) => R.hook(Object.assign({ hook_event_name: event, session_id: s.sessionId.slice(0, 12) }, extra));
+  const task = async () => (await R.call('GET', '/tasks')).body.tasks[0];
+  const ap = async () => (await R.call('GET', '/autopilot')).body;
+  const ticket = (await R.call('POST', '/tickets', { title: 'Fix after a stop', repo })).body.ticket;
+  await R.call('POST', '/autopilot', { on: true, only: ticket.id });
+  const x = await until(task, 'the task'), wt = x.worktree;
+  const dev = (await terminals()).find((y) => y.id === x.worker.terminal);
+  await until(async () => /GOT\[Your task is to build/.test(await R.screen(dev.id)), 'the brief');
+  await say(dev, 'UserPromptSubmit');
+  await until(async () => (await task()).history.some((h) => h.type === 'briefed'), 'the brief to land');
+  fs.writeFileSync(path.join(wt, 'a.txt'), 'change\n');
+  sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'change');
+  pushPr(wt, origin);
+  fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: sh(wt, 'rev-parse', 'HEAD'), mergeStateStatus: 'CLEAN', statusCheckRollup: GREEN } }, api: { 'repos/acme/widgets/pulls/7/files': [{ filename: 'a.txt' }] } }));
+  await say(dev, 'PostToolUse', { pr_url: PR, cwd: wt });
+  await say(dev, 'Stop');
+  const r = await until(async () => (await terminals()).find((y) => y.role === 'reviewer' && y.pr === PR), 'a reviewer');
+  await R.call('POST', '/terminals/' + dev.id + '/stop', {});
+  await until(async () => !(await terminals()).some((y) => y.id === dev.id), 'the Dev to stop');
+  const token = { 'X-Office-Token': await until(() => { try { return sessionToken(r.sessionId); } catch (e) { return null; } }, 'its token') };
+  assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'fix' }, token)).status, 200);
+  await say(r, 'UserPromptSubmit');
+  await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-101' } });
+  await say(r, 'Stop');
+  const back = await until(async () => { const y = await task(); return y.worker && y.worker.terminal !== dev.id && y; }, 'the Dev brought back');
+  assert.ok(back.history.some((h) => h.type === 'resumed' && h.by === 'Autopilot'), 'Autopilot brought it back: ' + JSON.stringify(back.history));
+  await until(async () => (await R.screen(back.worker.terminal)).includes('--resume'), 'the same conversation');
+  const a = await ap();
+  assert.ok(a.notes.some((n) => /its Dev was not running, so Autopilot brought it back for the fixes the last review asks for/.test(n.text)), JSON.stringify(a.notes));
+  assert.notStrictEqual((await task()).state, 'waiting_on_you', 'nothing went to the person');
+});

@@ -4,31 +4,39 @@
 // list, so all three agree. A plain function with no side effects, so the tests run it without a relay.
 // See docs/manual/roles.html#needs-you.
 //
-//   listOf({ seats, tasks }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
+//   listOf({ seats, tasks, waits }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
 //
-// A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh },
+// A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh, continuing },
 // where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
-// spoke says a turn of it has begun, and fresh says it started under a minute ago with no turn yet.
+// spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
+// says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
-// handedOver, onlyYouMerge }, where owner is the terminal of its Dev while that session runs, and pipelineWaits
-// says its open PR's pipeline is running or failing.
+// handedOver, reviewedSince, onlyYouMerge }, where owner is the terminal of its Dev while that session runs,
+// pipelineWaits says its open PR's pipeline is running or failing, and reviewedSince is the last review posted
+// after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current says
+// the PR's head is that commit.
+// A wait is one saved message (relay/delivery.js) that has not gone in for a long time: { terminal, who, minutes,
+// why }, where terminal is the running session it is for, and why says in plain words what holds it.
 //
 // One rule for each kind. A session gives at most one item, and so does a task. A task whose Dev already has an
 // item gives none, since answering the Dev is the one move. The kinds, most urgent first:
 //   permission   a session waits on the person, and its message asks for permission
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   merge        an open PR that only the person may merge
-//   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason
+//   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
+//                with the next step a review posted after it gives
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
-//   prompt       an idle Dev on a task in Building or Changes requested with no PR, unless it has just started
+//   undelivered  a saved message for a running session has waited long, unless that session has another item
+//   prompt       an idle Dev on a task in Building or Changes requested with no PR, unless it has just started or
+//                the relay still has a continue prompt for it
 //   gone         a task in Building or Changes requested with no PR whose session has ended
 // link says what the page opens: { terminal } for a session, { url } for a PR, { ticket } for a Board card.
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'prompt', 'gone'];
+const KINDS = ['permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -46,8 +54,17 @@ function seatItem(s, t) {
   if (s.screen === 'trust') return item('question', 'Answer the question on the screen of ' + who + ': does it trust this folder?');
   if (s.screen === 'menu') return item('question', 'Answer the question on the screen of ' + who + '.');
   if (s.live === 'stuck' && s.cause === 'told') return item('stuck', 'Open the session of ' + who + ': the relay told it something and it did not start' + (s.stuckWhy ? ', ' + oneLine(s.stuckWhy, 160) : '') + '.');
-  if (s.role === 'Dev' && s.live === 'idle' && !s.fresh && t && BUILDING.includes(t.state) && !t.pr) return item('prompt', 'Prompt ' + who + ': ' + (s.spoke === false ? 'it has not started on ' + nameOf(t) + '.' : 'it stopped on ' + nameOf(t) + ' with no PR.'));
+  if (s.role === 'Dev' && s.live === 'idle' && !s.fresh && !s.continuing && t && BUILDING.includes(t.state) && !t.pr) return item('prompt', 'Prompt ' + who + ': ' + (s.spoke === false ? 'it has not started on ' + nameOf(t) + '.' : 'it stopped on ' + nameOf(t) + ' with no PR.'));
   return null;
+}
+
+function reviewedLine(t, dev, item) {
+  const r = t.reviewedSince, pr = t.pr, n = numberOf(pr), at = oneLine(r.commit, 40).slice(0, 7), url = oneLine(r.url, 300);
+  const where = url ? ' ' + url : '';
+  if (r.current === false) return item('handed-over', 'Get a review of PR ' + n + ' (' + nameOf(t) + '): the review of ' + at + ' says ' + (r.kind === 'merge' ? 'merge' : 'fix') + ', but newer commits came after it.', { url: pr });
+  if (r.kind === 'merge') return item('handed-over', 'Merge PR ' + n + ' (' + nameOf(t) + '), or move its card: the review of ' + at + ' says merge.' + where, { url: pr });
+  if (!dev) return item('handed-over', 'Bring back the worker on ' + nameOf(t) + ' to fix PR ' + n + ': the review of ' + at + ' says fix, and its session has ended.' + where, { ticket: t.ticket || t.id });
+  return item('handed-over', 'Move ' + nameOf(t) + ' out of Waiting on you: the review of ' + at + ' on PR ' + n + ' says fix, and ' + (oneLine(dev.who, 40) ? 'its Dev ' + oneLine(dev.who, 40) : 'its Dev') + ' is running to fix it.' + where, { ticket: t.ticket || t.id });
 }
 
 function taskItem(t, dev) {
@@ -55,6 +72,7 @@ function taskItem(t, dev) {
   const pr = t.pr || null;
   const item = (kind, line, link) => ({ kind, who, terminal: dev ? dev.terminal : null, task: t.id, ticket: t.ticket || null, pr, line, link });
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
+  if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), { url: pr });
   if (t.state === 'waiting_on_you') {
     if (t.reviewRuns || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;
@@ -82,6 +100,12 @@ function listOf(input) {
     if (dev && items.some((i) => i.terminal === dev.terminal)) continue;
     const it = taskItem(t, dev);
     if (it) items.push(it);
+  }
+  for (const w of (input && input.waits) || []) {
+    if (!w || !w.terminal || items.some((i) => i.terminal === w.terminal)) continue;
+    const who = oneLine(w.who, 40) || 'a session';
+    const minutes = Math.max(1, Math.floor(Number(w.minutes) || 0));
+    items.push({ kind: 'undelivered', who, terminal: w.terminal, task: null, ticket: null, pr: null, line: 'Open the session of ' + who + ': a message from the relay has waited ' + minutes + (minutes === 1 ? ' minute' : ' minutes') + ' for it and is not typed in, because ' + (oneLine(w.why, 160) || 'the relay cannot tell why') + '.', link: { terminal: w.terminal } });
   }
   return items.map((it, i) => [it, i]).sort((a, b) => KINDS.indexOf(a[0].kind) - KINDS.indexOf(b[0].kind) || a[1] - b[1]).map((x) => x[0]);
 }
