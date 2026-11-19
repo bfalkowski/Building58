@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Files a ticket from inside a session the room started. What it files waits in Triage.
-//   node relay/ticket.js create "Radio clips at high volume" --body "What to do" --priority high --blocked-by T-1,T-2
+//   node relay/ticket.js create "Radio clips at high volume" --priority high --blocked-by T-1,T-2 --body - <<'EOF'
 //   (blocked-by takes the ids that list and create print: T-1 on the local store, 12 on GitHub issues,
 //   with commas and no spaces; the relay refuses an id no ticket has, and a PM's body without its four parts)
 //   node relay/ticket.js create "Decide the layout" --shapes T-7,T-9 --body - <<'EOF'
@@ -93,7 +93,7 @@ function flags(args) {
   return out;
 }
 async function readBody(f) {
-  if (f.twice) { console.error('Give the body once: --body "text", --body - for stdin, or --body-file <path>.'); return false; }
+  if (f.twice) { console.error('Give the body once: --body - for stdin, --body-file <path>, or --body text.'); return false; }
   if ((f.bodyFrom === 'file' || f.bodyFrom === 'text') && f.body === undefined) { console.error('Say what follows ' + (f.bodyFrom === 'file' ? '--body-file: a path, or - for stdin.' : '--body: the text, or - for stdin.')); return false; }
   if (f.bodyFrom === 'file') {
     try { f.body = fs.readFileSync(f.body, 'utf8'); } catch (e) { console.error('Could not read the body file ' + f.body + ': ' + e.code); return false; }
