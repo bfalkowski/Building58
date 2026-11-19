@@ -4,7 +4,8 @@
 //
 // What it reads: each running session (relay/terminal.js) with its state from relay/liveness.js and any
 // question on its screen; each task that is not done (relay/tasks.js); Autopilot's hand-over reason
-// (relay/autopilot.js); whether a review of a PR runs; whether a PR merged or closed (relay/floor.js,
+// (relay/autopilot.js); whether a Dev still owes the continue prompt a restart saved for it (relay/sessions.js);
+// whether a review of a PR runs; whether a PR merged or closed (relay/floor.js,
 // relay/pipeline.js); and who may merge a PR, from the PR watch (relay/pr-watch.js) and the last huddle
 // report (relay/huddles.js), when they have looked; and each saved message (relay/delivery.js) that has waited
 // UNDELIVERED for a running session, unless that session is in a turn, waits on an answer, or has ended. The
@@ -22,6 +23,7 @@ const pipeline = require('./pipeline.js');
 const chat = require('./chat.js');
 const { livenessOf } = require('./liveness.js');
 const delivery = require('./delivery.js');
+const { owesContinue } = require('./sessions.js');
 const { listOf } = require('./needs-you-plan.js');
 
 const FRESH_MS = 60 * 1000;
@@ -52,7 +54,7 @@ function stateOf(channel, now, lastReport) {
   const taskOf = (t) => (t.task && list.find((x) => x.id === t.task)) || list.find((x) => x.owner && x.owner.terminal === t.id) || null;
   const seats = all.map((t) => {
     const task = taskOf(t), lv = livenessOf(t, now);
-    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : terminal.questionOnScreen(t), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, spoke: !!t.spoke, fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
+    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : terminal.questionOnScreen(t), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, spoke: !!t.spoke, continuing: owesContinue(channel, t), fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
   });
   const report = lastReport || huddles.reportOf(channel);
   const reviewing = (pr) => all.some((x) => !x.exited && x.reviewOf === pr && !x.posted);

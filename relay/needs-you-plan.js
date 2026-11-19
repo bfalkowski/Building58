@@ -6,9 +6,10 @@
 //
 //   listOf({ seats, tasks, waits }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
 //
-// A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh },
+// A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh, continuing },
 // where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
-// spoke says a turn of it has begun, and fresh says it started under a minute ago with no turn yet.
+// spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
+// says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
 // handedOver, onlyYouMerge }, where owner is the terminal of its Dev while that session runs, and pipelineWaits
 // says its open PR's pipeline is running or failing.
@@ -25,7 +26,8 @@
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
 //   undelivered  a saved message for a running session has waited long, unless that session has another item
-//   prompt       an idle Dev on a task in Building or Changes requested with no PR, unless it has just started
+//   prompt       an idle Dev on a task in Building or Changes requested with no PR, unless it has just started or
+//                the relay still has a continue prompt for it
 //   gone         a task in Building or Changes requested with no PR whose session has ended
 // link says what the page opens: { terminal } for a session, { url } for a PR, { ticket } for a Board card.
 'use strict';
@@ -49,7 +51,7 @@ function seatItem(s, t) {
   if (s.screen === 'trust') return item('question', 'Answer the question on the screen of ' + who + ': does it trust this folder?');
   if (s.screen === 'menu') return item('question', 'Answer the question on the screen of ' + who + '.');
   if (s.live === 'stuck' && s.cause === 'told') return item('stuck', 'Open the session of ' + who + ': the relay told it something and it did not start' + (s.stuckWhy ? ', ' + oneLine(s.stuckWhy, 160) : '') + '.');
-  if (s.role === 'Dev' && s.live === 'idle' && !s.fresh && t && BUILDING.includes(t.state) && !t.pr) return item('prompt', 'Prompt ' + who + ': ' + (s.spoke === false ? 'it has not started on ' + nameOf(t) + '.' : 'it stopped on ' + nameOf(t) + ' with no PR.'));
+  if (s.role === 'Dev' && s.live === 'idle' && !s.fresh && !s.continuing && t && BUILDING.includes(t.state) && !t.pr) return item('prompt', 'Prompt ' + who + ': ' + (s.spoke === false ? 'it has not started on ' + nameOf(t) + '.' : 'it stopped on ' + nameOf(t) + ' with no PR.'));
   return null;
 }
 
