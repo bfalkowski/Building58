@@ -21,7 +21,7 @@ test('a test file that never ends fails with a clear message, and does not hang 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-hang-'));
   const pidFile = path.join(dir, 'pid');
   try {
-    const env = { ...process.env, TEST_FILE_SECONDS: '3', HANG_PID_FILE: pidFile };
+    const env = { ...process.env, TEST_FILE_SECONDS: '3', HANG_PID_FILE: pidFile, TEST_SLOTS: '0' };
     delete env.NODE_TEST_CONTEXT;  // or node --test inside this test skips the file
     const r = spawnSync(process.execPath, [path.join(__dirname, 'run.js'), path.join(__dirname, 'hang.fixture.js')],
       { env, encoding: 'utf8', timeout: 60000 });
@@ -38,7 +38,7 @@ test('a test file that ends while a process it started holds its output fails at
   const pidFile = path.join(dir, 'pid');
   const kill = () => { try { process.kill(Number(fs.readFileSync(pidFile, 'utf8')), 'SIGKILL'); } catch (e) { /* gone, or never started */ } };
   try {
-    const env = { ...process.env, TEST_FILE_SECONDS: '300', HANG_PID_FILE: pidFile };
+    const env = { ...process.env, TEST_FILE_SECONDS: '300', HANG_PID_FILE: pidFile, TEST_SLOTS: '0' };
     delete env.NODE_TEST_CONTEXT;
     const started = Date.now();
     const r = spawnSync(process.execPath, [path.join(__dirname, 'run.js'), path.join(__dirname, 'held.fixture.js')],

@@ -110,6 +110,8 @@ test('a follow-up review posts, and checks the earlier findings', () => {
   assert.match(b, /Post your findings as a PR comment/);
   assert.match(b, /earlier review/);
   assert.ok(b.includes(PR));
+  assert.match(b, /A blocking or fix-now finding they do not fix keeps its kind\./);
+  assert.match(followBrief(PR, 'a'.repeat(40)), /A new finding is blocking only if it is a bug in those commits, and fix now only if it is in those commits\./);
 });
 test('a follow-up that could not start waits a while before it tries again', () => {
   const idle = [Object.assign(dev(PR), { state: 'idle' })];

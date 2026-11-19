@@ -303,13 +303,15 @@ test('a review whose verdict says merge reaches the Dev but leaves the card, and
   const said = async (task) => { const all = await o.R.screen(task.worker.terminal); return all.slice(all.lastIndexOf('GOT[')).replace(/\s+/g, ' '); };
   const cleanSaid = await said(clean);
   assert.match(cleanSaid, /verdict says merge, so do not push for its findings/);
-  assert.match(cleanSaid, /one follow-up ticket for this PR .* create "Title" --body - and a quoted heredoc/);
+  assert.match(cleanSaid, /File a ticket only for a finding that is a real bug or risk outside this PR, with node .* create "Title" --body - and a quoted heredoc/);
+  assert.match(cleanSaid, /Polish not worth a ticket gets only your reply\. Then stop\./);
+  assert.doesNotMatch(cleanSaid, /one follow-up ticket|non-blocking findings worth doing/);
   assert.match(cleanSaid, /<!-- office:hold -->/);
   assert.match(cleanSaid, /A failing check and a conflict with main are still yours/);
   assert.doesNotMatch(cleanSaid, /fix or dispute each finding, reply on the PR, and push/);
   for (const other of [sent, stale]) {
     const s = await said(other);
-    assert.match(s, /fix or dispute each finding, reply on the PR, and push/);
+    assert.match(s, /fix or dispute each finding, reply on the PR, and push\. Fix each blocking and fix-now finding in this PR\./);
     assert.doesNotMatch(s, /do not push/);
   }
   await t.test('a Dev\'s reply with the hold mark is kept on the task, and is not news for it', async () => {

@@ -1,5 +1,5 @@
-// At level 5 (Autopilot) the Lead keeps two rights (T-161, article 5): stop a session the Floor calls
-// safe to stop, and move a task to Done once its PR has merged. Only the relay starts and merges work.
+// At level 5 (Autopilot) the Lead keeps three rights (T-161, T-333, article 5): stop a session the Floor
+// calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task's PR. Only the relay starts and merges work.
 // Through a real relay with a fake `claude` and a fake `gh`.
 'use strict';
 const { execFileSync } = require('child_process');
@@ -12,16 +12,16 @@ const { relay, makeRepo, removeDir, sleep, until, sessionToken, ROOT } = require
 const { leadBrief, AUTOPILOT } = require('../lead-brief.js');
 
 const CLI = path.join(ROOT, 'relay', 'ticket.js');
-const KEEPS = 'stop a session the Floor calls safe to stop, and move a task to Done once its PR has merged';
+const KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';
 const NEVER = 'Never merge a pull request: merging stays with the person.';
 const RUNG = 'Read the merge rung in docs/constitution.md';
 
-test('the brief under Autopilot names the two rights and never merging, whatever the merge switch says', () => {
+test('the brief under Autopilot names the three rights and never merging, whatever the merge switch says', () => {
   const relayDir = path.join('/', 'r'.repeat(119), 'relay');
   for (const merge of [false, true]) {
     const b = leadBrief(relayDir, { merge, autopilot: true });
     assert.ok(b.includes(AUTOPILOT), 'merge ' + merge);
-    assert.ok(b.includes('Never merge a pull request.') && b.includes('You keep two rights: ' + KEEPS + '.'));
+    assert.ok(b.includes('Never merge a pull request.') && b.includes('You keep three rights: ' + KEEPS + '.'));
     assert.ok(!b.includes(RUNG), 'it does not point to the merge rung');
     assert.ok(Buffer.byteLength(b) < 1024, Buffer.byteLength(b) + ' bytes, from a checkout root of 120 characters');
   }
@@ -63,7 +63,7 @@ test('at level 5 the Lead keeps stops and moving merged tasks to Done, and nothi
   assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: lead.id, board: true })).body.board, true);
   const token = await until(() => { try { return sessionToken(lead.sessionId); } catch (e) { return null; } }, 'the token');
   const cli = (...args) => execFileSync('node', [CLI, ...args], { env: { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: token }, encoding: 'utf8', stdio: 'pipe' });
-  const refused = (fn, what) => assert.throws(fn, (e) => (/Autopilot is on, so only the relay starts and merges work\. The Lead keeps two rights: /.test(String(e.stderr) + String(e.stdout) + e.message) ? true : assert.fail(what + ': ' + e.stderr)), what);
+  const refused = (fn, what) => assert.throws(fn, (e) => (/Autopilot is on, so only the relay starts and merges work\. The Lead keeps three rights: /.test(String(e.stderr) + String(e.stdout) + e.message) ? true : assert.fail(what + ': ' + e.stderr)), what);
   const headers = { 'X-Office-Token': token };
 
   const merged = await dev(), building = await dev();
@@ -78,7 +78,7 @@ test('at level 5 the Lead keeps stops and moving merged tasks to Done, and nothi
   const ap = await R.call('POST', '/autopilot', { on: true, only: 'T-999999' });
   assert.strictEqual(ap.body.on, true, JSON.stringify(ap.body));
 
-  await t.test('the Lead is briefed again, with the two rights', async () => {
+  await t.test('the Lead is briefed again, with the three rights', async () => {
     await until(async () => (await R.screen(lead.id)).includes(AUTOPILOT.trim()), 'the Autopilot brief');
   });
 

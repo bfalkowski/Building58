@@ -32,7 +32,8 @@
 // kept in RELAY_REVIEWS_FILE, so a restart keeps them.
 //
 // The Lead asks for a review (T-98): POST /reviews/lead with { pr }, from ticket.js review, while the person's
-// switch Let the Lead start reviews is on (off by default, article 5). Only the Lead's token reaches it
+// switch Let the Lead start reviews is on (off by default, article 5), or while Autopilot is on whatever the
+// switch says (T-333; autopilot.follows, from relay/autopilot.js, says it is on). Only the Lead's token reaches it
 // (relay/server.js); the person's key gets 403, since the page has Get a review. It is the review Get a review
 // starts on a session with a PR: the same checkouts.create, brief and verdict ask, in its own checkout, and the
 // reviewer posts and leaves. The relay refuses a PR that is no task's, one that a reviewer is reviewing or is
@@ -329,7 +330,7 @@ terminal.onWork((channel, t) => {
 
 const refuse = (status, error, message) => [status, { ok: false, error, message }];
 async function leadReview(channel, body, agent) {
-  if (!config.get('leadReviews')) return refuse(403, 'forbidden', 'The person has not let the Lead start reviews. They turn it on with Let the Lead start reviews in Settings. Until then, tell them which PR needs a review, so they press Get a review. Never review it in your own session.');
+  if (!config.get('leadReviews') && !autopilot.follows(channel)) return refuse(403, 'forbidden', 'The person has not let the Lead start reviews. They turn it on with Let the Lead start reviews in Settings, or turn on Autopilot. Until then, tell them which PR needs a review, so they press Get a review. Never review it in your own session.');
   if (!agent.lead || !terminal.all(channel).includes(agent)) return refuse(403, 'forbidden', 'This session is no longer running as the Lead.');
   const pr = String((body && body.pr) || '').trim();
   if (!PR_URL.test(pr)) return refuse(400, 'bad_pr', 'A PR link looks like https://github.com/owner/repo/pull/1.');

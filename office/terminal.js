@@ -190,7 +190,7 @@
     { n: 4, name: 'The Lead merges', rung: 'rung 4, the merge rung', want: { auto: true, again: true, board: true, stops: true, merge: true, starts: true, autopilot: false },
       what: 'The Lead also merges a PR when it is ready: a review of the latest commit is posted, each blocking finding is fixed, all checks pass, it merges into main with no conflicts, and no decision is left for you. It never merges a change to CLAUDE.md or the constitution. You approve tickets and do the work it gives back to you.' },
     { n: 5, name: 'Autopilot', rung: 'rungs 3 and 4, run by the relay', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: false, autopilot: true },
-      what: 'The relay does the full loop itself. It starts each approved Ready ticket, reviews each push, sends findings to the Dev, and merges when the review says merge and all checks pass. It needs no Lead. Only the relay starts and merges work. A Lead keeps two rights: stop a session the Floor calls safe to stop, and move a task to Done once its PR has merged. You approve tickets and do the work it puts in Waiting on you.' }
+      what: 'The relay does the full loop itself. It starts each approved Ready ticket, reviews each push, sends findings to the Dev, and merges when the review says merge and all checks pass. It needs no Lead. Only the relay starts and merges work. A Lead keeps three rights: stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR. You approve tickets and do the work it puts in Waiting on you.' }
   ];
   const wantOf = (L) => (L.n === 5 && !boardTerm ? Object.assign({}, L.want, { board: false }) : L.want);
   const trust = { reviews: null, autopilot: null, settings: null, pick: null, busy: false };
@@ -300,7 +300,8 @@
       if (!c) continue;
       if (x.kind === 'bool') c.input.checked = !!x.value;
       else if (document.activeElement !== c.input) c.input.value = String(x.value);
-      c.from.textContent = fromText(x) + (x.kind === 'skills' ? skillsText(x) : x.kind === 'bool' || x.kind === 'text' ? '' : ' · ' + x.min + ' to ' + x.max + (x.from === 'default' ? '' : ' · default ' + x.def));
+      c.from.textContent = fromText(x) + (x.kind === 'skills' ? skillsText(x) : x.kind === 'bool' || x.kind === 'text' ? '' : ' · ' + x.min + ' to ' + x.max + (x.from === 'default' ? '' : ' · default ' + x.def))
+        + (x.name === 'leadReviews' && !x.value && trust.autopilot && trust.autopilot.on ? ' · on while Autopilot runs' : '');
       c.reset.hidden = x.from !== 'page';
     }
     drawLevels();
@@ -401,16 +402,28 @@
   }
   function drawAutopilot(r) {
     if (!r.ok) return;
-    trust.autopilot = r; drawLevels();
+    trust.autopilot = r;
+    if (trust.settings) drawSettings({ ok: true, settings: trust.settings }); else drawLevels();
     apBox.disabled = false;
     if (!apSet) { apBox.checked = r.on; if (document.activeElement !== apOnly) apOnly.value = (r.only || []).join(', '); }
     apOnly.disabled = r.on;
     const now = (r.prs || []).filter((p) => p.state !== 'done').map((p) => (p.ticket || p.pr.split('/').pop()) + ': ' + (p.why || p.act || ''));
     apSays.textContent = [r.on ? ([...now, r.idle].filter(Boolean).join(' · ') || 'Starting the next ticket.') + ' · merged today: ' + r.mergedToday + ' of ' + r.maxMerges : '', runsLine(r.runs)].filter(Boolean).join(' · ');
     apRow.what.textContent = 'The relay starts the next approved Ready ticket, one at a time. Each push to its PR gets a review, and the findings go to the Dev. When the review says merge and all checks pass, the relay merges the PR and starts the next ticket. After ' + r.maxRounds + ' review rounds that still ask for fixes, the task goes to Waiting on you. It merges at most ' + r.maxMerges + ' PRs a day. It never merges a change to CLAUDE.md or the constitution. It needs Review PRs automatically on. When you turn it off, work already started stays where it is.';
+    tellReady(r.prs || []);
     summaryOn.autopilot = !!r.on;
     summary.autopilot = r.on ? 'Autopilot on' + (r.only && r.only.length ? ' for ' + r.only.join(', ') : '') : 'Autopilot off';
     drawSummary();
+  }
+  let readySeen = null;
+  function tellReady(prs) {
+    if (!readySeen) { try { readySeen = new Set(JSON.parse(store(localStorage, 'office.readySeen') || '[]')); } catch (e) { readySeen = new Set(); } }
+    const fresh = prs.filter((p) => p.ready && p.state !== 'done' && !readySeen.has(p.pr + ' ' + p.ready));
+    if (!fresh.length) return;
+    for (const p of fresh) readySeen.add(p.pr + ' ' + p.ready);
+    store(localStorage, 'office.readySeen', JSON.stringify([...readySeen].slice(-50)));
+    const p = fresh[fresh.length - 1];
+    tell((p.ticket ? p.ticket + ', ' : '') + 'PR #' + p.pr.split('/').pop() + ': ' + p.why, '');
   }
   const syncAutopilot = () => api('', undefined, '/autopilot').then(drawAutopilot);
   if (window.run) window.run.on('hook', (e) => {
