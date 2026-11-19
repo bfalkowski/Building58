@@ -146,6 +146,11 @@ async function main() {
     const r = await (await fetch(URL_, { method: 'POST', headers, body: JSON.stringify({ title: f.rest.join(' '), body: f.body, priority: f.priority, blockedBy: f.blockedBy, shapes: f.shapes, kind: f.kind, labels: f.labels }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log((r.duplicate ? 'Already filed: ' : 'Filed: ') + r.ticket.id + '  ' + r.ticket.title + (r.duplicate ? '  (' + r.ticket.status + ')' : '  (waiting in ' + r.ticket.status + ')'));
+    const likely = r.likely || [];
+    if (likely.length) {
+      console.log('Likely duplicate' + (likely.length > 1 ? 's' : '') + ' of open tickets:\n' + likely.map((x) => '  ' + x.id + '  ' + x.title + '  (' + x.status + ')').join('\n'));
+      console.log('If ' + r.ticket.id + ' is the same work as one of them, one should be rejected: the Lead runs ticket.js move ' + r.ticket.id + ' rejected, and any other session tells @Lead with ticket.js post, naming both.');
+    }
     return 0;
   }
   if (cmd === 'edit' && args[0]) {

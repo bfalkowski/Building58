@@ -688,7 +688,7 @@
     return out.length ? out : [to.clone()];
   }
 
-  const { POSE, RIG, typePoseFor, aimArms, seatOn, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE } = window.OfficePoses;
+  const { POSE, RIG, typePoseFor, aimArms, chairTurn, seatOn, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE } = window.OfficePoses;
 
   function buildPerson(look) {
     const L = Object.assign({ skin: '#d6a27c', hair: '#2a1d17', hairStyle: 'short', shirt: '#556677', pants: '#333a44', shoes: '#222222', height: 1 }, look || {});
@@ -880,7 +880,7 @@
     if (w.spot !== w.desk) release(w);
     reserve(k, w);
     w.spot = k; w.seated = false; w.pos.copy(SPOTS[k].pos); w.yaw = SPOTS[k].yaw;
-    w.pose = Object.assign({}, POSE.stand); w.target = POSE.stand; w.moving = false;
+    w.pose = Object.assign({}, POSE.stand); w.target = POSE.stand; w.route = {}; w.moving = false;
     w.steps = [act({ dur: rand(8, 20), pose: 'pockets', label: 'Looking around' })]; w.step = null; w.doing = 'Looking around';
     placeFigure(w);
   }
@@ -888,7 +888,7 @@
     if (w.spot !== w.desk) release(w);
     const sp = SPOTS[w.desk];
     w.spot = w.desk; w.seated = true; w.pos.copy(sp.pos); w.yaw = sp.yaw;
-    w.pose = Object.assign({}, POSE.sit); w.target = POSE.sit; w.moving = false;
+    w.pose = Object.assign({}, POSE.sit); w.target = POSE.sit; w.route = {}; w.moving = false;
     w.steps = [act({ dur: Infinity, pose: 'type', work: true })]; w.step = null;
     placeFigure(w);
   }
@@ -1348,9 +1348,7 @@
   const upQ = new THREE.Quaternion(), tq = new THREE.Quaternion(), te = new THREE.Euler();
   function applyPose(w, dt) {
     const p = w.pose, t = w.target, k = Math.min(1, dt * (w.moving ? 10 : 7));
-    w.swivel += (w.swivelTo - w.swivel) * Math.min(1, dt * 3);
     w.gaze += (w.gazeTo - w.gaze) * Math.min(1, dt * 3);
-    if (w.desk) DESKS[w.desk].chair.rotation.y = w.swivel;
     let armR = null;
     if (w.carry === 'mug' && !(w.step && w.step.brew)) {
       armR = w.seated ? ARM_CARRY_SIT : ARM_CARRY;
@@ -1361,8 +1359,10 @@
     let aim = armR ? Object.assign({}, t, armR) : t;
     const seat = w.seated && SPOTS[w.spot] && SPOTS[w.spot].seat;
     if (seat) aim = Object.assign({}, aim, seatOn(aim, seat, (w.look || {}).height));
+    w.swivel += (chairTurn(p, aim, w.swivelTo) - w.swivel) * Math.min(1, dt * 3);
+    if (w.desk) DESKS[w.desk].chair.rotation.y = w.swivel;
     const ahead = w.desk && w.spot === w.desk && !w.moving ? w.pos.distanceTo(SPOTS[w.desk].pos) : Infinity;
-    if (w.seated ? ahead < Infinity : ahead < 0.03) aim = aimArms(w.route, p, aim, w.look.height || 1, ahead);
+    if (w.seated ? ahead < Infinity : ahead < 0.03) aim = aimArms(w.route, p, aim, w.look.height || 1, ahead, w.swivel);
     else if (w.route.L || w.route.R) w.route = {};
     towards(p, aim, k);
     const f = w.fig, tt = worldT;

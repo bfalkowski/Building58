@@ -44,6 +44,19 @@ test('a session the relay told something that did not start: open it', () => {
   assert.deepStrictEqual(listOf({ seats: [seat({ live: 'stuck', cause: 'silent' })] }), [], 'a silent turn may still be thinking');
 });
 
+test('a saved message that has waited long for a running session: open that session, with why', () => {
+  const wait = (o) => Object.assign({ terminal: 'aaaaaaaaaaaa', who: 'Ada', minutes: 17, why: 'its screen shows no prompt' }, o);
+  const [item] = listOf({ seats: [seat({ role: 'Lead' })], waits: [wait()] });
+  assert.strictEqual(item.kind, 'undelivered');
+  assert.strictEqual(item.who, 'Ada');
+  assert.strictEqual(item.line, 'Open the session of Ada: a message from the relay has waited 17 minutes for it and is not typed in, because its screen shows no prompt.');
+  assert.deepStrictEqual(item.link, { terminal: 'aaaaaaaaaaaa' });
+  assert.strictEqual(item.task, null, 'not on the Board');
+  assert.deepStrictEqual(kinds(listOf({ waits: [wait(), wait({ minutes: 20 })] })), ['undelivered'], 'one item for one session');
+  const asked = listOf({ seats: [seat({ live: 'waiting', message: 'Pick one' })], waits: [wait()] });
+  assert.deepStrictEqual(kinds(asked), ['question'], 'a session with another item gives no second one');
+});
+
 test('a Dev that stopped with no PR: prompt it', () => {
   const dev = seat({ task: 'k1' });
   const [item] = listOf({ seats: [dev], tasks: [task({ owner: dev.terminal })] });
@@ -123,7 +136,7 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
 });
 
 test('text from a session is cleaned to one line', () => {
