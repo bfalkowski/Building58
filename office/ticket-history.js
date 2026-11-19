@@ -39,6 +39,7 @@
       case 'edited': return 'Edited' + (x.what && x.what.length ? ' (' + x.what.join(', ') + ')' : '') + ' by ' + byText(x);
       case 'proposal': return 'Proposed to ' + proposalWords(x) + ' by ' + byText(x) + (x.why ? '. Why: ' + x.why : '');
       case 'proposal-approved': return 'Proposal to ' + proposalWords(x) + ' approved by ' + byText(x);
+      case 'proposal-dropped': return 'Proposal to ' + proposalWords(x) + ' dropped when ' + byText(x) + ' started it';
       case 'proposal-declined': return 'Proposal to ' + proposalWords(x) + ' declined by ' + byText(x);
       case 'moved': return 'Moved from ' + (STATES[x.from] || x.from) + ' to ' + (STATES[x.to] || x.to) + ' by ' + byText(x);
       default: return x.stage;

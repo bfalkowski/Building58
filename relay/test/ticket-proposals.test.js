@@ -93,6 +93,7 @@ test('proposals to replace, merge, close or re-block a ticket wait for the perso
       [ids.Early, { action: 'replace', ids: [] }, 'bad_proposal'],
       [ids.Early, { action: 'replace', ids: ['T-999'] }, 'bad_proposal'],
       [ids.Early, { action: 'replace', ids: [ids.Rejected] }, 'bad_proposal'],
+      [ids.Early, { action: 'blockers', ids: [ids.Rejected] }, 'bad_proposal'],
       [ids.Early, { action: 'merge', ids: [ids.New1, ids.New2] }, 'bad_proposal'],
       [ids.Early, { action: 'close', ids: [ids.New1] }, 'bad_proposal'],
       [ids.Early, { action: 'archive' }, 'bad_proposal'],
@@ -114,6 +115,16 @@ test('proposals to replace, merge, close or re-block a ticket wait for the perso
     assert.strictEqual((await propose(ids.Early, { action: 'close' }, pmT)).status, 200);
     for (const who of [pmT, leadT, workerT]) assert.notStrictEqual((await decide(ids.Early, 'approve', who)).status, 200);
     assert.strictEqual((await ticket(ids.Early)).status, 'ready');
+  });
+
+  await t.test('a blockers proposal whose blocker is rejected before approval is refused', async () => {
+    const a = await file('Waits'), b = await file('Blocker gone');
+    assert.strictEqual((await propose(a, { action: 'blockers', ids: [b] }, pmT)).status, 200);
+    assert.strictEqual((await R.call('POST', '/tickets/' + b + '/move', { to: 'rejected' })).status, 200);
+    const r = await decide(a, 'approve');
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.match(r.body.message, /rejected, so .* cannot wait for it/);
+    assert.deepStrictEqual((await ticket(a)).blockedBy, []);
   });
 
   await t.test('a proposal no longer true when approved is refused, and waits', async () => {
@@ -161,6 +172,8 @@ test('proposals to replace, merge, close or re-block a ticket wait for the perso
     assert.strictEqual((await propose(id, { action: 'close' }, pmT)).status, 200);
     assert.strictEqual((await R.call('POST', '/tickets/' + id + '/start', {})).status, 200);
     assert.strictEqual((await ticket(id)).proposal, undefined);
+    const h = await steps(id);
+    assert.deepStrictEqual([h.at(-1).stage, h.at(-1).by, h.at(-1).action], ['proposal-dropped', 'you', 'close'], 'the history says where it went');
   });
 
   await t.test('ticket.js replace, merge, close and blockers', async () => {

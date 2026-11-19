@@ -396,12 +396,11 @@ function proposalProblem(now, p, all) {
   if (p.ids.includes(now.id)) return p.action === 'blockers' ? 'A ticket cannot block itself.' : 'A ticket cannot go into itself.';
   const unknown = p.ids.filter((id) => !all.some((t) => t.id === id));
   if (unknown.length) return 'No such ticket: ' + unknown.join(', ') + '.';
-  if (p.action === 'blockers') {
-    const loop = p.ids.find((id) => waitsOn(id, now.id, all, new Set()));
-    return loop ? loop + ' already waits for ' + now.id + ', so ' + now.id + ' cannot wait for it.' : null;
-  }
   const gone = p.ids.filter((id) => all.find((t) => t.id === id).status === 'rejected');
-  return gone.length ? gone.join(', ') + (gone.length > 1 ? ' were' : ' was') + ' rejected, so ' + now.id + ' cannot go into ' + (gone.length > 1 ? 'them' : 'it') + '.' : null;
+  if (gone.length) return gone.join(', ') + (gone.length > 1 ? ' were' : ' was') + ' rejected, so ' + now.id + (p.action === 'blockers' ? ' cannot wait for ' : ' cannot go into ') + (gone.length > 1 ? 'them' : 'it') + '.';
+  if (p.action !== 'blockers') return null;
+  const loop = p.ids.find((id) => waitsOn(id, now.id, all, new Set()));
+  return loop ? loop + ' already waits for ' + now.id + ', so ' + now.id + ' cannot wait for it.' : null;
 }
 function propose(channel, ticket, body, agent) {
   const { proposal, error } = proposalFrom(body);
@@ -540,6 +539,7 @@ async function startTicket(channel, ticket, body, ctx, agent, by) {
       const no = agent && leadMayStart(channel, now, list, agent);
       if (no) return [list, now, no];
       await store.update(channel, now.id, Object.assign({ status: 'started' }, now.proposal ? { proposal: null } : {}));
+      if (now.proposal) history.add(channel, now, { stage: 'proposal-dropped', by: by || (agent ? 'Lead' : 'you'), action: now.proposal.action, ids: now.proposal.ids, from: now.proposal.by }, agent || null);
       return [list, now, null];
     });
     if (refused) return refused;
