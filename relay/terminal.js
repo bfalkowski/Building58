@@ -148,6 +148,24 @@ function saveLeads() {
   fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(leads), null, 2) + '\n', { mode: 0o600 });
   fs.renameSync(tmp, LEAD_FILE);
 }
+const LEAD_STOP_SAYS = 'That session is the Lead, so it was not stopped. A stop loses its turn in progress, and it comes back as the Lead only with Bring back. To make a slow Lead fresh, use Refresh the Lead. To stop it anyway, send lead: true.';
+const ENDED_SAYS = { stopped: 'The Lead\'s session was stopped.', ended: 'The Lead\'s session ended.', crashed: 'The Lead\'s session ended with an error.' };
+function offerBack(channel, t, code) {
+  const saved = leads.get(channel);
+  if (closing || !saved || saved.sessionId !== t.sessionId) return;
+  offered.set(channel, Object.assign({}, saved, { ended: t.stopped ? 'stopped' : code ? 'crashed' : 'ended', exitCode: t.stopped ? null : code, endedAt: new Date().toISOString() }));
+}
+function leadEndedOf(channel) {
+  const offer = !leadOf(channel) && restoreOf(channel);
+  if (!offer || !offer.ended) return null;
+  return { ended: offer.ended, sessionId: offer.sessionId, title: offer.title || null, endedAt: offer.endedAt, says: ENDED_SAYS[offer.ended] + ' No session is the Lead now. Its handoff notes are kept. Bring back as the Lead, on the page, returns it.' };
+}
+function leadIn(dir) {
+  const want = real(dir), inside = (cwd) => !!cwd && (real(cwd) === want || real(cwd).startsWith(want + path.sep));
+  for (const saved of leads.values()) if (inside(saved.cwd)) return true;
+  for (const terms of channels.values()) for (const t of terms.values()) if (t.lead && inside(t.cwd)) return true;
+  return false;
+}
 function restoreOf(channel) {
   const lead = offered.get(channel);
   return lead && ![...termsOf(channel).values()].some((t) => t.sessionId === lead.sessionId) ? lead : null;
@@ -389,6 +407,7 @@ function start(channel, body, ctx, onExit, own) {
     reseat(channel);
     keepReviewer(t);
     if (t.refresh) endRefresh(t, 'The Lead\'s session ended before the refresh finished.', false);
+    if (t.lead) offerBack(channel, t, code);
     setTimeout(() => {
       flushOut(t);
       for (const v of t.viewers) sse(v, 'exit', { code: t.exitCode, stopped: !!t.stopped });
@@ -783,6 +802,8 @@ async function handle(req, res, channel, rest, ctx) {
     ctx.send(res, 200, { ok: true, cols, rows }); return true;
   }
   if (req.method === 'POST' && verb === 'stop') {
+    const body = await ctx.readJson(req);
+    if (t.lead && !t.exited && body.lead !== true) { ctx.problem(res, 409, 'lead', LEAD_STOP_SAYS); return true; }
     t.stoppedBy = ctx.agent ? 'Lead' : 'you';
     stop(t);
     ctx.send(res, 200, { ok: true }); return true;
@@ -835,4 +856,4 @@ function agentFor(req) {
 const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited);
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, reviewFound, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit, MAX_PROMPT };
+module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, reviewFound, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };

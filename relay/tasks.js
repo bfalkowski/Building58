@@ -296,6 +296,7 @@ async function clean(channel, task, body) {
   if (task.state !== 'done') return [409, { ok: false, error: 'not_done', message: 'Only a finished task can be cleaned up.' }];
   if (terminal.find(channel, task.owner && task.owner.terminal)) return [409, { ok: false, error: 'running', message: 'Stop its worker first.' }];
   if (terminal.runningIn(task.worktree)) return [409, { ok: false, error: 'in_use', message: 'A session is still running in its checkout. Stop it first.' }];
+  if (terminal.leadIn(task.worktree)) return [409, { ok: false, error: 'lead', message: 'The Lead\'s session runs, or last ran, in its checkout, and Bring back needs it. Make another session the Lead first.' }];
   const ask = async () => {
     if (!fs.existsSync(task.repo) || !fs.existsSync(task.worktree)) return null;
     try {

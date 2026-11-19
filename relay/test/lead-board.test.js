@@ -280,8 +280,8 @@ test('moving the board', async (t) => {
     const filed = await fileAs(await tokenFor(elsewhere), 'After a restart');
     assert.strictEqual((await moveTicket(filed.id, 'ready', await tokenFor(elsewhere))).status, 401);
     assert.strictEqual((await moveTicket(filed.id, 'ready', await tokenFor(back))).status, 200);
-    await R.call('POST', '/terminals/' + back.id + '/stop', {});
-    await R.call('POST', '/terminals/' + elsewhere.id + '/stop', {});
+    await R.call('POST', '/terminals/' + back.id + '/stop', { lead: true });
+    await R.call('POST', '/terminals/' + elsewhere.id + '/stop', { lead: true });
     await until(async () => (await R.call('GET', '/terminals')).body.terminals.length === 0, 'them to stop');
   });
 

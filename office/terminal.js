@@ -78,6 +78,7 @@
     flushKeys();
     if (es) es.close();
     current = { id, running: false }; store(sessionStorage, 'office.terminal', id);
+    stopAsk.hidden = true;
     const stream = es = new EventSource(url('/' + id + '/stream'));
     stream.addEventListener('hello', (m) => {
       const t = JSON.parse(m.data);
@@ -93,8 +94,10 @@
     stream.addEventListener('exit', (m) => {
       const e = JSON.parse(m.data);
       stream.close(); if (es === stream) es = null;
-      current = null; store(sessionStorage, 'office.terminal', null); show();
-      say((e.stopped ? 'Stopped' : 'Ended' + (e.code ? ' (exit ' + e.code + ')' : '')) + '. Click a worker, or add one.', 'off');
+      const wasLead = !!(current && current.lead);
+      current = null; store(sessionStorage, 'office.terminal', null); show(); stopAsk.hidden = true;
+      if (wasLead) { tell('The Lead\'s session ' + (e.stopped ? 'was stopped' : 'ended' + (e.code ? ' (exit ' + e.code + ')' : '')) + '. No session is the Lead now. To return it as the Lead, press Bring back as the Lead.', 'off'); sync(); }
+      else say((e.stopped ? 'Stopped' : 'Ended' + (e.code ? ' (exit ' + e.code + ')' : '')) + '. Click a worker, or add one.', 'off');
       term.write('\r\n\x1b[2m[Claude Code ' + (e.stopped ? 'stopped' : 'ended') + ']\x1b[0m\r\n');
     });
     stream.addEventListener('error', () => {
@@ -670,14 +673,15 @@
   const ask = document.createElement('div'), askText = document.createElement('span'), askYes = document.createElement('button'), askNo = document.createElement('button');
   ask.className = 'cc-ask'; ask.hidden = true;
   askYes.type = askNo.type = 'button'; askYes.className = 'btn primary'; askNo.className = 'btn';
-  askYes.textContent = 'Bring back'; askNo.textContent = 'Not now';
+  askYes.textContent = 'Bring back as the Lead'; askNo.textContent = 'Not now';
   ask.append(askText, askYes, askNo);
   notes.append(ask);
   let offer = null;
   function offerLead(lead) {
     offer = lead || null;
     if (!askYes.disabled) ask.hidden = !offer;
-    if (offer && !askYes.disabled) askText.textContent = 'Bring back the Lead\'s last session? ' + (offer.title ? offer.title + ' · ' : '') + short(offer.sessionId) + ' in ' + home(offer.cwd);
+    const ended = { stopped: 'The Lead\'s session was stopped, so no session is the Lead now. ', ended: 'The Lead\'s session ended, so no session is the Lead now. ', crashed: 'The Lead\'s session ended with an error, so no session is the Lead now. ' };
+    if (offer && !askYes.disabled) askText.textContent = (ended[offer.ended] || '') + 'Bring back the Lead\'s last session? ' + (offer.title ? offer.title + ' · ' : '') + short(offer.sessionId) + ' in ' + home(offer.cwd);
   }
   askYes.addEventListener('click', async () => {
     if (!offer) return;
@@ -696,6 +700,7 @@
     say('That session did not come back. Its conversation may be gone.', 'off');
   });
   askNo.addEventListener('click', () => { offerLead(null); api('/lead', { asked: true }); });
+  window.addEventListener('office:bring-back-lead', () => { if (offer && !askYes.disabled) askYes.click(); });
 
   window.addEventListener('office:session', (ev) => {
     const id = ev.detail && ev.detail.terminal;
@@ -726,7 +731,36 @@
     const w = workerOf(r.id);
     if (w) window.dispatchEvent(new CustomEvent('office:pick', { detail: { who: w.id, keep: true } }));
   });
-  stopBtn.addEventListener('click', () => { if (current) { current.stopping = true; say('Stopping', 'wait'); api('/' + current.id + '/stop', {}); } });
+  const leadShown = () => !!(current && (current.lead || terms.some((x) => x.id === current.id && x.lead && x.running)));
+  async function stopShown(lead) {
+    if (!current) return;
+    const was = current;
+    was.stopping = true; say('Stopping', 'wait');
+    const r = await api('/' + was.id + '/stop', lead ? { lead: true } : {});
+    if (!r.ok) { was.stopping = false; tell(r.message || 'The relay did not answer.', 'off'); }
+  }
+  const stopAsk = document.createElement('div'), stopAskText = document.createElement('span');
+  const stopAskYes = document.createElement('button'), stopAskRefresh = document.createElement('button'), stopAskNo = document.createElement('button');
+  stopAsk.className = 'cc-ask'; stopAsk.id = 'cc-stop-lead'; stopAsk.hidden = true; stopAsk.setAttribute('role', 'alertdialog');
+  stopAskYes.type = stopAskRefresh.type = stopAskNo.type = 'button';
+  stopAskYes.className = 'btn'; stopAskRefresh.className = 'btn primary'; stopAskNo.className = 'btn';
+  stopAskYes.textContent = 'Stop the Lead'; stopAskRefresh.textContent = 'Refresh the Lead instead'; stopAskNo.textContent = 'Keep it running';
+  stopAskText.textContent = 'This session is the Lead. A stop loses its turn in progress, and no session is the Lead until you bring it back. Its handoff notes are kept. To get it back, press Bring back as the Lead. If the Lead is slow or forgets things, Refresh the Lead instead: it writes its notes, starts a clean conversation, and stays the Lead.';
+  stopAsk.append(stopAskText, stopAskYes, stopAskRefresh, stopAskNo);
+  note.after(stopAsk);
+  stopBtn.addEventListener('click', () => {
+    if (!current) return;
+    if (leadShown()) { stopAsk.hidden = false; stopAskNo.focus(); return; }
+    stopShown(false);
+  });
+  stopAskYes.addEventListener('click', () => { stopAsk.hidden = true; if (leadShown()) stopShown(true); });
+  stopAskNo.addEventListener('click', () => { stopAsk.hidden = true; });
+  stopAskRefresh.addEventListener('click', async () => {
+    stopAsk.hidden = true;
+    const r = await api('/lead', { refresh: true });
+    tell(r.ok ? 'Refreshing the Lead. It stays the Lead.' : r.message || 'The relay did not answer.', r.ok ? 'wait' : 'off');
+    await sync();
+  });
   box.addEventListener('click', () => term.focus());
 
   sync().then((r) => {

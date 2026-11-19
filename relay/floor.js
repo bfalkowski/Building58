@@ -186,6 +186,7 @@ function freeDesks(channel, need, now, by, pick) {
   const stopped = [];
   for (const t of free) {
     if (stopped.length >= need) break;
+    if (t.lead) continue;
     const task = taskOf(t);
     if (!pick(t, task)) continue;
     const v = leadVerdict(channel, t, task, now);
@@ -214,7 +215,7 @@ async function handle(req, res, channel, rest, ctx) {
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'The floor needs the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
-  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()) }); return true; }
+  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()), leadEnded: terminal.leadEndedOf(channel) }); return true; }
   const body = await ctx.readJson(req);
   const [status, out] = ctx.agent ? stopOne(channel, body.who, ctx, Date.now()) : personStop(channel, body, ctx, Date.now());
   ctx.send(res, status, out);

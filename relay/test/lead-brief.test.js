@@ -202,7 +202,7 @@ test('the Lead\'s brief', async (t) => {
     await hook(fresh, { hook_event_name: 'SessionStart', source: 'resume', full_session_id: fresh, terminal: back.id });
     await sleep(2500);
     assert.strictEqual(briefs(await R.screen(back.id)), 1, 'coming back reports itself, and that is not another brief');
-    for (const x of [back, elsewhere]) await R.call('POST', '/terminals/' + x.id + '/stop', {});
+    for (const x of [back, elsewhere]) await R.call('POST', '/terminals/' + x.id + '/stop', { lead: true });
     await until(async () => (await R.call('GET', '/terminals')).body.terminals.length === 0, 'them to stop');
   });
   await t.test('a task or a reviewer resuming the Lead\'s id does not take the job', async () => {
