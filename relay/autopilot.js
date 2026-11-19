@@ -96,7 +96,9 @@ function track(channel, task) {
 }
 function handRun(channel, task, reason) {
   const run = runOf(channel, task);
-  if (run && runs.hand(run, reason, Date.now())) save();
+  if (run) runs.hand(run, reason, Date.now());
+  nudge.forget(channel, chOf(channel), task);
+  save();
 }
 const number = (pr) => '#' + pr.split('/').pop();
 let ctx = null;
@@ -475,6 +477,7 @@ function stuckOn(channel, task, dev) {
   return found.filter((x) => Date.now() - x.since >= STALL_MS()).sort((a, b) => a.since - b.since)[0] || null;
 }
 function stalled(channel) {
+  nudge.watch(channel, chOf(channel), save);
   for (const task of tasks.list(channel).filter((t) => open(channel, t))) {
     const rec = task.pr ? recOf(channel, task.pr) : null;
     const dev = terminal.find(channel, task.owner && task.owner.terminal);
