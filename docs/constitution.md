@@ -332,7 +332,11 @@ Lead runs `gh pr merge` with the person's full GitHub login, not with only the a
 
 1. A review of the current head is posted. If commits land after the review, the Lead asks for a
    follow-up review first.
-2. Every blocking and fix-now finding is fixed, and the Lead checked each fix in the code.
+2. Every blocking and fix-now finding is fixed, and the Lead checked each fix in the code. The pull
+   request holds all its Dev's work: the Floor (`node relay/ticket.js floor`) shows no merge hold
+   for its task. The merge hold (`relay/merge-hold.js`) is on while the Dev may still be answering
+   the latest review, while the Dev is idle or gone with uncommitted or unpushed work, and while its
+   session has ended with review news it was never told.
 3. The pipeline is green on the current head.
 4. The base is `main`, and GitHub says the pull request merges cleanly into it. A pull request
    with any other base goes to the person.
@@ -452,7 +456,10 @@ start. The relay, not a brief, holds it to these:
   This replaces "a review of the current head" for a merge it makes: a commit after a merge
   verdict needs a follow-up that says merge.
 - It merges only when the latest verdict says merge for the current head, every check on that head
-  passed, and GitHub can merge it. It names that commit to GitHub, which refuses the merge if
+  passed, GitHub can merge it, and the pull request holds all its Dev's work. Before a merge, the
+  merge hold (`relay/merge-hold.js`) waits while the Dev may still be answering the latest review,
+  and hands the task to the person, in Waiting on you, when the Dev is idle or gone with uncommitted
+  or unpushed work, or gone with review news it was never told. It names that commit to GitHub, which refuses the merge if
   the PR moved since. A branch behind main merges as it is, since main does not ask
   for branches to be up to date.
 - It works only on tasks it started. It never merges a change to this file, `CLAUDE.md` or the lint rules. Its loop is limited: after 2 review rounds
