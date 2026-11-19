@@ -404,6 +404,29 @@ test('automatic PR review', async (t) => {
     assert.strictEqual(sh(repo, 'tag', '--list'), '');
     await stop(r.id); await gone(r.checkout.id);
   });
+  await t.test('a copy of a ref that iCloud or Finder made, such as refs/stash 2, is removed and the review starts (T-350)', async () => {
+    const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir');
+    const copies = [path.join(gitDir, 'refs', 'stash 2'), path.join(gitDir, 'refs', 'heads', 'feature 3')];
+    for (const f of copies) fs.writeFileSync(f, '0123456789012345678901234567890123456789\n');
+    assert.throws(() => sh(repo, 'fetch', '-q', '--no-tags', origin, '+refs/pull/7/head:refs/office/probe'), /bad object refs\//, 'git fails on the copy');
+    const r = await review();
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(sh(r.body.cwd, 'rev-parse', 'HEAD'), tip);
+    for (const f of copies) assert.ok(!fs.existsSync(f), f + ' is removed');
+    assert.ok(fs.existsSync(path.join(gitDir, 'refs', 'heads', 'feature')), 'the real branch stays');
+    await stop(r.body.id); await gone(r.body.checkout.id);
+  });
+  await t.test('a broken ref with a valid name is named in the error and kept (T-350)', async () => {
+    const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir'), broken = path.join(gitDir, 'refs', 'heads', 'broken');
+    fs.writeFileSync(broken, '0123456789012345678901234567890123456789\n');
+    const r = await review();
+    assert.strictEqual(r.body.error, 'fetch');
+    assert.match(r.body.message, /refs\/heads\/broken/);
+    assert.ok(r.body.message.includes(broken), 'it names the file');
+    assert.ok(fs.existsSync(broken), 'the relay does not remove a ref git could hold');
+    fs.rmSync(broken);
+    assert.strictEqual(refs(), '');
+  });
   await t.test('a follow-up review starts only when a push moved the PR, however the push was written (T-70)', async () => {
     const { pushedIn } = require('../office-hook.js');
     const terminals = async () => (await R.call('GET', '/terminals')).body.terminals.length;

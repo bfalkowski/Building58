@@ -5,7 +5,7 @@
 // What it reads: each running session (relay/terminal.js) with its state from relay/liveness.js and any
 // question on its screen; each task that is not done (relay/tasks.js); Autopilot's hand-over reason
 // (relay/autopilot.js); whether a Dev still owes the continue prompt a restart saved for it (relay/sessions.js);
-// whether a review of a PR runs; whether a PR merged or closed (relay/floor.js,
+// whether a review of a PR runs, or could not start and the relay stopped trying (relay/reviews.js); whether a PR merged or closed (relay/floor.js,
 // relay/pipeline.js); and who may merge a PR, from the PR watch (relay/pr-watch.js) and the last huddle
 // report (relay/huddles.js), when they have looked; and each saved message (relay/delivery.js) that has waited
 // UNDELIVERED for a running session, unless that session is in a turn, waits on an answer, or has ended. The
@@ -17,6 +17,7 @@
 const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const autopilot = require('./autopilot.js');
+const reviews = require('./reviews.js');
 const prWatch = require('./pr-watch.js');
 const huddles = require('./huddles.js');
 const pipeline = require('./pipeline.js');
@@ -64,6 +65,7 @@ function stateOf(channel, now, lastReport) {
     owner: task.owner && terminal.find(channel, task.owner.terminal) ? task.owner.terminal : null,
     note: noteOf(task), reviewRuns: !!task.pr && reviewing(task.pr), pipelineWaits: !!(tasks.pipelineOf(task) || {}).waits,
     handedOver: autopilot.deskOf(channel, task).handedOver,
+    reviewFailed: task.pr ? reviews.failedOf(channel, task.pr) : null,
     onlyYouMerge: task.pr ? onlyYouMerge(channel, task.pr, report) : null,
   }));
   const waits = delivery.pending(channel)

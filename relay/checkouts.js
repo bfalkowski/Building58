@@ -3,6 +3,10 @@
 // one at the PR's latest commit. Tasks have their own (relay/tasks.js). See docs/manual/running.html#checkouts.
 //
 // A checkout nobody can miss goes when its session ends. The rest wait in the panel for Clean up.
+//
+// A copy of a ref, such as refs/stash 2, that iCloud or Finder made in a synced folder, makes git fetch fail with
+// bad object. A ref name with a space is never valid, so a review's fetch or checkout removes such a file, logs
+// what it held, and tries again (mending). Any other bad ref is named, with its file, in the error the review gives.
 // Like the terminal, this answers only the room page on this machine, while RELAY_TERMINAL=1.
 'use strict';
 const { execFile } = require('child_process');
@@ -178,22 +182,50 @@ function quietEnv(env) {
 }
 const NO_PROMPT = { timeout: 30000, env: quietEnv(process.env) };
 const unsecret = (text) => String(text).replace(/(\/\/)[^/@\s]+@/g, '$1');
+const COPY = / \d+$/, BAD_REF = /bad object (refs\/[^\n]+?)\s*$/m, MENDS = 5;
+async function refFile(top, ref) {
+  const common = path.resolve(top, await git(top, ['rev-parse', '--git-common-dir']));
+  const file = path.resolve(common, ref);
+  return file.startsWith(path.join(common, 'refs') + path.sep) ? file : null;
+}
+async function mendCopy(top, message, log) {
+  const ref = (String(message).match(BAD_REF) || [])[1];
+  if (!ref || !COPY.test(ref)) return false;
+  const file = await refFile(top, ref);
+  const held = file && (() => { try { return fs.lstatSync(file).isFile() && fs.readFileSync(file, 'utf8').trim(); } catch (e) { return null; } })();
+  if (held === null || held === false || !file) return false;
+  fs.unlinkSync(file);
+  log('Removed ' + file + ', a copy of a ref that iCloud or Finder made, since git cannot read a ref with a space in its name. It held ' + (held || 'nothing') + '.');
+  return true;
+}
+async function named(top, e) {
+  const ref = (String(e.message).match(BAD_REF) || [])[1], file = ref && await refFile(top, ref).catch(() => null);
+  if (file) e.message += ' The broken ref is the file ' + file + '. Remove it if nothing needs it, then press Get a review.';
+  return e;
+}
+async function mending(top, args, opts, log) {
+  for (let left = MENDS; ; left--) {
+    try { return await git(top, args, opts); } catch (e) {
+      if (!(left > 0 && await mendCopy(top, e.message, log).catch(() => false))) throw await named(top, e);
+    }
+  }
+}
 const hasCommits = (top) => git(top, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).then(() => true, () => false);
-async function forReview(c, top, pr, unlessAt) {
+async function forReview(c, top, pr, unlessAt, log) {
   const [, owner, name, number] = pr.match(PR_URL);
   const source = await sourceFor(top, owner, name);
   if (!source) return [400, { ok: false, error: 'no_remote', message: top + ' has no remote at github.com, so it cannot review ' + pr + '.' }];
   c.ref = 'refs/office/review/' + c.id;
   const refspec = '+refs/pull/' + number + '/head:' + c.ref, fetch = ['fetch', '--no-write-fetch-head', '--no-tags'];
   if (source.remote) {
-    try { await git(top, fetch.concat(source.remote, refspec), NO_PROMPT); } catch (e) {
+    try { await mending(top, fetch.concat(source.remote, refspec), NO_PROMPT, log); } catch (e) {
       return [502, { ok: false, error: 'fetch', message: 'Could not fetch ' + pr + ': ' + unsecret(e.message) }];
     }
   } else {
     if (!(await hasCommits(top))) return [400, { ok: false, error: 'no_commits', message: top + ' has no commits yet, so the relay cannot tell whether ' + pr + ' is of the same project. Review it from a clone of ' + owner + '/' + name + '.' }];
     const failed = [];
     for (const url of source.urls) {
-      try { await git(top, fetch.concat(url, refspec), NO_PROMPT); failed.length = 0; break; } catch (e) { failed.push(unsecret(url + ': ' + e.message)); }
+      try { await mending(top, fetch.concat(url, refspec), NO_PROMPT, log); failed.length = 0; break; } catch (e) { failed.push(unsecret(url + ': ' + e.message)); }
     }
     if (failed.length) return [502, { ok: false, error: 'fetch', message: 'No remote of ' + top + ' is ' + owner + '/' + name + ', and fetching ' + pr + ' from its own repo failed. ' + failed.join(' ') }];
   }
@@ -206,7 +238,7 @@ async function forReview(c, top, pr, unlessAt) {
     await git(top, ['update-ref', '-d', c.ref]);
     return [200, { ok: true, unchanged: true, commit: c.commit }];
   }
-  await git(c.repo, ['worktree', 'add', '--detach', c.path, c.commit]);
+  await mending(c.repo, ['worktree', 'add', '--detach', c.path, c.commit], undefined, log);
   return null;
 }
 async function forWorker(c, top) {
@@ -241,7 +273,7 @@ async function make(channel, body, ctx, ask) {
   const c = { id, kind, repo, from, path: path.join(repo, WORKTREES, name), branch: pr ? null : name, ref: null, pr, commit: null, createdAt: new Date().toISOString() };
   try {
     await excludeWorktrees(repo);
-    const refused = pr ? await forReview(c, top, pr, unlessAt) : await forWorker(c, top);
+    const refused = pr ? await forReview(c, top, pr, unlessAt, ctx.log) : await forWorker(c, top);
     if (refused) return refused;
     await linkModules(repo, c.path);
   } catch (e) {

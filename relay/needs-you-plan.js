@@ -11,8 +11,9 @@
 // spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
 // says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
-// handedOver, onlyYouMerge }, where owner is the terminal of its Dev while that session runs, and pipelineWaits
-// says its open PR's pipeline is running or failing.
+// handedOver, onlyYouMerge, reviewFailed }, where owner is the terminal of its Dev while that session runs, and pipelineWaits
+// says its open PR's pipeline is running or failing, and reviewFailed is why its PR's automatic review could not
+// start, once the relay stopped trying.
 // A wait is one saved message (relay/delivery.js) that has not gone in for a long time: { terminal, who, minutes,
 // why }, where terminal is the running session it is for, and why says in plain words what holds it.
 //
@@ -22,6 +23,7 @@
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   merge        an open PR that only the person may merge
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason
+//   review       an open PR whose automatic review could not start, with the reason, unless a review of it runs
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
@@ -33,7 +35,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['permission', 'question', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -61,6 +63,7 @@ function taskItem(t, dev) {
   const item = (kind, line, link) => ({ kind, who, terminal: dev ? dev.terminal : null, task: t.id, ticket: t.ticket || null, pr, line, link });
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), { url: pr });
+  if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
   if (t.state === 'waiting_on_you') {
     if (t.reviewRuns || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;
     const note = oneLine(t.handedOver || t.note, 300);
