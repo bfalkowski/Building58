@@ -4,7 +4,7 @@
 // session brought back with the same id. This is the only module that types a message into a session
 // for the relay, a first brief and a first prompt included. Refresh the Lead types its own steps.
 //
-//   save(channel, { key, terminal, sessionId, text, expiresAt, on, first, untilTurn })  a new save with the same key replaces the old one
+//   save(channel, { key, terminal, sessionId, text, expiresAt, on, first, untilTurn, beforeTurn })  a new save with the same key replaces the old one
 //   save(channel, { key, to: 'lead', text, ... })                     for whichever session is the Lead when it is typed
 //   save(channel, { key, to: 'lead', terminal, sessionId, ... })      for that session, only while it is the Lead
 //   drop(channel, key)                                                takes one back, even mid-typing
@@ -24,6 +24,8 @@
 // brought back with the same id gets it again, and a relay restart keeps it. A relay that comes back
 // to a session it was typed into watches it again, from when it was typed. A task's brief is both.
 // The Lead's brief is first only: a Lead with no hooks reaching the relay is still briefed.
+// beforeTurn: a hook that says a turn began after it was saved, and before it was typed, drops it as
+// 'expired', since the session went on without it (the continue after a restart, relay/sessions.js).
 //
 // An update holds every first brief (a task's, the Lead's, and every first prompt) only while it
 // restarts, not while it waits for a quiet moment, which can take hours (T-147, T-299, T-198). Other
@@ -83,7 +85,7 @@ function persist() {
 const listOf = (channel) => store[channel] || (store[channel] = []);
 const callbacks = new Map();
 
-function save(channel, { key, to, terminal: id, sessionId, text, expiresAt, on, first, untilTurn, prompt }) {
+function save(channel, { key, to, terminal: id, sessionId, text, expiresAt, on, first, untilTurn, beforeTurn, prompt }) {
   const same = listOf(channel).find((x) => x.key === key);
   if (same && same.text === text && same.terminal === (id || null) && same.sessionId === (sessionId || null) && (same.to || null) === (to || null) && !!same.first === !!first && !!same.untilTurn === !!untilTurn && !!same.prompt === !!prompt) {
     if (on) callbacks.set(channel + '/' + key, on);
@@ -91,7 +93,7 @@ function save(channel, { key, to, terminal: id, sessionId, text, expiresAt, on, 
   }
   drop(channel, key);
   listOf(channel).push(Object.assign({ key, to: to || null, terminal: id || null, sessionId: sessionId || null, text, expiresAt: expiresAt || Date.now() + NEVER, savedAt: Date.now() },
-    first ? { first: true } : {}, untilTurn ? { untilTurn: true, typedAt: null, typedTo: null } : {}, prompt ? { prompt: true, readyBy: Date.now() + READY_LIMIT() } : {}));
+    first ? { first: true } : {}, beforeTurn ? { beforeTurn: true } : {}, untilTurn ? { untilTurn: true, typedAt: null, typedTo: null } : {}, prompt ? { prompt: true, readyBy: Date.now() + READY_LIMIT() } : {}));
   if (on) callbacks.set(channel + '/' + key, on);
   persist();
 }
@@ -222,6 +224,7 @@ function pump() {
         remove(channel, d); tell(channel, d.key, 'expired', 'the session was not ready after ' + Math.round(READY_LIMIT() / 60000) + ' minutes'); continue;
       }
       if (t && d.heldFor === t.id && !t.stuck) { remove(channel, d); continue; }
+      if (t && d.beforeTurn && !d.typedAt && (t.turnAt || 0) >= d.savedAt) { remove(channel, d); tell(channel, d.key, 'expired', 'a turn began before it went in'); continue; }
       if (d.untilTurn && landing(channel, d, t)) continue;
       if (!t || typing.has(t.id) || heldBy(channel, t, d)) continue;
       const problem = terminal.notSafeToType(t, how(d));

@@ -70,6 +70,7 @@ test('a Dev that stopped with no PR: prompt it', () => {
   assert.deepStrictEqual(listOf({ seats: [seat({ task: 'k1', role: 'reviewer' })], tasks: [task({ owner: dev.terminal })] }), [], 'only a Dev');
   assert.strictEqual(listOf({ seats: [seat({ task: 'k1', spoke: false })], tasks: [task({ owner: dev.terminal })] })[0].line, 'Prompt Ada: it has not started on T-5.', 'its brief never went in');
   assert.deepStrictEqual(listOf({ seats: [seat({ task: 'k1', spoke: false, fresh: true })], tasks: [task({ owner: dev.terminal })] }), [], 'one that just started gets its brief first');
+  assert.deepStrictEqual(listOf({ seats: [seat({ task: 'k1', continuing: true })], tasks: [task({ owner: dev.terminal })] }), [], 'the relay still has a continue prompt for it after a restart');
 });
 
 test('a task whose session ended before a PR: bring it back', () => {
