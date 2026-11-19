@@ -56,7 +56,7 @@ function sync(task, verdict, seen) {
 }
 
 function refusal(mark) {
-  return 'The review of ' + mark.commit.slice(0, 7) + ' says merge. Do not push. Reply on the PR and file one follow-up ticket for the findings.' +
+  return 'The review of ' + mark.commit.slice(0, 7) + ' says merge. Do not push. Reply on the PR, and file a ticket only for a finding that is a real bug or risk outside this PR.' +
     ' Only a merge of ' + mark.base + ' that clears a conflict may be pushed now. PR: ' + mark.pr;
 }
 
