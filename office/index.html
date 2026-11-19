@@ -217,6 +217,8 @@
   #chat-rooms [data-kind="ticket"] button { border-left-color: var(--link); }
   #chat-rooms [data-kind="fun"] button { border-left-color: var(--wait); }
   #chat-rooms small { color: var(--pane-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #chat-rooms [data-archived] button { opacity: 0.7; }
+  #chat-rooms .archived-toggle button { color: var(--pane-dim); border-left-color: transparent; font-size: 0.9em; }
   #chat-new { grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-top: 6px; }
   .chat-main { display: grid; gap: 6px; min-width: 0; align-content: start; }
   .chat-main h3 { margin: 0; font: 500 13px/1.3 var(--mono); color: var(--pane-strong); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
