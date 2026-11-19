@@ -34,6 +34,7 @@ test('proposals to replace, merge, close or re-block a ticket wait for the perso
   const ticket = async (id) => (await R.call('GET', '/tickets/' + id)).body.ticket;
   const propose = (id, body, who) => R.call('POST', '/tickets/' + id + '/propose', body, who);
   const decide = (id, decision, who) => R.call('POST', '/tickets/' + id + '/proposal', { decision }, who);
+  const archived = async (id) => (await R.call('GET', '/chat/' + id)).body.room.archived;
   const steps = async (id) => (await ticket(id)).history.filter((h) => /^proposal/.test(h.stage));
 
   await t.test('the PM proposes to replace a ticket, and nothing changes until the person approves', async () => {
@@ -57,6 +58,8 @@ test('proposals to replace, merge, close or re-block a ticket wait for the perso
     const h = await steps(ids.Old);
     assert.deepStrictEqual([h.at(-1).stage, h.at(-1).by, h.at(-1).action], ['proposal-approved', 'you', 'replace']);
     assert.strictEqual((await decide(ids.Old, 'approve')).status, 409, 'no proposal waits now');
+    const gone = await H.until(() => archived(ids.Old), 'the chat channel to be archived');
+    assert.strictEqual(gone.why, 'the ticket was replaced');
   });
 
   await t.test('merge: approving rejects the ticket as merged into the other one', async () => {
@@ -65,6 +68,8 @@ test('proposals to replace, merge, close or re-block a ticket wait for the perso
     const now = await ticket(ids.Dup);
     assert.deepStrictEqual([now.status, now.closedAs, now.closedFor], ['rejected', 'merged', [ids.Keeper]]);
     assert.strictEqual((await ticket(ids.Keeper)).status, 'ready', 'the ticket it went into stays');
+    assert.strictEqual((await H.until(() => archived(ids.Dup), 'the chat channel to be archived')).why, 'the ticket was merged');
+    assert.strictEqual(await archived(ids.Keeper), null, 'its chat channel stays open');
   });
 
   await t.test('close: declining leaves the ticket as it was', async () => {
@@ -74,6 +79,7 @@ test('proposals to replace, merge, close or re-block a ticket wait for the perso
     const now = await ticket(ids.Stale);
     assert.deepStrictEqual([now.status, now.proposal, now.heldBack], ['ready', undefined, null]);
     assert.strictEqual((await steps(ids.Stale)).at(-1).stage, 'proposal-declined');
+    assert.strictEqual(await archived(ids.Stale), null, 'its chat channel stays open');
   });
 
   await t.test('blockers: approving sets the new list of blockers', async () => {
@@ -83,6 +89,7 @@ test('proposals to replace, merge, close or re-block a ticket wait for the perso
     assert.strictEqual((await decide(ids.Late, 'approve')).status, 200);
     const now = await ticket(ids.Late);
     assert.deepStrictEqual([now.status, now.blockedBy, now.waitingFor], ['ready', [ids.Early], [ids.Early]]);
+    assert.strictEqual(await archived(ids.Late), null, 'its chat channel stays open');
     assert.strictEqual((await propose(ids.Late, { action: 'blockers', ids: [] }, pmT)).status, 200, 'an empty list proposes no blockers');
   });
 

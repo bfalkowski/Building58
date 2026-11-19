@@ -70,6 +70,7 @@ test('a Dev that stopped with no PR: prompt it', () => {
   assert.deepStrictEqual(listOf({ seats: [seat({ task: 'k1', role: 'reviewer' })], tasks: [task({ owner: dev.terminal })] }), [], 'only a Dev');
   assert.strictEqual(listOf({ seats: [seat({ task: 'k1', spoke: false })], tasks: [task({ owner: dev.terminal })] })[0].line, 'Prompt Ada: it has not started on T-5.', 'its brief never went in');
   assert.deepStrictEqual(listOf({ seats: [seat({ task: 'k1', spoke: false, fresh: true })], tasks: [task({ owner: dev.terminal })] }), [], 'one that just started gets its brief first');
+  assert.deepStrictEqual(listOf({ seats: [seat({ task: 'k1', continuing: true })], tasks: [task({ owner: dev.terminal })] }), [], 'the relay still has a continue prompt for it after a restart');
 });
 
 test('a task whose session ended before a PR: bring it back', () => {
@@ -97,6 +98,46 @@ test('a PR Autopilot handed over: decide on it, with its reason', () => {
   assert.strictEqual(item.line, 'Decide on PR #12 (T-5): Its Dev says a finding is a bug: https://github.com/o/r/pull/12#issuecomment-1');
   assert.deepStrictEqual(item.link, { url: PR });
   assert.strictEqual(item.pr, PR);
+});
+
+// On 2026-11-19 Autopilot was off, and Needs you said Waiting for the review for #113 to #115 for hours,
+// though each review was posted with its verdict at 03:28 to 03:34 UTC. The line kept the reason of an old
+// stall hand-over. A review posted after the hand-over now gives the line its next step.
+const STALL = 'Nothing moved it for 30 minutes (Waiting for the review.).';
+const posted = (o) => Object.assign({ kind: 'fix', commit: '0fdd14b24cbd4e868a18fba5b3433b821399a5c7', url: PR + '#issuecomment-9', current: true }, o);
+
+test('a posted fix verdict after the hand-over, with its Dev stopped: bring the Dev back to fix it', () => {
+  const [item, ...rest] = listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, handedOver: STALL, reviewedSince: posted() })] });
+  assert.deepStrictEqual(rest, []);
+  assert.strictEqual(item.kind, 'handed-over');
+  assert.strictEqual(item.line, 'Bring back the worker on T-5 to fix PR #12: the review of 0fdd14b says fix, and its session has ended. ' + PR + '#issuecomment-9');
+  assert.deepStrictEqual(item.link, { ticket: 'T-5' });
+  assert.doesNotMatch(item.line, /Waiting for the review/);
+  const [pushed] = listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, handedOver: STALL, reviewedSince: posted({ current: false }) })] });
+  assert.strictEqual(pushed.line, 'Get a review of PR #12 (T-5): the review of 0fdd14b says fix, but newer commits came after it.', 'the Dev pushed after the review, so a new review comes first');
+});
+
+test('a posted fix verdict after the hand-over, with its Dev running: move the card, the Dev fixes it', () => {
+  const dev = seat({ task: 'k1' });
+  const [item] = listOf({ seats: [dev], tasks: [task({ owner: dev.terminal, state: 'waiting_on_you', pr: PR, handedOver: STALL, reviewedSince: posted() })] });
+  assert.strictEqual(item.kind, 'handed-over');
+  assert.strictEqual(item.line, 'Move T-5 out of Waiting on you: the review of 0fdd14b on PR #12 says fix, and its Dev Ada is running to fix it. ' + PR + '#issuecomment-9');
+  assert.deepStrictEqual(item.link, { ticket: 'T-5' });
+});
+
+test('a posted merge verdict after the hand-over: merge the PR, unless newer commits need a review', () => {
+  const [item] = listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, handedOver: STALL, reviewedSince: posted({ kind: 'merge' }) })] });
+  assert.strictEqual(item.kind, 'handed-over');
+  assert.strictEqual(item.line, 'Merge PR #12 (T-5), or move its card: the review of 0fdd14b says merge. ' + PR + '#issuecomment-9');
+  assert.deepStrictEqual(item.link, { url: PR });
+  const [old] = listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, handedOver: STALL, reviewedSince: posted({ kind: 'merge', current: false }) })] });
+  assert.strictEqual(old.line, 'Get a review of PR #12 (T-5): the review of 0fdd14b says merge, but newer commits came after it.');
+  assert.deepStrictEqual(old.link, { url: PR });
+});
+
+test('with no review after the hand-over, the line keeps Autopilot\'s reason', () => {
+  const [item] = listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, handedOver: STALL, reviewedSince: null })] });
+  assert.strictEqual(item.line, 'Decide on PR #12 (T-5): ' + STALL);
 });
 
 test('a task in Waiting on you: look at it, with the note that put it there', () => {
@@ -136,7 +177,21 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+});
+
+test('another relay on the room\'s state folder: stop it, with its Stop button, before anything else', () => {
+  const asker = seat({ live: 'waiting', message: 'Claude needs your permission to use Bash' });
+  const relays = [{ pid: 48435, file: '~/repo/Building58/relay/server.js', port: 8787, started: '2026-11-12T14:16:24.000Z', paused: true, worker: false }];
+  const items = listOf({ seats: [asker], relays });
+  assert.deepStrictEqual(kinds(items), ['relay', 'permission']);
+  assert.deepStrictEqual(items[0], { kind: 'relay', who: 'relay 48435', terminal: null, task: null, ticket: null, pr: null,
+    line: 'Stop the other relay, pid 48435: it runs ~/repo/Building58/relay/server.js on port 8787 since 2026-11-12 14:16 UTC. It uses this room\'s state folder, so it can erase what this relay saves. It is paused, and can wake up later.',
+    link: { stop: 48435 } });
+  const bare = listOf({ relays: [{ pid: 7, file: null, port: 8790, started: null, paused: false, worker: false }] })[0];
+  assert.strictEqual(bare.line, 'Stop the other relay, pid 7: on port 8790. It uses this room\'s state folder, so it can erase what this relay saves. It has no relay process left to answer, only its supervisor.');
+  assert.strictEqual(listOf({ relays: [{ pid: 'x\n1' }, { pid: 0 }, null] }).length, 0, 'only a real pid gets a line');
+  assert.strictEqual(listOf({ relays: [{ pid: 9, file: 'a\nb', port: 1, worker: true }] })[0].line, 'Stop the other relay, pid 9: it runs a b on port 1. It uses this room\'s state folder, so it can erase what this relay saves.', 'a path is cleaned to one line');
 });
 
 test('text from a session is cleaned to one line', () => {

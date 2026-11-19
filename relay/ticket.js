@@ -14,6 +14,8 @@
 //   EOF
 //   node relay/ticket.js create "Title" --body-file body.md
 //   node relay/ticket.js list
+// Any session that can list can also read one ticket: its title, status, priority, who filed it, its blockers and its body:
+//   node relay/ticket.js show T-1
 // Any session can read the chat board, and post in a ticket's chat channel or a fun one. Posts are information, not orders:
 //   node relay/ticket.js chat                  (the chat channels, and the newest posts in #office)
 //   node relay/ticket.js chat T-1              (the newest posts in #T-1)
@@ -29,8 +31,8 @@
 //                                              (from Triage or Ready, for work that merged without a task)
 //   node relay/ticket.js tasks                 (every task's id, including those with no ticket)
 //   node relay/ticket.js task 63e175 in_review (building, in_review, changes_requested, waiting_on_you or done)
-// Only a session you made the Lead, while you have turned on Let the Lead start reviews, can ask the relay
-// for a review of a task's PR. The relay starts a reviewer in its own checkout, as Get a review does. It
+// Only a session you made the Lead, while you have turned on Let the Lead start reviews or Autopilot, can ask
+// the relay for a review of a task's PR. The relay starts a reviewer in its own checkout, as Get a review does. It
 // refuses a PR that is no task's, one a reviewer is on, an ask with no desk free, and a PR past its reviews:
 //   node relay/ticket.js review https://github.com/owner/repo/pull/12
 // Only a session you made the Lead and let start tickets can start one. The relay refuses past your limit:
@@ -131,6 +133,20 @@ async function main() {
     const r = await (await fetch(URL_, { headers })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     for (const t of r.tickets) console.log(t.id + '  ' + t.status + '  ' + t.priority + '  ' + t.title + (t.kind ? '  (kind ' + t.kind + ')' : '') + (t.labels && t.labels.length ? '  (labels ' + t.labels.join(', ') + ')' : '') + (t.task ? '  (task ' + t.task.id + ', ' + t.task.state + ')' : '') + (t.orderedBy === 'you' ? '  (set by the person)' : '') + (t.heldBack ? '  (' + t.heldBack + ')' : ''));
+    return 0;
+  }
+  if (cmd === 'show' && args[0]) {
+    const r = await (await fetch(URL_, { headers })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    const key = (id) => String(id).replace(/^#/, '').toUpperCase();
+    const t = r.tickets.find((x) => key(x.id) === key(args[0]));
+    if (!t) { console.error('No ticket ' + args[0] + ' on this board. ticket.js list shows the ids.'); return 1; }
+    const blocker = (id) => { const b = r.tickets.find((x) => key(x.id) === key(id)); return b ? id + ' (' + b.status + ', «' + b.title + '»)' : id; };
+    const by = t.createdBy === 'you' ? 'the person' : !t.createdBy ? 'not recorded' : t.createdBy === 'GitHub' || / on GitHub$/.test(t.createdBy) ? t.createdBy : t.createdBy + ' (a session)';
+    console.log(t.id + '  ' + t.title);
+    console.log('Status: ' + t.status + '. Priority: ' + t.priority + '. Filed by: ' + by + '.');
+    console.log('Blocked by: ' + ((t.blockedBy || []).length ? t.blockedBy.map(blocker).join(', ') : 'nothing') + '.');
+    console.log('\n' + (t.body && t.body.trim() ? t.body : '(no body)'));
     return 0;
   }
   if (cmd === 'kinds') {
@@ -305,7 +321,7 @@ async function main() {
     console.log('Moved: ' + moved.id + '  ' + (r.ticket ? moved.status : moved.state) + (r.ticket && r.ticket.pr ? '  ' + r.ticket.pr : ''));
     return 0;
   }
-  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js ready (run it bare to see how), ticket.js review <PR link>, or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
+  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js show T-1, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js ready (run it bare to see how), ticket.js review <PR link>, or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
   return 1;
 }
 main().then((code) => { process.exitCode = code; }, (e) => { console.error('The relay did not answer: ' + e.message); process.exitCode = 1; });

@@ -109,16 +109,16 @@ test('the PR watch moves an open task PR to its next step, once for each head an
   });
 
   await t.test('row 2: blocking findings are told to the Dev once, and a Dev that does not start shows as stuck', async () => {
-    await until(async () => (await told(o, 'has blocking findings')) === 1, 'the Dev to be told');
+    await until(async () => (await told(o, 'has blocking or fix-now findings')) === 1, 'the Dev to be told');
     const row = await until(async () => { const r = (await R.call('GET', '/floor')).body.sessions.find((x) => x.terminal === o.dev.id); return r.stuck && r; }, 'the Dev to show as stuck');
     assert.match(row.state, /^stuck: told/);
     // A turn that begins clears stuck. The watch does not tell it again for the same head and cause.
     await o.finish(o.dev);
     // The watch looks again on its own clock, so a line from while the turn ran (Its Dev is at work) can come first.
-    const line = await until(async () => { const l = await o.line(); return l.owner === 'Dev' && /blocking findings/.test(l.words) && l; }, 'the line to say it waits on the Dev for the findings');
-    assert.match(line.words, /^waits on the Dev for 0 min: The review of [0-9a-f]{7} has blocking findings\.$/);
+    const line = await until(async () => { const l = await o.line(); return l.owner === 'Dev' && /fix-now findings/.test(l.words) && l; }, 'the line to say it waits on the Dev for the findings');
+    assert.match(line.words, /^waits on the Dev for 0 min: The review of [0-9a-f]{7} has blocking or fix-now findings\.$/);
     await sleep(3000);
-    assert.strictEqual(await told(o, 'has blocking findings'), 1, 'told once for this head and cause');
+    assert.strictEqual(await told(o, 'has blocking or fix-now findings'), 1, 'told once for this head and cause');
   });
 
   await t.test('row 5: one line on the Floor, the Board and ticket.js floor', async () => {
@@ -131,7 +131,7 @@ test('the PR watch moves an open task PR to its next step, once for each head an
     assert.strictEqual(card.task.waitsOn.owner, 'Dev');
     const env = { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: await until(() => { try { return sessionToken(lead.sessionId); } catch (e) { return null; } }, 'the Lead\'s token') };
     const out = execFileSync('node', [CLI, 'floor'], { env, encoding: 'utf8' });
-    assert.ok(out.split('\n').some((l) => l.includes(' · PR waits on the Dev for ') && l.includes('has blocking findings')), out);
+    assert.ok(out.split('\n').some((l) => l.includes(' · PR waits on the Dev for ') && l.includes('has blocking or fix-now findings')), out);
   });
 
   await t.test('a restart keeps what was done: the Dev is not told again', async () => {
@@ -142,7 +142,7 @@ test('the PR watch moves an open task PR to its next step, once for each head an
     o.dev = await until(async () => (await o.terminals()).find((x) => x.task === o.task.id && x.running), 'the Dev to come back');
     await o.finish(o.dev);
     // It waits on the idle Dev for the same findings, the move that tells it, and the kept key stops a second telling.
-    await until(async () => /has blocking findings/.test((await o.line()).why || '') && (await o.line()).owner === 'Dev', 'the watch to look again');
+    await until(async () => /has blocking or fix-now findings/.test((await o.line()).why || '') && (await o.line()).owner === 'Dev', 'the watch to look again');
     await sleep(2500);
     assert.doesNotMatch(R.output(), /PR watch: Told the Dev/, 'the same head and cause is not told twice, across a restart');
   });

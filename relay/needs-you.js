@@ -3,11 +3,13 @@
 // page can read it often. relay/needs-you-plan.js holds the rules. See docs/manual/roles.html#needs-you.
 //
 // What it reads: each running session (relay/terminal.js) with its state from relay/liveness.js and any
-// question on its screen; each task that is not done (relay/tasks.js); Autopilot's hand-over reason
-// (relay/autopilot.js); whether a review of a PR runs; whether a PR merged or closed (relay/floor.js,
-// relay/pipeline.js); and who may merge a PR, from the PR watch (relay/pr-watch.js) and the last huddle
+// question on its screen; each task that is not done (relay/tasks.js); Autopilot's hand-over reason and, for a
+// stall, the last review posted after it (relay/autopilot.js); whether a Dev still owes the continue prompt a
+// restart saved for it (relay/sessions.js); whether a review of a PR runs; whether a PR merged or closed
+// (relay/floor.js, relay/pipeline.js); and who may merge a PR, from the PR watch (relay/pr-watch.js) and the last huddle
 // report (relay/huddles.js), when they have looked; and each saved message (relay/delivery.js) that has waited
-// UNDELIVERED for a running session, unless that session is in a turn, waits on an answer, or has ended. The
+// UNDELIVERED for a running session, unless that session is in a turn, waits on an answer, or has ended; and
+// each other relay on this room's state folder (relay/old-relays.js). The
 // huddle counts its headline from the same list, and boardOf gives the Board each task's item, so its Waiting
 // on you column holds the tickets the list names.
 //
@@ -22,7 +24,9 @@ const pipeline = require('./pipeline.js');
 const chat = require('./chat.js');
 const { livenessOf } = require('./liveness.js');
 const delivery = require('./delivery.js');
+const { owesContinue } = require('./sessions.js');
 const { listOf } = require('./needs-you-plan.js');
+const oldRelays = require('./old-relays.js');
 
 const FRESH_MS = 60 * 1000;
 const UNDELIVERED = Number(process.env.RELAY_UNDELIVERED_MS) > 0 ? Number(process.env.RELAY_UNDELIVERED_MS) : 15 * 60 * 1000;
@@ -47,12 +51,17 @@ function noteOf(task) {
   return moved && moved.note ? moved.note : null;
 }
 
+function handedOf(channel, task) {
+  const desk = autopilot.deskOf(channel, task), r = desk.reviewedSince, head = r && (pipeline.of(task.pr) || {}).head;
+  return { handedOver: desk.handedOver, reviewedSince: r ? { ...r, current: !head || head === r.commit } : null };
+}
+
 function stateOf(channel, now, lastReport) {
   const all = terminal.all(channel), list = tasks.list(channel).filter((t) => t.state !== 'done');
   const taskOf = (t) => (t.task && list.find((x) => x.id === t.task)) || list.find((x) => x.owner && x.owner.terminal === t.id) || null;
   const seats = all.map((t) => {
     const task = taskOf(t), lv = livenessOf(t, now);
-    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : terminal.questionOnScreen(t), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, spoke: !!t.spoke, fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
+    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : terminal.questionOnScreen(t), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, spoke: !!t.spoke, continuing: owesContinue(channel, t), fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
   });
   const report = lastReport || huddles.reportOf(channel);
   const reviewing = (pr) => all.some((x) => !x.exited && x.reviewOf === pr && !x.posted);
@@ -61,14 +70,14 @@ function stateOf(channel, now, lastReport) {
     prOpen: task.pr ? !closed(channel, task.pr) : null,
     owner: task.owner && terminal.find(channel, task.owner.terminal) ? task.owner.terminal : null,
     note: noteOf(task), reviewRuns: !!task.pr && reviewing(task.pr), pipelineWaits: !!(tasks.pipelineOf(task) || {}).waits,
-    handedOver: autopilot.deskOf(channel, task).handedOver,
+    ...handedOf(channel, task),
     onlyYouMerge: task.pr ? onlyYouMerge(channel, task.pr, report) : null,
   }));
   const waits = delivery.pending(channel)
     .filter((d) => d.target && !d.typed && d.blocked && !NOT_STUCK.has(d.blocked) && d.savedAt && now - d.savedAt > UNDELIVERED)
     .sort((a, b) => a.savedAt - b.savedAt)
     .map((d) => ({ terminal: d.target, who: chat.nameOf(terminal.find(channel, d.target)), minutes: Math.floor((now - d.savedAt) / 60000), why: delivery.whyWaits(d.blocked) }));
-  return { seats, tasks: out, waits };
+  return { seats, tasks: out, waits, relays: oldRelays.list() };
 }
 
 async function handle(req, res, channel, rest, ctx) {

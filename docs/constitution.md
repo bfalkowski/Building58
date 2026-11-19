@@ -279,6 +279,16 @@ reviews. After that the Floor and the Lead say its next review waits on the pers
 2026-11-03, when PRs 28 and 29 sat fixed and green overnight, because nothing started a review of
 their new commits and the Lead may merge only after a review of the current head.
 
+*Today (2026-11-18):* the reviewer marks each finding with one of three kinds. Blocking is a bug, or
+something that does not do what the pull request says. Fix now is small and safe to fix in the same
+pull request, such as a wording fix, a missing test case, a named const or a doc line. Follow-up is
+real work outside the pull request. A review with any blocking or fix-now finding asks for fixes,
+and the Dev fixes both kinds before the next review. The Dev files a ticket for a follow-up finding
+only when it is a real bug or risk outside the pull request, and replies on the pull request to the
+rest. Before this, every review that said merge sent its findings to one follow-up ticket. That
+made 66 tickets by 2026-11-18, about a third of the Board, and each needed a full Dev and reviewer
+cycle for what was often a two-line fix.
+
 *Enforced by:* CI for lint and tests. `relay/reviews.js` starts the automatic reviews and holds
 the limit, and `relay/test/auto-review.test.js` checks both with no page open.
 
@@ -322,7 +332,13 @@ Lead runs `gh pr merge` with the person's full GitHub login, not with only the a
 
 1. A review of the current head is posted. If commits land after the review, the Lead asks for a
    follow-up review first.
-2. Every blocking finding is fixed, and the Lead checked each fix in the code.
+2. Every blocking and fix-now finding is fixed, and the Lead checked each fix in the code. The pull
+   request holds all its Dev's work. While the Dev's session runs, the Floor
+   (`node relay/ticket.js floor`) shows no merge hold on its row. The merge hold
+   (`relay/merge-hold.js`) is on while the Dev may still be answering the latest review, and while
+   the Dev is idle with uncommitted or unpushed work, or work git cannot check. The Floor lists only
+   running sessions, so once the Dev's session has ended, the Lead checks the task's checkout itself:
+   `git status` shows no changes, and every commit is on a remote.
 3. The pipeline is green on the current head.
 4. The base is `main`, and GitHub says the pull request merges cleanly into it. A pull request
    with any other base goes to the person.
@@ -436,15 +452,18 @@ It is off by default. The person turns it on with **Autopilot**, and can list th
 start. The relay, not a brief, holds it to these:
 - It starts only a Ready ticket a person approved, whose blockers are done, in Board order, and one
   at a time (`RELAY_AUTOPILOT_AT_ONCE`, 1).
-- Each review gives a verdict, merge or fix, from the reviewer's own token. A verdict counts once
-  its review is posted, and only for the commit the reviewer read. A follow-up review reads only
+- Each review gives a verdict, merge or fix, from the reviewer's own token. It says fix while any
+  finding is blocking or fix now (article 4). A verdict counts once its review is posted, and only for the commit the reviewer read. A follow-up review reads only
   the commits since the last one, and for a merge of main only how its conflicts were resolved.
   This replaces "a review of the current head" for a merge it makes: a commit after a merge
   verdict needs a follow-up that says merge.
 - It merges only when the latest verdict says merge for the current head, every check on that head
-  passed, and GitHub can merge it. It names that commit to GitHub, which refuses the merge if
-  the PR moved since. A branch behind main merges as it is, since main does not ask
-  for branches to be up to date.
+  passed, GitHub can merge it, and the pull request holds all its Dev's work. Before a merge, the
+  merge hold (`relay/merge-hold.js`) waits while the Dev may still be answering the latest review.
+  It hands the task to the person, in Waiting on you, when the Dev is idle or gone with uncommitted
+  or unpushed work or work git cannot check, or gone with review news it was never told. It names
+  that commit to GitHub, which refuses the merge if the PR moved since. A branch behind main
+  merges as it is, since main does not ask for branches to be up to date.
 - It works only on tasks it started. It never merges a change to this file, `CLAUDE.md` or the lint rules. Its loop is limited: after 2 review rounds
   that still say fix, a failed check, a closed pull request or a failed merge, the task goes to
   Waiting on you with the reason, and it leaves it alone. It merges at most 10 pull requests a day.
@@ -453,14 +472,20 @@ start. The relay, not a brief, holds it to these:
 
 Turning it off starts nothing more and leaves work under way where it is.
 
-Only the relay starts and merges work. A Lead keeps two rights: stop a session the Floor calls safe to
-stop, and move a task to Done once its PR has merged. Trust level 5 on the room page leaves **Let the
-Lead move the board** and **Let the Lead stop sessions** on for this. The stop is the same as at rung 2,
-with the same verdict and hourly limit. While Autopilot is on, the relay refuses every other move the
-Lead asks for, any move to Done before the relay has seen the PR merge, and every start, and the Lead's
-brief says never merge. The failure behind it: on 2026-11-07 the person had to stop reviewers and Devs
-that never got their first prompt or brief, stop Devs whose PR had merged, and clear a task that held a
-building slot with no Dev, because at level 5 the Lead could only read and file tickets.
+Only the relay starts and merges work. A Lead keeps three rights: stop a session the Floor calls safe
+to stop, move a task to Done once its PR has merged, and ask the relay to review a task's PR. Trust
+level 5 on the room page leaves **Let the Lead move the board** and **Let the Lead stop sessions** on
+for this. The stop is the same as at rung 2, with the same verdict and hourly limit. The review is the
+one **Let the Lead start reviews** gives (T-98): the relay starts the reviewer, with the same limits,
+and it counts toward the reviews a pull request gets. While Autopilot is on, the relay lets the Lead
+ask for it whatever that switch says, and when Autopilot is off, the switch decides. While Autopilot
+is on, the relay refuses every other move the Lead asks for, any move to Done before the relay has
+seen the PR merge, and every start of a ticket, and the Lead's brief says never merge. The failure
+behind it: on 2026-11-07 the person had to stop reviewers and Devs that never got their first prompt
+or brief, stop Devs whose PR had merged, and clear a task that held a building slot with no Dev,
+because at level 5 the Lead could only read and file tickets. The review came later (T-333): one
+night a pull request (#107) sat with no review, and the Lead could see it but not start one, because
+**Let the Lead start reviews** was off.
 
 The five questions, for this rung:
 

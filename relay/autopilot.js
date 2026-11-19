@@ -3,10 +3,13 @@
 //
 // While it is on, every RELAY_AUTOPILOT_TICK_MS (20 seconds):
 //   1. Each task's PR is read with gh pr view, and relay/autopilot-plan.js says what to do with it:
-//      merge it, mark its task done, tell its Dev to merge main for a conflict, hand it to the
-//      person (Waiting on you, with the reason), or wait. Before a merge, relay/merge-hold.js asks whether
+//      merge it, mark its task done, tell its Dev to merge main for a conflict, bring back its Dev when
+//      a fix or a conflict needs one and none runs (bringBack), hand it to the person (Waiting on you,
+//      with the reason), or wait. Before a merge, relay/merge-hold.js asks whether
 //      the PR holds all its Dev's work: a Dev still at work waits, and one idle or gone with work in its
-//      checkout that is not pushed goes to the person.
+//      checkout that is not pushed goes to the person. A PR handed over only because it changes a file
+//      only a person merges is still read at each look (follow): its reason follows its review, CI and
+//      GitHub, and says ready for your merge when the same merge test passes. It is never merged here.
 //   2. While fewer than RELAY_AUTOPILOT_AT_ONCE tasks (1) are open, it starts the next Ready ticket a
 //      person approved, in Board order. With "only" set, just those tickets. When every desk is taken, it
 //      frees one of its own sessions the Lead may stop (freeADesk). If none is, it waits for a desk and
@@ -113,8 +116,9 @@ function gh(args, cwd) {
 }
 const git = (cwd, args) => new Promise((resolve, reject) => execFile('git', args, { cwd, timeout: 10000 }, (e, out) => (e ? reject(e) : resolve(out.trim()))));
 
-const verdictAsk = () => ' Mark each finding blocking or not: only a bug, or something that does not do what the PR says, blocks. Before you post, run node ' +
-  JSON.stringify(tickets.CLI) + ' verdict merge if nothing blocks, or verdict fix if something does. Then post.';
+const verdictAsk = () => ' Mark each finding blocking, fix now or follow-up. Blocking: a bug, or something that does not do what the PR says. ' +
+  'Fix now: small and safe to fix in this PR, such as a wording fix, a missing test case, a named const or a doc line. Follow-up: real work outside this PR. ' +
+  'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post.';
 reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(),
   since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; } });
 
@@ -254,24 +258,59 @@ async function look(channel) {
   holdPushes(channel);
   for (const task of tasks.list(channel).filter(mineTask)) track(channel, task);
   for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done')) {
-    if (held(channel, task)) await mergedYet(channel, task); else await lookAt(channel, task);
+    if (!held(channel, task)) await lookAt(channel, task);
+    else if (handedReasonOf(recOf(channel, task.pr)) === 'protected-file') await follow(channel, task);
+    else await mergedYet(channel, task);
   }
   stalled(channel);
   await maybeStart(channel);
 }
-async function lookAt(channel, task) {
-  const rec = recOf(channel, task.pr);
+async function readPr(task, rec) {
   let pr = null, files = null;
-  try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid,mergeStateStatus,statusCheckRollup'], task.repo)); } catch (e) { rec.why = 'gh pr view failed: ' + e.message; return; }
-  if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
+  try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid,mergeStateStatus,statusCheckRollup'], task.repo)); } catch (e) { rec.why = 'gh pr view failed: ' + e.message; return null; }
   if (pr.state === 'OPEN') {
     const m = task.pr.match(/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/);
-    try { files = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/pulls/' + m[2] + '/files?per_page=100'], task.repo)).flat().flatMap((f) => [f.filename, f.previous_filename]).filter(Boolean); } catch (e) { rec.why = 'Could not list the PR\'s files: ' + e.message; return; }
+    try { files = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/pulls/' + m[2] + '/files?per_page=100'], task.repo)).flat().flatMap((f) => [f.filename, f.previous_filename]).filter(Boolean); } catch (e) { rec.why = 'Could not list the PR\'s files: ' + e.message; return null; }
   }
+  return { pr, files };
+}
+function mergeTest(channel, task, rec, decide) {
+  const dev = terminal.find(channel, task.owner && task.owner.terminal);
+  const d = decide(latest(rec), !dev || dev.exited);
+  return (d.act === 'merge' && holdOf(task, dev, Date.now())) || d;
+}
+function forPersonMerge(channel, task, rec, pr, locked) {
   const v = latest(rec);
-  let d = plan.forPr(pr, files, v, roundsOf(rec), MAX_ROUNDS());
-  const hold = d.act === 'merge' ? holdOf(task, terminal.find(channel, task.owner && task.owner.terminal), Date.now()) : null;
-  if (hold) d = hold;
+  return plan.forPersonMerge(pr, locked, v, mergeTest(channel, task, rec, (x, gone) => plan.forReviewed(pr, x, roundsOf(rec), MAX_ROUNDS(), gone)));
+}
+async function follow(channel, task) {
+  const rec = recOf(channel, task.pr), got = await readPr(task, rec);
+  if (!got) return;
+  if (got.pr.state === 'MERGED') { markDone(channel, task); return; }
+  const locked = plan.lockedOf(got.files);
+  if (got.pr.state !== 'OPEN' || !locked.length) return;
+  const f = forPersonMerge(channel, task, rec, got.pr, locked);
+  if (f.why !== rec.handedOver) {
+    rec.handedOver = f.why; save();
+    tasks.record(task, { type: 'note', note: 'Autopilot: ' + f.why }); tasks.save();
+  }
+  readyNow(channel, task, rec, f);
+}
+function readyNow(channel, task, rec, f) {
+  if (rec.ready === f.ready) return;
+  rec.ready = f.ready; save();
+  if (!f.ready || rec.readyTold === f.ready) return;
+  rec.readyTold = f.ready; save();
+  note(channel, (task.ticket || 'Task ' + task.id) + ', PR ' + number(task.pr) + ': ' + f.why);
+}
+async function lookAt(channel, task) {
+  const rec = recOf(channel, task.pr);
+  const got = await readPr(task, rec);
+  if (!got) return;
+  const { pr, files } = got;
+  if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
+  const v = latest(rec);
+  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
   rec.why = d.why; rec.act = d.act;
   if (d.act === 'done') markDone(channel, task);
   else if (d.act === 'merge') {
@@ -288,13 +327,36 @@ async function lookAt(channel, task) {
     }
     counted(channel, task, rec, pr.headRefOid);
     note(channel, 'Merged PR ' + number(task.pr) + ' (' + (task.ticket || task.title) + '): ' + d.why);
-  } else if (d.act === 'conflict') {
-    if (rec.conflictAt === pr.headRefOid) return;
-    rec.conflictAt = pr.headRefOid; save();
-    delivery.save(channel, { key: 'autopilot-conflict ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
-      text: 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s non-blocking findings. A follow-up review checks how you resolved it.' });
-    note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
+  } else if (d.act === 'conflict') askToMergeMain(channel, task, rec, pr);
+  else if (d.act === 'bring-back') bringBack(channel, task, rec, d, d.for === 'fix' ? v.commit : pr.headRefOid, pr);
+  else if (d.act === 'person' && d.reason === 'protected-file') {
+    const f = forPersonMerge(channel, task, rec, pr, plan.lockedOf(files));
+    handOver(channel, task, rec, f.why, d.reason, pr.headRefOid);
+    readyNow(channel, task, rec, f);
   } else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason, (v && v.commit) || pr.headRefOid);
+}
+function askToMergeMain(channel, task, rec, pr) {
+  if (rec.conflictAt === pr.headRefOid) return;
+  rec.conflictAt = pr.headRefOid; save();
+  delivery.save(channel, { key: 'autopilot-conflict ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
+    text: 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s follow-up findings. A follow-up review checks how you resolved it.' });
+  note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
+}
+const WAITS_FOR_ROOM = ['wip_limit', 'full', 'running'];
+function bringBack(channel, task, rec, d, commit, pr) {
+  const name = task.ticket || 'Task ' + task.id, what = d.for === 'fix' ? 'the fixes the last review asks for' : 'a merge of main';
+  const step = ' Press Bring back on its task, then move its card back to Autopilot.';
+  const key = d.for + ' ' + commit;
+  if (rec.broughtBack === key) { handOver(channel, task, rec, 'Its Dev was brought back once for ' + what + ' at ' + commit.slice(0, 7) + ', and is not running again.' + step, 'dev-gone', commit); return; }
+  if (d.for === 'conflict') askToMergeMain(channel, task, rec, pr);
+  const [status, out] = tasks.resume(channel, task, {}, ctx, BY);
+  if (status < 400) {
+    rec.broughtBack = key; rec.act = 'wait'; rec.why = 'Autopilot brought its Dev back for ' + what + '.'; save();
+    note(channel, name + ': its Dev was not running, so Autopilot brought it back for ' + what + '.');
+    return;
+  }
+  if (WAITS_FOR_ROOM.includes(out.error)) { rec.act = 'wait'; rec.why = 'Its Dev is not running, and Autopilot brings it back for ' + what + ' once it can: ' + out.message; return; }
+  handOver(channel, task, rec, 'Its Dev is not running, and Autopilot could not bring it back for ' + what + ': ' + out.message + step, 'dev-gone', commit);
 }
 function counted(channel, task, rec, head) {
   const c = chOf(channel), run = runOf(channel, task);
@@ -469,7 +531,7 @@ function view(channel) {
   const c = chOf(channel);
   const prs = tasks.list(channel).filter((t) => mineTask(t) && t.pr && c.prs[t.pr]).map((t) => {
     const r = c.prs[t.pr];
-    return { pr: t.pr, ticket: t.ticket, task: t.id, state: t.state, rounds: roundsOf(r), verdict: (latest(r) || {}).kind || null, act: r.act || null, why: r.handedOver || r.why || null };
+    return { pr: t.pr, ticket: t.ticket, task: t.id, state: t.state, rounds: roundsOf(r), verdict: (latest(r) || {}).kind || null, act: r.act || null, why: r.handedOver || r.why || null, ready: (r.handedOver && r.ready) || null };
   });
   const all = Object.values(c.runs || {}).sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1));
   const record = { today: runs.dayOf(all, today()), keptDays: runs.KEEP_DAYS, recent: all.slice(-10).map(runs.viewOf) };
@@ -530,13 +592,15 @@ function deskOf(channel, task) {
   const r = task && task.pr && store[channel] && store[channel].prs[task.pr];
   const v = r ? latest(r) : null;
   const handed = r && r.handedOver && !handedBack(task, r) ? r.handedOver : null;
-  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed };
+  const since = handed && handedReasonOf(r) === 'stalled' && r.verdicts.filter((x) => Date.parse(x.at) > Date.parse(r.handedOverAt) && postOf(channel, x)).pop();
+  const reviewedSince = since ? { kind: since.kind, commit: since.commit, url: postOf(channel, since) } : null;
+  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, reviewedSince };
 }
 
-const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, and move a task to Done once its PR has merged';
+const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';
 function leadRefusal(channel, to, merged) {
   if (!isOn(channel) || (to === 'done' && merged)) return null;
-  return [403, { ok: false, error: 'autopilot', message: 'Autopilot is on, so only the relay starts and merges work. The Lead keeps two rights: ' + LEAD_KEEPS + '. ' +
+  return [403, { ok: false, error: 'autopilot', message: 'Autopilot is on, so only the relay starts and merges work. The Lead keeps three rights: ' + LEAD_KEEPS + '. ' +
     (to === 'done' ? 'The relay has not seen this PR merge, so it stays where it is.' : 'Leave this to Autopilot, or tell the person.') }];
 }
 
