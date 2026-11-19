@@ -453,14 +453,20 @@ start. The relay, not a brief, holds it to these:
 
 Turning it off starts nothing more and leaves work under way where it is.
 
-Only the relay starts and merges work. A Lead keeps two rights: stop a session the Floor calls safe to
-stop, and move a task to Done once its PR has merged. Trust level 5 on the room page leaves **Let the
-Lead move the board** and **Let the Lead stop sessions** on for this. The stop is the same as at rung 2,
-with the same verdict and hourly limit. While Autopilot is on, the relay refuses every other move the
-Lead asks for, any move to Done before the relay has seen the PR merge, and every start, and the Lead's
-brief says never merge. The failure behind it: on 2026-11-07 the person had to stop reviewers and Devs
-that never got their first prompt or brief, stop Devs whose PR had merged, and clear a task that held a
-building slot with no Dev, because at level 5 the Lead could only read and file tickets.
+Only the relay starts and merges work. A Lead keeps three rights: stop a session the Floor calls safe
+to stop, move a task to Done once its PR has merged, and ask the relay to review a task's PR. Trust
+level 5 on the room page leaves **Let the Lead move the board** and **Let the Lead stop sessions** on
+for this. The stop is the same as at rung 2, with the same verdict and hourly limit. The review is the
+one **Let the Lead start reviews** gives (T-98): the relay starts the reviewer, with the same limits,
+and it counts toward the reviews a pull request gets. While Autopilot is on, the relay lets the Lead
+ask for it whatever that switch says, and when Autopilot is off, the switch decides. While Autopilot
+is on, the relay refuses every other move the Lead asks for, any move to Done before the relay has
+seen the PR merge, and every start of a ticket, and the Lead's brief says never merge. The failure
+behind it: on 2026-11-07 the person had to stop reviewers and Devs that never got their first prompt
+or brief, stop Devs whose PR had merged, and clear a task that held a building slot with no Dev,
+because at level 5 the Lead could only read and file tickets. The review came later (T-333): one
+night a pull request (#107) sat with no review, and the Lead could see it but not start one, because
+**Let the Lead start reviews** was off.
 
 The five questions, for this rung:
 

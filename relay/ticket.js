@@ -31,8 +31,8 @@
 //                                              (from Triage or Ready, for work that merged without a task)
 //   node relay/ticket.js tasks                 (every task's id, including those with no ticket)
 //   node relay/ticket.js task 63e175 in_review (building, in_review, changes_requested, waiting_on_you or done)
-// Only a session you made the Lead, while you have turned on Let the Lead start reviews, can ask the relay
-// for a review of a task's PR. The relay starts a reviewer in its own checkout, as Get a review does. It
+// Only a session you made the Lead, while you have turned on Let the Lead start reviews or Autopilot, can ask
+// the relay for a review of a task's PR. The relay starts a reviewer in its own checkout, as Get a review does. It
 // refuses a PR that is no task's, one a reviewer is on, an ask with no desk free, and a PR past its reviews:
 //   node relay/ticket.js review https://github.com/owner/repo/pull/12
 // Only a session you made the Lead and let start tickets can start one. The relay refuses past your limit:

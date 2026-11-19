@@ -4,7 +4,7 @@
 // list, so all three agree. A plain function with no side effects, so the tests run it without a relay.
 // See docs/manual/roles.html#needs-you.
 //
-//   listOf({ seats, tasks, waits, desks }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
+//   listOf({ seats, tasks, waits, relays, desks }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
 //
 // A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh, continuing },
 // where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
@@ -17,10 +17,12 @@
 // the PR's head is that commit.
 // A wait is one saved message (relay/delivery.js) that has not gone in for a long time: { terminal, who, minutes,
 // why }, where terminal is the running session it is for, and why says in plain words what holds it.
+// A relay is another relay on this room's state folder (relay/old-relays.js): { pid, file, port, started, paused, worker }.
 // desks is reviews that wait for a desk while the relay may stop no session: { prs, taken }, the longest wait first.
 //
 // One rule for each kind. A session gives at most one item, and so does a task. A task whose Dev already has an
 // item gives none, since answering the Dev is the one move. The kinds, most urgent first:
+//   relay        another relay uses this room's state folder, so it can erase what this relay saves
 //   permission   a session waits on the person, and its message asks for permission
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   desks        reviews wait for a desk, and the relay may stop none of the sessions that hold them all
@@ -34,11 +36,12 @@
 //   prompt       an idle Dev on a task in Building or Changes requested with no PR, unless it has just started or
 //                the relay still has a continue prompt for it
 //   gone         a task in Building or Changes requested with no PR whose session has ended
-// link says what the page opens: { terminal } for a session, { url } for a PR, { ticket } for a Board card.
+// link says what the page opens: { terminal } for a session, { url } for a PR, { ticket } for a Board card,
+// and { stop } for another relay, its pid, which the page's Stop button stops.
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['permission', 'question', 'desks', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -118,6 +121,14 @@ function listOf(input) {
     const who = oneLine(w.who, 40) || 'a session';
     const minutes = Math.max(1, Math.floor(Number(w.minutes) || 0));
     items.push({ kind: 'undelivered', who, terminal: w.terminal, task: null, ticket: null, pr: null, line: 'Open the session of ' + who + ': a message from the relay has waited ' + minutes + (minutes === 1 ? ' minute' : ' minutes') + ' for it and is not typed in, because ' + (oneLine(w.why, 160) || 'the relay cannot tell why') + '.', link: { terminal: w.terminal } });
+  }
+  for (const r of (input && input.relays) || []) {
+    const pid = Number(r && r.pid);
+    if (!Number.isInteger(pid) || pid <= 0) continue;
+    const from = oneLine(r.file, 200), port = Number(r.port) || null, started = oneLine(r.started, 40).slice(0, 16).replace('T', ' ');
+    const where = [from ? 'it runs ' + from : '', port ? 'on port ' + port : '', started ? 'since ' + started + ' UTC' : ''].filter(Boolean).join(' ');
+    const how = r.paused ? ' It is paused, and can wake up later.' : r.worker === false ? ' It has no relay process left to answer, only its supervisor.' : '';
+    items.push({ kind: 'relay', who: 'relay ' + pid, terminal: null, task: null, ticket: null, pr: null, line: 'Stop the other relay, pid ' + pid + (where ? ': ' + where : '') + '. It uses this room\'s state folder, so it can erase what this relay saves.' + how, link: { stop: pid } });
   }
   const desks = desksItem(input && input.desks);
   if (desks) items.push(desks);
