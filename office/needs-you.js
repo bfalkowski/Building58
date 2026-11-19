@@ -1,6 +1,7 @@
 // The Needs you panel on the Floor: how many things wait on the person, and one line for each, from the relay
 // (relay/needs-you.js). It reads the list every two seconds, as the huddle bar reads its state. Clicking a line
-// opens what it names: the session at its desk, the PR on GitHub, or the ticket on the Board.
+// opens what it names: the session at its desk, the PR on GitHub, or the ticket on the Board. A line about
+// another relay on the room's state folder has a Stop button, which asks the relay to stop it (relay/old-relays.js).
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -9,7 +10,8 @@
   const channel = params.get('channel'), key = params.get('key') || '';
   if (!channel || !section) return;
 
-  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/needs-you?key=' + encodeURIComponent(key);
+  const base = location.origin + '/channels/' + encodeURIComponent(channel);
+  const url = base + '/needs-you?key=' + encodeURIComponent(key);
   const TICKET = /^T-\d+$/;
   const PR = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
   let drawn = '';
@@ -35,6 +37,18 @@
       b.addEventListener('click', () => open(link));
     }
     li.append(b);
+    if (Number.isInteger(link.stop) && link.stop > 0) {
+      const stop = document.createElement('button');
+      stop.type = 'button'; stop.className = 'needs-stop'; stop.textContent = 'Stop';
+      stop.title = 'Stop the relay with pid ' + link.stop;
+      stop.addEventListener('click', () => {
+        stop.disabled = true; stop.textContent = 'Stopping';
+        fetch(base + '/old-relays/' + link.stop + '/stop?key=' + encodeURIComponent(key), { method: 'POST' })
+          .then((r) => r.json()).catch(() => null)
+          .then((r) => { stop.textContent = r && r.ok ? 'Stopped' : 'Not stopped'; stop.title = (r && r.message) || stop.title; drawn = ''; read().then(draw); });
+      });
+      li.append(stop);
+    }
     if (item.pr && PR.test(item.pr) && !link.url) {
       const a = document.createElement('a');
       a.href = item.pr; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'PR';
