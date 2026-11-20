@@ -108,6 +108,14 @@ test('github: blockers are read again only when the issue changed, so a refresh 
   const settled = reads();
   assert.deepStrictEqual(blockers(await refresh()), [['1', []], ['2', ['3']], ['3', ['1']]], 'and the next list agrees');
   assert.strictEqual(reads(), settled, 'what the relay wrote is not read back');
+
+  edit((issue) => { issue(2).blockedBy.push(issue(1).id); });
+  assert.deepStrictEqual(blockers(await refresh())[1], ['2', ['3', '1']], 'a blocker added on GitHub shows when the counts change, even with the same updated time');
+
+
+  edit((issue) => { issue(3).blockedBy = [issue(2).id]; });  // swapped on GitHub: same count, same updated time
+  await fresh.update('p', c.id, { blockedBy: [] });
+  assert.deepStrictEqual(s.state().issues[2].blockedBy, [], 'a write reads the blockers fresh, so it takes off the ones GitHub has');
 });
 test('github: an issue filed on GitHub is a ticket once it has a room label, and a cached list catches up', async () => {
   process.env.FAKE_GITHUB_DIR = fs.mkdtempSync(path.join(dir, 'github-'));

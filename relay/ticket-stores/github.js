@@ -30,6 +30,7 @@
 //
 // A ticket's blockers cost one request each, so the store keeps what it read for each issue and reads
 // them again only when the issue's updated time or GitHub's blocker counts in the list have changed.
+// An update reads them fresh before it writes, so it never changes blockers from an old copy.
 // What the relay writes is kept the same way, with the time GitHub gave the write.
 'use strict';
 const { keepLines } = require('../clean.js');
@@ -154,11 +155,11 @@ function open(options) {
   const blockerReads = new Map();
   const stampOf = (issue) => { const s = issue.issue_dependencies_summary || {}; return [issue.updated_at, s.total_blocked_by, s.blocked_by].join(' '); };
   const remember = (repo, issue, blockers) => { blockerReads.set(repo + ' #' + issue.number, { stamp: stampOf(issue), blockers: blockers.slice() }); return blockers; };
-  async function blockersOf(repo, issue) {
+  async function blockersOf(repo, issue, fresh) {
     const s = issue.issue_dependencies_summary;
     if (s && !s.total_blocked_by && !s.blocked_by) return remember(repo, issue, []);
     const read = blockerReads.get(repo + ' #' + issue.number);
-    if (read && issue.updated_at && read.stamp === stampOf(issue)) return read.blockers.slice();
+    if (!fresh && read && issue.updated_at && read.stamp === stampOf(issue)) return read.blockers.slice();
     let list;
     try { list = await api('GET', '/repos/' + repo + '/issues/' + issue.number + '/dependencies/blocked_by?per_page=100'); } catch (e) {
       if (gone(e)) return [];
@@ -283,7 +284,7 @@ function open(options) {
       let issue;
       try { issue = await api('GET', '/repos/' + repo + '/issues/' + id); } catch (e) { if (gone(e)) return null; throw e; }
       if (!isTicket(issue)) return null;
-      const now = await blockersOf(repo, issue);
+      const now = await blockersOf(repo, issue, true);
       const { id: _id, createdAt: _at, updatedAt: _up, ...rest } = changes;
       const ticket = Object.assign(ticketOf(issue, now), rest);
       const want = (ticket.blockedBy || []).map(String);
