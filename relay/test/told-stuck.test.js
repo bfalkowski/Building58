@@ -45,8 +45,10 @@ const tell = (t, key, text) => { let told = 0; delivery.save('test', { key, term
 
 test('a session that starts on its note is left alone, and is never told it twice', async () => {
   const t = session('a1');
+  const before = Date.now();
   const told = tell(t, 'review a1', 'Review news for you.');
   await until(() => typedTo('a1').length === 1, 'the note');
+  assert.ok(t.toldAt >= before && t.toldAt <= Date.now(), 'when it was told, for the merge hold (T-238)');
   startsTurn(t);
   await sleep(100); endsTurn(t);  // a short turn: done before the check looks
   await sleep(CHECK * 3);

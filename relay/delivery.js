@@ -44,7 +44,8 @@
 // within TOLD_CHECK. If not, it tries once more, or PROMPT_TRIES more for a first prompt (relay/terminal.js
 // nudge: Enter if the note still shows, or the note typed again), and checks again after each. If it still has not started, the session is stuck
 // (t.stuck: when it was told, and why where the relay can tell), the Floor says so, and the relay
-// stops trying and leaves it to the person. Nothing else is typed into a session while it is stuck. The note is saved again for that session id, so Bring back gets it, but a
+// stops trying and leaves it to the person. When a note goes in, t.toldAt says when, so the merge hold
+// (relay/merge-hold.js) can wait for a Dev told news whose turn has not begun yet (T-238). Nothing else is typed into a session while it is stuck. The note is saved again for that session id, so Bring back gets it, but a
 // turn that begins in the stuck session itself drops it: that session has it already.
 //   onStuck(fn)  fn (channel, t) runs when a session becomes stuck
 //
@@ -235,6 +236,7 @@ function pump() {
       terminal.typeIfSafe(t, d.text, () => listOf(channel).includes(d) && targetOf(channel, d) === t, (problem) => {
         typing.delete(t.id);
         if (problem || !listOf(channel).includes(d)) return;
+        t.toldAt = at;
         watch(channel, d, t, at);
         if (d.untilTurn) { d.typedAt = at; d.typedTo = t.id; persist(); return; }
         remove(channel, d);
