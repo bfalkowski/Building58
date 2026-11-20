@@ -72,7 +72,14 @@ test('Let the Lead merge', async (t) => {
   const hook = async (s, event) => { await R.hook({ session_id: s.slice(0, 12), ...event }); await sleep(200); };
   const talk = async (s) => { await hook(s, { hook_event_name: 'UserPromptSubmit', title: '' }); await hook(s, { hook_event_name: 'Stop' }); };
   const terminal = async (id) => (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === id);
-  const told = (id, list) => until(async () => JSON.stringify(briefs(await R.screen(id)).map(merging)) === JSON.stringify(list), 'briefs ' + list.join(', '));
+  // A timeout names the briefs the screen showed. "Waiting for off, on, off, on, on" alone read as a
+  // brief gone missing (T-231), when the screen had an extra one: off, on, off, on, off, on.
+  const told = async (id, list) => {
+    let seen = [];
+    try {
+      await until(async () => { seen = briefs(await R.screen(id)).map(merging); return JSON.stringify(seen) === JSON.stringify(list); }, 'briefs ' + list.join(', '));
+    } catch (e) { e.message += '; the screen showed ' + (seen.join(', ') || 'none'); throw e; }
+  };
   const lead = (id, body) => R.call('POST', '/terminals/lead', { terminal: id, ...body });
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
 
