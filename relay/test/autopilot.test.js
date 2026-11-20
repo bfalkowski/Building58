@@ -757,3 +757,67 @@ test('a fix verdict whose Dev is not running brings the Dev back to fix it', asy
   assert.ok(a.notes.some((n) => /its Dev was not running, so Autopilot brought it back for the fixes the last review asks for/.test(n.text)), JSON.stringify(a.notes));
   assert.notStrictEqual((await task()).state, 'waiting_on_you', 'nothing went to the person');
 });
+
+// T-353: on 2026-11-19 PR #29 got a merge verdict, but GitHub said it conflicts with main. Autopilot asked
+// its Dev once to merge main, the Dev's turn ended without it, and only the stall timer, 30 minutes on,
+// would have caught it. Now a turn that ends at the same head brings one more ask at once, and a second
+// such turn sends the task to the person.
+test('a Dev whose turn ends without merging main is asked once more, then the person decides', async (t) => {
+  const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' }, null, { autoReview: true });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
+  const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
+  sh(R.home, 'init', '-q', '--bare', origin);
+  fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
+  sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+  sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/' + sh(repo, 'symbolic-ref', '--short', 'HEAD'));
+  const terminals = async () => (await R.call('GET', '/terminals')).body.terminals;
+  const say = (s, event, extra) => R.hook(Object.assign({ hook_event_name: event, session_id: s.sessionId.slice(0, 12) }, extra));
+  const task = async () => (await R.call('GET', '/tasks')).body.tasks[0];
+  const ap = async () => (await R.call('GET', '/autopilot')).body;
+  const ticket = (await R.call('POST', '/tickets', { title: 'Merge main when asked', repo })).body.ticket;
+  await R.call('POST', '/autopilot', { on: true, only: ticket.id });
+  const x = await until(task, 'the task'), wt = x.worktree;
+  const dev = (await terminals()).find((y) => y.id === x.worker.terminal);
+  await until(async () => /GOT\[Your task is to build/.test(await R.screen(dev.id)), 'the brief');
+  await say(dev, 'UserPromptSubmit');
+  await until(async () => (await task()).history.some((h) => h.type === 'briefed'), 'the brief to land');
+  fs.writeFileSync(path.join(wt, 'a.txt'), 'change\n');
+  sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'change');
+  pushPr(wt, origin);
+  const head = sh(wt, 'rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: head, mergeStateStatus: 'DIRTY', statusCheckRollup: GREEN } }, api: { 'repos/acme/widgets/pulls/7/files': [{ filename: 'a.txt' }] } }));
+  await say(dev, 'PostToolUse', { pr_url: PR, cwd: wt });
+  await say(dev, 'Stop');
+  const r = await until(async () => (await terminals()).find((y) => y.role === 'reviewer' && y.pr === PR), 'a reviewer');
+  const token = { 'X-Office-Token': await until(() => { try { return sessionToken(r.sessionId); } catch (e) { return null; } }, 'its token') };
+  assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, token)).status, 200);
+  await say(r, 'UserPromptSubmit');
+  await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-101' } });
+  await say(r, 'Stop');
+  // The Dev takes one turn, without a merge of main, for each note the relay typed into it. Other notes, such
+  // as the news that a review started, can come between the asks, and each waits for the turn before it.
+  const asks = (screen) => (screen.match(/GOT\[[^\]]*conflicts with main/g) || []).length;
+  let answered = 0;
+  const turnsUntil = async (n, what) => until(async () => {
+    const screen = await R.screen(dev.id), got = (screen.match(/GOT\[/g) || []).length;
+    if (asks(screen) === n) return screen;
+    if (got > answered) { answered = got; await say(dev, 'UserPromptSubmit'); await say(dev, 'Stop'); }
+    return null;
+  }, what);
+
+  await turnsUntil(1, 'the first ask to merge main');
+  const screen = await turnsUntil(2, 'one more ask, at once, after a turn that ended at the same head');
+  assert.match(screen, new RegExp('GOT\\[Your PR ' + PR + ' still conflicts with main at ' + head.slice(0, 7) + ', and your last turn ended without a merge of main\\.'));
+  assert.notStrictEqual((await task()).state, 'waiting_on_you', 'not the person yet');
+  assert.ok((await ap()).notes.some((n) => /PR #7 still conflicts with main after its Dev's turn ended, so its Dev was asked once more\./.test(n.text)), JSON.stringify((await ap()).notes));
+
+  await say(dev, 'UserPromptSubmit');
+  await say(dev, 'Stop');
+  const parked = await until(async () => { const y = await task(); return y.state === 'waiting_on_you' && y; }, 'the task to wait on you');
+  const move = parked.history.filter((h) => h.type === 'moved').pop();
+  assert.strictEqual(move.note, 'Autopilot: Its Dev was asked twice to merge main into PR #7 at ' + head.slice(0, 7) + ', and each turn ended without it. Merge main yourself, or tell the Dev to, then move the card back to Autopilot.');
+  assert.strictEqual(asks(await R.screen(dev.id)), 2, 'no third ask');
+  assert.strictEqual((await ap()).runs.recent.find((y) => y.ticket === ticket.id).blocked.reason, 'conflict-dropped');
+  assert.strictEqual(require('../autopilot-runs.js').REASONS['conflict-dropped'], 'its Dev did not merge main after two asks');
+});
