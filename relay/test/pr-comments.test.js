@@ -315,6 +315,10 @@ test('a review whose verdict says merge reaches the Dev but leaves the card, and
   assert.match(cleanSaid, /Polish not worth a ticket gets only your reply\. Then stop\./);
   assert.doesNotMatch(cleanSaid, /one follow-up ticket|non-blocking findings worth doing/);
   assert.match(cleanSaid, /<!-- office:hold -->/);
+  // T-234: the relay reads the hold mark only the first time it sees a comment, so the message and the brief say a new reply.
+  assert.match(cleanSaid, /say so in a new reply .* An edited reply does not count\./);
+  const brief = (await o.R.screen(clean.worker.terminal)).replace(/\s+/g, ' ');
+  assert.match(brief.slice(0, brief.lastIndexOf('GOT[')), /say so in a new reply .* An edited reply does not count\./);
   assert.match(cleanSaid, /A failing check and a conflict with main are still yours/);
   assert.doesNotMatch(cleanSaid, /fix or dispute each finding, reply on the PR, and push/);
   for (const other of [sent, stale]) {
