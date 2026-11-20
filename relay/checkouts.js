@@ -8,7 +8,8 @@
 // bad object, even when the commit it holds exists. A review's fetch or checkout takes such a file away and tries
 // again (mending). It deletes the file when its commit is missing or another ref already reaches it. Otherwise it
 // moves the commit to a valid name under refs/office/rescued/, so git gc cannot prune it. The log says which, and an
-// error after a move names it too. Any other bad ref is named, with its file, in the error the review gives.
+// error after a move names it too. A copy with no hash and no ref: line is kept. It and any other bad ref are
+// named, with their file, in the error the review gives.
 // Like the terminal, this answers only the room page on this machine, while RELAY_TERMINAL=1.
 'use strict';
 const { execFile } = require('child_process');

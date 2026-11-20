@@ -442,6 +442,16 @@ test('automatic PR review', async (t) => {
     await stop(again.body.id); await gone(again.body.checkout.id);
     sh(repo, 'update-ref', '-d', 'refs/office/rescued/stash-2');
   });
+  await t.test('a copy that holds no commit hash and no ref: line is kept and named in the error (T-350)', async () => {
+    const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir'), copy = path.join(gitDir, 'refs', 'stash 2');
+    fs.writeFileSync(copy, 'garbage\n');
+    const r = await review();
+    assert.strictEqual(r.body.error, 'fetch');
+    assert.ok(r.body.message.includes('The broken ref is the file ' + copy), r.body.message);
+    assert.strictEqual(fs.readFileSync(copy, 'utf8'), 'garbage\n', 'the relay cannot tell what it held, so it keeps it');
+    fs.rmSync(copy);
+    assert.strictEqual(refs(), '');
+  });
   await t.test('a broken ref with a valid name is named in the error and kept (T-350)', async () => {
     const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir'), broken = path.join(gitDir, 'refs', 'heads', 'broken');
     fs.writeFileSync(broken, '0123456789012345678901234567890123456789\n');
