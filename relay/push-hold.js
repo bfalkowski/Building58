@@ -6,8 +6,10 @@
 //   The relay side. sync() writes a mark, office-push-hold.json, in the git folder of a task's own
 //   checkout (that worktree's folder under .git/worktrees, so git never shows or commits it). It writes
 //   the mark while the latest posted verdict on the task's PR says merge, and removes it when a newer
-//   verdict says fix, the PR merges or closes, or the task is Done. relay/autopilot.js, which keeps the
-//   verdicts, calls it when a verdict is posted, when a task changes state, and on each of its looks.
+//   verdict says fix, the PR merges or closes, or the task is Done. A newer fix verdict is a review's, or the
+//   person's Fix it (the Lead's under its merge rung), which relay/autopilot.js keeps on the reviewed commit.
+//   relay/autopilot.js, which keeps the verdicts, calls it when a verdict is posted or decided, when a task
+//   changes state, and on each of its looks.
 //   The git side. .githooks/pre-push runs this file with --pre-push when the mark is there. A push goes
 //   through only when every new commit since the reviewed one is a merge whose first parent is the
 //   reviewed commit or another such merge, and whose other parents are on the remote's base branch.

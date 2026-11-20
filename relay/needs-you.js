@@ -55,7 +55,7 @@ function noteOf(task) {
 
 function handedOf(channel, task) {
   const desk = autopilot.deskOf(channel, task), r = desk.reviewedSince, head = r && (pipeline.of(task.pr) || {}).head;
-  return { handedOver: desk.handedOver, reviewedSince: r ? { ...r, current: !head || head === r.commit } : null };
+  return { handedOver: desk.handedOver, devSaysBug: !!desk.devSaysBug, reviewedSince: r ? { ...r, current: !head || head === r.commit } : null };
 }
 
 function stateOf(channel, now, lastReport) {

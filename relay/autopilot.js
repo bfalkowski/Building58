@@ -19,6 +19,8 @@
 // and the PR's line says whom it stopped, or that it may stop none (deskLine). Each review asks the
 // reviewer for a verdict, merge or fix, which it gives with ticket.js verdict before it posts. A verdict
 // counts once its review is posted, and covers only the commit the reviewer read. After MAX_ROUNDS verdicts that still say fix, the person decides.
+// Fix it (POST /autopilot/fix, decideFix): the person, or the Lead under its merge rung, decides a finding a merge
+// review marked non-blocking must be fixed. That is a fix verdict on the reviewed commit, which lifts the push hold.
 // It merges at most MAX_MERGES_A_DAY PRs a day, and never one that changes CLAUDE.md or the
 // constitution. After a merge it pulls main into the relay's folder (relay/update.js), which
 // restarts the relay once no session is busy if relay files changed. While that update waits, Autopilot
@@ -51,6 +53,7 @@ const { holdOf } = require('./merge-hold.js');
 const runs = require('./autopilot-runs.js');
 const pushHold = require('./push-hold.js');
 const pipeline = require('./pipeline.js');
+const { oneLine } = require('./clean.js');
 
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const GH = process.env.GH_CMD || 'gh';
@@ -564,6 +567,15 @@ async function handle(req, res, channel, rest, rctx) {
     const [status, out] = await giveVerdict(channel, rctx.agent, String(body.kind || ''));
     rctx.send(res, status, out); return true;
   }
+  if (rest === '/autopilot/fix' && req.method === 'POST') {
+    const agent = rctx.agent;
+    if (agent && !agent.lead) { rctx.problem(res, 401, 'unauthorized', 'Only the person, and the Lead under its merge rung, decide that a finding must be fixed.'); return true; }
+    if (agent && !agent.merge) { rctx.problem(res, 403, 'forbidden', 'The person has not let the Lead merge. Fix it lifts a push hold, so the Lead may use it only while Let the Lead merge is on. Tell the person instead.'); return true; }
+    const body = await rctx.readJson(req), task = findTask(channel, String(body.task || '').trim());
+    if (!task) { rctx.problem(res, 404, 'not_a_task', 'No task has that id, ticket or PR.'); return true; }
+    const [status, out] = decideFix(channel, task, agent ? 'Lead' : 'you');
+    rctx.send(res, status, out); return true;
+  }
   if (rest !== '/autopilot' || !['GET', 'POST'].includes(req.method)) { rctx.problem(res, 404, 'not_found', 'Unknown Autopilot route.'); return true; }
   if (rctx.agent) { rctx.problem(res, 401, 'unauthorized', 'Only the person turns Autopilot on or off.'); return true; }
   if (req.method === 'POST') {
@@ -589,6 +601,28 @@ async function handle(req, res, channel, rest, rctx) {
   return true;
 }
 
+const HELD_URL = /https:\/\/github\.com\/\S+#issuecomment-\d+$/;
+function decideFix(channel, task, by) {
+  const rec = task && task.pr && store[channel] && store[channel].prs[task.pr];
+  const v = rec && postedOf(rec).slice(-1)[0];
+  if (!task || !task.pr || task.state === 'done') return [409, { ok: false, error: 'no_pr', message: 'Only a task with an open PR has a push hold to lift.' }];
+  if (!v || v.kind !== 'merge' || !v.commit) return [409, { ok: false, error: 'no_merge_verdict', message: 'The latest posted verdict on PR ' + number(task.pr) + ' does not say merge, so there is no push hold to lift.' }];
+  const who = by === 'you' ? 'You' : 'The Lead', held = handedReasonOf(rec) === 'dev-says-bug' ? (String(rec.handedOver || '').match(HELD_URL) || [])[0] : null;
+  rec.verdicts.push({ kind: 'fix', commit: v.commit, by, sessionId: null, at: new Date().toISOString(), posted: 'decided by ' + by });
+  dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; rec.act = 'wait'; rec.why = null;
+  if (chOf(channel).stuck) delete chOf(channel).stuck[task.id];
+  save();
+  holdPushes(channel, task);
+  const why = who + ' decided a finding on PR ' + number(task.pr) + ' must be fixed, so the review of ' + v.commit.slice(0, 7) + ' counts as fix.';
+  if (task.state === 'changes_requested') tasks.record(task, { type: 'note', note: why }); else tasks.setState(channel, task, 'changes_requested', by, why);
+  tasks.save();
+  delivery.save(channel, { key: 'autopilot-fix ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
+    text: (by === 'you' ? 'The person' : 'The Lead') + ' decided that a finding on your PR ' + task.pr + ' must be fixed in this PR' + (held ? ', as you said in ' + oneLine(held, 200) : '') + '. Fix it, run the tests, and push. The push hold is lifted, and a follow-up review checks the fix.' });
+  note(channel, (task.ticket || 'Task ' + task.id) + ': ' + why + ' The push hold is lifted.');
+  return [200, { ok: true, pr: task.pr, task: task.id, commit: v.commit, message: why + ' The push hold is lifted, and its Dev is told to fix it.' }];
+}
+const findTask = (channel, what) => tasks.list(channel).find((x) => what && (x.id === what || x.ticket === what || x.pr === what)) || null;
+
 function holdPushes(channel, only) {
   for (const task of tasks.list(channel)) {
     if (!task.pr || !task.worktree || (only && task !== only)) continue;
@@ -610,7 +644,7 @@ function deskOf(channel, task) {
   const handed = r && r.handedOver && !handedBack(task, r) ? r.handedOver : null;
   const since = handed && handedReasonOf(r) === 'stalled' && r.verdicts.filter((x) => Date.parse(x.at) > Date.parse(r.handedOverAt) && postOf(channel, x)).pop();
   const reviewedSince = since ? { kind: since.kind, commit: since.commit, url: postOf(channel, since) } : null;
-  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, reviewedSince };
+  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', reviewedSince };
 }
 
 const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';

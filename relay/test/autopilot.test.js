@@ -480,6 +480,115 @@ test('a merge review of a newer commit clears a Dev\'s hand-over and merges, and
   assert.deepStrictEqual(await decisions(), [], 'Needs you no longer lists it');
 });
 
+// T-385: on PR 121 the Dev said a finding the merge review marked non-blocking is a bug, and the person agreed.
+// The push hold still refused the fix, since only a review posts a verdict. Fix it, on Needs you, is the person's
+// fix verdict on the reviewed commit: it lifts the hold, and a later review's verdict counts as usual. The Lead
+// may give it only while its merge rung is on.
+test('the person\'s Fix it lifts the push hold, a later review counts, and the Lead needs its merge rung', async (t) => {
+  const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '0' });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
+  const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
+  sh(R.home, 'init', '-q', '--bare', origin);
+  fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
+  sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+  sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/' + sh(repo, 'symbolic-ref', '--short', 'HEAD'));
+  sh(repo, 'config', 'core.hooksPath', path.resolve(__dirname, '..', '..', '.githooks'));
+  const terminals = async () => (await R.call('GET', '/terminals')).body.terminals;
+  const say = (s, event, extra) => R.hook(Object.assign({ hook_event_name: event, session_id: s.sessionId.slice(0, 12) }, extra));
+  const task = async () => (await R.call('GET', '/tasks')).body.tasks[0];
+  const tokenOf = (s) => until(() => { try { return { 'X-Office-Token': sessionToken(s.sessionId) }; } catch (e) { return null; } }, 'its token');
+  const ticket = (await R.call('POST', '/tickets', { title: 'Make a.txt say hello', repo })).body.ticket;
+  await R.call('POST', '/autopilot', { on: true, only: ticket.id });
+  const x = await until(task, 'the task'), wt = x.worktree;
+  const dev = (await terminals()).find((y) => y.id === x.worker.terminal);
+  let head = null, comments = [], n = 0;
+  const answer = () => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: head, mergeStateStatus: 'CLEAN', statusCheckRollup: GREEN } }, api: { 'repos/acme/widgets/pulls/7/files': [{ filename: 'a.txt' }], 'repos/acme/widgets/issues/7/comments': comments } }));
+  const commit = () => {
+    fs.writeFileSync(path.join(wt, 'a.txt'), 'hello ' + (++n) + '\n');
+    sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'hello ' + n);
+    return sh(wt, 'rev-parse', 'HEAD');
+  };
+  // A plain git push, so the pre-push hook runs, as it does in a Dev's checkout.
+  const push = () => {
+    const r = require('child_process').spawnSync('git', ['push', origin, 'HEAD:refs/pull/7/head'], { cwd: wt, encoding: 'utf8' });
+    if (r.status === 0) { sh(wt, 'update-ref', 'refs/remotes/origin/pr', 'HEAD'); head = sh(wt, 'rev-parse', 'HEAD'); answer(); }
+    return { ok: r.status === 0, out: r.stdout + r.stderr };
+  };
+  const review = async (id) => {
+    const got = await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: prBrief(PR) }), r = got.body;
+    assert.strictEqual(got.status, 201, JSON.stringify(r));
+    assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, await tokenOf(r))).status, 200);
+    await say(r, 'UserPromptSubmit');
+    await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-' + id } });
+    await say(r, 'Stop');
+    await until(async () => !(await terminals()).some((y) => y.id === r.id), 'the reviewer to leave');
+    await until(async () => !(await R.call('GET', '/checkouts')).body.checkouts.some((c) => c.id === r.checkout.id), 'its checkout to go');
+  };
+  const reviewed = commit();
+  assert.ok(push().ok, 'no mark yet, so the first push goes through');
+  await say(dev, 'UserPromptSubmit');
+  await say(dev, 'PostToolUse', { pr_url: PR, cwd: wt });
+  await review(101);
+  assert.deepStrictEqual(await until(() => markOf(wt), 'the push hold'), { pr: PR, commit: reviewed, base: 'main' });
+  const held = PR + '#issuecomment-102';
+  comments = [{ id: 102, html_url: held, body: '<!-- office:dev -->\n<!-- office:hold -->\nFinding 2 is a bug.', created_at: new Date().toISOString() }];
+  answer();
+  assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 3600 } })).status, 200);
+  await say(dev, 'Stop');
+  await until(async () => (await task()).state === 'waiting_on_you', 'the hand-over');
+  commit();
+  const refused = push();
+  assert.strictEqual(refused.ok, false, 'the fix is refused while the merge verdict stands: ' + refused.out);
+  assert.match(refused.out, /Push refused: The review of \w{7} says merge/);
+
+  await t.test('Needs you offers Fix it on the line that says the Dev thinks the finding is a bug', async () => {
+    const item = (await R.call('GET', '/needs-you')).body.items.find((i) => i.kind === 'handed-over');
+    assert.ok(item, 'the hand-over line');
+    assert.strictEqual(item.link.fix, x.id);
+    assert.strictEqual(item.link.url, PR, 'it still opens the PR');
+  });
+
+  const lead = await R.start({ cwd: fs.realpathSync(fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-fix-lead-'))) });
+  await say(lead, 'UserPromptSubmit');
+  await say(lead, 'Stop');
+  assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: lead.id })).status, 200);
+  await t.test('the Lead without its merge rung, and any other session, cannot decide it', async () => {
+    const off = await R.call('POST', '/autopilot/fix', { task: x.id }, await tokenOf(lead));
+    assert.strictEqual(off.status, 403, JSON.stringify(off.body));
+    assert.match(off.body.message, /Let the Lead merge/);
+    const other = await R.call('POST', '/autopilot/fix', { task: x.id }, await tokenOf(dev));
+    assert.strictEqual(other.status, 401, JSON.stringify(other.body));
+    assert.ok(markOf(wt), 'the push hold stays');
+  });
+
+  await t.test('the person\'s Fix it lifts the push hold, and the fix then pushes', async () => {
+    const r = await R.call('POST', '/autopilot/fix', { task: x.id });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.commit, reviewed);
+    assert.strictEqual(markOf(wt), null, 'the mark is gone');
+    const now = await task();
+    assert.strictEqual(now.state, 'changes_requested', 'the task goes back to its Dev');
+    assert.ok(now.history.some((h) => h.type === 'moved' && h.by === 'you' && /You decided a finding on PR #7 must be fixed/.test(h.note || '')), 'the card says who decided');
+    assert.ok(!(await R.call('GET', '/needs-you')).body.items.some((i) => i.kind === 'handed-over'), 'Needs you no longer lists the hand-over');
+    const again = await R.call('POST', '/autopilot/fix', { task: x.id });
+    assert.strictEqual(again.status, 409, 'a second press has no merge verdict to answer');
+    const pushed = push();
+    assert.strictEqual(pushed.ok, true, pushed.out);
+    await R.call('POST', '/autopilot', { on: false });  // so it does not merge on the next review before the Lead acts
+  });
+
+  await t.test('a later review\'s merge verdict holds pushes again, and the Lead with its merge rung can lift it', async () => {
+    await review(103);
+    assert.deepStrictEqual(await until(() => { const m = markOf(wt); return m && m.commit === head && m; }, 'the push hold on the new commit'), { pr: PR, commit: head, base: 'main' });
+    assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: lead.id, merge: true })).status, 200);
+    const r = await R.call('POST', '/autopilot/fix', { task: ticket.id }, await tokenOf(lead));
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(markOf(wt), null);
+    assert.ok((await task()).history.some((h) => /^The Lead decided a finding on PR #7 must be fixed/.test(h.note || '')), 'the card says the Lead decided');
+  });
+});
+
 test('a PR that changes CLAUDE.md waits on the person, and is done once the person merges it', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300' });
