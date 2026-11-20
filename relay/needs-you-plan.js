@@ -4,7 +4,7 @@
 // list, so all three agree. A plain function with no side effects, so the tests run it without a relay.
 // See docs/manual/roles.html#needs-you.
 //
-//   listOf({ seats, tasks, waits, relays, desks, writes }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
+//   listOf({ seats, tasks, waits, relays, desks, mains, writes }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
 //   writeLine(write) -> the line for one GitHub write that failed, which the ticket's card shows too
 //
 // A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh, continuing },
@@ -21,6 +21,7 @@
 // why }, where terminal is the running session it is for, and why says in plain words what holds it.
 // A relay is another relay on this room's state folder (relay/old-relays.js): { pid, file, port, started, paused, worker }.
 // desks is reviews that wait for a desk while the relay may stop no session: { prs, taken }, the longest wait first.
+// A main is one base branch whose latest CI run failed (relay/main-ci.js): { name, branch, run: { workflow, sha, url, conclusion } }.
 // A write is one ticket whose last write to the GitHub ticket store failed (relay/ticket-stores/github.js):
 // { id, what, message, inMs }, where message is what GitHub said and inMs is the time to the next try.
 //
@@ -30,6 +31,7 @@
 //   permission   a session waits on the person, and its message asks for permission
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   desks        reviews wait for a desk, and the relay may stop none of the sessions that hold them all
+//   main         the latest push run of CI on main failed, so Autopilot starts no new ticket on that branch
 //   ticket-write the last write to a ticket's GitHub issue failed, until a write goes through, GitHub shows what it
 //                wanted, or a read comes after the wait
 //   merge        an open PR that only the person may merge
@@ -48,7 +50,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'ticket-write', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'ticket-write', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -107,6 +109,11 @@ function desksItem(d) {
     line: 'Stop a session to free a desk: the review' + (prs.length > 1 ? 's of PR ' + list + ' wait' : ' of PR ' + list + ' waits') + ' for one. All ' + taken + ' desks are taken, and the relay may stop none of them. ' + MAY_STOP, link: {} };
 }
 
+function redMain(m) {
+  const r = m.run || {}, branch = oneLine(m.branch, 80) || 'main', sha = oneLine(r.sha, 64).slice(0, 7), url = oneLine(r.url, 300);
+  return branch + ' of ' + (oneLine(m.name, 80) || 'the repo') + ': ' + (oneLine(r.workflow, 80) || 'CI') + (sha ? ' at ' + sha : '') + ' ended in ' + (oneLine(r.conclusion, 40).replace(/_/g, ' ') || 'failure') + '. Autopilot starts no new ticket on ' + branch + ' there until a push run on ' + branch + ' passes.' + (url ? ' ' + url : '');
+}
+
 function writeLine(w) {
   const ms = Number(w.inMs), s = Math.ceil(ms / 1000);
   const when = !(ms > 0) ? null : s < 120 ? s + (s === 1 ? ' second' : ' seconds') : Math.round(s / 60) + ' minutes';
@@ -147,6 +154,11 @@ function listOf(input) {
   }
   const desks = desksItem(input && input.desks);
   if (desks) items.push(desks);
+  for (const m of (input && input.mains) || []) {
+    if (!m || !m.run) continue;
+    const url = oneLine(m.run.url, 300);
+    items.push({ kind: 'main', who: 'CI', terminal: null, task: null, ticket: null, pr: null, line: 'Look at the failed CI run on ' + redMain(m), link: url ? { url } : {} });
+  }
   for (const w of (input && input.writes) || []) {
     if (!w || !/^[\w.-]{1,20}$/.test(String(w.id))) continue;
     items.push({ kind: 'ticket-write', who: 'the relay', terminal: null, task: null, ticket: String(w.id), pr: null, line: writeLine(w), link: { ticket: String(w.id) } });
@@ -154,4 +166,4 @@ function listOf(input) {
   return items.map((it, i) => [it, i]).sort((a, b) => KINDS.indexOf(a[0].kind) - KINDS.indexOf(b[0].kind) || a[1] - b[1]).map((x) => x[0]);
 }
 
-module.exports = { listOf, writeLine, KINDS };
+module.exports = { listOf, redMain, writeLine, KINDS };

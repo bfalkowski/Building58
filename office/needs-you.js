@@ -1,6 +1,6 @@
 // The Needs you panel on the Floor: how many things wait on the person, and one line for each, from the relay
 // (relay/needs-you.js). It reads the list every two seconds, as the huddle bar reads its state. Clicking a line
-// opens what it names: the session at its desk, the PR on GitHub, or the ticket on the Board. A line about
+// opens what it names: the session at its desk, the PR or the failed CI run on GitHub, or the ticket on the Board. A line about
 // another relay on the room's state folder has a Stop button, which asks the relay to stop it (relay/old-relays.js).
 (function () {
   'use strict';
@@ -14,26 +14,28 @@
   const url = base + '/needs-you?key=' + encodeURIComponent(key);
   const TICKET = /^[\w.-]{1,20}$/;
   const PR = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
+  const RUN = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/;
+  const onGithub = (u) => !!u && (PR.test(u) || RUN.test(u));
   let drawn = '';
 
   function open(link) {
     if (link.terminal) {
       const w = window.run && window.run.state().workers.find((x) => x.session && x.session.terminal === link.terminal);
       if (w) window.dispatchEvent(new CustomEvent('office:pick', { detail: { who: w.id, keep: true } }));
-    } else if (link.url && PR.test(link.url)) window.open(link.url, '_blank', 'noopener');
+    } else if (onGithub(link.url)) window.open(link.url, '_blank', 'noopener');
     else if (link.ticket && TICKET.test(link.ticket)) window.dispatchEvent(new CustomEvent('office:ticket', { detail: { id: link.ticket } }));
   }
   function row(item) {
     const li = document.createElement('li');
     li.dataset.kind = item.kind;
     const link = item.link || {};
-    const opens = !!(link.terminal || (link.url && PR.test(link.url)) || (link.ticket && TICKET.test(link.ticket)));
+    const opens = !!(link.terminal || onGithub(link.url) || (link.ticket && TICKET.test(link.ticket)));
     const b = document.createElement(opens ? 'button' : 'span');
     b.className = 'needs-line';
     b.textContent = item.line;
     if (opens) {
       b.type = 'button';
-      b.title = link.terminal ? 'Open the session of ' + item.who : link.url ? 'Open the PR on GitHub' : 'Show ' + link.ticket + ' on the Board';
+      b.title = link.terminal ? 'Open the session of ' + item.who : link.url ? (RUN.test(link.url) ? 'Open the failed run on GitHub' : 'Open the PR on GitHub') : 'Show ' + link.ticket + ' on the Board';
       b.addEventListener('click', () => open(link));
     }
     li.append(b);

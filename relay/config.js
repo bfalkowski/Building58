@@ -31,6 +31,8 @@ const SETTINGS = [
     what: 'How often the relay asks GitHub for new comments on each PR, to send them to the Dev. 0 stops it.' },
   { name: 'pipelinePollSeconds', group: 'Reviews', label: 'Check each PR\'s pipeline every', unit: 'seconds', env: 'RELAY_PIPELINE_POLL_SECONDS', def: 15, min: 0, max: 600, zero: true,
     what: 'How often the relay asks GitHub for the checks on each open PR. An automatic review waits until they pass, and the Board shows a PR whose checks are running or failed as waiting on the pipeline. 0 stops asking, and reviews start without waiting.' },
+  { name: 'mainCiPollSeconds', group: 'Reviews', label: 'Check main\'s CI every', unit: 'seconds', env: 'RELAY_MAIN_CI_POLL_SECONDS', def: 120, min: 0, max: 3600, zero: true,
+    what: 'How often the relay asks GitHub for the latest CI runs that a push to main started, once for each repo and base branch the room works on. When the latest one failed, Needs you and the Lead\'s Floor say main is red, and Autopilot starts no new ticket on that branch until a push run passes. 0 stops asking, and then nothing shows main as red.' },
   { name: 'pipelineNoChecksSeconds', group: 'Reviews', label: 'Review a PR with no checks after', unit: 'seconds', env: 'RELAY_PIPELINE_NO_CHECKS_MS', scale: 1 / 1000, def: 120, min: 10, max: 3600,
     what: 'GitHub can take a moment to start a PR\'s checks. A PR with none waits this long for them, then its review starts with no pipeline. The same happens when gh cannot read the checks.' },
   { name: 'reviewRetrySeconds', group: 'Reviews', label: 'Try a review again after', unit: 'seconds', env: 'RELAY_REVIEW_RETRY_MS', scale: 1 / 1000, def: 60, min: 5, max: 3600,
