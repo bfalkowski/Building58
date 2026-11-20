@@ -95,3 +95,15 @@ test('a review posted that no comment check has listed yet: wait until one has',
   t.after(() => { delete process.env.RELAY_REVIEW_POLL_SECONDS; });
   assert.strictEqual(holdOf(unseen, dev('idle'), now), null, 'with the comment check off, no check will come, and the Dev is never told of reviews');
 });
+
+// T-238: review news was typed to the Dev and delivered, so task.reviews.pending is empty, but the Dev's
+// UserPromptSubmit hook has not come yet, so its hooks still say idle. A merge now would leave its answer out.
+test('a Dev told something after its last turn began, with no hook since: wait', (t) => {
+  const dir = checkout(t);
+  const TOLD = { act: 'wait', why: 'Its Dev was told something and has not started on it yet, so the PR may not hold every fix yet.' };
+  assert.deepStrictEqual(holdOf(task(dir), dev('idle', { turnAt: now - 60000, toldAt: now - 500 }), now), TOLD);
+  assert.deepStrictEqual(holdOf(task(dir), dev('idle', { toldAt: now - 500 }), now), TOLD, 'no turn seen at all yet');
+  assert.strictEqual(holdOf(task(dir), dev('idle', { turnAt: now - 400, toldAt: now - 500 }), now), null, 'a turn began after it was told, and has ended');
+  assert.strictEqual(holdOf(task(dir), dev('idle', { exited: true, toldAt: now - 500 }), now), null, 'a Dev that has ended will not start on it');
+  assert.strictEqual(holdOf(task(dir), dev('idle', { turnAt: now - 60000, toldAt: now - 16000 }), now), null, 'past RELAY_TOLD_HOLD_MS (15 seconds) the wait ends, so a note that never starts a turn cannot hold the merge for good');
+});

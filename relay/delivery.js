@@ -50,7 +50,8 @@
 // says its turn began, and then the turn holds the rest: a hook can come seconds after Enter, and a note typed
 // then sits unsent in the prompt while the turn counts for it (T-353). If it still has not started, the session is stuck
 // (t.stuck: when it was told, and why where the relay can tell), the Floor says so, and the relay
-// stops trying and leaves it to the person. Nothing else is typed into a session while it is stuck. The note is saved again for that session id, so Bring back gets it, but a
+// stops trying and leaves it to the person. When a note goes in, t.toldAt says when, so the merge hold
+// (relay/merge-hold.js) can wait for a Dev told news whose turn has not begun yet (T-238). Nothing else is typed into a session while it is stuck. The note is saved again for that session id, so Bring back gets it, but a
 // turn that begins in the stuck session itself drops it: that session has it already.
 //   onStuck(fn)  fn (channel, t) runs when a session becomes stuck
 //
@@ -65,7 +66,7 @@ const state = require('./state.js');
 const terminal = require('./terminal.js');
 const config = require('./config.js');
 const { claim } = require('./lockfile.js');
-const { TOLD_CHECK } = require('./stop-verdict.js');
+const { TOLD_CHECK, TOLD_HOLD } = require('./stop-verdict.js');
 
 const FILE = state.file('deliveries.json', 'RELAY_DELIVERIES_FILE');
 const EVERY = Number(process.env.RELAY_DELIVERY_EVERY_MS) >= 1 ? Number(process.env.RELAY_DELIVERY_EVERY_MS) : 500;
@@ -132,7 +133,6 @@ function pending(channel) {
 }
 
 const PROMPT_TRIES = 3;
-const TOLD_HOLD = Number(process.env.RELAY_TOLD_HOLD_MS) > 0 ? Number(process.env.RELAY_TOLD_HOLD_MS) : 15 * 1000;
 const READY_LIMIT = () => config.get('readyMinutes') * 60 * 1000;
 const watching = new Map();
 const stuckFns = [];
@@ -251,6 +251,7 @@ function type(channel, d, t, done) {
   terminal.typeIfSafe(t, d.text, () => listOf(channel).includes(d) && targetOf(channel, d) === t, (problem) => {
     typing.delete(t.id);
     if (problem || !listOf(channel).includes(d)) { done(problem || 'dropped'); return; }
+    t.toldAt = at;
     watch(channel, d, t, at);
     if (d.untilTurn) { d.typedAt = at; d.typedTo = t.id; persist(); done(null); return; }
     remove(channel, d);

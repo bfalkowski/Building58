@@ -8,6 +8,7 @@ const { jobsOf, jobWords } = require('./liveness.js');
 const PM_TALK = () => config.get('pmTalkMinutes') * 60 * 1000;
 const ENTER_SETTLES = 3000;
 const TOLD_CHECK = Number(process.env.RELAY_TOLD_CHECK_MS) > 0 ? Number(process.env.RELAY_TOLD_CHECK_MS) : 60 * 1000;
+const TOLD_HOLD = Number(process.env.RELAY_TOLD_HOLD_MS) > 0 ? Number(process.env.RELAY_TOLD_HOLD_MS) : 15 * 1000;
 const minutes = (ms) => Math.max(0, Math.floor(ms / 60000));
 
 const QUESTIONS = { trust: 'it is asking the person whether to trust its folder', menu: 'a menu is open on its screen' };
@@ -68,4 +69,4 @@ function forReview(candidates) {
   return pick ? { t: pick.t, task: pick.task, why: pick.by.why + pick.verdict.reason } : null;
 }
 
-module.exports = { stopVerdict, leadMayStop, forReview, PM_TALK, ENTER_SETTLES, TOLD_CHECK };
+module.exports = { stopVerdict, leadMayStop, forReview, PM_TALK, ENTER_SETTLES, TOLD_CHECK, TOLD_HOLD };
