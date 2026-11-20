@@ -157,3 +157,46 @@ test('a refresh stopped after /clear says so, and types no read prompt', async (
   await R.call('POST', '/terminals/' + a.id + '/input', { data: '\x15' }); await sleep(3000);
   assert.ok(!(await R.screen(a.id)).includes(READ), 'no read prompt after the stop');
 });
+
+// RELAY_DELIVERY_EVERY_MS holds the round that types saved messages for ten minutes, so the brief goes
+// in only when Refresh the Lead types it. FAKE_CLAUDE_SLOW_START keeps the prompt off the screen at first.
+test('Refresh the Lead types a brief the Lead still owes, and says why when it cannot', async (t) => {
+  const R = await relay({ RELAY_DELIVERY_EVERY_MS: '600000', FAKE_CLAUDE_SLOW_START: '8' });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const repo = makeRepo(R.home);
+  const a = (await R.call('POST', '/terminals', { cwd: repo })).body;
+  const lead = async () => (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === a.id);
+  const refresh = () => R.call('POST', '/terminals/lead', { refresh: true });
+  await R.call('POST', '/terminals/lead', { terminal: a.id });
+  assert.strictEqual((await lead()).owesBrief, true);
+
+  await t.test('no prompt on its screen: it types nothing, and says so', async () => {
+    let r;
+    await until(async () => { r = await refresh(); return r.body.reason !== 'settling'; }, 'the start lines to settle', 60);  // the prompt comes 8 seconds in
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.reason, 'no_prompt');
+    assert.match(r.body.message, /has not had its brief, and the relay cannot type it now: its screen shows no prompt\./);
+  });
+  await until(async () => (await R.screen(a.id)).includes('❯'), 'the prompt');
+  await t.test('text in its prompt: it types nothing, and says so', async () => {
+    await R.call('POST', '/terminals/' + a.id + '/input', { data: 'half a thought' });
+    const r = await refresh();
+    assert.strictEqual(r.status, 409);
+    assert.match(r.body.message, /someone has text in its prompt/);
+    await R.call('POST', '/terminals/' + a.id + '/input', { data: '\x15' });
+    await sleep(1600);
+  });
+  await t.test('once it is safe, Refresh types the brief now, and stops there', async () => {
+    assert.ok(!(await R.screen(a.id)).includes(BRIEF), 'the brief has not gone in by itself');
+    const r = await refresh();
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.brief, true);
+    assert.match(r.body.message, /typing it now/);
+    await until(async () => (await R.screen(a.id)).includes(BRIEF), 'the brief');
+    await until(async () => !(await lead()).owesBrief, 'the brief to count as had');
+    const l = await lead();
+    assert.strictEqual(l.refresh, null, 'no refresh runs');
+    assert.ok(!(await R.screen(a.id)).includes(NOTES), 'no notes prompt');
+    assert.strictEqual(count(await R.screen(a.id), BRIEF), 1, 'typed once');
+  });
+});

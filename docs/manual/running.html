@@ -239,7 +239,7 @@ Open the office: http://localhost:8787/office/?channel=office&amp;key=pick-a-lon
     <li>Tickets on the local store do not carry over. Their ids, such as <code>T-21</code>, are not issue numbers.</li>
     <li>A ticket you file on GitHub has no approval, so a Lead you let start tickets leaves it for you (see <a href="roles.html#lead-starts">The Lead starts tickets</a>).</li>
   </ul>
-  <p>The Board lists the issues once, then uses that list for <code>RELAY_TICKET_CACHE_MS</code>. After that it shows the old list at once and fetches a new one, so a change made on GitHub shows one refresh later. What the relay changes shows at once.</p>
+  <p>The Board lists the issues once, then uses that list for <code>RELAY_TICKET_CACHE_MS</code>. After that it shows the old list at once and fetches a new one, so a change made on GitHub shows one refresh later. What the relay changes shows at once. Each refresh reads the issue list, one request for each 100 issues. A ticket's blockers take one more request each, so the relay keeps them and reads an issue's blockers again only when the list shows that issue with a new updated time or new blocker counts. Before the relay changes a ticket, it reads that issue's blockers fresh, so it never writes from an old copy. Blockers the relay sets are kept at once, with the time GitHub gives that change.</p>
 
   <h2 id="messages">Common messages, and what to do</h2>
   <table>

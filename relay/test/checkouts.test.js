@@ -404,6 +404,65 @@ test('automatic PR review', async (t) => {
     assert.strictEqual(sh(repo, 'tag', '--list'), '');
     await stop(r.id); await gone(r.checkout.id);
   });
+  await t.test('a copy of a ref that iCloud or Finder made, such as refs/stash 2, is removed and the review starts (T-350)', async () => {
+    const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir');
+    const copies = [path.join(gitDir, 'refs', 'stash 2'), path.join(gitDir, 'refs', 'heads', 'feature 3')];
+    for (const f of copies) fs.writeFileSync(f, '0123456789012345678901234567890123456789\n');
+    assert.throws(() => sh(repo, 'fetch', '-q', '--no-tags', origin, '+refs/pull/7/head:refs/office/probe'), /bad object refs\//, 'git fails on the copy');
+    const r = await review();
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(sh(r.body.cwd, 'rev-parse', 'HEAD'), tip);
+    for (const f of copies) assert.ok(!fs.existsSync(f), f + ' is removed');
+    assert.ok(fs.existsSync(path.join(gitDir, 'refs', 'heads', 'feature')), 'the real branch stays');
+    await stop(r.body.id); await gone(r.body.checkout.id);
+  });
+  await t.test('a copy that holds a commit another ref reaches is removed too (T-350)', async () => {
+    const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir'), copy = path.join(gitDir, 'refs', 'heads', 'feature 2');
+    fs.writeFileSync(copy, tip + '\n');
+    const r = await review();
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.ok(!fs.existsSync(copy), 'feature still reaches ' + tip);
+    assert.strictEqual(sh(repo, 'for-each-ref', '--format=%(refname)', 'refs/office/rescued'), '', 'nothing to rescue');
+    await stop(r.body.id); await gone(r.body.checkout.id);
+  });
+  await t.test('a copy that holds the only pointer to a commit is kept under refs/office/rescued (T-350)', async () => {
+    const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir'), copy = path.join(gitDir, 'refs', 'stash 2');
+    const lone = sh(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit-tree', '-m', 'made on another Mac', '-p', tip, sh(repo, 'rev-parse', tip + '^{tree}'));
+    fs.writeFileSync(copy, lone + '\n');
+    const r = await review();
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.ok(!fs.existsSync(copy), 'the copy with a space is gone');
+    assert.strictEqual(sh(repo, 'rev-parse', 'refs/office/rescued/stash-2'), lone, 'its commit keeps a ref with a valid name');
+    assert.match(R.output(), /Moved .*refs\/stash 2.* to refs\/office\/rescued\/stash-2/);
+    await stop(r.body.id); await gone(r.body.checkout.id);
+    fs.writeFileSync(copy, lone + '\n');
+    const again = await review();
+    assert.strictEqual(again.status, 201, JSON.stringify(again.body));
+    assert.ok(!fs.existsSync(copy), 'a second copy of it is removed, since the rescued ref now reaches it');
+    await stop(again.body.id); await gone(again.body.checkout.id);
+    sh(repo, 'update-ref', '-d', 'refs/office/rescued/stash-2');
+  });
+  await t.test('a copy that holds no commit hash and no ref: line is kept and named in the error (T-350)', async () => {
+    const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir'), copy = path.join(gitDir, 'refs', 'stash 2');
+    fs.writeFileSync(copy, 'garbage\n');
+    const r = await review();
+    assert.strictEqual(r.body.error, 'fetch');
+    assert.ok(r.body.message.includes('The broken ref is the file ' + copy), r.body.message);
+    assert.strictEqual(fs.readFileSync(copy, 'utf8'), 'garbage\n', 'the relay cannot tell what it held, so it keeps it');
+    fs.rmSync(copy);
+    assert.strictEqual(refs(), '');
+  });
+  await t.test('a broken ref with a valid name is named in the error and kept (T-350)', async () => {
+    const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir'), broken = path.join(gitDir, 'refs', 'heads', 'broken');
+    fs.writeFileSync(broken, '0123456789012345678901234567890123456789\n');
+    const r = await review();
+    assert.strictEqual(r.body.error, 'fetch');
+    assert.match(r.body.message, /refs\/heads\/broken/);
+    assert.ok(r.body.message.includes(broken), 'it names the file');
+    assert.ok(fs.existsSync(broken), 'the relay does not remove a ref git could hold');
+    fs.rmSync(broken);
+    assert.strictEqual(refs(), '');
+  });
   await t.test('a follow-up review starts only when a push moved the PR, however the push was written (T-70)', async () => {
     const { pushedIn } = require('../office-hook.js');
     const terminals = async () => (await R.call('GET', '/terminals')).body.terminals.length;

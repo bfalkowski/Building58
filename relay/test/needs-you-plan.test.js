@@ -100,6 +100,18 @@ test('a PR Autopilot handed over: decide on it, with its reason', () => {
   assert.strictEqual(item.pr, PR);
 });
 
+test('a PR whose automatic review could not start: get a review, with the reason (T-350)', () => {
+  const why = 'Could not fetch https://github.com/o/r/pull/12: fatal: bad object refs/heads/x The broken ref is the file /r/.git/refs/heads/x.';
+  const [item] = listOf({ tasks: [task({ state: 'in_review', pr: PR, prOpen: true, reviewFailed: why })] });
+  assert.strictEqual(item.kind, 'review');
+  assert.strictEqual(item.line, 'Get a review of PR #12 (T-5): its automatic review could not start, and the relay stopped trying. ' + why);
+  assert.deepStrictEqual(item.link, { url: PR });
+  const dev = seat({ task: 'k1' });
+  assert.deepStrictEqual(listOf({ seats: [dev], tasks: [task({ owner: dev.terminal, state: 'waiting_on_you', pr: PR, reviewFailed: why })] })[0].link, { terminal: dev.terminal }, 'Get a review is on its Dev\'s session');
+  assert.deepStrictEqual(listOf({ tasks: [task({ state: 'in_review', pr: PR, reviewFailed: why, reviewRuns: true })] }), [], 'a review of it runs now');
+  assert.deepStrictEqual(listOf({ tasks: [task({ state: 'in_review', pr: PR, prOpen: false, reviewFailed: why })] }), [], 'not once it merged or closed');
+});
+
 // On 2026-11-19 Autopilot was off, and Needs you said Waiting for the review for #113 to #115 for hours,
 // though each review was posted with its verdict at 03:28 to 03:34 UTC. The line kept the reason of an old
 // stall hand-over. A review posted after the hand-over now gives the line its next step.
@@ -177,7 +189,7 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
 });
 
 // T-374: reviews waited for a desk, and every desk was held by a session the relay may not stop.

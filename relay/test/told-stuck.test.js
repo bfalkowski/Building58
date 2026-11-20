@@ -206,3 +206,26 @@ test('a relay that is stopping keeps the first prompt, for the session brought b
   assert.ok(delivery.pending('test').some((d) => d.key === 'first-prompt s1'), 'kept');
   delivery.drop('test', 'first-prompt s1');
 });
+
+// T-353: on 2026-11-19 room C typed review news into Oscar at 11:38:45, and its turn's first hook came
+// only at 11:38:50. Three seconds after Enter the relay saw an idle session and typed Autopilot's ask to
+// merge main too. Claude Code was still taking the first prompt, so the ask sat in its prompt box, unsent,
+// and the turn that began counted for it. So a second note waits until the first one's turn has begun
+// and ended.
+test('a second note waits until a turn began after the first one, and that turn ended', async () => {
+  const t = session('w1');
+  const first = tell(t, 'news w1', 'Review news for you.');
+  await until(() => typedTo('w1').length === 1, 'the first note');
+  const second = tell(t, 'ask w1', 'Merge main, please.');
+  await sleep(CHECK / 2);
+  assert.deepStrictEqual(typedTo('w1').map((x) => x.text), ['Review news for you.'], 'idle, but no turn began yet');
+  assert.strictEqual(delivery.pending('test').find((d) => d.key === 'ask w1').blocked, 'told');
+  assert.strictEqual(delivery.whyWaits('told'), 'the last message the relay typed into it has not started a turn yet');
+  startsTurn(t);
+  await sleep(200);
+  assert.strictEqual(typedTo('w1').length, 1, 'held while the turn runs');
+  endsTurn(t);
+  await until(() => typedTo('w1').length === 2, 'the second note once the turn ended');
+  assert.deepStrictEqual([first(), second()], [1, 1]);
+  startsTurn(t); endsTurn(t);
+});

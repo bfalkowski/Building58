@@ -27,6 +27,11 @@
 // list() is cached for RELAY_TICKET_CACHE_MS (10 seconds by default). After that the Board gets the
 // cached list at once while a new one is fetched, so a change made on GitHub shows a poll later.
 // What the relay writes through this store shows at once.
+//
+// A ticket's blockers cost one request each, so the store keeps what it read for each issue and reads
+// them again only when the issue's updated time or GitHub's blocker counts in the list have changed.
+// An update reads them fresh before it writes, so it never changes blockers from an old copy.
+// What the relay writes is kept the same way, with the time GitHub gave the write.
 'use strict';
 const { keepLines } = require('../clean.js');
 const { spawn } = require('child_process');
@@ -147,9 +152,14 @@ function open(options) {
     });
   }
   const dbIds = new Map();
-  async function blockersOf(repo, issue) {
+  const blockerReads = new Map();
+  const stampOf = (issue) => { const s = issue.issue_dependencies_summary || {}; return [issue.updated_at, s.total_blocked_by, s.blocked_by].join(' '); };
+  const remember = (repo, issue, blockers) => { blockerReads.set(repo + ' #' + issue.number, { stamp: stampOf(issue), blockers: blockers.slice() }); return blockers; };
+  async function blockersOf(repo, issue, fresh) {
     const s = issue.issue_dependencies_summary;
-    if (s && !s.total_blocked_by && !s.blocked_by) return [];
+    if (s && !s.total_blocked_by && !s.blocked_by) return remember(repo, issue, []);
+    const read = blockerReads.get(repo + ' #' + issue.number);
+    if (!fresh && read && issue.updated_at && read.stamp === stampOf(issue)) return read.blockers.slice();
     let list;
     try { list = await api('GET', '/repos/' + repo + '/issues/' + issue.number + '/dependencies/blocked_by?per_page=100'); } catch (e) {
       if (gone(e)) return [];
@@ -157,7 +167,7 @@ function open(options) {
     }
     const here = (list || []).filter((b) => sameRepo(b, repo));
     for (const b of here) dbIds.set(repo + ' #' + b.number, b.id);
-    return here.map((b) => b.number);
+    return remember(repo, issue, here.map((b) => b.number));
   }
   async function dbId(repo, n) {
     const key = repo + ' #' + n;
@@ -262,7 +272,7 @@ function open(options) {
       try {
         const extra = await setBlockers(repo, n, [], want);
         issue = await api('PATCH', '/repos/' + repo + '/issues/' + n, shape(ticket, labelNames(issue), extra, n));
-        return keep(project, ticketOf(issue, want.filter((id) => !extra.includes(id)).map(Number)));
+        return keep(project, ticketOf(issue, remember(repo, issue, want.filter((id) => !extra.includes(id)).map(Number))));
       } catch (e) {
         await api('PATCH', '/repos/' + repo + '/issues/' + n, { state: 'closed', state_reason: 'not_planned' }).catch(() => {});
         throw e;
@@ -274,7 +284,7 @@ function open(options) {
       let issue;
       try { issue = await api('GET', '/repos/' + repo + '/issues/' + id); } catch (e) { if (gone(e)) return null; throw e; }
       if (!isTicket(issue)) return null;
-      const now = await blockersOf(repo, issue);
+      const now = await blockersOf(repo, issue, true);
       const { id: _id, createdAt: _at, updatedAt: _up, ...rest } = changes;
       const ticket = Object.assign(ticketOf(issue, now), rest);
       const want = (ticket.blockedBy || []).map(String);
@@ -289,7 +299,7 @@ function open(options) {
       if (foreign) patch.body = (ticket.body ? ticket.body + '\n\n' : '') + foreign;
       await ensureLabels(repo, ourLabels(patch));
       const after = await api('PATCH', '/repos/' + repo + '/issues/' + issue.number, patch);
-      return keep(project, ticketOf(after, want.filter((b) => !extra.includes(b)).map(Number)));
+      return keep(project, ticketOf(after, remember(repo, after, want.filter((b) => !extra.includes(b)).map(Number))));
     }
   };
 }

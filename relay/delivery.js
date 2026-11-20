@@ -2,7 +2,8 @@
 // when relay/terminal.js says nothing is going on in that session, and the check runs right before
 // typing, because typed text can answer a permission prompt. It survives a relay restart, and finds a
 // session brought back with the same id. This is the only module that types a message into a session
-// for the relay, a first brief and a first prompt included. Refresh the Lead types its own steps.
+// for the relay, a first brief and a first prompt included. Refresh the Lead types its own steps, and
+// asks sendNow for the Lead's brief when the Lead still owes it.
 //
 //   save(channel, { key, terminal, sessionId, text, expiresAt, on, first, untilTurn, beforeTurn })  a new save with the same key replaces the old one
 //   save(channel, { key, to: 'lead', text, ... })                     for whichever session is the Lead when it is typed
@@ -12,6 +13,8 @@
 //   pending(channel)                                                  what is still waiting, for which session, since when, and why
 //   whyWaits(blocked)                                                 a pending message's reason, in plain words
 //   promptOnce(channel, terminal, text, done, was)                    a reviewer's, the PM's or the COO's first prompt (below)
+//   sendNow(channel, key, done)                                       types that one now, with the same checks, without waiting
+//                                                                     for the next round; returns why not, or null and done(problem) once typed
 //
 // `on` runs once: on ('delivered') or on ('expired', why). It is not saved, so after a restart a
 // delivery still goes in and nobody is told, unless its caller saves it again: a save that changes
@@ -42,7 +45,10 @@
 //
 // After a note goes in, the relay checks that the session took it up: that a hook said a turn began
 // within TOLD_CHECK. If not, it tries once more, or PROMPT_TRIES more for a first prompt (relay/terminal.js
-// nudge: Enter if the note still shows, or the note typed again), and checks again after each. If it still has not started, the session is stuck
+// nudge: Enter if the note still shows, or the note typed again), and checks again after each. For TOLD_HOLD
+// (RELAY_TOLD_HOLD_MS, 15 seconds) after a note goes in, nothing else is typed into that session unless a hook
+// says its turn began, and then the turn holds the rest: a hook can come seconds after Enter, and a note typed
+// then sits unsent in the prompt while the turn counts for it (T-353). If it still has not started, the session is stuck
 // (t.stuck: when it was told, and why where the relay can tell), the Floor says so, and the relay
 // stops trying and leaves it to the person. When a note goes in, t.toldAt says when, so the merge hold
 // (relay/merge-hold.js) can wait for a Dev told news whose turn has not begun yet (T-238). Nothing else is typed into a session while it is stuck. The note is saved again for that session id, so Bring back gets it, but a
@@ -63,7 +69,7 @@ const { claim } = require('./lockfile.js');
 const { TOLD_CHECK } = require('./stop-verdict.js');
 
 const FILE = state.file('deliveries.json', 'RELAY_DELIVERIES_FILE');
-const EVERY = 500;
+const EVERY = Number(process.env.RELAY_DELIVERY_EVERY_MS) >= 1 ? Number(process.env.RELAY_DELIVERY_EVERY_MS) : 500;
 const NEVER = 24 * 60 * 60 * 1000;
 
 const ownsFile = claim(FILE);
@@ -127,6 +133,7 @@ function pending(channel) {
 }
 
 const PROMPT_TRIES = 3;
+const TOLD_HOLD = Number(process.env.RELAY_TOLD_HOLD_MS) > 0 ? Number(process.env.RELAY_TOLD_HOLD_MS) : 15 * 1000;
 const READY_LIMIT = () => config.get('readyMinutes') * 60 * 1000;
 const watching = new Map();
 const stuckFns = [];
@@ -139,6 +146,7 @@ const WHY = {
 const WAITS = Object.assign({}, WHY, {
   ended: 'its session is not running', restarting: 'an update is restarting the relay', leaving: 'it is ending', working: 'it is in a turn',
   waiting: 'it waits on an answer', briefing: 'its first brief has not gone in yet', stuck: 'it is stuck on an earlier message',
+  told: 'the last message the relay typed into it has not started a turn yet',
 });
 const whyWaits = (blocked) => WAITS[blocked] || 'the relay cannot tell why';
 function whyStuck(t, text, problem) {
@@ -187,6 +195,8 @@ function heldBy(channel, t, d) {
   if (!t) return null;
   if (t.stuck) return 'stuck';
   if (!d.first && listOf(channel).some((x) => x.first && x !== d && targetOf(channel, x) === t)) return 'briefing';
+  const w = watching.get(t.id);
+  if (w && w.d.key !== d.key && !tookUp(t, w.at) && Date.now() - w.at < TOLD_HOLD) return 'told';
   return null;
 }
 function landing(channel, d, t) {
@@ -231,22 +241,38 @@ function pump() {
       const problem = terminal.notSafeToType(t, how(d));
       if (problem === 'no_prompt') redrawIfBlank(t, seen);
       if (problem) continue;
-      typing.add(t.id);
-      const at = Date.now();
-      terminal.typeIfSafe(t, d.text, () => listOf(channel).includes(d) && targetOf(channel, d) === t, (problem) => {
-        typing.delete(t.id);
-        if (problem || !listOf(channel).includes(d)) return;
-        t.toldAt = at;
-        watch(channel, d, t, at);
-        if (d.untilTurn) { d.typedAt = at; d.typedTo = t.id; persist(); return; }
-        remove(channel, d);
-        if (!d.heldFor) tell(channel, d.key, 'delivered');
-      }, how(d));
+      type(channel, d, t, () => {});
     }
   }
   for (const id of [...blankSince.keys()]) if (!seen.has(id)) blankSince.delete(id);
 }
+function type(channel, d, t, done) {
+  typing.add(t.id);
+  const at = Date.now();
+  terminal.typeIfSafe(t, d.text, () => listOf(channel).includes(d) && targetOf(channel, d) === t, (problem) => {
+    typing.delete(t.id);
+    if (problem || !listOf(channel).includes(d)) { done(problem || 'dropped'); return; }
+    t.toldAt = at;
+    watch(channel, d, t, at);
+    if (d.untilTurn) { d.typedAt = at; d.typedTo = t.id; persist(); done(null); return; }
+    remove(channel, d);
+    if (!d.heldFor) tell(channel, d.key, 'delivered');
+    done(null);
+  }, how(d));
+}
 setInterval(pump, EVERY).unref();
+function sendNow(channel, key, done) {
+  const d = listOf(channel).find((x) => x.key === key);
+  if (!d) return 'gone';
+  const t = targetOf(channel, d);
+  if (!t) return 'ended';
+  if (typing.has(t.id)) return 'busy_typing';
+  if (d.untilTurn && d.typedAt) return 'typed';
+  const problem = heldBy(channel, t, d) || terminal.notSafeToType(t, how(d));
+  if (problem) return problem;
+  type(channel, d, t, done);
+  return null;
+}
 
 const PROMPT_KEY = (id) => 'first-prompt ' + id;
 function promptOnce(channel, id, text, done, was) {
@@ -269,4 +295,4 @@ terminal.onEnd((channel, t, code, closing) => {
   tell(channel, d.key, 'expired', d.typedAt ? 'the session ended after its prompt was typed, before a hook said a turn began' : 'the session ended first');
 });
 
-module.exports = { save, drop, dropWhere, pending, whyWaits, onStuck, promptOnce, TOLD_CHECK, PROMPT_TRIES, REDRAW_EVERY };
+module.exports = { save, drop, dropWhere, pending, whyWaits, onStuck, promptOnce, sendNow, WHY, TOLD_CHECK, PROMPT_TRIES, REDRAW_EVERY };

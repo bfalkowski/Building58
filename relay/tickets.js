@@ -49,6 +49,8 @@ function labelsFrom(value, all, agent) {
 const MOVES = { triage: ['ready', 'rejected', 'done'], ready: ['rejected', 'done'], rejected: ['triage'] };
 const PR_LINK = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/[1-9]\d{0,9}$/;
 const MAX_TITLE = 80, MAX_BODY = 8000, MAX_TRIAGE = 20;
+const PM_PARTS = ['What to build', 'Acceptance criteria', 'Blocked by', 'Out of scope'];
+const partsMissing = (text) => PM_PARTS.filter((part) => !new RegExp('^[\\s#*_>-]*' + part + '\\b', 'im').test(text));
 const CLI = path.join(__dirname, 'ticket.js');
 
 function openStore() {
@@ -122,6 +124,8 @@ async function create(channel, body, agent) {
   if (title.length > MAX_TITLE) return [400, { ok: false, error: 'bad_title', message: 'Keep the title to ' + MAX_TITLE + ' characters.' }];
   const text = clean(body.body);
   if (text.length > MAX_BODY) return [400, { ok: false, error: 'bad_body', message: 'Keep the body to ' + MAX_BODY + ' characters.' }];
+  const missing = agent && agent.role === 'pm' ? partsMissing(text) : [];
+  if (missing.length) return [400, { ok: false, error: 'bad_body', message: 'A PM ticket\'s body has the parts What to build, Acceptance criteria, Blocked by and Out of scope, each at the start of its own line, such as "Blocked by: none". Missing: ' + missing.join(', ') + '.' }];
   const priority = body.priority === undefined ? 'normal' : String(body.priority);
   if (!PRIORITIES.includes(priority)) return [400, { ok: false, error: 'bad_priority', message: 'Priority is one of: ' + PRIORITIES.join(', ') + '.' }];
   const from = agent ? agent.cwd : terminal.expand(body.repo);
@@ -145,9 +149,11 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   if (error) return error;
   const { labels, error: badLabels } = labelsFrom(askedLabels, all, agent);
   if (badLabels) return badLabels;
-  const blockedBy = [...new Set((Array.isArray(asked) ? asked : []).map(String))];
+  const blockedBy = [...new Set((Array.isArray(asked) ? asked : []).map((id) => String(id).trim()))];
+  const spaced = blockedBy.filter((id) => /\s/.test(id));
+  if (spaced.length) return [400, { ok: false, error: 'bad_blocker', message: 'Separate blocker ids with commas, not spaces: --blocked-by ' + blockedBy.flatMap((id) => id.split(/[\s,]+/)).filter(Boolean).join(',') + '.' }];
   const unknown = blockedBy.filter((id) => !all.some((t) => t.id === id));
-  if (unknown.length) return [400, { ok: false, error: 'bad_blocker', message: 'No such ticket: ' + unknown.join(', ') + '.' }];
+  if (unknown.length) return [400, { ok: false, error: 'bad_blocker', message: 'No such ticket: ' + unknown.join(', ') + '. Run ticket.js list to see the ids, and give each one that exists, separated by commas.' }];
   const { shapes, error: badShapes } = shapesFrom(askedShapes, all, null);
   if (badShapes) return badShapes;
   const live = all.filter((t) => t.status !== 'done' && t.status !== 'rejected');

@@ -1,7 +1,8 @@
 // The Floor as the Lead sees it: each running session, with the name the relay gave it (relay/seats.js),
 // which the page shows too, its role, ticket and PR, its state, and whether it can be stopped. The Lead reads it with
 // node relay/ticket.js floor. It reads only what the relay already knows, so it interrupts nobody.
-// Whether each can be stopped comes from relay/stop-verdict.js.
+// Whether each can be stopped comes from relay/stop-verdict.js. Above the sessions it shows each base branch
+// whose latest CI run failed (relay/main-ci.js), with the run's link.
 //
 // A Lead the person let move the board can also stop one session, with node relay/ticket.js stop,
 // while the relay runs with RELAY_LEAD_STOPS=1 (article 3, a rung in article 5). The relay asks the
@@ -16,6 +17,8 @@ const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const chat = require('./chat.js');
 const pipeline = require('./pipeline.js');
+const mainCi = require('./main-ci.js');
+const { redMain } = require('./needs-you-plan.js');
 const { stopVerdict, leadMayStop, forReview } = require('./stop-verdict.js');
 const { deskOf, pairReviewers } = require('./desk.js');
 const { livenessOf, jobWords } = require('./liveness.js');
@@ -215,7 +218,7 @@ async function handle(req, res, channel, rest, ctx) {
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'The floor needs the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
-  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()), leadEnded: terminal.leadEndedOf(channel) }); return true; }
+  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()), leadEnded: terminal.leadEndedOf(channel), mainRed: mainCi.redOf(channel).map((m) => ({ branch: m.branch, repo: m.name, url: m.run.url || null, says: 'Red: ' + redMain(m) })) }); return true; }
   const body = await ctx.readJson(req);
   const [status, out] = ctx.agent ? stopOne(channel, body.who, ctx, Date.now()) : personStop(channel, body, ctx, Date.now());
   ctx.send(res, status, out);
