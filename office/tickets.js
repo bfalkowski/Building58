@@ -216,6 +216,7 @@
     const others = M.alsoWith(people, t.assignee);
     meta.textContent = [(t.priority || 'normal') + ' priority', t.kind ? 'kind ' + t.kind : 'no kind', M.labelsOf(t).length ? 'labels ' + M.labelsOf(t).join(', ') : '', orderedNote(t), t.createdBy, startedNote(t), state ? 'task ' + (STATE_WORDS[state] || state) : '', pipelineNote(t), waitsOnNote(t), window.officeTicketHistory ? window.officeTicketHistory.assigneeText(t) : '', others.length ? 'also with ' + others.join(', ') : '', (t.repo || 'no repo').split('/').pop(), t.base ? 'base ' + t.base : '', t.waitingFor.length ? 'waiting for ' + t.waitingFor.join(', ') : '', t.rejectedBlockers.length ? t.rejectedBlockers.join(', ') + ' was rejected' : '', after.length ? 'after ' + after.join(', ') : '', t.status === 'done' && !t.task && t.pr ? 'merged outside the room' : '', t.status === 'ready' && !t.approved ? 'not approved by you, so nothing starts it by itself' : '', (t.shapes || []).length ? 'shapes ' + t.shapes.join(', ') : '', (t.status === 'triage' || t.status === 'ready') && t.heldBack ? t.heldBack : ''].filter(Boolean).join(' · ');
     li.append(meta);
+    if (t.writeError) { const w = document.createElement('p'); w.className = 'write-error'; w.setAttribute('role', 'status'); w.textContent = t.writeError; li.append(w); }
     if (t.proposal) {
       const p = document.createElement('p'); p.className = 'proposal'; p.textContent = M.proposalText(t);
       const decide = document.createElement('div'); decide.className = 'card-actions';

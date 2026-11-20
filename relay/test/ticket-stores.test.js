@@ -149,3 +149,63 @@ test('github: a create that fails part way leaves no ticket and no open issue', 
   const fresh = github.open({ repo: 'p=o/r', gh: fakeGh, keyFile: path.join(s.dir, 'key') });
   assert.deepStrictEqual((await fresh.list('p')).map((t) => t.title), ['A']);
 });
+
+function failingPatches(clock) {
+  const d = fs.mkdtempSync(path.join(dir, 'github-'));
+  process.env.FAKE_GITHUB_DIR = d;
+  const s = github.open({ repo: 'p=o/r', gh: fakeGh, folder: '/home/repo', keyFile: path.join(d, 'key'), now: () => clock.at, retryMs: 15000, retryCapMs: 300000 });
+  s.calls = () => fs.readFileSync(path.join(d, 'calls.log'), 'utf8').trim().split('\n');
+  s.fail = (message) => fs.writeFileSync(path.join(d, 'fail.json'), JSON.stringify({ fail: message, match: '--method PATCH' }));
+  s.heal = () => fs.rmSync(path.join(d, 'fail.json'));
+  return s;
+}
+const quiet = async (fn) => { const err = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = err; } };
+
+test('github: a write that fails waits before its next try, so a read each second makes a few tries a minute, not one each', async () => {
+  const clock = { at: 1000000 };
+  const s = failingPatches(clock);
+  const t = await s.create('p', { title: 'A', status: 'started' });
+  s.fail('Resource not accessible by integration');
+  const before = s.calls().length;
+  for (let i = 0; i < 60; i++, clock.at += 1000) await quiet(() => s.update('p', t.id, { status: 'done' }).catch(() => {}));
+  const calls = s.calls().slice(before);
+  const patches = calls.filter((c) => c.includes('--method PATCH')).length;
+  assert.ok(patches >= 2 && patches <= 4, 'a few tries in the first minute, not 60: ' + patches);
+  assert.ok(calls.length <= patches * 4, 'a write that waits asks GitHub nothing: ' + calls.length + ' calls');
+});
+
+test('github: the waits between tries grow, and stop at the cap', async () => {
+  const clock = { at: 1000000 };
+  const s = failingPatches(clock);
+  const t = await s.create('p', { title: 'A', status: 'started' });
+  s.fail('Server Error');
+  const waits = [];
+  for (let i = 0; i < 8; i++) {
+    await quiet(() => s.update('p', t.id, { status: 'done' }).catch(() => {}));
+    const e = s.writeErrors('p')[0];
+    waits.push(e.nextAt - clock.at);
+    clock.at = e.nextAt;
+  }
+  assert.deepStrictEqual(waits, [15000, 30000, 60000, 120000, 240000, 300000, 300000, 300000]);
+});
+
+test('github: a write that fails is named with GitHub\'s message and the next try, and a write that later succeeds clears it', async () => {
+  const clock = { at: 1000000 };
+  const s = failingPatches(clock);
+  const t = await s.create('p', { title: 'A', status: 'started' });
+  s.fail('Resource not accessible by integration');
+  await quiet(() => assert.rejects(s.update('p', t.id, { status: 'done' }), /Resource not accessible by integration/));
+  const [e] = s.writeErrors('p');
+  assert.deepStrictEqual({ id: e.id, what: e.what, nextAt: e.nextAt, tries: e.tries }, { id: t.id, what: 'close issue #' + t.id, nextAt: clock.at + 15000, tries: 1 });
+  assert.match(e.message, /Resource not accessible by integration/);
+  assert.doesNotMatch(e.message, /gh api|--method|\/repos\//, 'GitHub\'s message, not the command');
+  await assert.rejects(s.update('p', t.id, { status: 'done' }), /next try/, 'a write that waits says when it tries again');
+  assert.strictEqual(s.writeErrors('p').length, 1, 'one line for the issue, however many reads');
+  assert.strictEqual((await s.list('p')).length, 1, 'reads keep working while a write waits');
+  assert.strictEqual((await s.get('p', t.id)).status, 'started');
+  s.heal();
+  clock.at += 15000;
+  assert.strictEqual((await s.update('p', t.id, { status: 'done' })).status, 'done');
+  assert.deepStrictEqual(s.writeErrors('p'), []);
+  assert.deepStrictEqual(s.writeErrors('other'), []);
+});

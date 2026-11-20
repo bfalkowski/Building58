@@ -127,6 +127,8 @@
       <tr><td><code>RELAY_TICKET_STORE</code></td><td class="plain"><code>local</code></td><td>Where tickets are kept: <code>local</code>, or the path to your own store module. See <a href="running.html#github-issues">Keeping tickets in GitHub issues</a>.</td></tr>
       <tr><td><code>RELAY_TICKET_REPO</code></td><td class="plain">none</td><td>The GitHub store: the repo that keeps each channel's tickets, as <code>owner/repo</code> or <code>office=owner/repo,demo=owner/other</code>.</td></tr>
       <tr><td><code>RELAY_TICKET_CACHE_MS</code></td><td class="plain"><code>10000</code></td><td>The GitHub store: how long a fetched list is used before it is fetched again.</td></tr>
+      <tr><td><code>RELAY_TICKET_RETRY_MS</code></td><td class="plain"><code>15000</code></td><td>The GitHub store: how long a write to an issue waits after it first fails. Each next failure waits twice as long (see <a href="running.html#github-write-fails">When a write to GitHub fails</a>).</td></tr>
+      <tr><td><code>RELAY_TICKET_RETRY_CAP_MS</code></td><td class="plain"><code>300000</code></td><td>The GitHub store: the longest wait between two tries of a failed write.</td></tr>
       <tr><td><code>RELAY_TICKET_FOLDER</code></td><td class="plain">the repo folder that holds the relay</td><td>The GitHub store: where a ticket filed on GitHub, or one whose note does not check, is worked on.</td></tr>
       <tr><td><code>RELAY_TICKET_KEY_FILE</code></td><td class="plain"><code>github-store.key</code> in the state folder</td><td>The GitHub store: the key that signs each ticket's hidden note.</td></tr>
     </tbody>

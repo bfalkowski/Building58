@@ -27,8 +27,13 @@
 // list() is cached for RELAY_TICKET_CACHE_MS (10 seconds by default). After that the Board gets the
 // cached list at once while a new one is fetched, so a change made on GitHub shows a poll later.
 // What the relay writes through this store shows at once.
+//
+// A write to an issue that fails waits before its next try: RELAY_TICKET_RETRY_MS (15 seconds) after the
+// first failure, then twice as long each time, up to RELAY_TICKET_RETRY_CAP_MS (5 minutes). A write in that
+// wait asks GitHub nothing and fails at once. writeErrors(project) names each issue whose last write failed:
+// { id, what, message, tries, at, nextAt }, where message is what GitHub said. A write that goes through clears it.
 'use strict';
-const { keepLines } = require('../clean.js');
+const { keepLines, oneLine } = require('../clean.js');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -64,6 +69,9 @@ function open(options) {
   const ttl = Number(o.cacheMs !== undefined ? o.cacheMs : process.env.RELAY_TICKET_CACHE_MS || 10000);
   const TTL = Number.isFinite(ttl) && ttl >= 0 ? ttl : 10000;
   const repoOf = (project) => map.get(project) || null;
+  const msOf = (v, env, def) => { const n = Number(v !== undefined ? v : process.env[env] || def); return Number.isFinite(n) && n >= 0 ? n : def; };
+  const RETRY = msOf(o.retryMs, 'RELAY_TICKET_RETRY_MS', 15000), CAP = msOf(o.retryCapMs, 'RELAY_TICKET_RETRY_CAP_MS', 300000);
+  const clock = o.now || Date.now;
   const FOLDER = o.folder || process.env.RELAY_TICKET_FOLDER || path.resolve(__dirname, '..', '..');
   const KEY_FILE = o.keyFile || state.file('github-store.key', 'RELAY_TICKET_KEY_FILE');
   let key = null;
@@ -100,6 +108,7 @@ function open(options) {
           const m = /HTTP (\d{3})/.exec(err);
           const e = new Error('gh api ' + method + ' ' + route + ': ' + (err.trim() || 'exit ' + code));
           e.status = m ? Number(m[1]) : 0;
+          e.github = err.trim().replace(/^gh: /, '');
           return reject(e);
         }
         try { resolve(out.trim() ? JSON.parse(out) : null); } catch (e) { reject(new Error('gh api ' + route + ' did not print JSON')); }
@@ -227,6 +236,30 @@ function open(options) {
     };
   }
   const warned = new Set();
+  const failed = new Map();
+  const failsOf = (project) => { if (!failed.has(project)) failed.set(project, new Map()); return failed.get(project); };
+  const whatOf = (changes, n) => (changes.status === 'done' || changes.status === 'rejected' ? 'close' : changes.status ? 'move' : 'update') + ' issue #' + n;
+  const secondsTo = (at) => { const s = Math.max(1, Math.ceil((at - clock()) / 1000)); return s < 120 ? s + (s === 1 ? ' second' : ' seconds') : Math.round(s / 60) + ' minutes'; };
+  function waiting(f) {
+    const e = new Error('The relay could not ' + f.what + ' on GitHub: ' + f.message + ' Its next try is in ' + secondsTo(f.nextAt) + '.');
+    e.waits = true;
+    return e;
+  }
+  async function written(project, id, changes, write) {
+    const fails = failsOf(project), key = String(id), was = fails.get(key);
+    if (was && clock() < was.nextAt) throw waiting(was);
+    try {
+      const out = await write();
+      fails.delete(key);
+      return out;
+    } catch (e) {
+      if (e.refused) throw e;
+      const tries = (was ? was.tries : 0) + 1, at = clock();
+      const message = oneLine(e.github || e.message, 300).replace(/([^.!?])$/, '$1.');
+      fails.set(key, { id: key, what: whatOf(changes, key), message, tries, at, nextAt: at + Math.min(CAP, RETRY * 2 ** (tries - 1)) });
+      throw e;
+    }
+  }
   const ourLabels = (patch) => patch.labels.filter((l) => l.startsWith('office:'));
 
   return {
@@ -268,29 +301,36 @@ function open(options) {
         throw e;
       }
     },
+    writeErrors(project) {
+      return [...failsOf(project).values()].sort((a, b) => Number(a.id) - Number(b.id)).map((f) => Object.assign({}, f));
+    },
     async update(project, id, changes) {
       const repo = repoOf(project);
       if (!repo || !isNumber(id)) return null;
-      let issue;
-      try { issue = await api('GET', '/repos/' + repo + '/issues/' + id); } catch (e) { if (gone(e)) return null; throw e; }
-      if (!isTicket(issue)) return null;
-      const now = await blockersOf(repo, issue);
-      const { id: _id, createdAt: _at, updatedAt: _up, ...rest } = changes;
-      const ticket = Object.assign(ticketOf(issue, now), rest);
-      const want = (ticket.blockedBy || []).map(String);
-      const foreign = foreignNote(issue);
-      if (foreign) {
-        const held = Object.keys(rest).filter((k) => !NATIVE.includes(k)).concat('blockedBy' in rest && want.some((b) => !isNumber(b)) ? ['blockedBy'] : []);
-        if (held.length) throw new Error('Issue #' + issue.number + ' has a note this relay\'s key did not sign, so its ' + held.join(', ') + ' cannot change. Check RELAY_TICKET_KEY_FILE, or take the note out of the issue.');
-        if (!warned.has(repo + ' #' + issue.number)) { warned.add(repo + ' #' + issue.number); console.error('Ticket store (github): issue #' + issue.number + ' has a note this relay\'s key did not sign. It is kept as it is, and the ticket works in ' + FOLDER + '.'); }
-      }
-      const extra = 'blockedBy' in rest ? await setBlockers(repo, issue.number, now, want) : want.filter((b) => !now.includes(Number(b)));
-      const patch = shape(ticket, labelNames(issue), extra, issue.number);
-      if (foreign) patch.body = (ticket.body ? ticket.body + '\n\n' : '') + foreign;
-      await ensureLabels(repo, ourLabels(patch));
-      const after = await api('PATCH', '/repos/' + repo + '/issues/' + issue.number, patch);
-      return keep(project, ticketOf(after, want.filter((b) => !extra.includes(b)).map(Number)));
+      return written(project, id, changes, () => write(project, repo, id, changes));
     }
   };
+
+  async function write(project, repo, id, changes) {
+    let issue;
+    try { issue = await api('GET', '/repos/' + repo + '/issues/' + id); } catch (e) { if (gone(e)) return null; throw e; }
+    if (!isTicket(issue)) return null;
+    const now = await blockersOf(repo, issue);
+    const { id: _id, createdAt: _at, updatedAt: _up, ...rest } = changes;
+    const ticket = Object.assign(ticketOf(issue, now), rest);
+    const want = (ticket.blockedBy || []).map(String);
+    const foreign = foreignNote(issue);
+    if (foreign) {
+      const held = Object.keys(rest).filter((k) => !NATIVE.includes(k)).concat('blockedBy' in rest && want.some((b) => !isNumber(b)) ? ['blockedBy'] : []);
+      if (held.length) throw Object.assign(new Error('Issue #' + issue.number + ' has a note this relay\'s key did not sign, so its ' + held.join(', ') + ' cannot change. Check RELAY_TICKET_KEY_FILE, or take the note out of the issue.'), { refused: true });
+      if (!warned.has(repo + ' #' + issue.number)) { warned.add(repo + ' #' + issue.number); console.error('Ticket store (github): issue #' + issue.number + ' has a note this relay\'s key did not sign. It is kept as it is, and the ticket works in ' + FOLDER + '.'); }
+    }
+    const extra = 'blockedBy' in rest ? await setBlockers(repo, issue.number, now, want) : want.filter((b) => !now.includes(Number(b)));
+    const patch = shape(ticket, labelNames(issue), extra, issue.number);
+    if (foreign) patch.body = (ticket.body ? ticket.body + '\n\n' : '') + foreign;
+    await ensureLabels(repo, ourLabels(patch));
+    const after = await api('PATCH', '/repos/' + repo + '/issues/' + issue.number, patch);
+    return keep(project, ticketOf(after, want.filter((b) => !extra.includes(b)).map(Number)));
+  }
 }
 module.exports = { open, repos };

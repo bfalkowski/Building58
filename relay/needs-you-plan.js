@@ -4,7 +4,8 @@
 // list, so all three agree. A plain function with no side effects, so the tests run it without a relay.
 // See docs/manual/roles.html#needs-you.
 //
-//   listOf({ seats, tasks, waits, relays, desks }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
+//   listOf({ seats, tasks, waits, relays, desks, writes }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
+//   writeLine(write) -> the line for one GitHub write that failed, which the ticket's card shows too
 //
 // A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh, continuing },
 // where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
@@ -20,6 +21,8 @@
 // why }, where terminal is the running session it is for, and why says in plain words what holds it.
 // A relay is another relay on this room's state folder (relay/old-relays.js): { pid, file, port, started, paused, worker }.
 // desks is reviews that wait for a desk while the relay may stop no session: { prs, taken }, the longest wait first.
+// A write is one ticket whose last write to the GitHub ticket store failed (relay/ticket-stores/github.js):
+// { id, what, message, inMs }, where message is what GitHub said and inMs is the time to the next try.
 //
 // One rule for each kind. A session gives at most one item, and so does a task. A task whose Dev already has an
 // item gives none, since answering the Dev is the one move. The kinds, most urgent first:
@@ -27,6 +30,7 @@
 //   permission   a session waits on the person, and its message asks for permission
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   desks        reviews wait for a desk, and the relay may stop none of the sessions that hold them all
+//   ticket-write the last write to a ticket's GitHub issue failed, until a write to it goes through
 //   merge        an open PR that only the person may merge
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
 //                with the next step a review posted after it gives
@@ -43,7 +47,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'ticket-write', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -102,6 +106,13 @@ function desksItem(d) {
     line: 'Stop a session to free a desk: the review' + (prs.length > 1 ? 's of PR ' + list + ' wait' : ' of PR ' + list + ' waits') + ' for one. All ' + taken + ' desks are taken, and the relay may stop none of them. ' + MAY_STOP, link: {} };
 }
 
+function writeLine(w) {
+  const ms = Number(w.inMs), s = Math.ceil(ms / 1000);
+  const when = !(ms > 0) ? 'at the next write' : s < 120 ? 'in ' + s + (s === 1 ? ' second' : ' seconds') : 'in ' + Math.round(s / 60) + ' minutes';
+  const said = oneLine(w.message, 300).replace(/([^.!?])$/, '$1.');
+  return 'Fix what stops a GitHub write: the relay could not ' + oneLine(w.what, 60) + '. GitHub says: ' + said + ' It tries again ' + when + '.';
+}
+
 function listOf(input) {
   const seats = (input && input.seats) || [], tasks = ((input && input.tasks) || []).filter((t) => t && t.state !== 'done');
   const items = [], covered = new Set();
@@ -135,7 +146,11 @@ function listOf(input) {
   }
   const desks = desksItem(input && input.desks);
   if (desks) items.push(desks);
+  for (const w of (input && input.writes) || []) {
+    if (!w || !/^[\w.-]{1,20}$/.test(String(w.id))) continue;
+    items.push({ kind: 'ticket-write', who: 'the relay', terminal: null, task: null, ticket: String(w.id), pr: null, line: writeLine(w), link: { ticket: String(w.id) } });
+  }
   return items.map((it, i) => [it, i]).sort((a, b) => KINDS.indexOf(a[0].kind) - KINDS.indexOf(b[0].kind) || a[1] - b[1]).map((x) => x[0]);
 }
 
-module.exports = { listOf, KINDS };
+module.exports = { listOf, writeLine, KINDS };

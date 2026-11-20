@@ -376,6 +376,32 @@ test('a ticket filed on GitHub with only a label lists, works in the relay\'s fo
   assert.ok(issue.labels.includes('office:started'));
   assert.match(issue.body, /"repo":"[^"]+","createdBy":"someone on GitHub","sig":"[0-9a-f]{32}"/, 'the relay signs the folder it chose');
 });
+test('a GitHub write that fails: the Board still reads, the card and Needs you name it once, and a later write clears it', async (t) => {
+  const env = githubEnv(), fakeDir = env.FAKE_GITHUB_DIR;
+  const R = await H.relay({ RELAY_WIP_LIMIT: '2', RELAY_TICKET_STORE: path.join(__dirname, '..', 'ticket-stores', 'github.js'), RELAY_TICKET_RETRY_MS: '400', ...env });
+  t.after(R.stop);
+  R.repo = H.makeRepo(R.home);
+  const a = (await R.call('POST', '/tickets', { title: 'Close me', repo: R.repo })).body.ticket;
+  const task = (await R.call('POST', '/tickets/' + a.id + '/start', {})).body.task;
+  await R.call('POST', '/terminals/' + task.worker.terminal + '/stop', {});
+  await until(async () => !(await R.call('GET', '/tasks/' + task.id)).body.task.worker, 'the worker to go');
+  fs.writeFileSync(path.join(fakeDir, 'fail.json'), JSON.stringify({ fail: 'Resource not accessible by integration', match: '--method PATCH' }));
+  await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' });
+  for (let i = 0; i < 3; i++) {
+    const board = await R.call('GET', '/tickets');
+    assert.strictEqual(board.status, 200, 'the Board reads while a write waits: ' + JSON.stringify(board.body));
+    const card = board.body.tickets.find((x) => x.id === a.id);
+    assert.strictEqual(card.status, 'started');
+    assert.match(card.writeError, /^Fix what stops a GitHub write: the relay could not close issue #1\. GitHub says: Resource not accessible by integration \(HTTP 500\)\. It tries again /);
+  }
+  const needs = (await R.call('GET', '/needs-you')).body.items.filter((i) => i.kind === 'ticket-write');
+  assert.strictEqual(needs.length, 1, 'one line for the issue');
+  assert.deepStrictEqual([needs[0].ticket, needs[0].link], [a.id, { ticket: a.id }]);
+  fs.rmSync(path.join(fakeDir, 'fail.json'));
+  await until(async () => (await R.call('GET', '/tickets')).body.tickets.find((x) => x.id === a.id).status === 'done', 'a later read to close the issue');
+  assert.strictEqual((await R.call('GET', '/tickets')).body.tickets.find((x) => x.id === a.id).writeError, null);
+  assert.deepStrictEqual((await R.call('GET', '/needs-you')).body.items.filter((i) => i.kind === 'ticket-write'), []);
+});
 test('a plain New task counts against the limit too', async (t) => {
   const R = await relay(); t.after(R.stop);
   for (const title of ['One', 'Two']) assert.strictEqual((await R.call('POST', '/tasks', { title, repo: R.repo })).status, 201);

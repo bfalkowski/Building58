@@ -11,7 +11,8 @@
 // report (relay/huddles.js), when they have looked; reviews that wait for a desk the relay could not free
 // (relay/reviews.js); and each saved message (relay/delivery.js) that has waited
 // UNDELIVERED for a running session, unless that session is in a turn, waits on an answer, or has ended; and
-// each other relay on this room's state folder (relay/old-relays.js). The
+// each other relay on this room's state folder (relay/old-relays.js); and each ticket whose last write to the
+// GitHub ticket store failed (relay/tickets.js). The
 // huddle counts its headline from the same list, and boardOf gives the Board each task's item, so its Waiting
 // on you column holds the tickets the list names.
 //
@@ -81,7 +82,7 @@ function stateOf(channel, now, lastReport) {
     .filter((d) => d.target && !d.typed && d.blocked && !NOT_STUCK.has(d.blocked) && d.savedAt && now - d.savedAt > UNDELIVERED)
     .sort((a, b) => a.savedAt - b.savedAt)
     .map((d) => ({ terminal: d.target, who: chat.nameOf(terminal.find(channel, d.target)), minutes: Math.floor((now - d.savedAt) / 60000), why: delivery.whyWaits(d.blocked) }));
-  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel) };
+  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), writes: require('./tickets.js').writeErrors(channel, now) };
 }
 
 async function handle(req, res, channel, rest, ctx) {

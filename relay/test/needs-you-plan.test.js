@@ -2,7 +2,7 @@
 // What needs the person (relay/needs-you-plan.js), one kind of item at a time, from plain state.
 const test = require('node:test');
 const assert = require('node:assert');
-const { listOf, KINDS } = require('../needs-you-plan.js');
+const { listOf, KINDS, writeLine } = require('../needs-you-plan.js');
 
 const PR = 'https://github.com/o/r/pull/12';
 const seat = (o) => Object.assign({ terminal: 'aaaaaaaaaaaa', who: 'Ada', role: 'Dev', live: 'idle', cause: null, message: null, screen: null, task: null, stuckWhy: null }, o);
@@ -189,7 +189,7 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'ticket-write', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
 });
 
 // T-374: reviews waited for a desk, and every desk was held by a session the relay may not stop.
@@ -224,4 +224,16 @@ test('text from a session is cleaned to one line', () => {
   const [item] = listOf({ seats: [seat({ who: 'A\nda', live: 'waiting', message: 'Claude needs your permission\n\u0007to use Bash' })] });
   assert.strictEqual(item.who, 'A da');
   assert.strictEqual(item.line, 'Approve or deny the request from A da: Claude needs your permission to use Bash');
+});
+
+test('a GitHub write that failed: one line for the issue, with GitHub\'s message and the next try, after the desks', () => {
+  const writes = [{ id: '68', what: 'close issue #68', message: 'Resource not accessible\nby integration.', tries: 3, inMs: 239000 }];
+  const items = listOf({ seats: [], tasks: [task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })], desks: { prs: [PR], taken: 9 }, writes });
+  assert.deepStrictEqual(kinds(items), ['desks', 'ticket-write', 'merge']);
+  assert.deepStrictEqual(items[1], { kind: 'ticket-write', who: 'the relay', terminal: null, task: null, ticket: '68', pr: null,
+    line: 'Fix what stops a GitHub write: the relay could not close issue #68. GitHub says: Resource not accessible by integration. It tries again in 4 minutes.',
+    link: { ticket: '68' } });
+  assert.strictEqual(writeLine({ what: 'move issue #3', message: 'Bad', inMs: 900 }), 'Fix what stops a GitHub write: the relay could not move issue #3. GitHub says: Bad. It tries again in 1 second.');
+  assert.match(writeLine({ what: 'update issue #3', message: 'x', inMs: -5 }), /It tries again at the next write\.$/, 'a wait that is over says so');
+  assert.deepStrictEqual(listOf({ writes: [null, { id: 'x\n1' }] }), [], 'only a write with an issue gets a line');
 });
