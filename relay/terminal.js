@@ -608,6 +608,7 @@ const NOT_NOW = { typing: 'You have text typed in the Lead\'s prompt. Send it or
 function startRefresh(channel) {
   const t = leadOf(channel);
   if (t && t.refresh) return [409, { ok: false, error: 'refreshing', message: 'The Lead is already being refreshed.' }];
+  if (t && !t.exited && !t.stopped && t.owesBrief) return briefNow(channel, t);
   const unsafe = t ? notSafeToType(t) : null;
   const why = leadRefresh.canStart(refreshView(t)) || (unsafe && (NOT_NOW[unsafe] || 'The Lead cannot take a prompt right now. Try again in a moment.'));
   if (why) return [409, { ok: false, error: 'not_now', message: why }];
@@ -615,6 +616,20 @@ function startRefresh(channel) {
   t.refreshTimer = setTimeout(() => { if (t.refresh) endRefresh(t, 'The refresh took more than ' + leadRefresh.LIMIT_MS / 60000 + ' minutes, so it stopped. Look at the Lead.', false); }, leadRefresh.LIMIT_MS);
   typeForRefresh(t, leadRefresh.NOTES_PROMPT, () => {});
   return [200, { ok: true, refresh: 'notes' }];
+}
+const BRIEF_NOT_NOW = {
+  working: 'it is busy, and it gets the brief when its turn ends', waiting: 'it is waiting on you. Answer it first',
+  restarting: 'the relay is restarting for an update', stuck: 'it did not start on what the relay last typed. Look at its screen',
+  ended: 'its session has ended', busy_typing: 'the relay is typing into it right now. Try again in a moment',
+  typed: 'the brief is typed and waits for its turn to begin',
+};
+const whyNoBrief = (problem) => delivery().WHY[problem] || BRIEF_NOT_NOW[problem] || 'the relay cannot type into it right now';
+function briefNow(channel, t) {
+  const done = (problem) => { if (problem && t.owesBrief) endRefresh(t, 'The relay did not finish typing the Lead\'s brief: ' + whyNoBrief(problem) + '. It types it once that is safe.', false); };
+  let problem = delivery().sendNow(channel, BRIEF_KEY, done);
+  if (problem === 'gone') { briefLead(channel, t); problem = delivery().sendNow(channel, BRIEF_KEY, done); }
+  if (problem) return [409, { ok: false, error: 'brief_not_now', reason: problem, message: 'The Lead has not had its brief, and the relay cannot type it now: ' + whyNoBrief(problem) + '.' }];
+  return [200, { ok: true, refresh: null, brief: true, message: 'The Lead had not had its brief, so the relay is typing it now. The refresh stops there. Press Refresh the Lead again later if the Lead still needs it.' }];
 }
 function stopRefresh(channel) {
   const t = [...termsOf(channel).values()].find((x) => x.refresh);

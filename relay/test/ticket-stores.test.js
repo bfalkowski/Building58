@@ -73,6 +73,50 @@ test('github: blockers are issue dependencies, and the rest is hidden in the bod
   assert.deepStrictEqual(s.state().issues[1].blockedBy, []);
   assert.deepStrictEqual((await s.get('p', b.id)).blockedBy, []);
 });
+test('github: blockers are read again only when the issue changed, so a refresh costs one list request', async (t) => {
+  const s = onGithub();
+  const f = { body: '', status: 'ready', priority: 'normal' };
+  const a = await s.create('p', { ...f, title: 'A', blockedBy: [] });
+  await s.create('p', { ...f, title: 'B', blockedBy: [a.id] });
+  const c = await s.create('p', { ...f, title: 'C', blockedBy: [] });
+  const clock = { now: Date.now() };
+  t.mock.method(Date, 'now', () => clock.now);
+  const fresh = github.open({ repo: 'p=o/r', gh: fakeGh, cacheMs: 1000, keyFile: path.join(s.dir, 'key') });
+  const file = path.join(s.dir, 'state.json');
+  const edit = (fn) => { const st = JSON.parse(fs.readFileSync(file, 'utf8')); fn((n) => st['o/r'].issues.find((i) => i.number === n)); fs.writeFileSync(file, JSON.stringify(st)); };
+  const reads = () => fs.readFileSync(path.join(s.dir, 'calls.log'), 'utf8').split('\n').filter((l) => /GET \S+\/dependencies\/blocked_by/.test(l)).length;
+  const blockers = (l) => l.map((x) => [x.id, x.blockedBy]);
+  // A title the test changes on its own, with no new updated time, marks when a refresh has ended.
+  let round = 0;
+  const refresh = async () => {
+    const mark = 'A' + ++round;
+    edit((issue) => { issue(1).title = mark; });
+    clock.now += 2000;
+    return until(async () => { const l = await fresh.list('p'); return l[0].title === mark && l; }, 'refresh ' + round);
+  };
+  assert.deepStrictEqual(blockers(await fresh.list('p')), [['1', []], ['2', ['1']], ['3', []]]);
+  const before = reads();
+  await refresh();
+  await refresh();
+  assert.strictEqual(reads(), before, 'no issue changed, so no blocker is read again');
+
+  edit((issue) => { issue(2).blockedBy = [issue(3).id]; issue(2).updated_at = '2099-01-01T00:00:00Z'; });
+  assert.deepStrictEqual(blockers(await refresh()), [['1', []], ['2', ['3']], ['3', []]], 'a blocker changed on GitHub shows once its updated time moves');
+
+  assert.deepStrictEqual((await fresh.update('p', c.id, { blockedBy: [a.id] })).blockedBy, ['1']);
+  assert.deepStrictEqual(blockers(await fresh.list('p')), [['1', []], ['2', ['3']], ['3', ['1']]], 'a blocker set through the relay shows at once');
+  const settled = reads();
+  assert.deepStrictEqual(blockers(await refresh()), [['1', []], ['2', ['3']], ['3', ['1']]], 'and the next list agrees');
+  assert.strictEqual(reads(), settled, 'what the relay wrote is not read back');
+
+  edit((issue) => { issue(2).blockedBy.push(issue(1).id); });
+  assert.deepStrictEqual(blockers(await refresh())[1], ['2', ['3', '1']], 'a blocker added on GitHub shows when the counts change, even with the same updated time');
+
+
+  edit((issue) => { issue(3).blockedBy = [issue(2).id]; });  // swapped on GitHub: same count, same updated time
+  await fresh.update('p', c.id, { blockedBy: [] });
+  assert.deepStrictEqual(s.state().issues[2].blockedBy, [], 'a write reads the blockers fresh, so it takes off the ones GitHub has');
+});
 test('github: an issue filed on GitHub is a ticket once it has a room label, and a cached list catches up', async () => {
   process.env.FAKE_GITHUB_DIR = fs.mkdtempSync(path.join(dir, 'github-'));
   const s = github.open({ repo: 'p=o/r', gh: fakeGh, cacheMs: 0, folder: '/home/repo', keyFile: path.join(process.env.FAKE_GITHUB_DIR, 'key') });
