@@ -13,7 +13,8 @@
 //   - Was the Dev told something (t.toldAt, set by relay/delivery.js when it types a note) after its
 //     last turn began (t.turnAt)? Then the review news is delivered, so task.reviews.pending is empty,
 //     but its hooks still say idle until its UserPromptSubmit hook comes, about a second later, and it is
-//     not stuck until RELAY_TOLD_CHECK_MS has passed (T-238). It is about to start, so wait.
+//     not stuck until RELAY_TOLD_CHECK_MS has passed (T-238). It is about to start, so wait, but only for
+//     RELAY_TOLD_HOLD_MS, the time delivery itself gives a note to start a turn before it types another.
 //   - Does its checkout hold uncommitted changes, or commits that are on no remote? Then the PR does
 //     not hold them.
 // holdOf(task, dev, now) -> null, or { act, why }, with a reason word when act is 'person'. act is 'wait'
@@ -24,6 +25,7 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { livenessOf, jobWords } = require('./liveness.js');
 const config = require('./config.js');
+const { TOLD_HOLD } = require('./stop-verdict.js');
 
 function unsavedWork(dir) {
   const git = (...args) => execFileSync('git', ['-C', dir].concat(args), { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -40,7 +42,7 @@ const unseen = (r) => !!r.posted && !r.posted.seen && config.get('reviewPollSeco
 const busy = (lv, dev) => ({ working: 'is working', quiet: 'is in a turn', waiting: 'is at a question', job: 'is running a job (' + jobWords(dev) + ')',
   stuck: lv.cause === 'told' ? 'has not started on what it was told' : 'is in a turn with no hook' })[lv.state] || null;
 
-const toldSinceTurn = (dev) => (dev.toldAt || 0) > (dev.turnAt || 0);
+const toldSinceTurn = (dev, now) => (dev.toldAt || 0) > (dev.turnAt || 0) && now - dev.toldAt < TOLD_HOLD;
 
 function holdOf(task, dev, now, unsaved = unsavedWork) {
   const lv = livenessOf(dev, now);
@@ -50,7 +52,7 @@ function holdOf(task, dev, now, unsaved = unsavedWork) {
   const news = r.pending;
   if (news && !gone) return { act: 'wait', why: 'Its Dev has not been told of the latest review yet.' };
   if (busy(lv, dev)) return { act: 'wait', why: 'Its Dev ' + busy(lv, dev) + ', maybe still answering the latest review, so the PR may not hold every fix yet.' };
-  if (!gone && toldSinceTurn(dev)) return { act: 'wait', why: 'Its Dev was told something and has not started on it yet, so the PR may not hold every fix yet.' };
+  if (!gone && toldSinceTurn(dev, now)) return { act: 'wait', why: 'Its Dev was told something and has not started on it yet, so the PR may not hold every fix yet.' };
   const dir = task.worktree || (dev && dev.cwd);
   const left = dir && fs.existsSync(dir) ? unsaved(dir) : null;
   if (left) return { act: 'person', reason: 'work-left-out', why: 'Its Dev ' + (gone ? 'has ended' : 'stopped') + ', but ' + left + ', so the PR does not hold all its work.' };

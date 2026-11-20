@@ -66,7 +66,7 @@ const state = require('./state.js');
 const terminal = require('./terminal.js');
 const config = require('./config.js');
 const { claim } = require('./lockfile.js');
-const { TOLD_CHECK } = require('./stop-verdict.js');
+const { TOLD_CHECK, TOLD_HOLD } = require('./stop-verdict.js');
 
 const FILE = state.file('deliveries.json', 'RELAY_DELIVERIES_FILE');
 const EVERY = Number(process.env.RELAY_DELIVERY_EVERY_MS) >= 1 ? Number(process.env.RELAY_DELIVERY_EVERY_MS) : 500;
@@ -133,7 +133,6 @@ function pending(channel) {
 }
 
 const PROMPT_TRIES = 3;
-const TOLD_HOLD = Number(process.env.RELAY_TOLD_HOLD_MS) > 0 ? Number(process.env.RELAY_TOLD_HOLD_MS) : 15 * 1000;
 const READY_LIMIT = () => config.get('readyMinutes') * 60 * 1000;
 const watching = new Map();
 const stuckFns = [];
