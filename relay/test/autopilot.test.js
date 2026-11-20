@@ -389,6 +389,9 @@ test('a Dev reply with the hold mark sends a merge-verdict PR to the person, eve
   await R.call('POST', '/autopilot', { on: false });
   await R.call('POST', '/tasks/' + x.id + '/move', { to: 'in_review' });
   assert.deepStrictEqual(await decisions(), []);
+  // T-234: the hold works once. Given back, the task merges on the same merge verdict, since it still covers the head.
+  await R.call('POST', '/autopilot', { on: true, only: ticket.id });
+  await until(() => merged().includes(PR + ' --merge --match-head-commit ' + head), 'the merge on the verdict the Dev disputed');
 });
 
 // T-303: on PR 45 the Dev held the PR, the person answered, the Dev pushed the fix, and a review of the new
