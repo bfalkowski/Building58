@@ -427,7 +427,7 @@ test('automatic PR review', async (t) => {
   });
   await t.test('a copy that holds the only pointer to a commit is kept under refs/office/rescued (T-350)', async () => {
     const gitDir = sh(repo, 'rev-parse', '--absolute-git-dir'), copy = path.join(gitDir, 'refs', 'stash 2');
-    const lone = sh(repo, 'commit-tree', '-m', 'made on another Mac', '-p', tip, sh(repo, 'rev-parse', tip + '^{tree}'));
+    const lone = sh(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit-tree', '-m', 'made on another Mac', '-p', tip, sh(repo, 'rev-parse', tip + '^{tree}'));
     fs.writeFileSync(copy, lone + '\n');
     const r = await review();
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
