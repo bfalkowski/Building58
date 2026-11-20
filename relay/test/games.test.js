@@ -31,7 +31,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { relay, until, sleep, sessionToken, makeRepo } = require('./helpers.js');
+const { relay, withoutRoom, until, sleep, sessionToken, makeRepo } = require('./helpers.js');
 const { spawnSync } = require('child_process');
 const { launch } = require('../session-host.js');
 const { writeTranscript, REQUEST_USD } = require('./transcript.fixture.js');
@@ -493,7 +493,7 @@ test('a seat\'s hook keeps none of its words, sent, queued or logged, and an idl
   fs.mkdirSync(path.join(home, '.office-world'));  // the queue is kept only where a room has run
   const log = path.join(home, 'hook-log.jsonl');
   try {
-    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(OFFICE_|RELAY_)/.test(k)));
+    const env = withoutRoom(process.env);
     Object.assign(env, { HOME: home, OFFICE_SEAT: '1', OFFICE_SHOW_PROMPTS: '1', OFFICE_HOOK_LOG: log, OFFICE_TICKET_TOKEN: 'seat-token', OFFICE_TERMINAL_ID: 'abcdefabcdef', OFFICE_HOOK_URL: 'http://127.0.0.1:9/channels/t/commands' });
     const sid = 'b299ee24-0c4c-4507-afb7-bb2625eeb192';
     const events = [

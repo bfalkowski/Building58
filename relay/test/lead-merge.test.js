@@ -29,17 +29,23 @@ test('the brief says never merge unless the switch is on, and names the five con
 });
 
 test('Let the Lead merge', async (t) => {
-  // The relay presses Enter RELAY_TYPE_SETTLE_MS after it types a brief. The test sees the brief on the
-  // line only through a screen read of 300 ms, so with the relay's own 300 ms its press could land
-  // after Enter, about one run in three on a busy machine (T-183). 1500 ms leaves it time to press.
+  // The relay presses Enter RELAY_TYPE_SETTLE_MS after it types a brief. 1500 ms (T-183) gives the second
+  // press below room to land before Enter, so the half-typed brief is taken out most runs.
   let R = await relay({ RELAY_WIP_LIMIT: '5', RELAY_TYPE_SETTLE_MS: '1500' });
   const home = R.home, repo = makeRepo(home), file = path.join(home, '.office-world', 'lead.json');
   const saved = () => JSON.parse(fs.readFileSync(file, 'utf8')).t;
-  const start = async (extra) => (await R.call('POST', '/terminals', { cwd: repo, ...extra })).body;
+  const start = (extra) => R.start({ cwd: repo, ...extra });
   const hook = async (s, event) => { await R.hook({ session_id: s.slice(0, 12), ...event }); await sleep(200); };
   const talk = async (s) => { await hook(s, { hook_event_name: 'UserPromptSubmit', title: '' }); await hook(s, { hook_event_name: 'Stop' }); };
   const terminal = async (id) => (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === id);
-  const told = (id, list) => until(async () => JSON.stringify(briefs(await R.screen(id)).map(merging)) === JSON.stringify(list), 'briefs ' + list.join(', '));
+  // A timeout names the briefs the screen showed. "Waiting for off, on, off, on, on" alone read as a
+  // brief gone missing (T-231), when the screen had an extra one: off, on, off, on, off, on.
+  const told = async (id, list) => {
+    let seen = [];
+    try {
+      await until(async () => { seen = briefs(await R.screen(id)).map(merging); return JSON.stringify(seen) === JSON.stringify(list); }, 'briefs ' + list.join(', '));
+    } catch (e) { e.message += '; the screen showed ' + (seen.join(', ') || 'none'); throw e; }
+  };
   const lead = (id, body) => R.call('POST', '/terminals/lead', { terminal: id, ...body });
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
 
@@ -99,21 +105,31 @@ test('Let the Lead merge', async (t) => {
     await told(a.id, ['off', 'on', 'off', 'on']);
   });
   // The brief is a saved delivery (relay/delivery.js): a press while it is being typed saves the new
-  // words in its place, so the half-typed one is taken back out and only the new one goes in.
-  await t.test('a press while the brief is being typed is not lost', async () => {
-    // Typed but not yet entered: the terminal has echoed the text once more than the fake has answered it.
-    const typing = async () => { const sc = await R.screen(a.id); return sc.split('You are the Lead of this room.').length - 1 > 2 * briefs(sc).length; };
+  // words in its place, so the half-typed one is taken back out and only the new one goes in. Whether the
+  // second press lands before the relay presses Enter is a race here, so this step holds for either
+  // order, and relay/test/lead-brief-typing.test.js holds the typing to test the press before Enter (T-233).
+  let sofar = ['off', 'on', 'off', 'on'];
+  await t.test('a press while the brief is being typed: the last one goes in, and each brief whole and once', async (step) => {
+    const shown = (sc) => sc.split('You are the Lead of this room.').length - 1;
+    const before = shown(await R.screen(a.id));
     await lead(a.id, { merge: false });
-    for (let i = 0; !(await typing()); i++) { assert.ok(i < 2000, 'the brief to be on the line'); await sleep(5); }
+    await until(async () => shown(await R.screen(a.id)) > before, 'the brief to be typed');
     await lead(a.id, { merge: true });
-    await told(a.id, ['off', 'on', 'off', 'on', 'on']);
+    const after = (sc) => briefs(sc).map(merging).slice(sofar.length);
+    await until(async () => after(await R.screen(a.id)).slice(-1)[0] === 'on', 'the last brief to say on');
     await sleep(1500);
-    assert.strictEqual(briefs(await R.screen(a.id)).length, 5, 'and only once');
+    const sc = await R.screen(a.id);
+    const now = after(sc);
+    assert.ok(['on', 'off,on'].includes(now.join()), 'the new briefs are ' + now.join());
+    const lines = [...sc.matchAll(/GOT\[([^\]]*)\]/g)].map((m) => m[1]).filter((x) => x.includes('Lead of this room.'));
+    for (const line of lines) assert.strictEqual(line.split('You are the Lead of this room.').length, 2, 'a brief went in whole, with no half-typed one before it: ' + line.slice(0, 80));
+    step.diagnostic(now.join() === 'on' ? 'the press landed before Enter' : 'the press landed after Enter');
+    sofar = sofar.concat(now);
   });
   const fresh = crypto.randomUUID();
   await t.test('/clear keeps it, and the brief after it still has the conditions', async () => {
     await R.hook({ hook_event_name: 'SessionStart', source: 'clear', session_id: fresh.slice(0, 12), full_session_id: fresh, terminal: a.id });
-    await told(a.id, ['off', 'on', 'off', 'on', 'on', 'on']);
+    await told(a.id, sofar.concat(['on']));
     assert.strictEqual((await terminal(a.id)).merge, true);
     await until(() => saved().sessionId === fresh && saved().merge === true, 'it to be saved under the new id');
     await talk(fresh);

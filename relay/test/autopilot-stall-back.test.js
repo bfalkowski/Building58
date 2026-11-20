@@ -70,7 +70,8 @@ test('a task parked with no PR comes back once its Dev opens one, and then merge
   await say(dev, 'Stop');
   const p = await parked();  // after the nudge and one more stall time
   // The reason says what Autopilot saw: an open session, idle, with no PR.
-  assert.match(lastMove(p).note, /^Autopilot: Nothing moved it for \d+ minutes: its Dev has been idle for \d+ minutes with no PR, and (took|did not start) a turn after Autopilot nudged it \d+ minutes ago\.$/);
+  // With a stall time of 2 s the nudge may not be typed in before it expires (T-221), and the reason says which.
+  assert.match(lastMove(p).note, /^Autopilot: Nothing moved it for \d+ minutes: its Dev has been idle for \d+ minutes with no PR, and ((took|did not start) a turn after Autopilot nudged it|the nudge Autopilot saved for it) \d+ minutes ago( was never typed in)?\.$/);
   assert.ok((await ap()).notes.some((n) => /waits on you: Nothing moved it .*idle for \d+ minutes with no PR/.test(n.text)), 'and the Autopilot view says it too');
 
   const head = await openPr();
@@ -164,4 +165,26 @@ test('a Dev with a hook is idle since that hook', () => {
 
 test('a Dev whose session ended says so', () => {
   assert.strictEqual(noPrWhy('office', {}, task, { exited: true }, now), 'its Dev\'s session ended, and there is no PR');
+});
+
+// T-221: the reason says a nudge reached the Dev only when the delivery queue typed it in.
+const typed = (min) => ({ at: now - 30 * 60000, typedAt: min === null ? null : now - min * 60000 });
+const idleDev = (extra) => Object.assign({ state: 'idle', lastActAt: now - 60 * 60000 }, extra);
+
+test('a nudge saved but never typed in says so, not that the Dev ignored it', () => {
+  assert.strictEqual(noPrWhy('office', { nudged: { 'task-1': typed(null) } }, task, idleDev(), now),
+    'its Dev has been idle for 60 minutes with no PR, and the nudge Autopilot saved for it 30 minutes ago was never typed in');
+});
+
+test('a nudge typed in counts its turn and its minutes from when it went in', () => {
+  assert.strictEqual(noPrWhy('office', { nudged: { 'task-1': typed(20) } }, task, idleDev({ turnAt: now - 25 * 60000 }), now),
+    'its Dev has been idle for 60 minutes with no PR, and did not start a turn after Autopilot nudged it 20 minutes ago');
+  assert.strictEqual(noPrWhy('office', { nudged: { 'task-1': typed(20) } }, task, idleDev({ turnAt: now - 10 * 60000 }), now),
+    'its Dev has been idle for 60 minutes with no PR, and took a turn after Autopilot nudged it 20 minutes ago');
+});
+
+test('working out the reason does not forget the nudge: only a park or a hand-over does', () => {
+  const c = { nudged: { 'task-1': typed(20) } };
+  noPrWhy('office', c, task, idleDev(), now);
+  assert.ok(c.nudged['task-1']);
 });

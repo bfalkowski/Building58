@@ -83,6 +83,7 @@ async function remove(c) {
   }
   return kept;
 }
+const LEAD_KEEPS = 'The Lead\'s session runs, or last ran, in this checkout, and Bring back needs it. Make another session the Lead first.';
 const turns = new Map();
 function inTurn(c, fn) {
   const run = (turns.get(c) || Promise.resolve()).then(fn);
@@ -94,7 +95,7 @@ const settle = (channel, c, spoke, log) => inTurn(c, async () => {
   try {
     if (!listOf(channel).includes(c)) return;
     if (c.kind === 'worker' && spoke) return;
-    if (terminal.runningIn(c.path) || terminal.failedIn(c.path)) return;
+    if (terminal.runningIn(c.path) || terminal.failedIn(c.path) || terminal.leadIn(c.path)) return;
     const left = await leftBehind(c);
     if (left) { c.left = left; save(); return; }
     await remove(c);
@@ -377,6 +378,7 @@ const view = (channel, c) => Object.assign({}, c, { running: terminal.runningIn(
 const clean = (channel, c, body) => inTurn(c, async () => {
   if (!listOf(channel).includes(c)) return [200, { ok: true, removed: c.id, branches: [] }];
   if (terminal.runningIn(c.path)) return [409, { ok: false, error: 'in_use', message: 'A session is still running in this checkout. Stop it first.' }];
+  if (terminal.leadIn(c.path)) return [409, { ok: false, error: 'lead', message: LEAD_KEEPS }];
   let branches;
   try {
     if (fs.existsSync(c.repo) && fs.existsSync(c.path)) {

@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, removeDir, sleep, until } = require('./helpers.js');
+const { relay, withoutRoom, makeRepo, removeDir, sleep, until } = require('./helpers.js');
 
 const RESUME = { RELAY_RESUME: '1', RELAY_WIP_LIMIT: '5' };
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -344,7 +344,7 @@ test('the supervisor says so when the relay cannot start', async () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-test-')));
   try {
     const r = spawnSync('node', ['relay/server.js'], { cwd: path.join(__dirname, '..', '..'), encoding: 'utf8', timeout: 20000,
-      env: { ...process.env, HOME: home, HOST: '127.0.0.1', PORT: String(blocker.address().port), RELAY_KEY: 'k' } });  // the address the blocker holds
+      env: { ...withoutRoom(process.env), HOME: home, HOST: '127.0.0.1', PORT: String(blocker.address().port), RELAY_KEY: 'k' } });  // the address the blocker holds
     assert.strictEqual(r.status, 1);
     assert.match(r.stderr, /already in use/);
     assert.match(r.stderr, /The relay stopped with exit code 1\./);
@@ -509,7 +509,7 @@ test('an automatic reviewer brought back still ends once its review is posted', 
   const payload = { hook_event_name: 'PostToolUse', session_id: reviewer.sessionId, cwd: back.cwd, tool_name: 'Bash', tool_input: { command: 'gh pr comment 7 --body "Looks right."' },
     tool_response: { stdout: PR + '#issuecomment-42\n', stderr: '', interrupted: false } };
   const r = require('child_process').spawnSync('node', [path.join(__dirname, '..', 'office-hook.js')], { input: JSON.stringify(payload),
-    env: { ...process.env, HOME: home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
+    env: { ...withoutRoom(process.env), HOME: home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
   assert.strictEqual(r.status, 0);
   await idle(R, reviewer.sessionId);
   await until(async () => !(await terminals(R)).some((x) => x.running && x.id === back.id), 'the reviewer to leave');
@@ -521,7 +521,7 @@ function postedReview(R, home, s, cwd) {
   const payload = { hook_event_name: 'PostToolUse', session_id: s.sessionId, cwd: cwd || s.cwd, tool_name: 'Bash', tool_input: { command: 'gh pr comment 7 --body "Looks right."' },
     tool_response: { stdout: PR + '#issuecomment-42\n', stderr: '', interrupted: false } };
   const r = require('child_process').spawnSync('node', [path.join(__dirname, '..', 'office-hook.js')], { input: JSON.stringify(payload),
-    env: { ...process.env, HOME: home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
+    env: { ...withoutRoom(process.env), HOME: home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
   assert.strictEqual(r.status, 0);
 }
 // The hook gives up on the relay after a second, which a loaded machine can take, so it sends again
@@ -650,6 +650,70 @@ test('Update waits for a session answered at its question while it still prints,
   // Quiet, as after Esc, it holds nothing, and the relay restarts.
   await R.call('POST', '/terminals/' + s.id + '/input', { data: '/still\r' });
   await until(async () => { try { return (await R.call('GET', '/update')).body.run !== r.body.run; } catch (e) { return false; } }, 'the relay to restart');
+});
+
+test('a new question after an answer is not answered yet, so it holds nothing', async (t) => {
+  const { R, repo, relayChange } = await updatable({});
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = (await R.call('POST', '/terminals', { cwd: repo })).body;
+  const sid = s.sessionId.slice(0, 12);
+  await talk(R, s.sessionId);
+  await R.hook({ hook_event_name: 'Notification', session_id: sid, message: 'Claude needs your permission to use Bash' });
+  await sleep(200);
+  await R.call('POST', '/terminals/' + s.id + '/input', { data: '/spin\r' });
+  await until(async () => /Thinking/.test(await R.screen(s.id)), 'the spinner');
+  // A second question comes with no hook between, while the screen still moves.
+  await R.hook({ hook_event_name: 'Notification', session_id: sid, message: 'Claude needs your permission to use Edit' });
+  await sleep(200);
+  relayChange(2);
+  const r = await R.call('POST', '/update', {});
+  assert.ok(!((r.body.update || {}).waitingOn || []).some((w) => w.terminal === s.id), JSON.stringify(r.body));
+  await until(async () => { try { return (await R.call('GET', '/update')).body.run !== r.body.run; } catch (e) { return false; } }, 'the relay to restart');
+});
+
+test('a Notification that is not a question leaves a session in its turn working, and Update still waits for it', async (t) => {
+  const { R, repo, relayChange } = await updatable({});
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = (await R.call('POST', '/terminals', { cwd: repo })).body;
+  const sid = s.sessionId.slice(0, 12);
+  const state = async () => (await terminals(R)).find((x) => x.id === s.id).state;
+  await talk(R, s.sessionId);
+  await R.hook({ hook_event_name: 'Notification', session_id: sid, message: 'Signed in to Claude', notification_type: 'auth_success' });
+  await sleep(200);
+  assert.strictEqual(await state(), 'working', 'an auth_success mid-turn is not a question');
+  relayChange(2);
+  const r = await R.call('POST', '/update', {});
+  assert.strictEqual(r.status, 202, JSON.stringify(r.body));
+  assert.deepStrictEqual(r.body.update.waitingOn.map((w) => [w.terminal, w.why]), [[s.id, 'in a turn']]);
+  await sleep(1500);
+  const u = (await R.call('GET', '/update')).body;
+  assert.strictEqual(u.run, r.body.run, 'no restart while its turn goes on');
+  assert.strictEqual(u.update.state, 'waiting');
+  // Its Stop reaches this relay, and only then does the restart go on.
+  await idle(R, s.sessionId);
+  await until(async () => { try { return (await R.call('GET', '/update')).body.run !== r.body.run; } catch (e) { return false; } }, 'the relay to restart');
+});
+
+test('only the question kinds of Notification, or a question message with no kind, put a session at a question', async (t) => {
+  const { R, repo } = await updatable({});
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = (await R.call('POST', '/terminals', { cwd: repo })).body;
+  const sid = s.sessionId.slice(0, 12);
+  const state = async () => (await terminals(R)).find((x) => x.id === s.id).state;
+  const cases = [
+    [{ message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' }, 'waiting'],
+    [{ message: 'Claude has a question for you', notification_type: 'elicitation_dialog' }, 'waiting'],
+    [{ message: 'Claude needs your permission to use Bash' }, 'waiting'],
+    [{ message: 'Signed in to Claude', notification_type: 'auth_success' }, 'working'],
+    [{ message: 'Claude is waiting for your input', notification_type: 'idle_prompt' }, 'working'],
+    [{ message: 'Claude is waiting for your input' }, 'working'],
+  ];
+  for (const [ev, want] of cases) {
+    await talk(R, s.sessionId);
+    await R.hook({ hook_event_name: 'Notification', session_id: sid, ...ev });
+    await sleep(200);
+    assert.strictEqual(await state(), want, JSON.stringify(ev));
+  }
 });
 
 // RELAY_ROLLBACK=1 makes the supervisor run git itself, before and after each start of the relay.

@@ -1,7 +1,7 @@
 // Whether the Lead may stop a session, and why. The one place that decides it: relay/floor.js shows
 // it to the Lead, and asks it again before the Lead stops one. Plain, so the tests can run it on its own.
 // Anything unknown counts as not safe: stopping a session that someone needs is worse than leaving
-// an idle one open.
+// an idle one open. forReview picks the one session a review that waits for a desk stops (relay/reviews.js).
 'use strict';
 const config = require('./config.js');
 const { jobsOf, jobWords } = require('./liveness.js');
@@ -52,4 +52,20 @@ function leadMayStop(t, task, merged) {
   return no('it is not a reviewer or a Dev');
 }
 
-module.exports = { stopVerdict, leadMayStop, PM_TALK, ENTER_SETTLES, TOLD_CHECK };
+function reviewRank(c) {
+  const { t, task } = c;
+  if (t.lead || !c.verdict.safe) return null;
+  if (t.reviewOf) return t.posted ? { rank: 1, why: '' } : null;
+  if (!t.task || !task) return null;
+  const kind = leadMayStop(t, task, c.merged);
+  if (kind.may) return c.unsaved ? null : { rank: 2, why: kind.why };
+  return task.pr && c.waits ? { rank: 3, why: 'its PR waits on a review, ' } : null;
+}
+function forReview(candidates) {
+  const ranked = candidates.map((c) => Object.assign({}, c, { by: reviewRank(c) })).filter((c) => c.by)
+    .sort((a, b) => a.by.rank - b.by.rank || (a.t.lastActAt || 0) - (b.t.lastActAt || 0));
+  const pick = ranked[0];
+  return pick ? { t: pick.t, task: pick.task, why: pick.by.why + pick.verdict.reason } : null;
+}
+
+module.exports = { stopVerdict, leadMayStop, forReview, PM_TALK, ENTER_SETTLES, TOLD_CHECK };

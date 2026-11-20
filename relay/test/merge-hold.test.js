@@ -44,6 +44,16 @@ test('a Dev in a turn, at a question, or told news it has not started on: wait',
   assert.strictEqual(holdOf(task(dir), dev('working'), now).act, 'wait');
 });
 
+// T-221: a Dev that pushed and waits on npm test in the background is not done. Its turn ended, but
+// the run may still fail and ask for a fix.
+test('a Dev running a job: wait, even with uncommitted work', (t) => {
+  const dir = checkout(t);
+  assert.deepStrictEqual(holdOf(task(dir), dev('idle', { jobs: { count: 1 } }), now), { act: 'wait', why: 'Its Dev is running a job (a command it started still runs), maybe still answering the latest review, so the PR may not hold every fix yet.' });
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'two\n');
+  assert.strictEqual(holdOf(task(dir), dev('idle', { jobs: { count: 2 } }), now).act, 'wait');
+  assert.strictEqual(holdOf(task(dir), dev('idle', { jobs: { count: 0 } }), now).act, 'person', 'its job ended: the work left out goes to the person');
+});
+
 test('review news the Dev was not told yet: wait, or the person once its session has ended', (t) => {
   const dir = checkout(t);
   const told = task(dir, { reviews: { pending: { links: ['x'], count: 1 } } });
