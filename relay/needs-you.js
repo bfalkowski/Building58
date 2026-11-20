@@ -5,12 +5,14 @@
 // What it reads: each running session (relay/terminal.js) with its state from relay/liveness.js and any
 // question on its screen; each task that is not done (relay/tasks.js); Autopilot's hand-over reason and, for a
 // stall, the last review posted after it (relay/autopilot.js); whether a Dev still owes the continue prompt a
-// restart saved for it (relay/sessions.js); whether a review of a PR runs; whether a PR merged or closed
+// restart saved for it (relay/sessions.js); whether a review of a PR runs, or could not start and the relay
+// stopped trying (relay/reviews.js); whether a PR merged or closed
 // (relay/floor.js, relay/pipeline.js); and who may merge a PR, from the PR watch (relay/pr-watch.js) and the last huddle
 // report (relay/huddles.js), when they have looked; reviews that wait for a desk the relay could not free
 // (relay/reviews.js); and each saved message (relay/delivery.js) that has waited
 // UNDELIVERED for a running session, unless that session is in a turn, waits on an answer, or has ended; and
-// each other relay on this room's state folder (relay/old-relays.js). The
+// each other relay on this room's state folder (relay/old-relays.js); and each base branch whose latest CI run
+// failed, from the last answer relay/main-ci.js kept. The
 // huddle counts its headline from the same list, and boardOf gives the Board each task's item, so its Waiting
 // on you column holds the tickets the list names.
 //
@@ -29,6 +31,7 @@ const delivery = require('./delivery.js');
 const { owesContinue } = require('./sessions.js');
 const { listOf } = require('./needs-you-plan.js');
 const oldRelays = require('./old-relays.js');
+const mainCi = require('./main-ci.js');
 
 const FRESH_MS = 60 * 1000;
 const UNDELIVERED = Number(process.env.RELAY_UNDELIVERED_MS) > 0 ? Number(process.env.RELAY_UNDELIVERED_MS) : 15 * 60 * 1000;
@@ -73,13 +76,14 @@ function stateOf(channel, now, lastReport) {
     owner: task.owner && terminal.find(channel, task.owner.terminal) ? task.owner.terminal : null,
     note: noteOf(task), reviewRuns: !!task.pr && reviewing(task.pr), pipelineWaits: !!(tasks.pipelineOf(task) || {}).waits,
     ...handedOf(channel, task),
+    reviewFailed: task.pr ? reviews.failedOf(channel, task.pr) : null,
     onlyYouMerge: task.pr ? onlyYouMerge(channel, task.pr, report) : null,
   }));
   const waits = delivery.pending(channel)
     .filter((d) => d.target && !d.typed && d.blocked && !NOT_STUCK.has(d.blocked) && d.savedAt && now - d.savedAt > UNDELIVERED)
     .sort((a, b) => a.savedAt - b.savedAt)
     .map((d) => ({ terminal: d.target, who: chat.nameOf(terminal.find(channel, d.target)), minutes: Math.floor((now - d.savedAt) / 60000), why: delivery.whyWaits(d.blocked) }));
-  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel) };
+  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), mains: mainCi.redOf(channel) };
 }
 
 async function handle(req, res, channel, rest, ctx) {

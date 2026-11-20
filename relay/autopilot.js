@@ -3,7 +3,8 @@
 //
 // While it is on, every RELAY_AUTOPILOT_TICK_MS (20 seconds):
 //   1. Each task's PR is read with gh pr view, and relay/autopilot-plan.js says what to do with it:
-//      merge it, mark its task done, tell its Dev to merge main for a conflict, bring back its Dev when
+//      merge it, mark its task done, tell its Dev to merge main for a conflict (once more if a turn ends at
+//      the same head, then the person decides: askToMergeMain), bring back its Dev when
 //      a fix or a conflict needs one and none runs (bringBack), hand it to the person (Waiting on you,
 //      with the reason), or wait. Before a merge, relay/merge-hold.js asks whether
 //      the PR holds all its Dev's work: a Dev still at work waits, and one idle or gone with work in its
@@ -11,7 +12,8 @@
 //      only a person merges is still read at each look (follow): its reason follows its review, CI and
 //      GitHub, and says ready for your merge when the same merge test passes. It is never merged here.
 //   2. While fewer than RELAY_AUTOPILOT_AT_ONCE tasks (1) are open, it starts the next Ready ticket a
-//      person approved, in Board order. With "only" set, just those tickets. When every desk is taken, it
+//      person approved, in Board order. With "only" set, just those tickets. While the latest CI run on the
+//      ticket's base branch failed (relay/main-ci.js), it starts none, and its idle line says main is red. When every desk is taken, it
 //      frees one of its own sessions the Lead may stop (freeADesk). If none is, it waits for a desk and
 //      tries again on its next look. It turns itself off only for a start that fails for another reason.
 // Reviews: relay/reviews.js starts the first review and, while Autopilot is on, a follow-up after each
@@ -39,6 +41,8 @@ const state = require('./state.js');
 const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const tickets = require('./tickets.js');
+const mainCi = require('./main-ci.js');
+const { redMain } = require('./needs-you-plan.js');
 const reviews = require('./reviews.js');
 const prComments = require('./pr-comments.js');
 const update = require('./update.js');
@@ -342,7 +346,7 @@ async function lookAt(channel, task) {
     }
     counted(channel, task, rec, pr.headRefOid);
     note(channel, 'Merged PR ' + number(task.pr) + ' (' + (task.ticket || task.title) + '): ' + d.why);
-  } else if (d.act === 'conflict') askToMergeMain(channel, task, rec, pr);
+  } else if (d.act === 'conflict') askToMergeMain(channel, task, rec, pr, terminal.find(channel, task.owner && task.owner.terminal));
   else if (d.act === 'bring-back') bringBack(channel, task, rec, d, d.for === 'fix' ? v.commit : pr.headRefOid, pr);
   else if (d.act === 'person' && d.reason === 'protected-file') {
     const f = forPersonMerge(channel, task, rec, pr, plan.lockedOf(files));
@@ -350,12 +354,39 @@ async function lookAt(channel, task) {
     readyNow(channel, task, rec, f);
   } else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason, (v && v.commit) || pr.headRefOid);
 }
-function askToMergeMain(channel, task, rec, pr) {
-  if (rec.conflictAt === pr.headRefOid) return;
-  rec.conflictAt = pr.headRefOid; save();
-  delivery.save(channel, { key: 'autopilot-conflict ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
-    text: 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s follow-up findings. A follow-up review checks how you resolved it.' });
-  note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
+const CONFLICT_KEY = (task) => 'autopilot-conflict ' + task.pr;
+const CONFLICT_ASKS = 2;
+const MERGE_MAIN = ' Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s follow-up findings. A follow-up review checks how you resolved it.';
+function conflictAsk(channel, task, rec, pr) {
+  const again = rec.conflictAsks > 1;
+  const text = (again ? 'Your PR ' + task.pr + ' still conflicts with main at ' + pr.headRefOid.slice(0, 7) + ', and your last turn ended without a merge of main.'
+    : 'Your PR ' + task.pr + ' was reviewed, but it conflicts with main.') + MERGE_MAIN;
+  delivery.save(channel, { key: CONFLICT_KEY(task), terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000, text,
+    on: (what) => { if (what === 'delivered' && rec.conflictAt === pr.headRefOid) { rec.conflictTypedAt = Date.now(); save(); } } });
+}
+function droppedAsk(rec, dev) {
+  if (!rec.conflictTypedAt) return false;
+  if (!dev || dev.exited) return true;
+  return dev.state === 'idle' && (dev.turnAt || 0) >= rec.conflictTypedAt;
+}
+function askToMergeMain(channel, task, rec, pr, dev) {
+  const pending = delivery.pending(channel).some((d) => d.key === CONFLICT_KEY(task));
+  if (rec.conflictAt === pr.headRefOid) {
+    if (pending) { conflictAsk(channel, task, rec, pr); return false; }
+    if (!droppedAsk(rec, dev)) return false;
+    if ((rec.conflictAsks || 1) >= CONFLICT_ASKS) {
+      handOver(channel, task, rec, 'Its Dev was asked twice to merge main into PR ' + number(task.pr) + ' at ' + pr.headRefOid.slice(0, 7) + ', and each turn ended without it. Merge main yourself, or tell the Dev to, then move the card back to Autopilot.', 'conflict-dropped', pr.headRefOid);
+      return true;
+    }
+    rec.conflictAsks = (rec.conflictAsks || 1) + 1;
+    note(channel, 'PR ' + number(task.pr) + ' still conflicts with main after its Dev\'s turn ended, so its Dev was asked once more.');
+  } else {
+    rec.conflictAsks = 1;
+    note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
+  }
+  rec.conflictAt = pr.headRefOid; rec.conflictTypedAt = null; save();
+  conflictAsk(channel, task, rec, pr);
+  return false;
 }
 const WAITS_FOR_ROOM = ['wip_limit', 'full', 'running'];
 function bringBack(channel, task, rec, d, commit, pr) {
@@ -363,7 +394,7 @@ function bringBack(channel, task, rec, d, commit, pr) {
   const step = ' Press Bring back on its task, then move its card back to Autopilot.';
   const key = d.for + ' ' + commit;
   if (rec.broughtBack === key) { handOver(channel, task, rec, 'Its Dev was brought back once for ' + what + ' at ' + commit.slice(0, 7) + ', and is not running again.' + step, 'dev-gone', commit); return; }
-  if (d.for === 'conflict') askToMergeMain(channel, task, rec, pr);
+  if (d.for === 'conflict' && askToMergeMain(channel, task, rec, pr, terminal.find(channel, task.owner && task.owner.terminal))) return;
   const [status, out] = tasks.resume(channel, task, {}, ctx, BY);
   if (status < 400) {
     rec.broughtBack = key; rec.act = 'wait'; rec.why = 'Autopilot brought its Dev back for ' + what + '.'; save();
@@ -415,6 +446,8 @@ async function maybeStart(channel) {
     const all = await tickets.listAll(channel);
     const next = plan.nextTicket(all, (t) => !!tasks.ofTicket(channel, t), c.only);
     if (!next) { c.idle = c.only ? plan.whyNoneAllowed(all, (t) => !!tasks.ofTicket(channel, t), c.only) : 'Nothing in Ready that a person approved and that is not blocked, on hold, replaced or waiting on a design ticket.'; return; }
+    const main = await mainCi.check(channel, next.repo, next.base || await tasks.git(next.repo, ['symbolic-ref', '--short', 'HEAD']).catch(() => 'main'));
+    if (main && main.state === 'red') { c.idle = 'Main is red, so ' + next.id + ' waits: ' + redMain({ name: path.basename(next.repo), branch: main.branch, run: main.run }); return; }
     const waitWip = (message) => { c.idle = 'Waiting for room under the WIP limit: ' + message; };
     const building = tasks.building(channel);
     if (building >= tasks.wipLimit()) { waitWip(building + (building === 1 ? ' task is' : ' tasks are') + ' being built, and the limit is ' + tasks.wipLimit() + '.'); return; }

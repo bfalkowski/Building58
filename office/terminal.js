@@ -657,6 +657,7 @@
     refreshBtn.disabled = true;
     const r = await api('/lead', { refresh: !stopping });
     if (!r.ok) { refreshBtn.disabled = false; tell(r.message || 'The relay did not answer.', 'off'); return; }
+    if (r.brief) tell(r.message, '');
     await sync();
   });
   boardBtn.addEventListener('click', async () => {

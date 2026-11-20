@@ -4,22 +4,24 @@
 // list, so all three agree. A plain function with no side effects, so the tests run it without a relay.
 // See docs/manual/roles.html#needs-you.
 //
-//   listOf({ seats, tasks, waits, relays, desks }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
+//   listOf({ seats, tasks, waits, relays, desks, mains }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
 //
 // A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh, continuing },
 // where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
 // spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
 // says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
-// handedOver, devSaysBug, reviewedSince, onlyYouMerge }, where owner is the terminal of its Dev while that session runs,
-// pipelineWaits says its open PR's pipeline is running or failing, devSaysBug says Autopilot handed it over because
-// its Dev says a finding the merge review marked non-blocking is a bug, and reviewedSince is the last review posted
-// after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current says
-// the PR's head is that commit.
+// handedOver, devSaysBug, reviewedSince, onlyYouMerge, reviewFailed }, where owner is the terminal of its Dev while
+// that session runs, pipelineWaits says its open PR's pipeline is running or failing, devSaysBug says Autopilot handed
+// it over because its Dev says a finding the merge review marked non-blocking is a bug, reviewedSince is the last
+// review posted after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current
+// says the PR's head is that commit, and reviewFailed is why its PR's automatic review could not start, once the
+// relay stopped trying.
 // A wait is one saved message (relay/delivery.js) that has not gone in for a long time: { terminal, who, minutes,
 // why }, where terminal is the running session it is for, and why says in plain words what holds it.
 // A relay is another relay on this room's state folder (relay/old-relays.js): { pid, file, port, started, paused, worker }.
 // desks is reviews that wait for a desk while the relay may stop no session: { prs, taken }, the longest wait first.
+// A main is one base branch whose latest CI run failed (relay/main-ci.js): { name, branch, run: { workflow, sha, url, conclusion } }.
 //
 // One rule for each kind. A session gives at most one item, and so does a task. A task whose Dev already has an
 // item gives none, since answering the Dev is the one move. The kinds, most urgent first:
@@ -27,9 +29,11 @@
 //   permission   a session waits on the person, and its message asks for permission
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   desks        reviews wait for a desk, and the relay may stop none of the sessions that hold them all
+//   main         the latest push run of CI on main failed, so Autopilot starts no new ticket on that branch
 //   merge        an open PR that only the person may merge
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
 //                with the next step a review posted after it gives
+//   review       an open PR whose automatic review could not start, with the reason, unless a review of it runs
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
@@ -43,7 +47,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -81,6 +85,7 @@ function taskItem(t, dev) {
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
   if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
+  if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
   if (t.state === 'waiting_on_you') {
     if (t.reviewRuns || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;
     const note = oneLine(t.handedOver || t.note, 300);
@@ -99,6 +104,11 @@ function desksItem(d) {
   const taken = Math.max(0, Math.floor(Number(d.taken) || 0));
   return { kind: 'desks', who: 'the relay', terminal: null, task: null, ticket: null, pr: prs[0],
     line: 'Stop a session to free a desk: the review' + (prs.length > 1 ? 's of PR ' + list + ' wait' : ' of PR ' + list + ' waits') + ' for one. All ' + taken + ' desks are taken, and the relay may stop none of them. ' + MAY_STOP, link: {} };
+}
+
+function redMain(m) {
+  const r = m.run || {}, branch = oneLine(m.branch, 80) || 'main', sha = oneLine(r.sha, 64).slice(0, 7), url = oneLine(r.url, 300);
+  return branch + ' of ' + (oneLine(m.name, 80) || 'the repo') + ': ' + (oneLine(r.workflow, 80) || 'CI') + (sha ? ' at ' + sha : '') + ' ended in ' + (oneLine(r.conclusion, 40).replace(/_/g, ' ') || 'failure') + '. Autopilot starts no new ticket on ' + branch + ' there until a push run on ' + branch + ' passes.' + (url ? ' ' + url : '');
 }
 
 function listOf(input) {
@@ -134,7 +144,12 @@ function listOf(input) {
   }
   const desks = desksItem(input && input.desks);
   if (desks) items.push(desks);
+  for (const m of (input && input.mains) || []) {
+    if (!m || !m.run) continue;
+    const url = oneLine(m.run.url, 300);
+    items.push({ kind: 'main', who: 'CI', terminal: null, task: null, ticket: null, pr: null, line: 'Look at the failed CI run on ' + redMain(m), link: url ? { url } : {} });
+  }
   return items.map((it, i) => [it, i]).sort((a, b) => KINDS.indexOf(a[0].kind) - KINDS.indexOf(b[0].kind) || a[1] - b[1]).map((x) => x[0]);
 }
 
-module.exports = { listOf, KINDS };
+module.exports = { listOf, redMain, KINDS };
