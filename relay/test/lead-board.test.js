@@ -1,6 +1,7 @@
 // The Lead's own permission to move the board, through a real relay with a fake `claude`.
 'use strict';
-const { execFileSync } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
+const { promisify } = require('util');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -11,6 +12,7 @@ const { relay, makeRepo, removeDir, sleep, until, sessionToken, sessionTokens, R
 
 const tokenFor = (s) => until(() => { try { return { 'X-Office-Token': sessionToken(s.sessionId) }; } catch (e) { return null; } }, 'the session');
 const CLI = path.join(ROOT, 'relay', 'ticket.js');
+const run = promisify(execFile);
 
 test('moving the board', async (t) => {
   // The Lead's move to Done asks gh about the PR (T-91). Every PR it names here merged in o/r, unless it says otherwise.
@@ -113,17 +115,18 @@ test('moving the board', async (t) => {
   });
   await t.test('the Lead uses it from the command line', async () => {
     const env = { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: leadToken['X-Office-Token'] };
+    const cli = async (args, e) => (await run('node', [CLI, ...args], { env: e || env, encoding: 'utf8' })).stdout;
     const filed = await fileAs(otherToken, 'By the tool');
-    assert.match(execFileSync('node', [CLI, 'move', filed.id, 'ready'], { env, encoding: 'utf8' }), new RegExp('Moved: ' + filed.id + ' {2}ready'));
-    assert.match(execFileSync('node', [CLI, 'tasks'], { env, encoding: 'utf8' }), new RegExp(task.id + ' {2}\\w+ {2}A task {2}' + task.branch));
-    assert.match(execFileSync('node', [CLI, 'task', task.id, 'waiting_on_you'], { env, encoding: 'utf8' }), new RegExp('Moved: ' + task.id + ' {2}waiting_on_you'));
-    assert.match(execFileSync('node', [CLI, 'list'], { env, encoding: 'utf8' }), /By the tool/);
+    assert.match(await cli(['move', filed.id, 'ready']), new RegExp('Moved: ' + filed.id + ' {2}ready'));
+    assert.match(await cli(['tasks']), new RegExp(task.id + ' {2}\\w+ {2}A task {2}' + task.branch));
+    assert.match(await cli(['task', task.id, 'waiting_on_you']), new RegExp('Moved: ' + task.id + ' {2}waiting_on_you'));
+    assert.match(await cli(['list']), /By the tool/);
     const merged = await fileAs(otherToken, 'Merged without a task');
-    assert.match(execFileSync('node', [CLI, 'move', merged.id, 'done', 'https://github.com/o/r/pull/32'], { env, encoding: 'utf8' }), new RegExp('Moved: ' + merged.id + ' {2}done {2}https://github.com/o/r/pull/32'));
-    assert.throws(() => execFileSync('node', [CLI, 'move', filed.id, 'done'], { env, encoding: 'utf8', stdio: 'pipe' }), /give the link of the PR that merged it/);
-    assert.throws(() => execFileSync('node', [CLI, 'move', filed.id, 'done', 'https://github.com/o/r/pull/32'], { env: { ...env, OFFICE_TICKET_TOKEN: otherToken['X-Office-Token'] }, encoding: 'utf8', stdio: 'pipe' }), /Only a Lead you have let move the board/);
+    assert.match(await cli(['move', merged.id, 'done', 'https://github.com/o/r/pull/32']), new RegExp('Moved: ' + merged.id + ' {2}done {2}https://github.com/o/r/pull/32'));
+    await assert.rejects(cli(['move', filed.id, 'done']), /give the link of the PR that merged it/);
     const denied = { ...env, OFFICE_TICKET_TOKEN: otherToken['X-Office-Token'] };
-    assert.throws(() => execFileSync('node', [CLI, 'move', filed.id, 'rejected'], { env: denied, encoding: 'utf8', stdio: 'pipe' }), /Only a Lead you have let move the board/);
+    await assert.rejects(cli(['move', filed.id, 'done', 'https://github.com/o/r/pull/32'], denied), /Only a Lead you have let move the board/);
+    await assert.rejects(cli(['move', filed.id, 'rejected'], denied), /Only a Lead you have let move the board/);
   });
   await t.test('Merged elsewhere refuses a PR that is another task\'s or another ticket\'s', async () => {
     const moveDone = (id, pr) => R.call('POST', '/tickets/' + id + '/move', { to: 'done', pr }, leadToken);
