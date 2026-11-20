@@ -10,7 +10,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, removeDir, until, sleep, sessionToken, ROOT } = require('./helpers.js');
+const { relay, withoutRoom, makeRepo, removeDir, until, sleep, sessionToken, ROOT } = require('./helpers.js');
 const { prBrief } = require('../../office/reviews.js');
 const { reviewPostFor } = require('../autopilot-plan.js');
 
@@ -35,7 +35,7 @@ test('a posted review stays linked to its verdict, whatever comes after it', asy
   // The real hook, fed what Claude Code would give it.
   const hook = (s, event, extra) => {
     const payload = Object.assign({ hook_event_name: event, session_id: s.sessionId, cwd: s.cwd }, extra);
-    const r = spawnSync('node', [path.join(ROOT, 'relay', 'office-hook.js')], { input: JSON.stringify(payload), env: { ...process.env, HOME: R.home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
+    const r = spawnSync('node', [path.join(ROOT, 'relay', 'office-hook.js')], { input: JSON.stringify(payload), env: { ...withoutRoom(process.env), HOME: R.home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
     assert.strictEqual(r.status, 0);
   };
   const ticket = (await R.call('POST', '/tickets', { title: 'Make a.txt say hello', repo })).body.ticket;

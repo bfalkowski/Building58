@@ -1,7 +1,8 @@
 // T-98: the Lead asks the relay for a review of a task's PR, with ticket.js review, while the person's
 // switch Let the Lead start reviews is on. The relay starts the reviewer Get a review starts, in its own
 // checkout. It refuses a PR that is no task's, a PR a reviewer is on, an ask with no desk free, and a PR
-// past the per-PR limit the automatic reviews have. Through a real relay with a fake `claude`.
+// past the per-PR limit the automatic reviews have. While Autopilot is on, the switch is not needed (T-333).
+// Through a real relay with a fake `claude`.
 'use strict';
 const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
@@ -175,4 +176,32 @@ test('an automatic review and the Lead\'s count toward the same per-PR limit', a
   assert.strictEqual(past.status, 409);
   assert.strictEqual(past.body.error, 'limit');
   assert.deepStrictEqual(await reviewersOf(PR), []);
+});
+
+test('while Autopilot is on the Lead starts a review with Let the Lead start reviews off (T-333)', async (t) => {
+  const R = await H.relay({ RELAY_WIP_LIMIT: '5' });
+  t.after(R.stop);
+  const { leadT, reviewersOf, stop, count, ask } = await office(R);
+  const switchOn = async () => (await R.call('GET', '/settings')).body.settings.find((x) => x.name === 'leadReviews').value;
+  const autopilot = async (on) => (await R.call('POST', '/autopilot', on ? { on: true, only: 'T-999999' } : { on: false })).body.on;
+
+  let r = await ask(PR, leadT);
+  assert.strictEqual(r.status, 403, 'Autopilot off and the switch off');
+  assert.deepStrictEqual(await reviewersOf(PR), []);
+
+  assert.strictEqual(await autopilot(true), true);
+  r = await ask(PR, leadT);
+  assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+  assert.strictEqual(await switchOn(), false, 'the switch itself stays off');
+  const [rv] = await reviewersOf(PR);
+  assert.ok(rv, 'a reviewer is on the Floor');
+  assert.strictEqual(await count(PR), 1);
+  await stop(rv.id);
+
+  assert.strictEqual(await autopilot(false), false);
+  r = await ask(PR, leadT);
+  assert.strictEqual(r.status, 403, 'Autopilot off again, so the switch decides');
+  assert.match(r.body.message, /or turn on Autopilot/);
+  assert.deepStrictEqual(await reviewersOf(PR), []);
+  assert.strictEqual(await count(PR), 1);
 });

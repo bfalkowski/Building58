@@ -15,7 +15,7 @@ const PARTS = [['Reviews:', 'each review of this head, with its link and verdict
   ['Hand checks still open:', 'what nobody has checked by hand yet, or none']];
 
 function guide(relayDir) {
-  return 'Mark a PR ready to merge only when a review of its current head is posted, every blocking finding is fixed and you checked each fix in the code, and no decision is left to the person. ' +
+  return 'Mark a PR ready to merge only when a review of its current head is posted, every blocking and fix-now finding is fixed and you checked each fix in the code, and no decision is left to the person. ' +
     'The relay checks the rest and refuses if any fails: the PR is open with base main, its head is the commit you name, its pipeline is green there, it merges cleanly, and its Dev has no merge hold. Then run:\n' +
     '  node ' + JSON.stringify(path.join(relayDir, 'ticket.js')) + ' ready <PR link> <head commit> --body - <<\'EOF\'\n' +
     PARTS.map(([k, v]) => '  ' + k + ' ' + v + '.\n').join('') +

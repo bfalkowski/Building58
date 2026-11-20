@@ -38,7 +38,7 @@ function nextMove(s) {
   }
   if (!v) return at('you', 'verdict', null, 'Its review of ' + short(head) + ' gave no verdict. Read it, and decide.');
   if (!v.posted) return at('reviewer', 'verdict', null, 'Its reviewer gave a verdict on ' + short(head) + ' but has not posted the review.');
-  if (v.kind === 'fix') return forDev('fix', 'The review of ' + short(head) + ' has blocking findings.');
+  if (v.kind === 'fix') return forDev('fix', 'The review of ' + short(head) + ' has blocking or fix-now findings.');
   const locked = s.files ? [...new Set(s.files.filter((f) => PROTECTED.includes(f)))] : [];
   if (locked.length) return at('you', 'protected', null, 'Reviewed at its head, green and clean, and it changes ' + locked.join(' and ') + ', which only you merge.');
   if (!CLEAN.includes(pr.mergeStateStatus)) return at('CI', 'mergeable', null, 'GitHub says it is ' + String(pr.mergeStateStatus || 'not ready').toLowerCase() + '.');

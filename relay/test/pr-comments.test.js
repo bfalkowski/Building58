@@ -19,7 +19,8 @@ test('review comments reach the Dev', async (t) => {
   const env = { GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_REVIEW_POLL_SECONDS: '1' };
   let R = await relay(env, home);
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
-  const answers = (a) => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify(a));
+  // Written whole and then renamed, so a gh call never reads half a file and takes it for no answers.
+  const answers = (a) => { const tmp = path.join(ghDir, 'answers.json.tmp'); fs.writeFileSync(tmp, JSON.stringify(a)); fs.renameSync(tmp, path.join(ghDir, 'answers.json')); };
   const calls = () => { try { return fs.readFileSync(path.join(ghDir, 'calls.log'), 'utf8').split('\n').filter(Boolean); } catch (e) { return []; } };
   const posted = () => { try { return fs.readFileSync(path.join(ghDir, 'posted.log'), 'utf8').split('\n---\n').filter(Boolean); } catch (e) { return []; } };
   const api = { [ISSUE]: [], [REVIEWS]: [], [INLINE]: [] };
@@ -150,14 +151,21 @@ test('review comments reach the Dev', async (t) => {
     await until(async () => (await get(task.id)).state === 'changes_requested', 'Changes requested');
   });
   await t.test('a task that is done is left alone', async () => {
+    // A check that began before the move may ask gh after it, even seconds later on a loaded machine. So the test
+    // holds one check at its reviews call, a gate the fake gh keeps closed until a file exists. Checks of one task
+    // run one at a time, so no other can begin, and the move comes after that check asked about comments.
+    const gate = path.join(home, 'gate'), count = (where) => calls().filter((c) => c.includes(where)).length;
+    answers({ api, gateApi: { [REVIEWS]: gate } });
+    const held = count(REVIEWS);
+    await until(() => count(REVIEWS) > held, 'a check to wait at the gate');
     await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' });
-    // A check that was already running when the card moved may still ask gh once, so the count starts after it.
-    await sleep(2500);
-    const asked = calls().filter((c) => c.includes(ISSUE)).length;
+    const asked = count(ISSUE), inline = count(INLINE);
     api[ISSUE].push(comment(106));
     say();
+    fs.writeFileSync(gate, '');
+    await until(() => count(INLINE) > inline, 'the held check to finish');
     await sleep(2500);
-    assert.strictEqual(calls().filter((c) => c.includes(ISSUE)).length, asked, 'gh is not asked about it');
+    assert.strictEqual(count(ISSUE), asked, 'gh is not asked about it');
     assert.strictEqual(await told(task), 1);
   });
 });
@@ -303,13 +311,19 @@ test('a review whose verdict says merge reaches the Dev but leaves the card, and
   const said = async (task) => { const all = await o.R.screen(task.worker.terminal); return all.slice(all.lastIndexOf('GOT[')).replace(/\s+/g, ' '); };
   const cleanSaid = await said(clean);
   assert.match(cleanSaid, /verdict says merge, so do not push for its findings/);
-  assert.match(cleanSaid, /one follow-up ticket for this PR .* create "Title" --body - and a quoted heredoc/);
+  assert.match(cleanSaid, /File a ticket only for a finding that is a real bug or risk outside this PR, with node .* create "Title" --body - and a quoted heredoc/);
+  assert.match(cleanSaid, /Polish not worth a ticket gets only your reply\. Then stop\./);
+  assert.doesNotMatch(cleanSaid, /one follow-up ticket|non-blocking findings worth doing/);
   assert.match(cleanSaid, /<!-- office:hold -->/);
+  // T-234: the relay reads the hold mark only the first time it sees a comment, so the message and the brief say a new reply.
+  assert.match(cleanSaid, /say so in a new reply .* An edited reply does not count\./);
+  const brief = (await o.R.screen(clean.worker.terminal)).replace(/\s+/g, ' ');
+  assert.match(brief.slice(0, brief.lastIndexOf('GOT[')), /say so in a new reply .* An edited reply does not count\./);
   assert.match(cleanSaid, /A failing check and a conflict with main are still yours/);
   assert.doesNotMatch(cleanSaid, /fix or dispute each finding, reply on the PR, and push/);
   for (const other of [sent, stale]) {
     const s = await said(other);
-    assert.match(s, /fix or dispute each finding, reply on the PR, and push/);
+    assert.match(s, /fix or dispute each finding, reply on the PR, and push\. Fix each blocking and fix-now finding in this PR\./);
     assert.doesNotMatch(s, /do not push/);
   }
   await t.test('a Dev\'s reply with the hold mark is kept on the task, and is not news for it', async () => {

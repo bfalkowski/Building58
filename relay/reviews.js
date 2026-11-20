@@ -19,6 +19,10 @@
 //   Either review waits for the pipeline. While it waits, no desk is used: the relay asks gh. A red
 //   pipeline starts no review, and the Dev is told once for each commit. A push that turns it green
 //   starts the review then.
+//   Either review that finds every desk taken waits for one, and frees one by itself (makeRoom, T-374). Each
+//   tick it stops at most one session, for the review that has waited longest, and only once no session it
+//   stopped is still ending: the one relay/stop-verdict.js forReview picks. It says so in the news, and
+//   Autopilot puts it on the PR's line. When it may stop none, the wait is a deadlock that Needs you names.
 //
 // Every review that starts, first, follow-up or Get a review, is told to the PR's Dev as a saved message:
 // the PR, the commit the reviewer reads, and the reviewer's name. The relay names each session as it
@@ -32,7 +36,8 @@
 // kept in RELAY_REVIEWS_FILE, so a restart keeps them.
 //
 // The Lead asks for a review (T-98): POST /reviews/lead with { pr }, from ticket.js review, while the person's
-// switch Let the Lead start reviews is on (off by default, article 5). Only the Lead's token reaches it
+// switch Let the Lead start reviews is on (off by default, article 5), or while Autopilot is on whatever the
+// switch says (T-333; autopilot.follows, from relay/autopilot.js, says it is on). Only the Lead's token reaches it
 // (relay/server.js); the person's key gets 403, since the page has Get a review. It is the review Get a review
 // starts on a session with a PR: the same checkouts.create, brief and verdict ask, in its own checkout, and the
 // reviewer posts and leaves. The relay refuses a PR that is no task's, one that a reviewer is reviewing or is
@@ -60,6 +65,7 @@ const FILE = state.file('reviews.json', 'RELAY_REVIEWS_FILE');
 const RETRY_MS = () => config.get('reviewRetrySeconds') * 1000, MAX_TRIES = 3;
 const TICK = 1000, NEWS_KEPT = 20, LEAD_KEEP = 12 * 60 * 60 * 1000;
 const START_KEEP = 60 * 60 * 1000;
+const ENDING_WAIT = 10 * 1000;
 
 const ownsFile = claim(FILE);
 let store = {};
@@ -81,7 +87,7 @@ function save() {
   } catch (e) { console.error('Could not save reviews to ' + FILE + ': ' + e.message); }
 }
 const chOf = (channel) => store[channel] || (store[channel] = { prs: {} });
-let autopilot = { follows: () => false, ask: () => '', since: () => null };
+let autopilot = { follows: () => false, ask: () => '', since: () => null, freed: () => {} };
 const useAutopilot = (a) => { autopilot = a; checkouts.useAsk((channel) => a.ask(channel)); };
 const followsPushes = (channel) => switchesOf(channel).again || autopilot.follows(channel);
 const switchesOf = (channel) => { const c = chOf(channel); return { auto: c.auto !== false, again: c.again === true }; };
@@ -156,10 +162,16 @@ async function followUp(channel, pr, from) {
   rec.count = Math.max(0, rec.count - 1);
   if (out.ok) { save(); say(channel, 'PR ' + number(pr) + ' has no new commits since its last review, so no follow-up review started.'); return; }
   if (out.error === 'unrelated') { save(); return; }
+  if (out.error === 'full') { needsDesk(channel, pr, rec, p); return; }
   const tries = (p.tries || 0) + 1;
   if (tries >= MAX_TRIES) say(channel, 'The follow-up review of PR ' + number(pr) + ' could not start ' + MAX_TRIES + ' times: ' + (out.message || '') + ' Press Get a review on its session.', 'off');
   else if (!rec.pending) rec.pending = Object.assign({}, p, { tries, notBefore: Date.now() + RETRY_MS() });
   save();
+}
+function needsDesk(channel, pr, rec, p) {
+  rec.pending = Object.assign({}, p, { desk: true });
+  save();
+  if (!p.desk) say(channel, 'No desk is free for the follow-up review of PR ' + number(pr) + '. It starts once a desk is free.', 'wait');
 }
 function waitOnPerson(channel, pr) {
   const rec = recOf(channel, pr);
@@ -223,6 +235,47 @@ function firstReviews(channel, c) {
   }
 }
 
+const deskWaitOf = (r) => (r.first && r.first.desk ? r.first : r.pending && r.pending.desk ? r.pending : null);
+function deskQueue(channel) {
+  const c = store[channel];
+  if (!c || !c.prs) return [];
+  return Object.entries(c.prs).filter(([pr, r]) => deskWaitOf(r) && !starting.has(channel + ' ' + pr))
+    .sort(([, a], [, b]) => (deskWaitOf(a).at || 0) - (deskWaitOf(b).at || 0)).map(([pr]) => pr);
+}
+const unposted = (channel, pr) => terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr && !t.posted);
+const owesReview = (channel, pr) => { const r = recOf(channel, pr); return !!(r && (r.first || r.pending)) || starting.has(channel + ' ' + pr) || unposted(channel, pr); };
+const deadlocks = new Map(), endingSince = new WeakMap();
+function makeRoom(channel, now) {
+  const queue = deskQueue(channel);
+  if (!queue.length || deskFree(channel)) { deadlocks.delete(channel); return; }
+  const ending = terminal.all(channel).filter((t) => !t.exited && t.stopped);
+  for (const t of ending) if (!endingSince.has(t)) endingSince.set(t, now);
+  if (ending.some((t) => now - endingSince.get(t) < ENDING_WAIT)) return;
+  const pr = queue[0], rec = recOf(channel, pr);
+  const row = require('./floor.js').freeForReview(channel, now, (p) => owesReview(channel, p), 'for the review of PR ' + number(pr));
+  if (row) {
+    deadlocks.delete(channel);
+    rec.freed = 'The relay stopped ' + row.name + ' (' + row.role + (row.task ? ', task ' + row.task : '') + ') to free a desk for its review: ' + row.why + '.';
+    save();
+    say(channel, 'The relay stopped ' + row.name + ' (' + row.role + (row.task ? ', task ' + row.task : '') + ') to free a desk for the review of PR ' + number(pr) + ': ' + row.why + '.', 'wait');
+    autopilot.freed(channel, pr, rec.freed);
+    return;
+  }
+  if (!deadlocks.has(channel) || deadlocks.get(channel).prs[0] !== pr) say(channel, 'No desk is free for the review of PR ' + number(pr) + ', and the relay may stop no session for it. Stop one yourself.', 'off');
+  deadlocks.set(channel, { prs: queue, taken: terminal.all(channel).filter((t) => !t.exited).length });
+}
+function deadlockOf(channel) {
+  const d = deadlocks.get(channel);
+  return d && deskQueue(channel).length && !deskFree(channel) ? d : null;
+}
+function deskLine(channel, pr) {
+  const r = recOf(channel, pr);
+  if (!r || !deskWaitOf(r)) return null;
+  const d = deadlockOf(channel);
+  if (d && d.prs.includes(pr)) return 'Its review waits for a desk: all ' + d.taken + ' are taken, and the relay may stop none of them.';
+  return r.freed || 'Its review waits for a desk.';
+}
+
 const devOf = (channel, pr) => terminal.all(channel).find((t) => !t.exited && !isReviewer(t) && prOf(channel, t) === pr) || null;
 function startText(pr, commit, name) {
   return 'A review of your PR ' + pr + ' started. ' + (name || 'A reviewer') + ' is reviewing commit ' + (commit || 'unknown') +
@@ -275,8 +328,13 @@ function tick() {
     const counts = Object.fromEntries(Object.entries(c.prs).map(([pr, r]) => [pr, r.count]));
     const { start, full } = followUps(pending, terms, counts, Date.now(), MAX_AUTO_REVIEWS());
     for (const pr of full) waitOnPerson(channel, pr);
-    for (const s of start) { const rec = c.prs[s.pr]; if (passes(channel, s.pr, rec, rec.pending, rec.head) && rec.pending) followUp(channel, s.pr, s.from); }
+    for (const s of start) {
+      const rec = c.prs[s.pr];
+      if (!passes(channel, s.pr, rec, rec.pending, rec.head) || !rec.pending) continue;
+      if (deskFree(channel)) followUp(channel, s.pr, s.from); else needsDesk(channel, s.pr, rec, rec.pending);
+    }
   }
+  for (const channel of Object.keys(store)) makeRoom(channel, Date.now());
 }
 
 function noteHook(channel, ev) {
@@ -308,7 +366,7 @@ checkouts.onReview((channel, pr, commit, reviewer) => {
   begun.push({ channel, pr, commit, reviewer, at: Date.now() });
   const c = chOf(channel);
   const rec = c.prs[pr] || (c.prs[pr] = { count: 0, head: null, pending: null, waits: false });
-  rec.head = commit; rec.reviewedAt = Date.now();
+  rec.head = commit; rec.reviewedAt = Date.now(); delete rec.freed;
   if (rec.failed) { delete rec.failed; delivery.drop(channel, 'review-limit ' + pr); }
   if (!starting.has(channel + ' ' + pr)) { rec.waits = false; delete rec.first; rec.why = null; delivery.drop(channel, 'review-limit ' + pr); delivery.drop(channel, 'pipeline ' + pr); }
   save();
@@ -326,7 +384,7 @@ terminal.onWork((channel, t) => {
 
 const refuse = (status, error, message) => [status, { ok: false, error, message }];
 async function leadReview(channel, body, agent) {
-  if (!config.get('leadReviews')) return refuse(403, 'forbidden', 'The person has not let the Lead start reviews. They turn it on with Let the Lead start reviews in Settings. Until then, tell them which PR needs a review, so they press Get a review. Never review it in your own session.');
+  if (!config.get('leadReviews') && !autopilot.follows(channel)) return refuse(403, 'forbidden', 'The person has not let the Lead start reviews. They turn it on with Let the Lead start reviews in Settings, or turn on Autopilot. Until then, tell them which PR needs a review, so they press Get a review. Never review it in your own session.');
   if (!agent.lead || !terminal.all(channel).includes(agent)) return refuse(403, 'forbidden', 'This session is no longer running as the Lead.');
   const pr = String((body && body.pr) || '').trim();
   if (!PR_URL.test(pr)) return refuse(400, 'bad_pr', 'A PR link looks like https://github.com/owner/repo/pull/1.');
@@ -423,8 +481,8 @@ function owe(channel, pr, { from, dev, head }) {
 
 function deskOf(channel, pr) {
   const r = pr && recOf(channel, pr);
-  const desk = !!(r && r.first && r.first.desk), retry = !desk && !!(r && r.first && r.first.tries);
+  const desk = !!(r && deskWaitOf(r)), retry = !desk && !!(r && r.first && r.first.tries);
   return r ? { count: r.count || 0, waits: !!r.waits, held: !desk && !retry && !!(r.first || (r.pending && r.why)), desk, retry, failed: !!r.failed } : null;
 }
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe };
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, deskQueue, deskLine, deadlockOf };

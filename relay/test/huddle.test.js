@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, sleep, until, ROOT } = require('./helpers.js');
+const { relay, withoutRoom, makeRepo, sleep, until, ROOT } = require('./helpers.js');
 
 const PR = 'https://github.com/o/r/pull/7';
 const green = { number: 7, url: PR, title: 't', state: 'OPEN', isDraft: false, reviewDecision: '', statusCheckRollup: [{ conclusion: 'SUCCESS' }], comments: [] };
@@ -249,7 +249,7 @@ test('asking idle sessions', async (t) => {
   // It answers from the real hook, reading what Claude Code passes it at the end of a turn.
   const answer = spawnSync(process.execPath, [path.join(ROOT, 'relay', 'office-hook.js')], {
     input: JSON.stringify({ hook_event_name: 'Stop', session_id: speaker.sessionId, last_assistant_message: 'Fine.\nHUDDLE-' + marker + ': on the parser, next the tests, waiting on nothing\nSecret other words' }),
-    env: { ...process.env, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't', OFFICE_SHOW_TITLES: '0' }, encoding: 'utf8'
+    env: { ...withoutRoom(process.env), OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't', OFFICE_SHOW_TITLES: '0' }, encoding: 'utf8'
   });
   assert.strictEqual(answer.status, 0);
   await until(async () => (await now()).waitingFor === 1, 'the answer');
