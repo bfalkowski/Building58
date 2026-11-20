@@ -108,9 +108,9 @@ function desksItem(d) {
 
 function writeLine(w) {
   const ms = Number(w.inMs), s = Math.ceil(ms / 1000);
-  const when = !(ms > 0) ? 'at the next write' : s < 120 ? 'in ' + s + (s === 1 ? ' second' : ' seconds') : 'in ' + Math.round(s / 60) + ' minutes';
+  const when = !(ms > 0) ? null : s < 120 ? s + (s === 1 ? ' second' : ' seconds') : Math.round(s / 60) + ' minutes';
   const said = oneLine(w.message, 300).replace(/([^.!?])$/, '$1.');
-  return 'Fix what stops a GitHub write: the relay could not ' + oneLine(w.what, 60) + '. GitHub says: ' + said + ' It tries again ' + when + '.';
+  return 'Fix what stops a GitHub write: the relay could not ' + oneLine(w.what, 60) + '. GitHub says: ' + said + (when ? ' It tries again in ' + when + '.' : ' Its wait is over, so the next write to it tries again.');
 }
 
 function listOf(input) {

@@ -45,3 +45,17 @@ pageTest('Needs you shows the count and the list, and opens the session', () => 
   assert.strictEqual(await page.innerText('#needs-you-count'), '0');
   assert.deepStrictEqual(p.errors, []);
 });
+
+pageTest('a line about a GitHub issue opens its ticket, whose id is the bare issue number', () => o, async (p) => {
+  await p.open();
+  const { page } = p;
+  const item = { kind: 'ticket-write', who: 'the relay', terminal: null, task: null, ticket: '68', pr: null, line: 'Fix what stops a GitHub write: the relay could not close issue #68. GitHub says: Bad. It tries again in 4 minutes.', link: { ticket: '68' } };
+  await page.route(/\/needs-you\?/, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, at: new Date().toISOString(), count: 1, items: [item] }) }));
+  await page.evaluate(() => window.addEventListener('office:ticket', (ev) => { window.openedTicket = ev.detail.id; }));
+  const line = page.locator('#needs-you-list li[data-kind="ticket-write"] button.needs-line');
+  await line.waitFor();
+  assert.strictEqual(await line.getAttribute('title'), 'Show 68 on the Board');
+  await line.click();
+  await page.waitForFunction(() => window.openedTicket === '68');
+  await page.unroute(/\/needs-you\?/);
+});

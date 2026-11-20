@@ -12,7 +12,7 @@
 
   const base = location.origin + '/channels/' + encodeURIComponent(channel);
   const url = base + '/needs-you?key=' + encodeURIComponent(key);
-  const TICKET = /^T-\d+$/;
+  const TICKET = /^[\w.-]{1,20}$/;
   const PR = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
   let drawn = '';
 

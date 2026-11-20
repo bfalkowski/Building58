@@ -31,7 +31,9 @@
 // A write to an issue that fails waits before its next try: RELAY_TICKET_RETRY_MS (15 seconds) after the
 // first failure, then twice as long each time, up to RELAY_TICKET_RETRY_CAP_MS (5 minutes). A write in that
 // wait asks GitHub nothing and fails at once. writeErrors(project) names each issue whose last write failed:
-// { id, what, message, tries, at, nextAt }, where message is what GitHub said. A write that goes through clears it.
+// { id, what, message, tries, at, nextAt }, where message is what GitHub said. A write that goes through clears it,
+// and so does a read of the issue that shows what the write wanted, such as an issue closed by hand, or that comes
+// after the wait. The tries are kept until a write goes through, so the next failure waits longer still.
 'use strict';
 const { keepLines, oneLine } = require('../clean.js');
 const { spawn } = require('child_process');
@@ -201,6 +203,7 @@ function open(options) {
       }
       for (const [id, n] of c.wrote) if (n > seen && c.tickets.has(id)) fresh.set(id, c.tickets.get(id));
       c.tickets = fresh; c.listedAt = began;
+      settleAll(project, fresh);
     })().finally(() => { c.refreshing = null; });
     return c.refreshing;
   }
@@ -245,6 +248,17 @@ function open(options) {
     e.waits = true;
     return e;
   }
+  const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+  function settle(project, t) {
+    const f = failsOf(project).get(t.id);
+    if (!f) return;
+    if (Object.entries(f.want).every(([k, v]) => same(t[k], v))) failsOf(project).delete(t.id);
+    else if (clock() >= f.nextAt) f.shown = false;
+  }
+  function settleAll(project, tickets) {
+    for (const id of [...failsOf(project).keys()]) if (!tickets.has(id)) failsOf(project).delete(id);
+    for (const t of tickets.values()) settle(project, t);
+  }
   async function written(project, id, changes, write) {
     const fails = failsOf(project), key = String(id), was = fails.get(key);
     if (was && clock() < was.nextAt) throw waiting(was);
@@ -256,7 +270,8 @@ function open(options) {
       if (e.refused) throw e;
       const tries = (was ? was.tries : 0) + 1, at = clock();
       const message = oneLine(e.github || e.message, 300).replace(/([^.!?])$/, '$1.');
-      fails.set(key, { id: key, what: whatOf(changes, key), message, tries, at, nextAt: at + Math.min(CAP, RETRY * 2 ** (tries - 1)) });
+      const { id: _id, createdAt: _at, updatedAt: _up, ...want } = changes;
+      fails.set(key, { id: key, what: whatOf(changes, key), message, tries, at, nextAt: at + Math.min(CAP, RETRY * 2 ** (tries - 1)), want, shown: true });
       throw e;
     }
   }
@@ -278,8 +293,9 @@ function open(options) {
       const c = cacheOf(project);
       if (c.tickets.has(String(id)) && (Date.now() - c.listedAt <= TTL || Date.now() - (c.wroteAt.get(String(id)) || 0) <= TTL)) return copy(c.tickets.get(String(id)));
       const t = await fetchOne(repo, id);
-      if (t) return keep(project, t);
+      if (t) { settle(project, t); return keep(project, t); }
       c.tickets.delete(String(id));
+      failsOf(project).delete(String(id));
       return null;
     },
     async create(project, fields) {
@@ -302,7 +318,7 @@ function open(options) {
       }
     },
     writeErrors(project) {
-      return [...failsOf(project).values()].sort((a, b) => Number(a.id) - Number(b.id)).map((f) => Object.assign({}, f));
+      return [...failsOf(project).values()].filter((f) => f.shown).sort((a, b) => Number(a.id) - Number(b.id)).map(({ id, what, message, tries, at, nextAt }) => ({ id, what, message, tries, at, nextAt }));
     },
     async update(project, id, changes) {
       const repo = repoOf(project);

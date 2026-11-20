@@ -234,6 +234,6 @@ test('a GitHub write that failed: one line for the issue, with GitHub\'s message
     line: 'Fix what stops a GitHub write: the relay could not close issue #68. GitHub says: Resource not accessible by integration. It tries again in 4 minutes.',
     link: { ticket: '68' } });
   assert.strictEqual(writeLine({ what: 'move issue #3', message: 'Bad', inMs: 900 }), 'Fix what stops a GitHub write: the relay could not move issue #3. GitHub says: Bad. It tries again in 1 second.');
-  assert.match(writeLine({ what: 'update issue #3', message: 'x', inMs: -5 }), /It tries again at the next write\.$/, 'a wait that is over says so');
+  assert.match(writeLine({ what: 'update issue #3', message: 'x', inMs: -5 }), /GitHub says: x\. Its wait is over, so the next write to it tries again\.$/, 'a wait that is over says so');
   assert.deepStrictEqual(listOf({ writes: [null, { id: 'x\n1' }] }), [], 'only a write with an issue gets a line');
 });

@@ -153,7 +153,8 @@ test('github: a create that fails part way leaves no ticket and no open issue', 
 function failingPatches(clock) {
   const d = fs.mkdtempSync(path.join(dir, 'github-'));
   process.env.FAKE_GITHUB_DIR = d;
-  const s = github.open({ repo: 'p=o/r', gh: fakeGh, folder: '/home/repo', keyFile: path.join(d, 'key'), now: () => clock.at, retryMs: 15000, retryCapMs: 300000 });
+  const s = github.open({ repo: 'p=o/r', gh: fakeGh, folder: '/home/repo', keyFile: path.join(d, 'key'), now: () => clock.at, retryMs: 15000, retryCapMs: 300000, cacheMs: 0 });
+  s.onGithub = (fn) => { const f = path.join(d, 'state.json'), all = JSON.parse(fs.readFileSync(f, 'utf8')); fn(all['o/r']); fs.writeFileSync(f, JSON.stringify(all)); };
   s.calls = () => fs.readFileSync(path.join(d, 'calls.log'), 'utf8').trim().split('\n');
   s.fail = (message) => fs.writeFileSync(path.join(d, 'fail.json'), JSON.stringify({ fail: message, match: '--method PATCH' }));
   s.heal = () => fs.rmSync(path.join(d, 'fail.json'));
@@ -208,4 +209,34 @@ test('github: a write that fails is named with GitHub\'s message and the next tr
   assert.strictEqual((await s.update('p', t.id, { status: 'done' })).status, 'done');
   assert.deepStrictEqual(s.writeErrors('p'), []);
   assert.deepStrictEqual(s.writeErrors('other'), []);
+});
+
+test('github: an issue fixed on GitHub by hand clears its failed write at the next read', async () => {
+  const clock = { at: 1000000 };
+  const s = failingPatches(clock);
+  const t = await s.create('p', { title: 'A', status: 'started' });
+  s.fail('Resource not accessible by integration');
+  await quiet(() => s.update('p', t.id, { status: 'done' }).catch(() => {}));
+  assert.strictEqual(s.writeErrors('p').length, 1);
+  await s.get('p', t.id);
+  assert.strictEqual(s.writeErrors('p').length, 1, 'a read that shows the issue still open keeps the line while the write waits');
+  s.onGithub((repo) => { const i = repo.issues.find((x) => String(x.number) === t.id); i.state = 'closed'; i.state_reason = 'completed'; });
+  assert.strictEqual((await s.list('p')).find((x) => x.id === t.id).status, 'done', 'the first list fetches from GitHub');
+  assert.deepStrictEqual(s.writeErrors('p'), [], 'GitHub shows what the write wanted, so nothing is left to fix');
+});
+
+test('github: a write nobody tries again clears at the first read after its wait, and the next failure still waits longer', async () => {
+  const clock = { at: 1000000 };
+  const s = failingPatches(clock);
+  const t = await s.create('p', { title: 'A', status: 'ready' });
+  s.fail('Server Error');
+  await quiet(() => s.update('p', t.id, { priority: 'high' }).catch(() => {}));
+  assert.deepStrictEqual(s.writeErrors('p').map((e) => e.what), ['update issue #' + t.id]);
+  clock.at += 15000;
+  await s.list('p');
+  await s.get('p', t.id);
+  assert.deepStrictEqual(s.writeErrors('p'), [], 'nothing tries that write again, so the line does not stay for good');
+  await quiet(() => s.update('p', t.id, { priority: 'high' }).catch(() => {}));
+  const [e] = s.writeErrors('p');
+  assert.deepStrictEqual([e.tries, e.nextAt - clock.at], [2, 30000]);
 });
