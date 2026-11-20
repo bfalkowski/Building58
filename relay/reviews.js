@@ -147,9 +147,12 @@ async function firstReview(channel, pr, held) {
   }
   const tries = (held.tries || 0) + 1;
   if (tries < MAX_TRIES) { rec.first = Object.assign({}, held, { desk: false, tries, notBefore: Date.now() + RETRY_MS() }); save(); return; }
+  gaveUp(channel, pr, rec, 'first', out);
+}
+function gaveUp(channel, pr, rec, which, out) {
   rec.failed = out.message || 'the relay did not say why.';
   save();
-  say(channel, 'The first review of PR ' + number(pr) + ' could not start ' + MAX_TRIES + ' times: ' + rec.failed + ' Press Get a review on its session.', 'off');
+  say(channel, 'The ' + which + ' review of PR ' + number(pr) + ' could not start ' + MAX_TRIES + ' times: ' + rec.failed + ' Press Get a review on its session.', 'off');
   delivery.save(channel, { key: 'review-limit ' + pr, to: 'lead', expiresAt: Date.now() + LEAD_KEEP,
     text: 'The automatic review of PR ' + pr + ' could not start ' + MAX_TRIES + ' times (' + rec.failed + '), so its review waits on the person. Tell them it is theirs to review or to start a review with Get a review.' });
 }
@@ -164,8 +167,8 @@ async function followUp(channel, pr, from) {
   if (out.error === 'unrelated') { save(); return; }
   if (out.error === 'full') { needsDesk(channel, pr, rec, p); return; }
   const tries = (p.tries || 0) + 1;
-  if (tries >= MAX_TRIES) say(channel, 'The follow-up review of PR ' + number(pr) + ' could not start ' + MAX_TRIES + ' times: ' + (out.message || '') + ' Press Get a review on its session.', 'off');
-  else if (!rec.pending) rec.pending = Object.assign({}, p, { tries, notBefore: Date.now() + RETRY_MS() });
+  if (tries >= MAX_TRIES) { gaveUp(channel, pr, rec, 'follow-up', out); return; }
+  if (!rec.pending) rec.pending = Object.assign({}, p, { tries, notBefore: Date.now() + RETRY_MS() });
   save();
 }
 function needsDesk(channel, pr, rec, p) {
@@ -485,4 +488,6 @@ function deskOf(channel, pr) {
   return r ? { count: r.count || 0, waits: !!r.waits, held: !desk && !retry && !!(r.first || (r.pending && r.why)), desk, retry, failed: !!r.failed } : null;
 }
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, deskQueue, deskLine, deadlockOf };
+const failedOf = (channel, pr) => { const r = pr && recOf(channel, pr); return (r && r.failed) || null; };
+
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, deskQueue, deskLine, deadlockOf, failedOf };

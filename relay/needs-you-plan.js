@@ -11,10 +11,11 @@
 // spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
 // says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
-// handedOver, reviewedSince, onlyYouMerge }, where owner is the terminal of its Dev while that session runs,
-// pipelineWaits says its open PR's pipeline is running or failing, and reviewedSince is the last review posted
-// after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current says
-// the PR's head is that commit.
+// handedOver, reviewedSince, onlyYouMerge, reviewFailed }, where owner is the terminal of its Dev while that
+// session runs, pipelineWaits says its open PR's pipeline is running or failing, reviewedSince is the last review
+// posted after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current
+// says the PR's head is that commit, and reviewFailed is why its PR's automatic review could not start, once the
+// relay stopped trying.
 // A wait is one saved message (relay/delivery.js) that has not gone in for a long time: { terminal, who, minutes,
 // why }, where terminal is the running session it is for, and why says in plain words what holds it.
 // A relay is another relay on this room's state folder (relay/old-relays.js): { pid, file, port, started, paused, worker }.
@@ -27,10 +28,11 @@
 //   permission   a session waits on the person, and its message asks for permission
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   desks        reviews wait for a desk, and the relay may stop none of the sessions that hold them all
-//   main         the latest CI run on main failed, so Autopilot starts no new ticket in that repo
+//   main         the latest push run of CI on main failed, so Autopilot starts no new ticket on that branch
 //   merge        an open PR that only the person may merge
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
 //                with the next step a review posted after it gives
+//   review       an open PR whose automatic review could not start, with the reason, unless a review of it runs
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
@@ -43,7 +45,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'merge', 'handed-over', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -81,6 +83,7 @@ function taskItem(t, dev) {
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
   if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), { url: pr });
+  if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
   if (t.state === 'waiting_on_you') {
     if (t.reviewRuns || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;
     const note = oneLine(t.handedOver || t.note, 300);

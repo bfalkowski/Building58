@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Files a ticket from inside a session the room started. What it files waits in Triage.
 //   node relay/ticket.js create "Radio clips at high volume" --priority high --blocked-by T-1,T-2 --body - <<'EOF'
-//   (blocked-by takes the ids that list and create print: T-1 on the local store, 12 on GitHub issues)
+//   (blocked-by takes the ids that list and create print: T-1 on the local store, 12 on GitHub issues,
+//   with commas and no spaces; the relay refuses an id no ticket has, and a PM's body without its four parts)
 //   node relay/ticket.js create "Decide the layout" --shapes T-7,T-9 --body - <<'EOF'
 //   (a design ticket: while it is open, Autopilot and the Lead start none of the tickets it shapes, which must be in Triage)
 //   node relay/ticket.js create "Title" --kind docs --body - <<'EOF'
@@ -76,6 +77,7 @@ const fs = require('fs');
 const leadTired = require('./lead-tired.js');
 const URL_ = process.env.OFFICE_TICKET_URL, TOKEN = process.env.OFFICE_TICKET_TOKEN;
 
+const LOOSE_ID = /^(T-)?\d+,?$/i;
 function flags(args) {
   const out = { rest: [] };
   for (let i = 0; i < args.length; i++) {
@@ -89,11 +91,16 @@ function flags(args) {
     else if (args[i] === '--title') out.title = args[++i];
     else if (args[i] === '--kind') out.kind = args[++i];
     else if (args[i] === '--label') out.labels = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
-    else if (args[i] === '--blocked-by') out.blockedBy = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
+    else if (args[i] === '--blocked-by' || args[i] === '--shapes') {
+      const flag = args[i], words = [String(args[++i] || '')];
+      while (i + 1 < args.length && LOOSE_ID.test(args[i + 1])) words.push(args[++i]);
+      const ids = words.join(' ').split(/[\s,]+/).filter(Boolean);
+      if (words.length > 1 || /\s/.test(words[0].trim())) out.spaced = 'Write the ids after ' + flag + ' with commas and no spaces: ' + flag + ' ' + ids.join(',') + '.';
+      out[flag === '--shapes' ? 'shapes' : 'blockedBy'] = ids;
+    }
     else if (args[i] === '--by') out.by = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else if (args[i] === '--into') out.into = args[++i];
     else if (args[i] === '--why') out.why = args[++i];
-    else if (args[i] === '--shapes') out.shapes = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else out.rest.push(args[i]);
   }
   return out;
@@ -170,6 +177,7 @@ async function main() {
   }
   if (cmd === 'create') {
     const f = flags(args);
+    if (f.spaced) { console.error(f.spaced + ' Nothing was filed.'); return 1; }
     if (!(await readBody(f))) return 1;
     const r = await (await fetch(URL_, { method: 'POST', headers, body: JSON.stringify({ title: f.rest.join(' '), body: f.body, priority: f.priority, blockedBy: f.blockedBy, shapes: f.shapes, kind: f.kind, labels: f.labels }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
