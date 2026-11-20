@@ -37,6 +37,10 @@
 // the relay for a review of a task's PR. The relay starts a reviewer in its own checkout, as Get a review does. It
 // refuses a PR that is no task's, one a reviewer is on, an ask with no desk free, and a PR past its reviews:
 //   node relay/ticket.js review https://github.com/owner/repo/pull/12
+// Only a session you made the Lead, while you have turned on Let the Lead merge, can decide that a finding a merge
+// review marked non-blocking must be fixed, as Fix it on Needs you does. It lifts the push hold on the task's checkout,
+// moves the task to Changes requested, and tells its Dev (docs/manual/roles.html#push-hold):
+//   node relay/ticket.js fix T-12              (a ticket id, a task id or the PR link)
 // Only a session you made the Lead and let start tickets can start one. The relay refuses past your limit:
 //   node relay/ticket.js start T-1             (from Ready, one at a time, in Board order, while few enough are building)
 // And, while the person runs the relay with RELAY_LEAD_STOPS=1, stop a session the floor calls safe to stop:
@@ -171,6 +175,12 @@ async function main() {
   }
   if (cmd === 'verdict' && ['merge', 'fix'].includes(args[0])) {
     const r = await (await fetch(URL_.replace(/\/tickets$/, '/autopilot/verdict'), { method: 'POST', headers, body: JSON.stringify({ kind: args[0] }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log(r.message);
+    return 0;
+  }
+  if (cmd === 'fix' && args[0]) {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/autopilot/fix'), { method: 'POST', headers, body: JSON.stringify({ task: args[0] }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log(r.message);
     return 0;
@@ -332,7 +342,7 @@ async function main() {
     console.log('Moved: ' + moved.id + '  ' + (r.ticket ? moved.status : moved.state) + (r.ticket && r.ticket.pr ? '  ' + r.ticket.pr : ''));
     return 0;
   }
-  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js show T-1, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js ready (run it bare to see how), ticket.js review <PR link>, or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
+  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js show T-1, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js ready (run it bare to see how), ticket.js review <PR link>, ticket.js fix T-1 (with Let the Lead merge on), or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
   return 1;
 }
 main().then((code) => { process.exitCode = code; }, (e) => { console.error('The relay did not answer: ' + e.message); process.exitCode = 1; });

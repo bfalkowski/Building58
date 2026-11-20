@@ -90,6 +90,14 @@ test('a PR Autopilot handed over stays a decision after review news moves its ta
   assert.strictEqual(item.line, 'Decide on PR #12 (T-5): ' + held);
 });
 
+test('a hand-over whose Dev says a finding is a bug offers Fix it, and no other hand-over does', () => {
+  const held = 'Its Dev says a finding the review marked non-blocking is a bug: https://github.com/o/r/pull/12#issuecomment-1';
+  const [bug] = listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, handedOver: held, devSaysBug: true })] });
+  assert.deepStrictEqual(bug.link, { url: PR, fix: 'k1' });
+  const [rounds] = listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, handedOver: 'Review 2 still asks for fixes.' })] });
+  assert.deepStrictEqual(rounds.link, { url: PR });
+});
+
 test('a PR Autopilot handed over: decide on it, with its reason', () => {
   const dev = seat({ task: 'k1' });
   const [item] = listOf({ seats: [dev], tasks: [task({ owner: dev.terminal, state: 'waiting_on_you', pr: PR, handedOver: 'Its Dev says a finding is a bug: https://github.com/o/r/pull/12#issuecomment-1' })] });

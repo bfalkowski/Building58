@@ -12,9 +12,10 @@
 // spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
 // says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
-// handedOver, reviewedSince, onlyYouMerge, reviewFailed }, where owner is the terminal of its Dev while that
-// session runs, pipelineWaits says its open PR's pipeline is running or failing, reviewedSince is the last review
-// posted after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current
+// handedOver, devSaysBug, reviewedSince, onlyYouMerge, reviewFailed }, where owner is the terminal of its Dev while
+// that session runs, pipelineWaits says its open PR's pipeline is running or failing, devSaysBug says Autopilot handed
+// it over because its Dev says a finding the merge review marked non-blocking is a bug, reviewedSince is the last
+// review posted after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current
 // says the PR's head is that commit, and reviewFailed is why its PR's automatic review could not start, once the
 // relay stopped trying.
 // A wait is one saved message (relay/delivery.js) that has not gone in for a long time: { terminal, who, minutes,
@@ -46,7 +47,8 @@
 //                the relay still has a continue prompt for it
 //   gone         a task in Building or Changes requested with no PR whose session has ended
 // link says what the page opens: { terminal } for a session, { url } for a PR, { ticket } for a Board card,
-// and { stop } for another relay, its pid, which the page's Stop button stops.
+// and { stop } for another relay, its pid, which the page's Stop button stops. A hand-over whose Dev says a finding
+// is a bug also has { fix }, its task's id, which the page's Fix it button sends to POST /autopilot/fix.
 'use strict';
 const { oneLine } = require('./clean.js');
 
@@ -87,7 +89,7 @@ function taskItem(t, dev) {
   const item = (kind, line, link) => ({ kind, who, terminal: dev ? dev.terminal : null, task: t.id, ticket: t.ticket || null, pr, line, link });
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
   if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
-  if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), { url: pr });
+  if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
   if (t.state === 'waiting_on_you') {
     if (t.reviewRuns || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;

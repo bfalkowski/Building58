@@ -2,6 +2,8 @@
 // (relay/needs-you.js). It reads the list every two seconds, as the huddle bar reads its state. Clicking a line
 // opens what it names: the session at its desk, the PR or the failed CI run on GitHub, or the ticket on the Board. A line about
 // another relay on the room's state folder has a Stop button, which asks the relay to stop it (relay/old-relays.js).
+// A PR Autopilot handed over because its Dev says a finding is a bug has a Fix it button: the person agrees, and
+// the relay lifts the push hold and tells the Dev (POST /autopilot/fix, relay/autopilot.js).
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -50,6 +52,18 @@
           .then((r) => { stop.textContent = r && r.ok ? 'Stopped' : 'Not stopped'; stop.title = (r && r.message) || stop.title; drawn = ''; read().then(draw); });
       });
       li.append(stop);
+    }
+    if (typeof link.fix === 'string' && link.fix) {
+      const fix = document.createElement('button');
+      fix.type = 'button'; fix.className = 'needs-stop'; fix.textContent = 'Fix it';
+      fix.title = 'You agree with the Dev: the finding must be fixed in this PR. This lifts the push hold, and its Dev is told to fix it.';
+      fix.addEventListener('click', () => {
+        fix.disabled = true; fix.textContent = 'Sending';
+        fetch(base + '/autopilot/fix?key=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: link.fix }) })
+          .then((r) => r.json()).catch(() => null)
+          .then((r) => { fix.textContent = r && r.ok ? 'Sent to its Dev' : 'Not sent'; fix.title = (r && r.message) || fix.title; drawn = ''; read().then(draw); });
+      });
+      li.append(fix);
     }
     if (item.pr && PR.test(item.pr) && !link.url) {
       const a = document.createElement('a');
