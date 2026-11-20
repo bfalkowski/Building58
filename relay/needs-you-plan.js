@@ -103,7 +103,7 @@ function desksItem(d) {
 
 function redMain(m) {
   const r = m.run || {}, branch = oneLine(m.branch, 80) || 'main', sha = oneLine(r.sha, 64).slice(0, 7), url = oneLine(r.url, 300);
-  return branch + ' of ' + (oneLine(m.name, 80) || 'the repo') + ': ' + (oneLine(r.workflow, 80) || 'CI') + (sha ? ' at ' + sha : '') + ' ended in ' + (oneLine(r.conclusion, 40).replace(/_/g, ' ') || 'failure') + '. Autopilot starts no new ticket there until a run on ' + branch + ' passes.' + (url ? ' ' + url : '');
+  return branch + ' of ' + (oneLine(m.name, 80) || 'the repo') + ': ' + (oneLine(r.workflow, 80) || 'CI') + (sha ? ' at ' + sha : '') + ' ended in ' + (oneLine(r.conclusion, 40).replace(/_/g, ' ') || 'failure') + '. Autopilot starts no new ticket on ' + branch + ' there until a push run on ' + branch + ' passes.' + (url ? ' ' + url : '');
 }
 
 function listOf(input) {

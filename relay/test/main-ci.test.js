@@ -25,6 +25,9 @@ test('what main\'s runs say', () => {
   assert.strictEqual(stateOf([run({ status: 'in_progress', conclusion: '', createdAt: '2026-11-20T12:00:00Z' }), FAILED]).state, 'red', 'a run still going changes nothing');
   assert.strictEqual(stateOf([run({ conclusion: 'cancelled', createdAt: '2026-11-20T12:00:00Z' }), FAILED]).state, 'red', 'a cancelled run is not a pass');
   assert.strictEqual(stateOf([run({ event: 'pull_request', createdAt: '2026-11-20T12:00:00Z' }), FAILED]).state, 'red', 'a pull request run does not test main');
+  assert.strictEqual(stateOf([run({ event: 'schedule', conclusion: 'failure', createdAt: '2026-11-20T12:00:00Z' }), run()]).state, 'green', 'a weekly run tests Node 18 too, so its failure is not a red main');
+  assert.strictEqual(stateOf([run({ event: 'workflow_dispatch', conclusion: 'failure', createdAt: '2026-11-20T12:00:00Z' }), run()]).state, 'green', 'nor is a by-hand run');
+  assert.strictEqual(stateOf([run({ event: 'schedule', createdAt: '2026-11-20T12:00:00Z' }), FAILED]).state, 'red', 'and a weekly pass does not clear a failed push');
   assert.strictEqual(stateOf([run({ workflowName: 'Pages', createdAt: '2026-11-20T12:00:00Z' }), FAILED]).state, 'red', 'each workflow counts on its own');
   assert.strictEqual(stateOf([run({ conclusion: 'timed_out' })]).state, 'red');
   assert.strictEqual(stateOf({}).state, 'unknown');
@@ -34,7 +37,7 @@ test('Needs you puts a red main after desks and before a merge', () => {
   const items = listOf({ tasks: [{ id: 't1', ticket: 'T-1', state: 'in_review', pr: 'https://github.com/a/b/pull/3', prOpen: true, onlyYouMerge: 'It changes CLAUDE.md.' }], mains: [{ name: 'widgets', branch: 'main', run: stateOf([FAILED]).run }] });
   assert.deepStrictEqual(items.map((i) => i.kind), ['main', 'merge']);
   assert.deepStrictEqual(items[0].link, { url: RUN });
-  assert.match(items[0].line, /^Look at the failed CI run on main of widgets: CI at bbbbbbb ended in failure\. Autopilot starts no new ticket there until a run on main passes\. https:\/\/github\.com\/acme\/widgets\/actions\/runs\/42$/);
+  assert.match(items[0].line, /^Look at the failed CI run on main of widgets: CI at bbbbbbb ended in failure\. Autopilot starts no new ticket on main there until a push run on main passes\. https:\/\/github\.com\/acme\/widgets\/actions\/runs\/42$/);
 });
 
 test('a red main holds Autopilot and shows in Needs you and on the Floor, and a pass clears it', async (t) => {
@@ -76,7 +79,7 @@ test('a red main holds Autopilot and shows in Needs you and on the Floor, and a 
   await t.test('it asks GitHub about main once a setting\'s time at most', async () => {
     const seconds = (Date.now() - began) / 1000;
     const asked = fs.readFileSync(path.join(ghDir, 'calls.log'), 'utf8').split('\n').filter((l) => l.startsWith('run list'));
-    assert.ok(asked.every((l) => l === 'run list --branch main --limit 20 --json databaseId,workflowName,status,conclusion,url,headSha,event,createdAt'), asked.join('\n'));
+    assert.ok(asked.every((l) => l === 'run list --branch main --event push --limit 20 --json databaseId,workflowName,status,conclusion,url,headSha,event,createdAt'), asked.join('\n'));
     assert.ok(asked.length >= 2 && asked.length <= Math.ceil(seconds) + 1, asked.length + ' asks in ' + seconds + ' seconds');
   });
 });

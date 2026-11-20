@@ -79,7 +79,7 @@ jobs:
           fetch-depth: 0
       # The pre-commit secret check, on what the pull request adds since its base. The hook runs only
       # where it is turned on, and --no-verify skips it, so this is the check that holds. A docs-only
-      # change runs it too. A scheduled or by-hand run has no pull request, so it is skipped.
+      # change runs it too. A push to main, a scheduled run and a by-hand run have no pull request, so it is skipped.
       - name: no secrets in what the pull request adds
         if: github.event_name == 'pull_request'
         env:

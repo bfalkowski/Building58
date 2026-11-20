@@ -2,16 +2,17 @@
 // pass can break main when they merge minutes apart, so CI runs on each push to main, and a red main is
 // shown where the person and the Lead look. See docs/manual/roles.html#red-main.
 //
-// Every mainCiPollSeconds (Settings, 120) the relay asks gh run list --branch <base> once for each repo and
-// base branch that a task of this room uses, and for each one Autopilot is about to start a ticket in. It
-// keeps the last answer in memory, and asks again about a branch only once that answer is mainCiPollSeconds old. For each workflow it takes the newest finished run that was not for a
-// pull request and not cancelled. Main is
+// Every mainCiPollSeconds (Settings, 120) the relay asks gh run list --branch <base> --event push once for
+// each repo and base branch that a task of this room uses, and for each one Autopilot is about to start a
+// ticket in. It keeps the last answer in memory, and asks again about a branch only once that answer is
+// mainCiPollSeconds old. For each workflow it takes the newest finished run that a push started and that
+// was not cancelled. Weekly and by-hand runs test more, such as Node 18, so they do not count. Main is
 //   red      the newest such run of a workflow failed, timed out or could not start
 //   green    every workflow's newest such run passed, or was skipped or neutral
 //   none     there is no such run yet
 //   unknown  gh did not answer, or sent something unreadable
 // Only red holds anything back: Needs you shows it with the failed run's link (relay/needs-you-plan.js), the
-// Lead's Floor shows it (relay/floor.js), and Autopilot starts no new ticket in that repo (relay/autopilot.js).
+// Lead's Floor shows it (relay/floor.js), and Autopilot starts no new ticket on that base branch (relay/autopilot.js).
 // A run that is still going changes nothing, so main stays red until a run passes.
 'use strict';
 const { execFile } = require('child_process');
@@ -24,14 +25,13 @@ const { oneLine } = require('./clean.js');
 const GH = process.env.GH_CMD || 'gh';
 const RED = ['FAILURE', 'TIMED_OUT', 'STARTUP_FAILURE'];
 const OK = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
-const PR_EVENTS = ['pull_request', 'pull_request_target'];
 const FIELDS = 'databaseId,workflowName,status,conclusion,url,headSha,event,createdAt';
 const up = (x) => String(x || '').toUpperCase();
 
 function stateOf(runs) {
   if (!Array.isArray(runs)) return { state: 'unknown', error: 'gh sent something unreadable' };
   const newest = new Map();
-  const done = runs.filter((r) => r && !PR_EVENTS.includes(r.event) && up(r.status) === 'COMPLETED' && (RED.includes(up(r.conclusion)) || OK.includes(up(r.conclusion))))
+  const done = runs.filter((r) => r && r.event === 'push' && up(r.status) === 'COMPLETED' && (RED.includes(up(r.conclusion)) || OK.includes(up(r.conclusion))))
     .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
   for (const r of done) if (!newest.has(r.workflowName || '')) newest.set(r.workflowName || '', r);
   if (!newest.size) return { state: 'none' };
@@ -47,7 +47,7 @@ const on = () => config.get('mainCiPollSeconds') > 0;
 
 function list(repo, branch) {
   return new Promise((resolve) => {
-    execFile(GH, ['run', 'list', '--branch', branch, '--limit', '20', '--json', FIELDS], { cwd: repo && fs.existsSync(repo) ? repo : os.homedir(), timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => {
+    execFile(GH, ['run', 'list', '--branch', branch, '--event', 'push', '--limit', '20', '--json', FIELDS], { cwd: repo && fs.existsSync(repo) ? repo : os.homedir(), timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => {
       if (err) { resolve({ state: 'unknown', error: err.code === 'ENOENT' ? 'gh is not installed' : String(stderr || err.message).trim().split('\n')[0].slice(0, 160) || 'gh failed' }); return; }
       try { resolve(stateOf(JSON.parse(stdout))); } catch (e) { resolve({ state: 'unknown', error: 'gh sent something unreadable' }); }
     });
