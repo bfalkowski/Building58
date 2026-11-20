@@ -227,7 +227,8 @@ function holdFirst(channel, pr, from, t) {
 function queueFirst(channel, pr, from, t) {
   if (pipeline.on()) holdFirst(channel, pr, from, t); else firstReview(channel, pr, { from, dev: t ? t.id : null, at: Date.now() });
 }
-const deskFree = (channel) => terminal.all(channel).filter((t) => !t.exited).length < terminal.DESKS;
+const startingIn = (channel) => [...starting].filter((k) => k.startsWith(channel + ' ')).length;
+const deskFree = (channel) => terminal.all(channel).filter((t) => !t.exited).length + startingIn(channel) < terminal.DESKS;
 function firstReviews(channel, c) {
   for (const [pr, r] of Object.entries(c.prs)) {
     if (!r.first || starting.has(channel + ' ' + pr)) continue;
