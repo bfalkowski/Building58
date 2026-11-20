@@ -184,3 +184,21 @@ test('a Dev whose session ended is parked as session ended, and is not nudged', 
   assert.match(parked.history.filter((h) => h.type === 'moved').pop().note, /its Dev's session ended, and there is no PR\.$/);
   assert.ok(!(await notes()).some((n) => /nudged/.test(n)), 'nobody to nudge');
 });
+
+// T-221: the nudge is forgotten on every park, not only on a park for no PR. A Dev nudged once, then
+// parked at a question, and brought back, gets a new nudge when it stalls again.
+test('a Dev nudged, then parked at a question and back, is nudged again on its next stall', async (t) => {
+  const { dev, taskOf, nudges, say } = await autopilotRig(t);
+  await say(dev.sessionId, 'Stop');
+  await until(async () => (await nudges()) === 1, 'the first nudge');
+  await say(dev.sessionId, 'UserPromptSubmit');
+  await say(dev.sessionId, 'Notification', { message: 'Claude needs your permission to use Bash' });
+  const parked = await until(async () => { const x = await taskOf(); return x.state === 'waiting_on_you' && x; }, 'the task to wait on you at its question');
+  assert.match(parked.history.filter((h) => h.type === 'moved').pop().note, /at a question/);
+  await say(dev.sessionId, 'PostToolUse', { tool_name: 'Bash' });
+  await say(dev.sessionId, 'PreToolUse', { tool_name: 'Bash' });
+  await until(async () => (await taskOf()).state === 'building', 'the task to go back to Building');
+  await say(dev.sessionId, 'Stop');
+  await until(async () => (await nudges()) === 2, 'a second nudge for the second stall');
+  assert.strictEqual((await taskOf()).state, 'building', 'nudged, not parked at once');
+});

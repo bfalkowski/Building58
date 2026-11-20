@@ -34,6 +34,7 @@
 #board-cols .th-session code { font: 11px/1.3 var(--mono); user-select: all; }
 #board-cols .th-session .btn { padding: 2px 6px; font-size: 11px; }
 #board-cols li[data-found], #board-rejected li[data-found] { outline: 2px solid var(--wait); outline-offset: 1px; }
+.proposal { margin: 6px 0 4px; font-size: 12px; }
 .card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .card-actions .btn { padding: 5px 8px; font-size: 12px; }
 .card-actions input { flex: 1 1 8em; min-width: 0; font: 12px var(--mono); padding: 4px 6px; }

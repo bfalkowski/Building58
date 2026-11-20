@@ -10,6 +10,9 @@
 // localhost or 127.0.0.1 (not a tunnel's name), and a browser request must come from the
 // relay's own page (its Origin). Other websites, tunnels and other computers get 403, even
 // with the right key.
+//
+// redraw(t) makes a session draw its whole screen again, as a resize does. It widens the terminal by one
+// column, and puts the width back at the next output, or after REDRAW_BACK. t.cols and t.rows do not change.
 'use strict';
 const crypto = require('crypto');
 const fs = require('fs');
@@ -145,9 +148,27 @@ function saveLeads() {
   fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(leads), null, 2) + '\n', { mode: 0o600 });
   fs.renameSync(tmp, LEAD_FILE);
 }
+const LEAD_STOP_SAYS = 'That session is the Lead, so it was not stopped. A stop loses its turn in progress, and it comes back as the Lead only with Bring back. To make a slow Lead fresh, use Refresh the Lead. To stop it anyway, send lead: true.';
+const ENDED_SAYS = { stopped: 'The Lead\'s session was stopped.', ended: 'The Lead\'s session ended.', crashed: 'The Lead\'s session ended with an error.' };
+function offerBack(channel, t, code) {
+  const saved = leads.get(channel);
+  if (closing || !saved || saved.sessionId !== t.sessionId) return;
+  offered.set(channel, Object.assign({}, saved, { ended: t.stopped ? 'stopped' : code ? 'crashed' : 'ended', exitCode: t.stopped ? null : code, endedAt: new Date().toISOString() }));
+}
+function leadEndedOf(channel) {
+  const offer = !leadOf(channel) && restoreOf(channel);
+  if (!offer || !offer.ended) return null;
+  return { ended: offer.ended, sessionId: offer.sessionId, title: offer.title || null, endedAt: offer.endedAt, says: ENDED_SAYS[offer.ended] + ' No session is the Lead now. Its handoff notes are kept. Bring back as the Lead, on the page, returns it.' };
+}
+function leadIn(dir) {
+  const want = real(dir), inside = (cwd) => !!cwd && (real(cwd) === want || real(cwd).startsWith(want + path.sep));
+  for (const saved of leads.values()) if (inside(saved.cwd)) return true;
+  for (const terms of channels.values()) for (const t of terms.values()) if (t.lead && inside(t.cwd)) return true;
+  return false;
+}
 function restoreOf(channel) {
   const lead = offered.get(channel);
-  return lead && ![...termsOf(channel).values()].some((t) => t.sessionId === lead.sessionId) ? lead : null;
+  return lead && !leadOf(channel) && ![...termsOf(channel).values()].some((t) => t.sessionId === lead.sessionId) ? lead : null;
 }
 function leadOf(channel) {
   return [...termsOf(channel).values()].find((t) => !t.exited && t.lead) || null;
@@ -205,7 +226,7 @@ let closing = false, savedText = null;
 function keepOf(t) {
   return { sessionId: t.sessionId, seat: t.seat || undefined, who: t.who || undefined, talked: !!t.talked, cwd: t.cwd, from: t.from, title: t.title, customTitle: t.customTitle || undefined, task: t.task, role: t.role, pr: t.pr,
     lead: !!t.lead, board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, owesBrief: !!t.owesBrief, owesPrompt: t.owesPrompt || undefined, reviewOf: t.reviewOf || undefined, round: t.round || undefined, posted: t.posted || undefined, cols: t.cols, rows: t.rows,
-    terminal: t.id, state: t.state, message: t.message || undefined, waitingAt: t.state === 'waiting' ? t.waitingAt : undefined, hooked: !!t.hooked, heard: !!t.heard, spoke: !!t.spoke, hookAt: t.hookAt || undefined };
+    terminal: t.id, state: t.state, message: t.message || undefined, waitingAt: t.state === 'waiting' ? t.waitingAt : undefined, hooked: !!t.hooked, heard: !!t.heard, spoke: !!t.spoke, hookAt: t.hookAt || undefined, actAt: t.lastActAt || undefined };
 }
 const FAIL_WITHIN = 10 * 1000, MAX_TRIES = 3;
 const failed = new Map();
@@ -312,6 +333,7 @@ function startLead(channel, cwd, ctx) {
   offered.delete(channel);
   const startNew = (why) => {
     if (leadOf(channel) || closing) return;
+    offered.delete(channel);
     const r = start(channel, { cwd }, ctx, null, { newLead: true });
     ctx.log(r.status < 400 ? why + 'Started a new Lead in ' + cwd + ' on ' + channel + '.' : why + 'Could not start a Lead on ' + channel + ': ' + r.body.message);
   };
@@ -365,7 +387,7 @@ function start(channel, body, ctx, onExit, own) {
     if (h) delete h['saved ' + restoring.sessionId];
     if (n) delete n['saved ' + restoring.sessionId];
   }
-  if (adopted) { t.state = ['working', 'waiting'].includes(adopted.state) ? adopted.state : 'idle'; t.message = adopted.message || null; if (t.state === 'waiting') t.waitingAt = adopted.waitingAt || Date.now(); t.hooked = !!adopted.hooked; t.heard = !!adopted.heard; t.hookAt = Number(adopted.hookAt) || 0; }
+  if (adopted) { t.state = ['working', 'waiting'].includes(adopted.state) ? adopted.state : 'idle'; t.message = adopted.message || null; if (t.state === 'waiting') t.waitingAt = adopted.waitingAt || Date.now(); t.hooked = !!adopted.hooked; t.heard = !!adopted.heard; t.hookAt = Number(adopted.hookAt) || 0; t.lastActAt = Number(adopted.actAt) || t.hookAt || t.lastActAt; }
   if (kept && kept.posted && t.reviewOf) {
     t.posted = kept.posted;
     t.ending = setTimeout(() => { t.ending = null; reviewDone(channel, t); }, REVIEW_GRACE());
@@ -375,6 +397,7 @@ function start(channel, body, ctx, onExit, own) {
   const emitOut = (buf) => {
     t.out.push(buf); t.outSize += buf.length;
     t.lastOutAt = Date.now(); t.tail = (t.tail + buf.toString('latin1')).slice(-TAIL);
+    if (t.redrawing) widthBack(t);
     if (t.sinceKey !== null) t.sinceKey = (t.sinceKey + buf.toString('latin1')).slice(-TAIL);
     while (t.outSize > KEEP && t.out.length > 1) t.outSize -= t.out.shift().length;
     t.pendingOut.push(buf);
@@ -385,6 +408,7 @@ function start(channel, body, ctx, onExit, own) {
     reseat(channel);
     keepReviewer(t);
     if (t.refresh) endRefresh(t, 'The Lead\'s session ended before the refresh finished.', false);
+    if (t.lead) offerBack(channel, t, code);
     setTimeout(() => {
       flushOut(t);
       for (const v of t.viewers) sse(v, 'exit', { code: t.exitCode, stopped: !!t.stopped });
@@ -498,6 +522,17 @@ function typeIfSafe(t, text, wanted, done, brief) {
   }, TYPE_SETTLE);
 }
 
+const REDRAW_BACK = 1000;
+function widthBack(t) {
+  clearTimeout(t.redrawing); t.redrawing = null;
+  if (!t.exited && !t.stopped) t.io.resize(t.cols, t.rows);
+}
+function redraw(t) {
+  if (!t || t.exited || t.stopped || t.redrawing) return;
+  t.redrawing = setTimeout(() => widthBack(t), REDRAW_BACK);
+  t.io.resize(t.cols + 1, t.rows);
+}
+
 const NOTE_SEEN = 30;
 function noteShown(t, text) {
   const key = Buffer.from(String(text).replace(/\s+/g, '').slice(0, NOTE_SEEN)).toString('latin1');
@@ -524,6 +559,9 @@ function noteTyping(t, data) {
   if (/[^\x00-\x1f\x7f]/.test(plain.slice(enter + 1))) t.drafting = true;
   else if (/\x03|\x15/.test(plain)) t.drafting = false;
 }
+
+const QUESTION_KINDS = ['permission_prompt', 'elicitation_dialog'];
+const asksQuestion = (ev) => ev.notification_type ? QUESTION_KINDS.includes(ev.notification_type) : !/waiting for your input|idle/i.test(ev.message || '');
 
 function noteHook(channel, ev) {
   if (!ev || !ev.hook_event_name) return;
@@ -556,7 +594,7 @@ function noteHook(channel, ev) {
   if (name === 'UserPromptSubmit' || (name === 'PreToolUse' && !ev.agent_id)) { t.state = 'working'; t.message = null; t.turnAt = Date.now(); t.stuck = null; }
   else if (name === 'PreToolUse') { if (t.state === 'waiting') { t.state = 'working'; t.message = null; } }
   else if (name === 'Stop' || name === 'StopFailure' || name === 'SessionEnd') { t.state = 'idle'; t.message = null; }
-  else if (name === 'Notification' && !/waiting for your input|idle/i.test((ev.message || '') + ' ' + (ev.notification_type || ''))) { if (t.state !== 'waiting') t.waitingAt = Date.now(); t.state = 'waiting'; t.message = ev.message || null; }
+  else if (name === 'Notification' && asksQuestion(ev)) { if (t.state !== 'waiting') t.waitingAt = Date.now(); t.answeredAt = null; t.state = 'waiting'; t.message = ev.message || null; }
   if (t.lead) keepLeadSaved(channel, t);
   saveSessions();
   if (t.reviewOf) noteReview(channel, t, name, ev);
@@ -655,6 +693,12 @@ function noteReview(channel, t, name, ev) {
     else { if (t.posted) console.log('The review of ' + t.reviewOf + ' got a prompt that was not the relay\'s, so it stays.'); keepReviewer(t); }
   } else if (name === 'Stop' && !t.posted) tell(turnEndFns, channel, t, 'After a review\'s turn ended');
   else if (name === 'Stop' && !t.ending && !t.exited) t.ending = setTimeout(() => { t.ending = null; reviewDone(channel, t); }, REVIEW_GRACE());
+}
+function reviewFound(channel, t, url) {
+  if (t.exited || t.stopped || t.posted || !t.reviewOf) return;
+  t.posted = { kind: 'comment', url };
+  console.log('The review of ' + t.reviewOf + ' is on the PR. Its session ends ' + REVIEW_GRACE() / 1000 + ' seconds after its turn does.');
+  if (t.state !== 'working' && !t.ending) t.ending = setTimeout(() => { t.ending = null; reviewDone(channel, t); }, REVIEW_GRACE());
 }
 function tell(fns, channel, t, what) { for (const fn of fns) { try { fn(channel, t); } catch (e) { console.error(what + ': ' + e.message); } } }
 function pauseReview(t) { clearTimeout(t.ending); t.ending = null; }
@@ -774,6 +818,8 @@ async function handle(req, res, channel, rest, ctx) {
     ctx.send(res, 200, { ok: true, cols, rows }); return true;
   }
   if (req.method === 'POST' && verb === 'stop') {
+    const body = await ctx.readJson(req);
+    if (t.lead && !t.exited && body.lead !== true) { ctx.problem(res, 409, 'lead', LEAD_STOP_SAYS); return true; }
     t.stoppedBy = ctx.agent ? 'Lead' : 'you';
     stop(t);
     ctx.send(res, 200, { ok: true }); return true;
@@ -826,4 +872,4 @@ function agentFor(req) {
 const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited);
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, expand, localOnly, agentFor, runningIn, useStart, ENABLED, wipLimit, MAX_PROMPT };
+module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, reviewFound, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };

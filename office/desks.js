@@ -2,6 +2,7 @@
 // its PR with CI and review, the next step and who owns it, and Safe to stop. office/panel.js draws
 // it on each person's row, and how tired the Lead is (relay/lead-tired.js). This file asks the relay and does the stops: a desk's Stop, and Stop all
 // safe at the top of the Floor. The relay checks each desk again before it stops it.
+// When the Lead's session has ended, a line above the Floor says so, with Bring back as the Lead, which office/terminal.js does.
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -11,6 +12,17 @@
   if (!channel || !allBtn) return;
   const at = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + p + '?key=' + encodeURIComponent(key);
   let desks = {}, busy = false;
+  const gone = document.createElement('p'), goneText = document.createElement('span'), goneBtn = document.createElement('button');
+  gone.className = 'cc-ask'; gone.id = 'lead-gone'; gone.setAttribute('role', 'status'); gone.hidden = true;
+  goneBtn.type = 'button'; goneBtn.className = 'btn primary'; goneBtn.textContent = 'Bring back as the Lead';
+  goneBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('office:bring-back-lead')));
+  gone.append(goneText, goneBtn);
+  const people = $('people');
+  if (people) people.before(gone);
+  function drawGone(ended) {
+    gone.hidden = !ended;
+    goneText.textContent = ended ? ended.says : '';
+  }
   function say(text, bad) { note.textContent = text || ''; note.hidden = !text; note.dataset.bad = bad ? '1' : ''; }
   function publish() {
     window.OFFICE_DESKS = desks;
@@ -26,6 +38,7 @@
       const next = {};
       for (const s of r.sessions) if (s.desk) next[s.terminal] = Object.assign({ name: s.name, lead: s.role === 'Lead', tired: s.tired || null }, s.desk);
       desks = next;
+      drawGone(r.leadEnded || null);
       publish();
     } catch (e) { return; }
   }

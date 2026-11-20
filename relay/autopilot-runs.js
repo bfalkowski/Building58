@@ -12,7 +12,9 @@ const BLOCKED = {
   silent: 'a session sent no hook and printed nothing',
   'reviewer-not-started': 'a reviewer did not start on its brief',
   stalled: 'nothing moved it',
-  'brief-not-delivered': 'its Dev did not get the brief'
+  'brief-not-delivered': 'its Dev did not get the brief',
+  'dev-gone': 'its Dev was not running and could not be brought back',
+  'conflict-dropped': 'its Dev did not merge main after two asks'
 };
 const MANUAL = {
   'protected-file': 'it changes a file only a person merges',

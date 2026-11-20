@@ -10,7 +10,8 @@
 // watches the PR of a session with no task too (T-293), so the brief says all Devs.
 //
 // The Lead never reviews code in its own session, itself or with a subagent, since the Floor cannot see that
-// (T-98). ticket.js review asks the relay for a reviewer of its own, while Let the Lead start reviews is on.
+// (T-98). ticket.js review asks the relay for a reviewer of its own, while Let the Lead start reviews or
+// Autopilot is on.
 //
 // Merging is the person's switch (merge: true, Let the Lead merge). While it is off the brief says
 // never merge. While it is on, it names the merge rung's five conditions and sends the Lead to the
@@ -22,8 +23,9 @@
 // to check and what the note says, so the brief only names it.
 //
 // While Autopilot is on (autopilot: true, level 5), only the relay starts and merges, whatever the merge
-// switch says, and the brief names the Lead's two rights in the same words as the level on the page and
-// article 5. The relay holds the Lead to them too (leadRefusal in relay/autopilot.js).
+// switch says, and the brief names the Lead's three rights in the same words as the level on the page and
+// article 5. The relay holds the Lead to them too (leadRefusal in relay/autopilot.js). The third, a review
+// through the relay, needs no Let the Lead start reviews while Autopilot is on (relay/reviews.js, T-333).
 //
 // Setting priority and order is the person's switch too (leadOrder, Let the Lead set priority, T-128).
 // While it is on, one line says the Lead may set them when the person asks, and never undoes a ticket the
@@ -33,7 +35,7 @@
 const path = require('path');
 
 const AUTOPILOT = 'Autopilot is on, so only the relay starts and merges work. Never merge a pull request. ' +
-  'You keep two rights: stop a session the Floor calls safe to stop, and move a task to Done once its PR has merged. ';
+  'You keep three rights: stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR. ';
 
 const ORDER = 'When the person asks, order Triage or Ready tickets with ticket.js priority and order; never undo one set by the person. ';
 

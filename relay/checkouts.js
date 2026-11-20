@@ -3,6 +3,13 @@
 // one at the PR's latest commit. Tasks have their own (relay/tasks.js). See docs/manual/running.html#checkouts.
 //
 // A checkout nobody can miss goes when its session ends. The rest wait in the panel for Clean up.
+//
+// A copy of a ref, such as refs/stash 2, that iCloud or Finder made in a synced folder, makes git fetch fail with
+// bad object, even when the commit it holds exists. A review's fetch or checkout takes such a file away and tries
+// again (mending). It deletes the file when its commit is missing or another ref already reaches it. Otherwise it
+// moves the commit to a valid name under refs/office/rescued/, so git gc cannot prune it. The log says which, and an
+// error after a move names it too. A copy with no hash and no ref: line is kept. It and any other bad ref are
+// named, with their file, in the error the review gives.
 // Like the terminal, this answers only the room page on this machine, while RELAY_TERMINAL=1.
 'use strict';
 const { execFile } = require('child_process');
@@ -77,6 +84,7 @@ async function remove(c) {
   }
   return kept;
 }
+const LEAD_KEEPS = 'The Lead\'s session runs, or last ran, in this checkout, and Bring back needs it. Make another session the Lead first.';
 const turns = new Map();
 function inTurn(c, fn) {
   const run = (turns.get(c) || Promise.resolve()).then(fn);
@@ -88,7 +96,7 @@ const settle = (channel, c, spoke, log) => inTurn(c, async () => {
   try {
     if (!listOf(channel).includes(c)) return;
     if (c.kind === 'worker' && spoke) return;
-    if (terminal.runningIn(c.path) || terminal.failedIn(c.path)) return;
+    if (terminal.runningIn(c.path) || terminal.failedIn(c.path) || terminal.leadIn(c.path)) return;
     const left = await leftBehind(c);
     if (left) { c.left = left; save(); return; }
     await remove(c);
@@ -160,6 +168,10 @@ async function roomCloneOf(channel, owner, name) {
   }
   return null;
 }
+async function roomKnows(channel, pr) {
+  const m = String(pr).match(PR_URL);
+  return !!(m && await roomCloneOf(channel, m[1], m[2]).catch(() => null));
+}
 async function reviewTop(channel, top, from, pr, log) {
   const [, owner, name] = pr.match(PR_URL);
   if (await isCloneOf(top, owner, name)) return top;
@@ -174,22 +186,78 @@ function quietEnv(env) {
 }
 const NO_PROMPT = { timeout: 30000, env: quietEnv(process.env) };
 const unsecret = (text) => String(text).replace(/(\/\/)[^/@\s]+@/g, '$1');
+const COPY = / \d+$/, BAD_REF = /bad object (refs\/[^\n]+?)\s*$/m, MENDS = 5;
+async function refFile(top, ref) {
+  const common = path.resolve(top, await git(top, ['rev-parse', '--git-common-dir']));
+  const file = path.resolve(common, ref);
+  return file.startsWith(path.join(common, 'refs') + path.sep) ? file : null;
+}
+const HASH = /^[0-9a-f]{40}([0-9a-f]{24})?$/, RESCUED = 'refs/office/rescued/';
+const reachedElsewhere = (top, held) => git(top, ['for-each-ref', '--contains', held, '--format=%(refname)'])
+  .then((out) => out.split('\n').some((r) => r && !/\s/.test(r) && !r.startsWith('refs/office/review/')), () => false);
+async function rescue(top, ref, held) {
+  const name = RESCUED + ref.slice('refs/'.length).replace(/\s+/g, '-');
+  for (const to of [name, name + '-' + held.slice(0, 7)]) {
+    if (await git(top, ['update-ref', to, held, '']).then(() => true, () => false)) return to;
+  }
+  return null;
+}
+async function mendCopy(top, message, log, rescued) {
+  const ref = (String(message).match(BAD_REF) || [])[1];
+  if (!ref || !COPY.test(ref)) return false;
+  const file = await refFile(top, ref);
+  const held = file && (() => { try { return fs.lstatSync(file).isFile() && fs.readFileSync(file, 'utf8').trim(); } catch (e) { return null; } })();
+  if (held === null || held === false || !file) return false;
+  const why = 'a copy of a ref that iCloud or Finder made, since git cannot read a ref with a space in its name';
+  if (!HASH.test(held)) {
+    if (held && !held.startsWith('ref: ')) return false;
+    fs.unlinkSync(file);
+    log('Removed ' + file + ', ' + why + '. It held ' + (held || 'nothing') + ', no commit of its own.');
+    return true;
+  }
+  const missing = await git(top, ['cat-file', '-e', held]).then(() => false, () => true);
+  if (missing || await reachedElsewhere(top, held)) {
+    fs.unlinkSync(file);
+    log('Removed ' + file + ', ' + why + '. It held ' + held + (missing ? ', which this repo does not have.' : ', which another ref already reaches.'));
+    return true;
+  }
+  const to = await rescue(top, ref, held);
+  if (!to) return false;
+  fs.unlinkSync(file);
+  rescued.push(file + ' to ' + to);
+  log('Moved ' + file + ', ' + why + ', to ' + to + '. It held ' + held + ', which no other ref reaches, so the commit is kept there.');
+  return true;
+}
+async function named(top, e, rescued) {
+  const ref = (String(e.message).match(BAD_REF) || [])[1], file = ref && await refFile(top, ref).catch(() => null);
+  if (file) e.message += ' The broken ref is the file ' + file + '. Remove it if nothing needs it, then press Get a review.';
+  if (rescued.length) e.message += ' The relay moved ' + rescued.join(', ') + ', so their commits are kept.';
+  return e;
+}
+async function mending(top, args, opts, log) {
+  const rescued = [];
+  for (let left = MENDS; ; left--) {
+    try { return await git(top, args, opts); } catch (e) {
+      if (!(left > 0 && await mendCopy(top, e.message, log, rescued).catch(() => false))) throw await named(top, e, rescued);
+    }
+  }
+}
 const hasCommits = (top) => git(top, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).then(() => true, () => false);
-async function forReview(c, top, pr, unlessAt) {
+async function forReview(c, top, pr, unlessAt, log) {
   const [, owner, name, number] = pr.match(PR_URL);
   const source = await sourceFor(top, owner, name);
   if (!source) return [400, { ok: false, error: 'no_remote', message: top + ' has no remote at github.com, so it cannot review ' + pr + '.' }];
   c.ref = 'refs/office/review/' + c.id;
   const refspec = '+refs/pull/' + number + '/head:' + c.ref, fetch = ['fetch', '--no-write-fetch-head', '--no-tags'];
   if (source.remote) {
-    try { await git(top, fetch.concat(source.remote, refspec), NO_PROMPT); } catch (e) {
+    try { await mending(top, fetch.concat(source.remote, refspec), NO_PROMPT, log); } catch (e) {
       return [502, { ok: false, error: 'fetch', message: 'Could not fetch ' + pr + ': ' + unsecret(e.message) }];
     }
   } else {
     if (!(await hasCommits(top))) return [400, { ok: false, error: 'no_commits', message: top + ' has no commits yet, so the relay cannot tell whether ' + pr + ' is of the same project. Review it from a clone of ' + owner + '/' + name + '.' }];
     const failed = [];
     for (const url of source.urls) {
-      try { await git(top, fetch.concat(url, refspec), NO_PROMPT); failed.length = 0; break; } catch (e) { failed.push(unsecret(url + ': ' + e.message)); }
+      try { await mending(top, fetch.concat(url, refspec), NO_PROMPT, log); failed.length = 0; break; } catch (e) { failed.push(unsecret(url + ': ' + e.message)); }
     }
     if (failed.length) return [502, { ok: false, error: 'fetch', message: 'No remote of ' + top + ' is ' + owner + '/' + name + ', and fetching ' + pr + ' from its own repo failed. ' + failed.join(' ') }];
   }
@@ -202,7 +270,7 @@ async function forReview(c, top, pr, unlessAt) {
     await git(top, ['update-ref', '-d', c.ref]);
     return [200, { ok: true, unchanged: true, commit: c.commit }];
   }
-  await git(c.repo, ['worktree', 'add', '--detach', c.path, c.commit]);
+  await mending(c.repo, ['worktree', 'add', '--detach', c.path, c.commit], undefined, log);
   return null;
 }
 async function forWorker(c, top) {
@@ -237,7 +305,7 @@ async function make(channel, body, ctx, ask) {
   const c = { id, kind, repo, from, path: path.join(repo, WORKTREES, name), branch: pr ? null : name, ref: null, pr, commit: null, createdAt: new Date().toISOString() };
   try {
     await excludeWorktrees(repo);
-    const refused = pr ? await forReview(c, top, pr, unlessAt) : await forWorker(c, top);
+    const refused = pr ? await forReview(c, top, pr, unlessAt, ctx.log) : await forWorker(c, top);
     if (refused) return refused;
     await linkModules(repo, c.path);
   } catch (e) {
@@ -311,6 +379,7 @@ const view = (channel, c) => Object.assign({}, c, { running: terminal.runningIn(
 const clean = (channel, c, body) => inTurn(c, async () => {
   if (!listOf(channel).includes(c)) return [200, { ok: true, removed: c.id, branches: [] }];
   if (terminal.runningIn(c.path)) return [409, { ok: false, error: 'in_use', message: 'A session is still running in this checkout. Stop it first.' }];
+  if (terminal.leadIn(c.path)) return [409, { ok: false, error: 'lead', message: LEAD_KEEPS }];
   let branches;
   try {
     if (fs.existsSync(c.repo) && fs.existsSync(c.path)) {
@@ -350,4 +419,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { forPm, pmBaseOf, parseRemote, unsecret, quietEnv, handle, create, sweep, onExitFor, onReview, useAsk, busy: () => making };
+module.exports = { forPm, pmBaseOf, parseRemote, roomKnows, unsecret, quietEnv, handle, create, sweep, onExitFor, onReview, useAsk, busy: () => making };

@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, sleep, until, sessionToken, ROOT } = require('./helpers.js');
+const { relay, makeRepo, sleep, until, sessionToken, sessionTokens, ROOT } = require('./helpers.js');
 
 const PR = 'https://github.com/o/r/pull/7';
 const POINTER = /GOT\[[^\]a-z]{0,8}The room chat board has/g;  // what the fake claude got, not the echo of typing
@@ -34,14 +34,16 @@ test('the chat board', async (t) => {
     assert.deepStrictEqual(r.body.rooms.map((x) => [x.name, x.kind]), [['office', 'office']]);
     assert.deepStrictEqual(await texts('office'), [], 'a new board has no news yet');
   });
-  await t.test('starting a ticket makes its chat channel and says so in #office', async () => {
+  await t.test('filing a ticket makes its chat channel, and starting it says so in #office', async () => {
     ticket = (await call('POST', '/tickets', { title: 'Chat about it', body: 'Do it.', repo })).body.ticket;
+    assert.deepStrictEqual(await rooms(), ['office', ticket.id], 'there before the ticket starts');
+    assert.match((await texts(ticket.id))[0], /chat channel for T-1: Chat about it\. When its PR merges or the ticket is done, it is archived: kept to read, with no new posts\.$/);
     const r = await call('POST', '/tickets/' + ticket.id + '/start', {});
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     task = r.body.task;
     assert.deepStrictEqual(await rooms(), ['office', ticket.id]);
     assert.ok((await texts('office')).includes(ticket.id + ' started by you: Chat about it.'));
-    assert.match((await texts(ticket.id))[0], /chat channel for T-1: Chat about it\. It is deleted when its PR merges/);
+    assert.ok((await texts(ticket.id)).includes(ticket.id + ' started by you: Chat about it.'), 'the same chat channel, not a new one');
     worker = task.worker.terminal;
     // A first brief is in once a turn begins after it (relay/delivery.js), and the fake sends no hooks.
     await until(async () => /GOT\[Your task is to build/.test(await R.screen(worker)), 'the brief typed');
@@ -134,7 +136,7 @@ test('the chat board', async (t) => {
     assert.match(out, /^#T-1, ticket T-1 «Chat about it», newest /m, 'the title comes from the ticket store, so it is quoted');
     assert.ok(out.includes('office (the relay): «' + a + ' raised a hand on T-1: '));
   });
-  await t.test('a PR opening, a failing pipeline and a merge are news, and the merge deletes the ticket\'s chat channel', async () => {
+  await t.test('a PR opening, a failing pipeline and a merge are news, and the merge archives the ticket\'s chat channel', async () => {
     answers({ prs: { [PR]: { state: 'OPEN', statusCheckRollup: [{ conclusion: 'SUCCESS' }] } } });
     await R.hook({ hook_event_name: 'PostToolUse', session_id: task.owner.sessionId.slice(0, 12), tool_name: 'Bash', pr_url: PR });
     await until(async () => (await texts('office')).includes('PR #7 opened for T-1 Chat about it: ' + PR), 'the PR news');
@@ -146,7 +148,8 @@ test('the chat board', async (t) => {
     answers({ prs: { [PR]: { state: 'OPEN', statusCheckRollup: [{ conclusion: 'FAILURE' }] } } });
     await until(async () => (await texts('office')).includes('The pipeline failed on PR #7 for T-1 Chat about it.'), 'the pipeline news');
     answers({ prs: { [PR]: { state: 'MERGED', mergedAt: '2026-11-03T10:05:00Z', statusCheckRollup: [{ conclusion: 'SUCCESS' }] } } });
-    await until(async () => !(await rooms()).includes(ticket.id), 'the chat channel to go');
+    await until(async () => (await call('GET', '/chat/' + ticket.id)).body.room.archived, 'the chat channel to be archived');
+    assert.ok((await rooms()).includes(ticket.id), 'archived, not deleted');
     // The relay keeps GitHub's merge time, and the COO counts the PR shipped though its card is not in Done (T-158).
     const card = (await call('GET', '/tasks/' + task.id)).body.task;
     assert.notStrictEqual(card.state, 'done');
@@ -154,9 +157,15 @@ test('the chat board', async (t) => {
     const shipped = (await call('GET', '/coo/measures')).body.measures.shipped;
     assert.deepStrictEqual(shipped.map((x) => [x.ticket, x.at, x.card]), [[ticket.id, '2026-11-03T10:05:00.000Z', card.state]]);
     assert.ok((await texts('office')).includes('PR #7 merged: T-1 Chat about it.'));
-    const kept = (await call('GET', '/tickets/' + ticket.id)).body.ticket.chatSummary;
-    assert.match(kept, new RegExp('^Chat #T-1 was deleted .* because PR #7 merged\\. It had 4 posts from ' + a + ', the person, from .* UTC\\. The posts themselves are not kept\\.$'));
-    assert.strictEqual((await call('POST', '/chat/' + ticket.id, { text: 'late' }, agent)).status, 404);
+    assert.ok((await texts('office')).includes('Archived #T-1 because PR #7 merged. It is kept to read.'));
+    const kept = await texts(ticket.id);
+    assert.ok(kept.includes('The pipeline failed on PR #7 for T-1 Chat about it.'), 'the posts are still there to read');
+    assert.strictEqual(kept[kept.length - 1], 'Archived because PR #7 merged. It is kept to read, with no new posts.');
+    assert.strictEqual((await call('GET', '/tickets/' + ticket.id)).body.ticket.chatSummary, undefined, 'nothing to sum up, the posts are kept');
+    const late = await call('POST', '/chat/' + ticket.id, { text: 'late' }, agent);
+    assert.strictEqual(late.status, 409);
+    assert.strictEqual(late.body.error, 'archived');
+    assert.strictEqual((await call('POST', '/chat/' + ticket.id, { text: 'late' })).status, 409, 'the person cannot post there either');
     const n = views();
     await sleep(2500);
     assert.strictEqual(views(), n, 'a merged PR is not asked about again');
@@ -168,6 +177,7 @@ test('the chat board', async (t) => {
       const office = (await again.call('GET', '/chat/office')).body.posts.map((p) => p.text);
       assert.ok(office.includes('PR #7 merged: T-1 Chat about it.'));
       assert.strictEqual(office[office.length - 1], 'The relay started.');
+      assert.ok((await again.call('GET', '/chat/T-1')).body.room.archived, 'still archived after a restart');
     } finally { await again.kill(); }
   });
 });
@@ -179,8 +189,6 @@ test('with a store off this computer, nothing from a chat channel is kept on the
   const repo = makeRepo(R.home);
   const ticket = (await R.call('POST', '/tickets', { title: 'Remote', repo })).body.ticket;
   assert.strictEqual((await R.call('POST', '/tickets/' + ticket.id + '/start', {})).status, 200);
-  const room = (await R.call('GET', '/chat/' + ticket.id)).body;
-  assert.match(room.posts[0].text, /Nothing from it is kept\.$/);
   await R.call('POST', '/chat/' + ticket.id, { text: 'Theo and Ada worked on this.' });
   assert.strictEqual((await R.call('POST', '/chat/' + ticket.id + '/delete', {})).status, 200);
   assert.strictEqual((await R.call('GET', '/tickets/' + ticket.id)).body.ticket.chatSummary, undefined);
@@ -198,19 +206,14 @@ test('when the summary cannot be kept', async (t) => {
   await t.test('a delete you asked for is refused, and does not happen later by itself', async () => {
     const r = await R.call('POST', '/chat/' + ticket.id + '/delete', {});
     assert.strictEqual(r.status, 502);
-    assert.match(r.body.message, /stays\. It is deleted later only when its PR merges or its task moves to Done\. Try again\.$/);
+    assert.match(r.body.message, new RegExp('^Could not keep a summary on ' + ticket.id + ', so #' + ticket.id + ' stays\\. Try again\\.$'));
     await sleep(1500);
     assert.ok((await rooms()).includes(ticket.id));
   });
-  await t.test('the relay\'s own delete tries a few times, then stops and says so', async () => {
+  await t.test('Done archives it without the store', async () => {
     await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' });
-    // While the relay still tries by itself, a refused delete from the page says so.
-    await until(async () => /The relay is still trying to delete it by itself, because its task moved to Done\. Try again\.$/.test((await R.call('POST', '/chat/' + ticket.id + '/delete', {})).body.message || ''), 'the page to hear the relay is still trying');
-    await until(async () => (await R.call('GET', '/chat/office')).body.posts.some((p) => /Could not keep a summary on .* after 5 tries, so #.* stays/.test(p.text)), 'the relay to give up');
+    await until(async () => (await R.call('GET', '/chat/' + ticket.id)).body.room.archived, 'the archive');
     assert.ok((await rooms()).includes(ticket.id));
-    const n = (await R.call('GET', '/chat/office')).body.posts.length;
-    await sleep(1000);
-    assert.strictEqual((await R.call('GET', '/chat/office')).body.posts.length, n, 'it is not tried again');
   });
 });
 
@@ -222,14 +225,19 @@ test('a chat channel follows its task out of Done, and a lost ticket keeps nothi
   const repo = makeRepo(R.home);
   const texts = async (room) => (await R.call('GET', '/chat/' + room)).body.posts.map((p) => p.text);
   const rooms = async () => (await R.call('GET', '/chat')).body.rooms.map((r) => r.name);
-  await t.test('a task moved back out of Done gets its chat channel back', async () => {
+  await t.test('a task moved back out of Done opens its chat channel again, with its posts', async () => {
     const ticket = (await R.call('POST', '/tickets', { title: 'Reopened', repo })).body.ticket;
     const task = (await R.call('POST', '/tickets/' + ticket.id + '/start', {})).body.task;
+    await R.call('POST', '/chat/' + ticket.id, { text: 'Before Done.' });
     await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' });
-    await until(async () => !(await rooms()).includes(ticket.id), 'Done to delete it');
+    await until(async () => (await R.call('GET', '/chat/' + ticket.id)).body.room.archived, 'Done to archive it');
+    assert.ok((await texts(ticket.id)).includes('Archived because its task moved to Done. It is kept to read, with no new posts.'));
     assert.strictEqual((await R.call('POST', '/tasks/' + task.id + '/move', { to: 'building' })).status, 200);
-    assert.ok((await rooms()).includes(ticket.id), 'its brief still points there');
+    assert.strictEqual((await R.call('GET', '/chat/' + ticket.id)).body.room.archived, null);
+    assert.ok((await texts(ticket.id)).includes('Before Done.'), 'its posts are still there');
     assert.ok((await texts('office')).includes(ticket.id + ' moved back out of Done, so #' + ticket.id + ' is open again.'));
+    assert.strictEqual((await R.call('POST', '/chat/' + ticket.id, { text: 'After.' })).status, 201);
+    assert.ok((await rooms()).includes(ticket.id));
   });
   await t.test('a ticket the store lost gets no summary, and #office does not say it does', async () => {
     const ticket = (await R.call('POST', '/tickets', { title: 'goes-missing', repo })).body.ticket;
@@ -266,4 +274,48 @@ test('a summary over midnight gives both dates', () => {
   const room = { name: 'T-1', said: 2, senders: ['the person'], firstAt: '2026-11-03T22:10:00.000Z', lastAt: '2026-11-04T09:05:00.000Z' };
   assert.match(summaryOf(room, 'it merged'), /from 2026-11-03 22:10 to 2026-11-04 09:05 UTC\./);
   assert.match(summaryOf({ ...room, lastAt: '2026-11-03T23:00:00.000Z' }, 'it merged'), /from 2026-11-03 22:10 to 23:00 UTC\./);
+});
+
+// T-201: evidence for a ticket nobody has started has somewhere to go, and is still there to read after.
+test('a ticket nobody started has a chat channel, archived when it is done or rejected', async (t) => {
+  const R = await relay();
+  t.after(R.stop);
+  const repo = makeRepo(R.home);
+  const texts = async (room) => (await R.call('GET', '/chat/' + room)).body.posts.map((p) => p.text);
+  const archived = async (room) => (await R.call('GET', '/chat/' + room)).body.room.archived;
+  const ticket = (await R.call('POST', '/tickets', { title: 'Not started', repo })).body.ticket;
+  await t.test('a session posts in it with ticket.js', async () => {
+    const term = (await R.call('POST', '/terminals', { cwd: repo })).body;
+    await until(async () => (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === term.id).sessionId, 'the session');
+    const sid = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === term.id).sessionId;
+    await until(() => sessionTokens(sid).length, 'its token');
+    const out = execFileSync('node', [path.join(ROOT, 'relay', 'ticket.js'), 'post', ticket.id, 'Found the cause in relay/chat.js.'], { encoding: 'utf8', env: { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: sessionToken(sid) } });
+    assert.match(out, new RegExp('^Posted in #' + ticket.id));
+    assert.ok((await texts(ticket.id)).includes('Found the cause in relay/chat.js.'));
+  });
+  await t.test('a rejected ticket\'s chat channel is archived, and comes back when it goes back to Triage', async () => {
+    assert.strictEqual((await R.call('POST', '/tickets/' + ticket.id + '/move', { to: 'rejected' })).status, 200);
+    assert.deepStrictEqual(await archived(ticket.id), { at: (await archived(ticket.id)).at, why: 'the ticket was rejected' });
+    assert.ok((await texts(ticket.id)).includes('Found the cause in relay/chat.js.'));
+    assert.strictEqual((await R.call('POST', '/chat/' + ticket.id, { text: 'hi' })).status, 409);
+    assert.strictEqual((await R.call('POST', '/tickets/' + ticket.id + '/move', { to: 'triage' })).status, 200);
+    assert.strictEqual(await archived(ticket.id), null);
+    assert.strictEqual((await R.call('POST', '/chat/' + ticket.id, { text: 'Open again.' })).status, 201);
+  });
+  await t.test('a ticket moved to Done without a task archives its chat channel', async () => {
+    assert.strictEqual((await R.call('POST', '/tickets/' + ticket.id + '/move', { to: 'done', pr: 'https://github.com/o/r/pull/9' })).status, 200);
+    assert.strictEqual((await archived(ticket.id)).why, 'the ticket moved to Done');
+  });
+  await t.test('an edited title shows on its chat channel', async () => {
+    const other = (await R.call('POST', '/tickets', { title: 'Old name', repo })).body.ticket;
+    assert.strictEqual((await R.call('POST', '/tickets/' + other.id + '/edit', { title: 'New name' })).status, 200);
+    assert.strictEqual((await R.call('GET', '/chat/' + other.id)).body.room.title, 'New name');
+  });
+  await t.test('an open ticket with no chat channel gets one when someone posts or reads', async () => {
+    const other = (await R.call('POST', '/tickets', { title: 'Deleted chat', repo })).body.ticket;
+    assert.strictEqual((await R.call('POST', '/chat/' + other.id + '/delete', {})).status, 200);
+    assert.ok(!(await R.call('GET', '/chat')).body.rooms.some((r) => r.name === other.id));
+    assert.strictEqual((await R.call('POST', '/chat/' + other.id, { text: 'Back.' })).status, 201);
+    assert.strictEqual((await R.call('GET', '/chat/' + ticket.id + 'x')).status, 404);
+  });
 });

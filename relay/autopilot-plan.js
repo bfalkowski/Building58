@@ -12,21 +12,28 @@ function ciOf(rollup) {
   return state === 'none' ? 'pending' : state;
 }
 
-function forPr(pr, files, verdict, rounds, maxRounds) {
+function forPr(pr, files, verdict, rounds, maxRounds, devGone) {
   if (!pr) return { act: 'wait', why: 'GitHub has not answered about the PR yet.' };
   if (pr.state === 'MERGED') return { act: 'done', why: 'The PR merged.' };
   if (pr.state === 'CLOSED') return { act: 'person', reason: 'pr-closed', why: 'The PR was closed without merging.' };
   if (!files) return { act: 'wait', why: 'Waiting for the list of files the PR changes.' };
-  const locked = [...new Set(files.filter((f) => PROTECTED.includes(f)))];
-  if (locked.length) return { act: 'person', reason: 'protected-file', why: 'It changes ' + locked.join(' and ') + ', which only a person merges.' };
+  const locked = lockedOf(files);
+  if (locked.length) return { act: 'person', reason: 'protected-file', why: onlyAPerson(locked) };
+  return forReviewed(pr, verdict, rounds, maxRounds, devGone);
+}
+const lockedOf = (files) => [...new Set((files || []).filter((f) => PROTECTED.includes(f)))];
+const onlyAPerson = (locked) => 'It changes ' + locked.join(' and ') + ', which only a person merges.';
+function forReviewed(pr, verdict, rounds, maxRounds, devGone) {
   if (!verdict) return { act: 'wait', why: 'Waiting for the review.' };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
     if (rounds >= maxRounds) return { act: 'person', reason: 'rounds', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };
+    if (devGone && verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review asked for fixes, so a follow-up review checks them.' };
+    if (devGone) return { act: 'bring-back', for: 'fix', why: 'The last review asks for fixes, but its Dev is not running, so Autopilot brings it back to fix them.' };
     return { act: 'wait', why: 'The Dev is fixing what the last review found. A follow-up review checks the fixes after the push.' };
   }
   if (verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review said merge, so a follow-up review checks them first.' };
-  if (pr.mergeStateStatus === 'DIRTY') return { act: 'conflict', why: 'It conflicts with main.' };
+  if (pr.mergeStateStatus === 'DIRTY') return devGone ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main, but its Dev is not running, so Autopilot brings it back to merge main.' } : { act: 'conflict', why: 'It conflicts with main.' };
   const ci = ciOf(pr.statusCheckRollup);
   if (ci === 'red') return { act: 'person', reason: 'ci-red', why: 'CI failed on the reviewed commit.' };
   if (ci === 'pending') return { act: 'wait', why: 'Waiting for CI.' };
@@ -34,9 +41,29 @@ function forPr(pr, files, verdict, rounds, maxRounds) {
   return { act: 'merge', why: 'Reviewed with no blocking findings, CI is green, and GitHub can merge it.' };
 }
 
+function forPersonMerge(pr, locked, verdict, d) {
+  const short = verdict && verdict.commit ? String(verdict.commit).slice(0, 7) : '';
+  if (d.act === 'merge') return { ready: pr.headRefOid, why: 'Ready for your merge: the review of ' + short + ' says merge, CI is green, and GitHub can merge it.' };
+  let now;
+  if (!verdict || !verdict.posted) now = 'Waiting for its review.';
+  else if (verdict.commit !== pr.headRefOid) now = 'Waiting for a review of the new commits.';
+  else if (verdict.kind === 'fix') now = 'The review of ' + short + ' says fix, so its Dev fixes it first.';
+  else if (d.act === 'conflict' || d.act === 'bring-back') now = 'The review of ' + short + ' says merge, but it conflicts with main.';
+  else now = d.why;
+  return { ready: null, why: onlyAPerson(locked) + ' ' + now };
+}
+
 const MARKS = ['hold', 'replaced'];
 const OPEN = ['triage', 'ready', 'started'];
+function proposalWords(p, id) {
+  const ids = (p.ids || []).join(', ');
+  if (p.action === 'replace') return 'replace ' + id + ' with ' + ids;
+  if (p.action === 'merge') return 'merge ' + id + ' into ' + ids;
+  if (p.action === 'close') return 'close ' + id;
+  return 'set the blockers of ' + id + ' to ' + (ids || 'none');
+}
 function heldBack(t, all) {
+  if (t.proposal) return 'A proposal to ' + proposalWords(t.proposal, t.id) + ' waits on you. Nothing starts it by itself until you approve or decline it.';
   const after = ' Nothing starts it by itself until you clear the mark.';
   if (t.mark === 'hold') return 'On hold.' + after;
   if (t.mark === 'replaced') return 'Replaced' + (t.replacedBy ? ' by ' + t.replacedBy : '') + '.' + after;
@@ -84,4 +111,4 @@ function reviewPostFor(comments, { login, since, commit }) {
   return found;
 }
 
-module.exports = { forPr, ciOf, nextTicket, whyNoneAllowed, heldBack, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };

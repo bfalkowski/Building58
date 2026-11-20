@@ -12,7 +12,7 @@ const hold = require('../push-hold.js');
 
 const HOOKS = path.resolve(__dirname, '..', '..', '.githooks');
 const PR = 'https://github.com/acme/widgets/pull/7';
-const SAID = /Push refused: The review of [0-9a-f]{7} says merge\. Do not push\. Reply on the PR and file one follow-up ticket for the findings\./;
+const SAID = /Push refused: The review of [0-9a-f]{7} says merge\. Do not push\. Reply on the PR, and file a ticket only for a finding that is a real bug or risk outside this PR\./;
 
 function setup() {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-push-hold-')));

@@ -78,6 +78,7 @@
     flushKeys();
     if (es) es.close();
     current = { id, running: false }; store(sessionStorage, 'office.terminal', id);
+    stopAsk.hidden = true;
     const stream = es = new EventSource(url('/' + id + '/stream'));
     stream.addEventListener('hello', (m) => {
       const t = JSON.parse(m.data);
@@ -93,8 +94,14 @@
     stream.addEventListener('exit', (m) => {
       const e = JSON.parse(m.data);
       stream.close(); if (es === stream) es = null;
-      current = null; store(sessionStorage, 'office.terminal', null); show();
-      say((e.stopped ? 'Stopped' : 'Ended' + (e.code ? ' (exit ' + e.code + ')' : '')) + '. Click a worker, or add one.', 'off');
+      const wasLead = !!(current && current.lead);
+      current = null; store(sessionStorage, 'office.terminal', null); show(); stopAsk.hidden = true;
+      if (wasLead) {
+        const how = 'The Lead\'s session ' + (e.stopped ? 'was stopped' : 'ended' + (e.code ? ' (exit ' + e.code + ')' : '')) + '. No session is the Lead now. ';
+        tell(how, 'off');
+        sync().then((r) => tell(how + (r && r.restore ? 'To return it as the Lead, press Bring back as the Lead.' : 'It had no saved conversation, so it cannot come back. Make another session the Lead with Make this the Lead.'), 'off'));
+      }
+      else say((e.stopped ? 'Stopped' : 'Ended' + (e.code ? ' (exit ' + e.code + ')' : '')) + '. Click a worker, or add one.', 'off');
       term.write('\r\n\x1b[2m[Claude Code ' + (e.stopped ? 'stopped' : 'ended') + ']\x1b[0m\r\n');
     });
     stream.addEventListener('error', () => {
@@ -190,7 +197,7 @@
     { n: 4, name: 'The Lead merges', rung: 'rung 4, the merge rung', want: { auto: true, again: true, board: true, stops: true, merge: true, starts: true, autopilot: false },
       what: 'The Lead also merges a PR when it is ready: a review of the latest commit is posted, each blocking finding is fixed, all checks pass, it merges into main with no conflicts, and no decision is left for you. It never merges a change to CLAUDE.md or the constitution. You approve tickets and do the work it gives back to you.' },
     { n: 5, name: 'Autopilot', rung: 'rungs 3 and 4, run by the relay', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: false, autopilot: true },
-      what: 'The relay does the full loop itself. It starts each approved Ready ticket, reviews each push, sends findings to the Dev, and merges when the review says merge and all checks pass. It needs no Lead. Only the relay starts and merges work. A Lead keeps two rights: stop a session the Floor calls safe to stop, and move a task to Done once its PR has merged. You approve tickets and do the work it puts in Waiting on you.' }
+      what: 'The relay does the full loop itself. It starts each approved Ready ticket, reviews each push, sends findings to the Dev, and merges when the review says merge and all checks pass. It needs no Lead. Only the relay starts and merges work. A Lead keeps three rights: stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR. You approve tickets and do the work it puts in Waiting on you.' }
   ];
   const wantOf = (L) => (L.n === 5 && !boardTerm ? Object.assign({}, L.want, { board: false }) : L.want);
   const trust = { reviews: null, autopilot: null, settings: null, pick: null, busy: false };
@@ -300,7 +307,8 @@
       if (!c) continue;
       if (x.kind === 'bool') c.input.checked = !!x.value;
       else if (document.activeElement !== c.input) c.input.value = String(x.value);
-      c.from.textContent = fromText(x) + (x.kind === 'skills' ? skillsText(x) : x.kind === 'bool' || x.kind === 'text' ? '' : ' · ' + x.min + ' to ' + x.max + (x.from === 'default' ? '' : ' · default ' + x.def));
+      c.from.textContent = fromText(x) + (x.kind === 'skills' ? skillsText(x) : x.kind === 'bool' || x.kind === 'text' ? '' : ' · ' + x.min + ' to ' + x.max + (x.from === 'default' ? '' : ' · default ' + x.def))
+        + (x.name === 'leadReviews' && !x.value && trust.autopilot && trust.autopilot.on ? ' · on while Autopilot runs' : '');
       c.reset.hidden = x.from !== 'page';
     }
     drawLevels();
@@ -401,16 +409,28 @@
   }
   function drawAutopilot(r) {
     if (!r.ok) return;
-    trust.autopilot = r; drawLevels();
+    trust.autopilot = r;
+    if (trust.settings) drawSettings({ ok: true, settings: trust.settings }); else drawLevels();
     apBox.disabled = false;
     if (!apSet) { apBox.checked = r.on; if (document.activeElement !== apOnly) apOnly.value = (r.only || []).join(', '); }
     apOnly.disabled = r.on;
     const now = (r.prs || []).filter((p) => p.state !== 'done').map((p) => (p.ticket || p.pr.split('/').pop()) + ': ' + (p.why || p.act || ''));
     apSays.textContent = [r.on ? ([...now, r.idle].filter(Boolean).join(' · ') || 'Starting the next ticket.') + ' · merged today: ' + r.mergedToday + ' of ' + r.maxMerges : '', runsLine(r.runs)].filter(Boolean).join(' · ');
     apRow.what.textContent = 'The relay starts the next approved Ready ticket, one at a time. Each push to its PR gets a review, and the findings go to the Dev. When the review says merge and all checks pass, the relay merges the PR and starts the next ticket. After ' + r.maxRounds + ' review rounds that still ask for fixes, the task goes to Waiting on you. It merges at most ' + r.maxMerges + ' PRs a day. It never merges a change to CLAUDE.md or the constitution. It needs Review PRs automatically on. When you turn it off, work already started stays where it is.';
+    tellReady(r.prs || []);
     summaryOn.autopilot = !!r.on;
     summary.autopilot = r.on ? 'Autopilot on' + (r.only && r.only.length ? ' for ' + r.only.join(', ') : '') : 'Autopilot off';
     drawSummary();
+  }
+  let readySeen = null;
+  function tellReady(prs) {
+    if (!readySeen) { try { readySeen = new Set(JSON.parse(store(localStorage, 'office.readySeen') || '[]')); } catch (e) { readySeen = new Set(); } }
+    const fresh = prs.filter((p) => p.ready && p.state !== 'done' && !readySeen.has(p.pr + ' ' + p.ready));
+    if (!fresh.length) return;
+    for (const p of fresh) readySeen.add(p.pr + ' ' + p.ready);
+    store(localStorage, 'office.readySeen', JSON.stringify([...readySeen].slice(-50)));
+    const p = fresh[fresh.length - 1];
+    tell((p.ticket ? p.ticket + ', ' : '') + 'PR #' + p.pr.split('/').pop() + ': ' + p.why, '');
   }
   const syncAutopilot = () => api('', undefined, '/autopilot').then(drawAutopilot);
   if (window.run) window.run.on('hook', (e) => {
@@ -658,14 +678,15 @@
   const ask = document.createElement('div'), askText = document.createElement('span'), askYes = document.createElement('button'), askNo = document.createElement('button');
   ask.className = 'cc-ask'; ask.hidden = true;
   askYes.type = askNo.type = 'button'; askYes.className = 'btn primary'; askNo.className = 'btn';
-  askYes.textContent = 'Bring back'; askNo.textContent = 'Not now';
+  askYes.textContent = 'Bring back as the Lead'; askNo.textContent = 'Not now';
   ask.append(askText, askYes, askNo);
   notes.append(ask);
   let offer = null;
   function offerLead(lead) {
     offer = lead || null;
     if (!askYes.disabled) ask.hidden = !offer;
-    if (offer && !askYes.disabled) askText.textContent = 'Bring back the Lead\'s last session? ' + (offer.title ? offer.title + ' · ' : '') + short(offer.sessionId) + ' in ' + home(offer.cwd);
+    const ended = { stopped: 'The Lead\'s session was stopped, so no session is the Lead now. ', ended: 'The Lead\'s session ended, so no session is the Lead now. ', crashed: 'The Lead\'s session ended with an error, so no session is the Lead now. ' };
+    if (offer && !askYes.disabled) askText.textContent = (ended[offer.ended] || '') + 'Bring back the Lead\'s last session? ' + (offer.title ? offer.title + ' · ' : '') + short(offer.sessionId) + ' in ' + home(offer.cwd);
   }
   askYes.addEventListener('click', async () => {
     if (!offer) return;
@@ -684,6 +705,11 @@
     say('That session did not come back. Its conversation may be gone.', 'off');
   });
   askNo.addEventListener('click', () => { offerLead(null); api('/lead', { asked: true }); });
+  window.addEventListener('office:bring-back-lead', async () => {
+    if (!offer) await sync();
+    if (!offer) { tell('There is no Lead to bring back now.', 'off'); return; }
+    if (!askYes.disabled) askYes.click();
+  });
 
   window.addEventListener('office:session', (ev) => {
     const id = ev.detail && ev.detail.terminal;
@@ -714,7 +740,36 @@
     const w = workerOf(r.id);
     if (w) window.dispatchEvent(new CustomEvent('office:pick', { detail: { who: w.id, keep: true } }));
   });
-  stopBtn.addEventListener('click', () => { if (current) { current.stopping = true; say('Stopping', 'wait'); api('/' + current.id + '/stop', {}); } });
+  const leadShown = () => !!(current && (current.lead || terms.some((x) => x.id === current.id && x.lead && x.running)));
+  async function stopShown(lead) {
+    if (!current) return;
+    const was = current;
+    was.stopping = true; say('Stopping', 'wait');
+    const r = await api('/' + was.id + '/stop', lead ? { lead: true } : {});
+    if (!r.ok) { was.stopping = false; tell(r.message || 'The relay did not answer.', 'off'); }
+  }
+  const stopAsk = document.createElement('div'), stopAskText = document.createElement('span');
+  const stopAskYes = document.createElement('button'), stopAskRefresh = document.createElement('button'), stopAskNo = document.createElement('button');
+  stopAsk.className = 'cc-ask'; stopAsk.id = 'cc-stop-lead'; stopAsk.hidden = true; stopAsk.setAttribute('role', 'alertdialog');
+  stopAskYes.type = stopAskRefresh.type = stopAskNo.type = 'button';
+  stopAskYes.className = 'btn'; stopAskRefresh.className = 'btn primary'; stopAskNo.className = 'btn';
+  stopAskYes.textContent = 'Stop the Lead'; stopAskRefresh.textContent = 'Refresh the Lead instead'; stopAskNo.textContent = 'Keep it running';
+  stopAskText.textContent = 'This session is the Lead. A stop loses its turn in progress, and no session is the Lead until you bring it back. Its handoff notes are kept. To get it back, press Bring back as the Lead. If the Lead is slow or forgets things, Refresh the Lead instead: it writes its notes, starts a clean conversation, and stays the Lead.';
+  stopAsk.append(stopAskText, stopAskYes, stopAskRefresh, stopAskNo);
+  notes.append(stopAsk);
+  stopBtn.addEventListener('click', () => {
+    if (!current) return;
+    if (leadShown()) { stopAsk.hidden = false; stopAskNo.focus(); return; }
+    stopShown(false);
+  });
+  stopAskYes.addEventListener('click', () => { stopAsk.hidden = true; if (leadShown()) stopShown(true); });
+  stopAskNo.addEventListener('click', () => { stopAsk.hidden = true; });
+  stopAskRefresh.addEventListener('click', async () => {
+    stopAsk.hidden = true;
+    const r = await api('/lead', { refresh: true });
+    tell(r.ok ? 'Refreshing the Lead. It stays the Lead.' : r.message || 'The relay did not answer.', r.ok ? 'wait' : 'off');
+    await sync();
+  });
   box.addEventListener('click', () => term.focus());
 
   sync().then((r) => {

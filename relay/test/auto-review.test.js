@@ -161,6 +161,18 @@ test('the relay starts the first review and the follow-ups, with no page open', 
     await stop(d);
   });
 
+  await t.test('a task\'s review that could not start 3 times says why in Needs you (T-350)', async () => {
+    const task = (await R.call('POST', '/tasks', { title: 'A task', repo })).body.task, pr = 'https://github.com/acme/other/pull/4';
+    const d = (await terminals()).find((x) => x.id === task.owner.terminal);
+    await opens(d, pr);
+    await until(async () => (await R.call('GET', '/tasks/' + task.id)).body.task.pr === pr, 'the task to hold the PR');
+    const item = await until(async () => (await R.call('GET', '/needs-you')).body.items.find((i) => i.kind === 'review'), 'a Needs you line', 300);
+    assert.strictEqual(item.task, task.id);
+    assert.match(item.line, /^Get a review of PR #4 \(task \w+\): its automatic review could not start, and the relay stopped trying\. No remote of /);
+    assert.deepStrictEqual(item.link, { terminal: d.id });
+    await stop(d);
+  });
+
   await t.test('only the room page sets the switches', async () => {
     const r = await R.call('POST', '/reviews', { again: false }, { 'X-Office-Token': 'nope' });
     assert.strictEqual(r.status, 401);

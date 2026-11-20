@@ -68,7 +68,7 @@ test('Refresh the Lead', async (t) => {
   await t.test('a refresh stops when the Lead goes away', async () => {
     await hook('UserPromptSubmit', sid); await hook('Stop', sid); await sleep(3200);  // the read prompt's turn, and Enter settles
     assert.strictEqual((await refresh()).status, 200);
-    await R.call('POST', '/terminals/' + a.id + '/stop', {});
+    await R.call('POST', '/terminals/' + a.id + '/stop', { lead: true });
     await until(() => /Refresh the Lead: The Lead's session ended before the refresh finished/.test(R.output()), 'the refresh to end with the session');
     const l = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === a.id);
     assert.ok(!l || l.refresh === null);

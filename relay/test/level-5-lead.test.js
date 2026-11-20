@@ -1,8 +1,9 @@
-// At level 5 (Autopilot) the Lead keeps two rights (T-161, article 5): stop a session the Floor calls
-// safe to stop, and move a task to Done once its PR has merged. Only the relay starts and merges work.
+// At level 5 (Autopilot) the Lead keeps three rights (T-161, T-333, article 5): stop a session the Floor
+// calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task's PR. Only the relay starts and merges work.
 // Through a real relay with a fake `claude` and a fake `gh`.
 'use strict';
-const { execFileSync } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
+const { promisify } = require('util');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -12,16 +13,17 @@ const { relay, makeRepo, removeDir, sleep, until, sessionToken, ROOT } = require
 const { leadBrief, AUTOPILOT } = require('../lead-brief.js');
 
 const CLI = path.join(ROOT, 'relay', 'ticket.js');
-const KEEPS = 'stop a session the Floor calls safe to stop, and move a task to Done once its PR has merged';
+const KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';
 const NEVER = 'Never merge a pull request: merging stays with the person.';
 const RUNG = 'Read the merge rung in docs/constitution.md';
+const run = promisify(execFile);
 
-test('the brief under Autopilot names the two rights and never merging, whatever the merge switch says', () => {
+test('the brief under Autopilot names the three rights and never merging, whatever the merge switch says', () => {
   const relayDir = path.join('/', 'r'.repeat(119), 'relay');
   for (const merge of [false, true]) {
     const b = leadBrief(relayDir, { merge, autopilot: true });
     assert.ok(b.includes(AUTOPILOT), 'merge ' + merge);
-    assert.ok(b.includes('Never merge a pull request.') && b.includes('You keep two rights: ' + KEEPS + '.'));
+    assert.ok(b.includes('Never merge a pull request.') && b.includes('You keep three rights: ' + KEEPS + '.'));
     assert.ok(!b.includes(RUNG), 'it does not point to the merge rung');
     assert.ok(Buffer.byteLength(b) < 1024, Buffer.byteLength(b) + ' bytes, from a checkout root of 120 characters');
   }
@@ -62,8 +64,8 @@ test('at level 5 the Lead keeps stops and moving merged tasks to Done, and nothi
   await finish(lead);
   assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: lead.id, board: true })).body.board, true);
   const token = await until(() => { try { return sessionToken(lead.sessionId); } catch (e) { return null; } }, 'the token');
-  const cli = (...args) => execFileSync('node', [CLI, ...args], { env: { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: token }, encoding: 'utf8', stdio: 'pipe' });
-  const refused = (fn, what) => assert.throws(fn, (e) => (/Autopilot is on, so only the relay starts and merges work\. The Lead keeps two rights: /.test(String(e.stderr) + String(e.stdout) + e.message) ? true : assert.fail(what + ': ' + e.stderr)), what);
+  const cli = async (...args) => (await run('node', [CLI, ...args], { env: { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: token }, encoding: 'utf8' })).stdout;
+  const refused = (p, what) => assert.rejects(p, (e) => (/Autopilot is on, so only the relay starts and merges work\. The Lead keeps three rights: /.test(String(e.stderr) + String(e.stdout) + e.message) ? true : assert.fail(what + ': ' + e.stderr)), what);
   const headers = { 'X-Office-Token': token };
 
   const merged = await dev(), building = await dev();
@@ -78,25 +80,25 @@ test('at level 5 the Lead keeps stops and moving merged tasks to Done, and nothi
   const ap = await R.call('POST', '/autopilot', { on: true, only: 'T-999999' });
   assert.strictEqual(ap.body.on, true, JSON.stringify(ap.body));
 
-  await t.test('the Lead is briefed again, with the two rights', async () => {
+  await t.test('the Lead is briefed again, with the three rights', async () => {
     await until(async () => (await R.screen(lead.id)).includes(AUTOPILOT.trim()), 'the Autopilot brief');
   });
 
   await t.test('ticket.js stop works on a session the Floor calls safe to stop', async () => {
     // A merged Dev is safe to stop and one the Lead may stop, with the same verdict as at level 2.
     const name = await nameOf(merged);
-    assert.match(cli('stop', name), new RegExp('^Stopped: ' + name + ' '), 'stopped by name');
+    assert.match(await cli('stop', name), new RegExp('^Stopped: ' + name + ' '), 'stopped by name');
     await until(async () => !(await running(merged)), 'the merged Dev to stop');
   });
 
   await t.test('ticket.js task <id> done works for a task whose PR merged', async () => {
-    cli('task', merged.task.id, 'done');
+    await cli('task', merged.task.id, 'done');
     assert.strictEqual((await taskOf(merged.task.id)).state, 'done');
     assert.strictEqual((await taskOf(merged.task.id)).history.at(-1).by, 'Lead');
   });
 
   await t.test('Done is refused for a task whose PR has not merged', async () => {
-    refused(() => cli('task', building.task.id, 'done'), 'a task with no merged PR');
+    await refused(cli('task', building.task.id, 'done'), 'a task with no merged PR');
     const r = await R.call('POST', '/tasks/' + building.task.id + '/move', { to: 'done' }, headers);
     assert.deepStrictEqual([r.status, r.body.error], [403, 'autopilot']);
     assert.ok(r.body.message.includes(KEEPS + '. The relay has not seen this PR merge'), r.body.message);
@@ -104,12 +106,12 @@ test('at level 5 the Lead keeps stops and moving merged tasks to Done, and nothi
   });
 
   await t.test('a move to any other column is refused, for tasks and tickets, even for a merged task', async () => {
-    for (const to of ['in_review', 'changes_requested', 'waiting_on_you', 'building']) refused(() => cli('task', merged.task.id, to), 'task to ' + to);
-    for (const to of ['in_review', 'waiting_on_you']) refused(() => cli('task', building.task.id, to), 'task to ' + to);
-    refused(() => cli('move', filed.id, 'ready'), 'accepting a ticket from Triage');
-    refused(() => cli('move', filed.id, 'rejected'), 'rejecting a ticket');
-    refused(() => cli('move', ready.id, 'triage'), 'a Ready ticket back to Triage');
-    refused(() => cli('move', ready.id, 'done', 'https://github.com/acme/widgets/pull/12'), 'a ticket to Done with a PR the relay never saw merge');
+    for (const to of ['in_review', 'changes_requested', 'waiting_on_you', 'building']) await refused(cli('task', merged.task.id, to), 'task to ' + to);
+    for (const to of ['in_review', 'waiting_on_you']) await refused(cli('task', building.task.id, to), 'task to ' + to);
+    await refused(cli('move', filed.id, 'ready'), 'accepting a ticket from Triage');
+    await refused(cli('move', filed.id, 'rejected'), 'rejecting a ticket');
+    await refused(cli('move', ready.id, 'triage'), 'a Ready ticket back to Triage');
+    await refused(cli('move', ready.id, 'done', 'https://github.com/acme/widgets/pull/12'), 'a ticket to Done with a PR the relay never saw merge');
     assert.strictEqual((await taskOf(merged.task.id)).state, 'done');
     assert.strictEqual((await taskOf(building.task.id)).state, 'building');
     const tickets = (await R.call('GET', '/tickets')).body.tickets;
@@ -119,7 +121,7 @@ test('at level 5 the Lead keeps stops and moving merged tasks to Done, and nothi
   await t.test('ticket.js start is refused, even with the start switch on', async () => {
     const r = await R.call('POST', '/terminals/lead', { terminal: lead.id, lead: true, starts: 1, total: 1 });
     assert.strictEqual(r.body.starts, 1, JSON.stringify(r.body));
-    refused(() => cli('start', ready.id), 'a start');
+    await refused(cli('start', ready.id), 'a start');
     assert.strictEqual((await R.call('GET', '/tasks')).body.tasks.length, 2, 'nothing started');
     await R.call('POST', '/terminals/lead', { starts: 0 });
   });
@@ -132,7 +134,7 @@ test('at level 5 the Lead keeps stops and moving merged tasks to Done, and nothi
 
   await t.test('with Autopilot off, the Lead moves the board as at level 2 again, and is told', async () => {
     assert.strictEqual((await R.call('POST', '/autopilot', { on: false })).body.on, false);
-    cli('move', filed.id, 'ready');
+    await cli('move', filed.id, 'ready');
     const tickets = (await R.call('GET', '/tickets')).body.tickets;
     assert.strictEqual(tickets.find((x) => x.id === filed.id).status, 'ready');
     await until(async () => (await R.screen(lead.id)).split('GOT[You are the Lead of this room.').at(-1).includes(NEVER), 'the brief without Autopilot');

@@ -25,6 +25,10 @@
     if (!by) return 'someone not recorded';
     return x.name && x.by !== 'you' ? x.name + ' (' + by + ')' : by;
   }
+  function proposalWords(x) {
+    const ids = (x.ids || []).join(', ');
+    return x.action === 'replace' ? 'replace it with ' + ids : x.action === 'merge' ? 'merge it into ' + ids : x.action === 'close' ? 'close it' : 'set its blockers to ' + (ids || 'none');
+  }
   function stepText(x) {
     switch (x.stage) {
       case 'filed': return 'Filed by ' + byText(x);
@@ -33,6 +37,10 @@
       case 'dev': return 'Dev: ' + (x.name || 'no name recorded');
       case 'reviewer': return 'Reviewer: ' + (x.name || 'no name recorded') + (x.by === 'you' ? ', started by you' : x.by ? ', ' + (BY[x.by] || x.by) : '');
       case 'edited': return 'Edited' + (x.what && x.what.length ? ' (' + x.what.join(', ') + ')' : '') + ' by ' + byText(x);
+      case 'proposal': return 'Proposed to ' + proposalWords(x) + ' by ' + byText(x) + (x.why ? '. Why: ' + x.why : '');
+      case 'proposal-approved': return 'Proposal to ' + proposalWords(x) + ' approved by ' + byText(x);
+      case 'proposal-dropped': return 'Proposal to ' + proposalWords(x) + ' dropped when ' + byText(x) + ' started it';
+      case 'proposal-declined': return 'Proposal to ' + proposalWords(x) + ' declined by ' + byText(x);
       case 'moved': return 'Moved from ' + (STATES[x.from] || x.from) + ' to ' + (STATES[x.to] || x.to) + ' by ' + byText(x);
       default: return x.stage;
     }

@@ -216,6 +216,12 @@
     const others = M.alsoWith(people, t.assignee);
     meta.textContent = [(t.priority || 'normal') + ' priority', t.kind ? 'kind ' + t.kind : 'no kind', M.labelsOf(t).length ? 'labels ' + M.labelsOf(t).join(', ') : '', orderedNote(t), t.createdBy, startedNote(t), state ? 'task ' + (STATE_WORDS[state] || state) : '', pipelineNote(t), waitsOnNote(t), window.officeTicketHistory ? window.officeTicketHistory.assigneeText(t) : '', others.length ? 'also with ' + others.join(', ') : '', (t.repo || 'no repo').split('/').pop(), t.base ? 'base ' + t.base : '', t.waitingFor.length ? 'waiting for ' + t.waitingFor.join(', ') : '', t.rejectedBlockers.length ? t.rejectedBlockers.join(', ') + ' was rejected' : '', after.length ? 'after ' + after.join(', ') : '', t.status === 'done' && !t.task && t.pr ? 'merged outside the room' : '', t.status === 'ready' && !t.approved ? 'not approved by you, so nothing starts it by itself' : '', (t.shapes || []).length ? 'shapes ' + t.shapes.join(', ') : '', (t.status === 'triage' || t.status === 'ready') && t.heldBack ? t.heldBack : ''].filter(Boolean).join(' · ');
     li.append(meta);
+    if (t.proposal) {
+      const p = document.createElement('p'); p.className = 'proposal'; p.textContent = M.proposalText(t);
+      const decide = document.createElement('div'); decide.className = 'card-actions';
+      decide.append(button('Approve proposal', true, () => act(t, 'proposal', { decision: 'approve' })), button('Decline proposal', false, () => act(t, 'proposal', { decision: 'decline' })));
+      li.append(p, decide);
+    }
     const row = document.createElement('div'); row.className = 'card-actions';
     if (t.status === 'started' && !t.task) row.append(button('Start again', true, () => act(t, 'start', {})));
     if (t.status === 'triage') { row.append(button('Approve', true, () => act(t, 'move', { to: 'ready' })), button('Reject', false, () => act(t, 'move', { to: 'rejected' }))); }
@@ -347,7 +353,7 @@
     fillRepos(r.tickets);
     fillKinds(r.kinds);
     fillLabels(r.labels);
-    drawWaiting(r.tickets.filter((t) => M.columnOf(t) === 'waiting_on_you'));
+    drawWaiting(r.tickets.filter(M.waitsOnYou));
     info.textContent = 'Kept in: ' + r.store + ' · up to ' + r.wipLimit + ' building at once, counting Changes requested' + (r.leadStarts ? ' · the Lead starts tickets while fewer than ' + r.leadStarts + ' are building, ' + r.leadStartsLeft + ' more at most' : '');
     const unapproved = r.tickets.filter((t) => t.status === 'ready' && !t.approved);
     if (unapproved.length) {
@@ -387,7 +393,7 @@
     cardEls = now; groupEls = groupsNow;
     const rejectedNow = new Map();
     place(rejectedList, rejected.map((t) => {
-      const li = document.createElement('li'); li.textContent = t.id + ' ' + t.title + ' '; li.dataset.ticket = t.id;
+      const li = document.createElement('li'); li.textContent = t.id + ' ' + t.title + ' ' + (M.closedText(t) ? '(' + M.closedText(t) + ') ' : ''); li.dataset.ticket = t.id;
       if (t.id === found && Date.now() < foundUntil) li.dataset.found = '1';
       li.append(button('Back to Triage', false, () => act(t, 'move', { to: 'triage' })));
       return kept(rejectedEls, rejectedNow, t.id, li);
@@ -440,7 +446,7 @@
     remember();
     if (r.duplicate) { say(r.ticket.id + ' already has that title ' + (r.ticket.base ? 'on ' + r.ticket.base : 'in this repo') + '. What you typed is still here.', true); return; }
     $('ticket-title').value = ''; $('ticket-body').value = '';
-    say('Filed ' + r.ticket.id + '.');
+    say('Filed ' + r.ticket.id + '.' + ((r.likely || []).length ? ' It looks like ' + r.likely.map((x) => x.id + ' (' + x.title + ', ' + x.status + ')').join(', ') + '. If it is the same work, reject one.' : ''), (r.likely || []).length > 0);
     refresh();
   });
   $('ticket-pm').addEventListener('click', async () => {

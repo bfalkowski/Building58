@@ -5,12 +5,13 @@
 // for the relay, a first brief and a first prompt included. Refresh the Lead types its own steps, and
 // asks sendNow for the Lead's brief when the Lead still owes it.
 //
-//   save(channel, { key, terminal, sessionId, text, expiresAt, on, first, untilTurn })  a new save with the same key replaces the old one
+//   save(channel, { key, terminal, sessionId, text, expiresAt, on, first, untilTurn, beforeTurn })  a new save with the same key replaces the old one
 //   save(channel, { key, to: 'lead', text, ... })                     for whichever session is the Lead when it is typed
 //   save(channel, { key, to: 'lead', terminal, sessionId, ... })      for that session, only while it is the Lead
 //   drop(channel, key)                                                takes one back, even mid-typing
 //   dropWhere(test)                                                   drops every one whose key passes
-//   pending(channel)                                                  what is still waiting, and why
+//   pending(channel)                                                  what is still waiting, for which session, since when, and why
+//   whyWaits(blocked)                                                 a pending message's reason, in plain words
 //   promptOnce(channel, terminal, text, done, was)                    a reviewer's, the PM's or the COO's first prompt (below)
 //   sendNow(channel, key, done)                                       types that one now, with the same checks, without waiting
 //                                                                     for the next round; returns why not, or null and done(problem) once typed
@@ -26,6 +27,8 @@
 // brought back with the same id gets it again, and a relay restart keeps it. A relay that comes back
 // to a session it was typed into watches it again, from when it was typed. A task's brief is both.
 // The Lead's brief is first only: a Lead with no hooks reaching the relay is still briefed.
+// beforeTurn: a hook that says a turn began after it was saved, and before it was typed, drops it as
+// 'expired', since the session went on without it (the continue after a restart, relay/sessions.js).
 //
 // An update holds every first brief (a task's, the Lead's, and every first prompt) only while it
 // restarts, not while it waits for a quiet moment, which can take hours (T-147, T-299, T-198). Other
@@ -42,11 +45,19 @@
 //
 // After a note goes in, the relay checks that the session took it up: that a hook said a turn began
 // within TOLD_CHECK. If not, it tries once more, or PROMPT_TRIES more for a first prompt (relay/terminal.js
-// nudge: Enter if the note still shows, or the note typed again), and checks again after each. If it still has not started, the session is stuck
+// nudge: Enter if the note still shows, or the note typed again), and checks again after each. For TOLD_HOLD
+// (RELAY_TOLD_HOLD_MS, 15 seconds) after a note goes in, nothing else is typed into that session unless a hook
+// says its turn began, and then the turn holds the rest: a hook can come seconds after Enter, and a note typed
+// then sits unsent in the prompt while the turn counts for it (T-353). If it still has not started, the session is stuck
 // (t.stuck: when it was told, and why where the relay can tell), the Floor says so, and the relay
 // stops trying and leaves it to the person. Nothing else is typed into a session while it is stuck. The note is saved again for that session id, so Bring back gets it, but a
 // turn that begins in the stuck session itself drops it: that session has it already.
 //   onStuck(fn)  fn (channel, t) runs when a session becomes stuck
+//
+// An idle Claude Code does not draw its prompt again on its own. A relay that took a session back after a
+// restart can keep only output with no prompt mark in it, and then notSafeToType says no_prompt for good.
+// So when a saved message has waited REDRAW_AFTER on a screen with no prompt, the relay asks the session to
+// draw its screen again (terminal.redraw), at most once each REDRAW_EVERY for one session.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -80,7 +91,7 @@ function persist() {
 const listOf = (channel) => store[channel] || (store[channel] = []);
 const callbacks = new Map();
 
-function save(channel, { key, to, terminal: id, sessionId, text, expiresAt, on, first, untilTurn, prompt }) {
+function save(channel, { key, to, terminal: id, sessionId, text, expiresAt, on, first, untilTurn, beforeTurn, prompt }) {
   const same = listOf(channel).find((x) => x.key === key);
   if (same && same.text === text && same.terminal === (id || null) && same.sessionId === (sessionId || null) && (same.to || null) === (to || null) && !!same.first === !!first && !!same.untilTurn === !!untilTurn && !!same.prompt === !!prompt) {
     if (on) callbacks.set(channel + '/' + key, on);
@@ -88,7 +99,7 @@ function save(channel, { key, to, terminal: id, sessionId, text, expiresAt, on, 
   }
   drop(channel, key);
   listOf(channel).push(Object.assign({ key, to: to || null, terminal: id || null, sessionId: sessionId || null, text, expiresAt: expiresAt || Date.now() + NEVER, savedAt: Date.now() },
-    first ? { first: true } : {}, untilTurn ? { untilTurn: true, typedAt: null, typedTo: null } : {}, prompt ? { prompt: true, readyBy: Date.now() + READY_LIMIT() } : {}));
+    first ? { first: true } : {}, beforeTurn ? { beforeTurn: true } : {}, untilTurn ? { untilTurn: true, typedAt: null, typedTo: null } : {}, prompt ? { prompt: true, readyBy: Date.now() + READY_LIMIT() } : {}));
   if (on) callbacks.set(channel + '/' + key, on);
   persist();
 }
@@ -117,10 +128,11 @@ function targetOf(channel, d) {
   return lead && (!d.terminal || isTarget(lead, d)) ? lead : null;
 }
 function pending(channel) {
-  return listOf(channel).map((d) => { const t = targetOf(channel, d); return { key: d.key, terminal: d.terminal, expiresAt: d.expiresAt, first: !!d.first, typed: !!(d.untilTurn && d.typedAt), blocked: heldBy(channel, t, d) || terminal.notSafeToType(t, how(d)) }; });
+  return listOf(channel).map((d) => { const t = targetOf(channel, d); return { key: d.key, terminal: d.terminal, target: t ? t.id : null, savedAt: d.savedAt || null, expiresAt: d.expiresAt, first: !!d.first, typed: !!(d.untilTurn && d.typedAt), blocked: heldBy(channel, t, d) || terminal.notSafeToType(t, how(d)) }; });
 }
 
 const PROMPT_TRIES = 3;
+const TOLD_HOLD = Number(process.env.RELAY_TOLD_HOLD_MS) > 0 ? Number(process.env.RELAY_TOLD_HOLD_MS) : 15 * 1000;
 const READY_LIMIT = () => config.get('readyMinutes') * 60 * 1000;
 const watching = new Map();
 const stuckFns = [];
@@ -130,6 +142,12 @@ const WHY = {
   menu: 'a menu is open on its screen', trust: 'it is asking whether to trust its folder', typing: 'someone has text in its prompt',
   no_prompt: 'its screen shows no prompt', no_hooks: 'no hook reaches the relay from it', settling: 'its screen keeps changing',
 };
+const WAITS = Object.assign({}, WHY, {
+  ended: 'its session is not running', restarting: 'an update is restarting the relay', leaving: 'it is ending', working: 'it is in a turn',
+  waiting: 'it waits on an answer', briefing: 'its first brief has not gone in yet', stuck: 'it is stuck on an earlier message',
+  told: 'the last message the relay typed into it has not started a turn yet',
+});
+const whyWaits = (blocked) => WAITS[blocked] || 'the relay cannot tell why';
 function whyStuck(t, text, problem) {
   if (problem && WHY[problem]) return WHY[problem];
   const q = terminal.questionOnScreen(t);
@@ -176,6 +194,8 @@ function heldBy(channel, t, d) {
   if (!t) return null;
   if (t.stuck) return 'stuck';
   if (!d.first && listOf(channel).some((x) => x.first && x !== d && targetOf(channel, x) === t)) return 'briefing';
+  const w = watching.get(t.id);
+  if (w && w.d.key !== d.key && !tookUp(t, w.at) && Date.now() - w.at < TOLD_HOLD) return 'told';
   return null;
 }
 function landing(channel, d, t) {
@@ -190,8 +210,22 @@ function landing(channel, d, t) {
   return false;
 }
 
+const REDRAW_AFTER = Number(process.env.RELAY_REDRAW_AFTER_MS) > 0 ? Number(process.env.RELAY_REDRAW_AFTER_MS) : 60 * 1000;
+const REDRAW_EVERY = 5 * 60 * 1000;
+const blankSince = new Map();
+function redrawIfBlank(t, seen) {
+  const now = Date.now();
+  seen.add(t.id);
+  if (!blankSince.has(t.id)) blankSince.set(t.id, now);
+  if (now - blankSince.get(t.id) < REDRAW_AFTER || now - (t.redrawnAt || 0) < REDRAW_EVERY) return;
+  t.redrawnAt = now;
+  console.log('A saved message waits for a session whose screen shows no prompt, so the relay asks it to draw its screen again.');
+  terminal.redraw(t);
+}
+
 const typing = new Set();
 function pump() {
+  const seen = new Set();
   for (const channel of Object.keys(store)) {
     for (const d of listOf(channel).slice()) {
       const t = targetOf(channel, d);
@@ -200,11 +234,16 @@ function pump() {
         remove(channel, d); tell(channel, d.key, 'expired', 'the session was not ready after ' + Math.round(READY_LIMIT() / 60000) + ' minutes'); continue;
       }
       if (t && d.heldFor === t.id && !t.stuck) { remove(channel, d); continue; }
+      if (t && d.beforeTurn && !d.typedAt && (t.turnAt || 0) >= d.savedAt) { remove(channel, d); tell(channel, d.key, 'expired', 'a turn began before it went in'); continue; }
       if (d.untilTurn && landing(channel, d, t)) continue;
-      if (!t || typing.has(t.id) || heldBy(channel, t, d) || terminal.notSafeToType(t, how(d))) continue;
+      if (!t || typing.has(t.id) || heldBy(channel, t, d)) continue;
+      const problem = terminal.notSafeToType(t, how(d));
+      if (problem === 'no_prompt') redrawIfBlank(t, seen);
+      if (problem) continue;
       type(channel, d, t, () => {});
     }
   }
+  for (const id of [...blankSince.keys()]) if (!seen.has(id)) blankSince.delete(id);
 }
 function type(channel, d, t, done) {
   typing.add(t.id);
@@ -254,4 +293,4 @@ terminal.onEnd((channel, t, code, closing) => {
   tell(channel, d.key, 'expired', d.typedAt ? 'the session ended after its prompt was typed, before a hook said a turn began' : 'the session ended first');
 });
 
-module.exports = { save, drop, dropWhere, pending, onStuck, promptOnce, sendNow, WHY, TOLD_CHECK, PROMPT_TRIES };
+module.exports = { save, drop, dropWhere, pending, whyWaits, onStuck, promptOnce, sendNow, WHY, TOLD_CHECK, PROMPT_TRIES, REDRAW_EVERY };
