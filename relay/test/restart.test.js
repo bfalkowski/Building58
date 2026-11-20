@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, removeDir, sleep, until } = require('./helpers.js');
+const { relay, withoutRoom, makeRepo, removeDir, sleep, until } = require('./helpers.js');
 
 const RESUME = { RELAY_RESUME: '1', RELAY_WIP_LIMIT: '5' };
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -344,7 +344,7 @@ test('the supervisor says so when the relay cannot start', async () => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-test-')));
   try {
     const r = spawnSync('node', ['relay/server.js'], { cwd: path.join(__dirname, '..', '..'), encoding: 'utf8', timeout: 20000,
-      env: { ...process.env, HOME: home, HOST: '127.0.0.1', PORT: String(blocker.address().port), RELAY_KEY: 'k' } });  // the address the blocker holds
+      env: { ...withoutRoom(process.env), HOME: home, HOST: '127.0.0.1', PORT: String(blocker.address().port), RELAY_KEY: 'k' } });  // the address the blocker holds
     assert.strictEqual(r.status, 1);
     assert.match(r.stderr, /already in use/);
     assert.match(r.stderr, /The relay stopped with exit code 1\./);
@@ -509,7 +509,7 @@ test('an automatic reviewer brought back still ends once its review is posted', 
   const payload = { hook_event_name: 'PostToolUse', session_id: reviewer.sessionId, cwd: back.cwd, tool_name: 'Bash', tool_input: { command: 'gh pr comment 7 --body "Looks right."' },
     tool_response: { stdout: PR + '#issuecomment-42\n', stderr: '', interrupted: false } };
   const r = require('child_process').spawnSync('node', [path.join(__dirname, '..', 'office-hook.js')], { input: JSON.stringify(payload),
-    env: { ...process.env, HOME: home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
+    env: { ...withoutRoom(process.env), HOME: home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
   assert.strictEqual(r.status, 0);
   await idle(R, reviewer.sessionId);
   await until(async () => !(await terminals(R)).some((x) => x.running && x.id === back.id), 'the reviewer to leave');
@@ -521,7 +521,7 @@ function postedReview(R, home, s, cwd) {
   const payload = { hook_event_name: 'PostToolUse', session_id: s.sessionId, cwd: cwd || s.cwd, tool_name: 'Bash', tool_input: { command: 'gh pr comment 7 --body "Looks right."' },
     tool_response: { stdout: PR + '#issuecomment-42\n', stderr: '', interrupted: false } };
   const r = require('child_process').spawnSync('node', [path.join(__dirname, '..', 'office-hook.js')], { input: JSON.stringify(payload),
-    env: { ...process.env, HOME: home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
+    env: { ...withoutRoom(process.env), HOME: home, OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't' } });
   assert.strictEqual(r.status, 0);
 }
 // The hook gives up on the relay after a second, which a loaded machine can take, so it sends again
