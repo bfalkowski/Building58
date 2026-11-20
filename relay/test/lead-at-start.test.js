@@ -87,6 +87,8 @@ test('a saved Lead that cannot come back gives way to a new Lead, with no permis
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'))[CHANNEL];
   assert.deepStrictEqual([saved.board, saved.merge, saved.starts], [false, false, 0], 'the old grants are not kept for the next Lead');
   assert.strictEqual((await leads(R)).length, 1);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.strictEqual((await room(R)).restore, null, 'a new Lead runs, so the one that failed is not offered back (T-225)');
 });
 
 test('RELAY_LEAD=0 and RELAY_RESUME=0 start no Lead', async (t) => {

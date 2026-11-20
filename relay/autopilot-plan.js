@@ -17,8 +17,13 @@ function forPr(pr, files, verdict, rounds, maxRounds, devGone) {
   if (pr.state === 'MERGED') return { act: 'done', why: 'The PR merged.' };
   if (pr.state === 'CLOSED') return { act: 'person', reason: 'pr-closed', why: 'The PR was closed without merging.' };
   if (!files) return { act: 'wait', why: 'Waiting for the list of files the PR changes.' };
-  const locked = [...new Set(files.filter((f) => PROTECTED.includes(f)))];
-  if (locked.length) return { act: 'person', reason: 'protected-file', why: 'It changes ' + locked.join(' and ') + ', which only a person merges.' };
+  const locked = lockedOf(files);
+  if (locked.length) return { act: 'person', reason: 'protected-file', why: onlyAPerson(locked) };
+  return forReviewed(pr, verdict, rounds, maxRounds, devGone);
+}
+const lockedOf = (files) => [...new Set((files || []).filter((f) => PROTECTED.includes(f)))];
+const onlyAPerson = (locked) => 'It changes ' + locked.join(' and ') + ', which only a person merges.';
+function forReviewed(pr, verdict, rounds, maxRounds, devGone) {
   if (!verdict) return { act: 'wait', why: 'Waiting for the review.' };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
@@ -36,9 +41,29 @@ function forPr(pr, files, verdict, rounds, maxRounds, devGone) {
   return { act: 'merge', why: 'Reviewed with no blocking findings, CI is green, and GitHub can merge it.' };
 }
 
+function forPersonMerge(pr, locked, verdict, d) {
+  const short = verdict && verdict.commit ? String(verdict.commit).slice(0, 7) : '';
+  if (d.act === 'merge') return { ready: pr.headRefOid, why: 'Ready for your merge: the review of ' + short + ' says merge, CI is green, and GitHub can merge it.' };
+  let now;
+  if (!verdict || !verdict.posted) now = 'Waiting for its review.';
+  else if (verdict.commit !== pr.headRefOid) now = 'Waiting for a review of the new commits.';
+  else if (verdict.kind === 'fix') now = 'The review of ' + short + ' says fix, so its Dev fixes it first.';
+  else if (d.act === 'conflict' || d.act === 'bring-back') now = 'The review of ' + short + ' says merge, but it conflicts with main.';
+  else now = d.why;
+  return { ready: null, why: onlyAPerson(locked) + ' ' + now };
+}
+
 const MARKS = ['hold', 'replaced'];
 const OPEN = ['triage', 'ready', 'started'];
+function proposalWords(p, id) {
+  const ids = (p.ids || []).join(', ');
+  if (p.action === 'replace') return 'replace ' + id + ' with ' + ids;
+  if (p.action === 'merge') return 'merge ' + id + ' into ' + ids;
+  if (p.action === 'close') return 'close ' + id;
+  return 'set the blockers of ' + id + ' to ' + (ids || 'none');
+}
 function heldBack(t, all) {
+  if (t.proposal) return 'A proposal to ' + proposalWords(t.proposal, t.id) + ' waits on you. Nothing starts it by itself until you approve or decline it.';
   const after = ' Nothing starts it by itself until you clear the mark.';
   if (t.mark === 'hold') return 'On hold.' + after;
   if (t.mark === 'replaced') return 'Replaced' + (t.replacedBy ? ' by ' + t.replacedBy : '') + '.' + after;
@@ -86,4 +111,4 @@ function reviewPostFor(comments, { login, since, commit }) {
   return found;
 }
 
-module.exports = { forPr, ciOf, nextTicket, whyNoneAllowed, heldBack, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };

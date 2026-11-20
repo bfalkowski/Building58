@@ -51,6 +51,25 @@ test('a code-only PR merges while the grouped wording PR waits for the person', 
   assert.strictEqual(wording.act, 'person');
   assert.match(wording.why, /CLAUDE\.md and docs\/constitution\.md, which only a person merges/);
 });
+// T-214: a PR handed to the person only for the merge says where it is, and says ready by Autopilot's own merge test.
+test('a PR only a person merges says where it is, and ready only when Autopilot would merge it', () => {
+  const { forReviewed, forPersonMerge, lockedOf } = require('../autopilot-plan.js');
+  const why = (p, v) => forPersonMerge(p, lockedOf(['a.js', 'CLAUDE.md']), v, forReviewed(p, v, 1, 2));
+  const only = 'It changes CLAUDE.md, which only a person merges. ';
+  const ready = why(pr(), merge);
+  assert.deepStrictEqual(ready, { ready: HEAD, why: 'Ready for your merge: the review of aaaaaaa says merge, CI is green, and GitHub can merge it.' });
+  assert.deepStrictEqual(why(pr(), null), { ready: null, why: only + 'Waiting for its review.' });
+  assert.strictEqual(why(pr(), { ...merge, posted: false }).why, only + 'Waiting for its review.', 'a verdict counts once its review is posted');
+  assert.strictEqual(why(pr(), { kind: 'fix', commit: HEAD, posted: true }).why, only + 'The review of aaaaaaa says fix, so its Dev fixes it first.');
+  assert.deepStrictEqual(why(pr({ headRefOid: 'b'.repeat(40) }), merge), { ready: null, why: only + 'Waiting for a review of the new commits.' }, 'a push after ready');
+  assert.strictEqual(why(pr({ statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'FAILURE' }] }), merge).why, only + 'CI failed on the reviewed commit.');
+  assert.strictEqual(why(pr({ statusCheckRollup: [{ status: 'IN_PROGRESS', conclusion: '' }] }), merge).why, only + 'Waiting for CI.');
+  assert.strictEqual(why(pr({ mergeStateStatus: 'BLOCKED' }), merge).why, only + 'GitHub says the PR is blocked.');
+  assert.strictEqual(why(pr({ mergeStateStatus: 'DIRTY' }), merge).why, only + 'The review of aaaaaaa says merge, but it conflicts with main.');
+  for (const [p, v] of [[pr(), merge], [pr(), null], [pr({ mergeStateStatus: 'DIRTY' }), merge], [pr({ statusCheckRollup: [] }), merge], [pr({ headRefOid: 'b'.repeat(40) }), merge]]) {
+    assert.strictEqual(!!why(p, v).ready, act(p, v, 1, 2) === 'merge', 'ready exactly when Autopilot would merge a PR that changes no such file');
+  }
+});
 test('a merged PR is done, and a conflict goes back to the Dev', () => {
   assert.strictEqual(act(pr({ state: 'MERGED' }), null, 0, 2, null), 'done');
   assert.strictEqual(act(pr({ mergeStateStatus: 'DIRTY' }), merge, 1, 2), 'conflict');

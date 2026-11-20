@@ -7,8 +7,9 @@
 //     (T-229). The poll runs about once a minute and Autopilot looks every 20 s, so without this a merge
 //     verdict could merge before its Dev was told. With the check off, the Dev is never told of reviews.
 //   - Has the Dev been told the latest review? News it was not told yet is still to answer.
-//   - Is the Dev at work, at a question, or told something it has not started on? It may still be
-//     answering the latest review, and its fixes would land after the merge.
+//   - Is the Dev at work, running a job (such as npm test in the background), at a question, or told
+//     something it has not started on? It may still be answering the latest review, and its fixes would
+//     land after the merge.
 //   - Does its checkout hold uncommitted changes, or commits that are on no remote? Then the PR does
 //     not hold them.
 // holdOf(task, dev, now) -> null, or { act, why }, with a reason word when act is 'person'. act is 'wait'
@@ -17,7 +18,7 @@
 'use strict';
 const fs = require('fs');
 const { execFileSync } = require('child_process');
-const { livenessOf } = require('./liveness.js');
+const { livenessOf, jobWords } = require('./liveness.js');
 const config = require('./config.js');
 
 function unsavedWork(dir) {
@@ -32,7 +33,7 @@ function unsavedWork(dir) {
 const UNSEEN = 'No comment check has listed the latest posted review on the PR yet, so its Dev was not told of it.';
 const unseen = (r) => !!r.posted && !r.posted.seen && config.get('reviewPollSeconds') > 0;
 
-const busy = (lv) => ({ working: 'is working', quiet: 'is in a turn', waiting: 'is at a question',
+const busy = (lv, dev) => ({ working: 'is working', quiet: 'is in a turn', waiting: 'is at a question', job: 'is running a job (' + jobWords(dev) + ')',
   stuck: lv.cause === 'told' ? 'has not started on what it was told' : 'is in a turn with no hook' })[lv.state] || null;
 
 function holdOf(task, dev, now, unsaved = unsavedWork) {
@@ -42,7 +43,7 @@ function holdOf(task, dev, now, unsaved = unsavedWork) {
   if (unseen(r)) return { act: 'wait', why: UNSEEN };
   const news = r.pending;
   if (news && !gone) return { act: 'wait', why: 'Its Dev has not been told of the latest review yet.' };
-  if (busy(lv)) return { act: 'wait', why: 'Its Dev ' + busy(lv) + ', maybe still answering the latest review, so the PR may not hold every fix yet.' };
+  if (busy(lv, dev)) return { act: 'wait', why: 'Its Dev ' + busy(lv, dev) + ', maybe still answering the latest review, so the PR may not hold every fix yet.' };
   const dir = task.worktree || (dev && dev.cwd);
   const left = dir && fs.existsSync(dir) ? unsaved(dir) : null;
   if (left) return { act: 'person', reason: 'work-left-out', why: 'Its Dev ' + (gone ? 'has ended' : 'stopped') + ', but ' + left + ', so the PR does not hold all its work.' };

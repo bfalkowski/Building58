@@ -16,7 +16,7 @@ const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const chat = require('./chat.js');
 const pipeline = require('./pipeline.js');
-const { stopVerdict, leadMayStop } = require('./stop-verdict.js');
+const { stopVerdict, leadMayStop, forReview } = require('./stop-verdict.js');
 const { deskOf, pairReviewers } = require('./desk.js');
 const { livenessOf, jobWords } = require('./liveness.js');
 const { tiredOf } = require('./lead-tired.js');
@@ -171,6 +171,14 @@ function personStop(channel, body, ctx, now) {
   return [200, { ok: true, stopped }];
 }
 
+function stopForDesk(channel, t, task, by, why, purpose) {
+  terminal.stop(t);
+  const what = 'to free a desk' + (purpose ? ' ' + purpose : '');
+  if (task) { tasks.record(task, { type: 'note', note: by + ' stopped its worker ' + what + ': ' + why + '.' }); tasks.save(); }
+  const row = { t, name: nameOf(t), role: roleOf(t), task: task ? task.id : null, why };
+  chat.announce(channel, by + ' stopped ' + row.name + ' (' + row.role + (task ? ', task ' + task.id : '') + ') ' + what + ': ' + why + '.', task && task.ticket);
+  return row;
+}
 function freeDesks(channel, need, now, by, pick) {
   const taskOf = taskFinder(channel);
   const free = terminal.all(channel).filter((t) => !t.exited && !t.stopped)
@@ -178,17 +186,26 @@ function freeDesks(channel, need, now, by, pick) {
   const stopped = [];
   for (const t of free) {
     if (stopped.length >= need) break;
+    if (t.lead) continue;
     const task = taskOf(t);
     if (!pick(t, task)) continue;
     const v = leadVerdict(channel, t, task, now);
     if (!v.canStop) continue;
-    terminal.stop(t);
-    if (task) { tasks.record(task, { type: 'note', note: by + ' stopped its worker to free a desk: ' + v.reason + '.' }); tasks.save(); }
-    const row = { t, name: nameOf(t), role: roleOf(t), task: task ? task.id : null, why: v.reason };
-    chat.announce(channel, by + ' stopped ' + row.name + ' (' + row.role + (task ? ', task ' + task.id : '') + ') to free a desk: ' + v.reason + '.', task && task.ticket);
-    stopped.push(row);
+    stopped.push(stopForDesk(channel, t, task, by, v.reason));
   }
   return stopped;
+}
+function freeForReview(channel, now, waits, purpose) {
+  const taskOf = taskFinder(channel);
+  const candidates = terminal.all(channel).filter((t) => !t.exited && !t.stopped).map((t) => {
+    const task = taskOf(t), verdict = stopVerdict(t, task, now, terminal.questionOnScreen(t));
+    if (!verdict.safe) return null;
+    const isMerged = !!task && !!task.pr && merged(channel, task.pr);
+    const finished = !!(t.task && task && (task.state === 'done' || isMerged));
+    return { t, task, verdict, merged: isMerged, unsaved: finished ? unsavedWork(task.worktree || t.cwd) : null, waits: !!(task && task.pr && waits(task.pr)) };
+  }).filter(Boolean);
+  const pick = forReview(candidates);
+  return pick ? stopForDesk(channel, pick.t, pick.task, 'The relay', pick.why, purpose) : null;
 }
 
 async function handle(req, res, channel, rest, ctx) {
@@ -198,11 +215,11 @@ async function handle(req, res, channel, rest, ctx) {
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'The floor needs the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
-  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()) }); return true; }
+  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()), leadEnded: terminal.leadEndedOf(channel) }); return true; }
   const body = await ctx.readJson(req);
   const [status, out] = ctx.agent ? stopOne(channel, body.who, ctx, Date.now()) : personStop(channel, body, ctx, Date.now());
   ctx.send(res, status, out);
   return true;
 }
 
-module.exports = { handle, floorOf, seatsOf, personStop, freeDesks, merged, LEAD_STOPS };
+module.exports = { handle, floorOf, seatsOf, personStop, freeDesks, freeForReview, merged, LEAD_STOPS };

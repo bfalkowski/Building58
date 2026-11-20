@@ -74,9 +74,22 @@
     return on;
   }
 
+  const WHO = { PM: 'The PM', Lead: 'The Lead', you: 'You' };
+  function proposalText(t) {
+    const p = t.proposal;
+    if (!p) return '';
+    const ids = (p.ids || []).join(', ');
+    const what = p.action === 'replace' ? 'replace ' + t.id + ' with ' + ids : p.action === 'merge' ? 'merge ' + t.id + ' into ' + ids
+      : p.action === 'close' ? 'close ' + t.id : 'set the blockers of ' + t.id + ' to ' + (ids || 'none');
+    return (WHO[p.by] || 'A session') + (p.by === 'you' ? ' propose' : ' proposes') + ' to ' + what + '.' + (p.why ? ' Why: ' + p.why : '');
+  }
+  const CLOSED = { replaced: 'replaced by ', merged: 'merged into ' };
+  const closedText = (t) => (t.closedAs === 'closed' ? 'closed' : CLOSED[t.closedAs] ? CLOSED[t.closedAs] + (t.closedFor || []).join(', ') : '');
+  const waitsOnYou = (t) => columnOf(t) === 'waiting_on_you' || !!t.proposal;
+
   const alsoWith = (names, assignee) => (names || []).filter((n) => !(assignee && assignee.name === n));
 
-  const api = { COLUMNS, DONE_SHOWN, PRIORITIES, GROUP_FROM, NO_LABEL, priorityOf, labelsOf, groupsOf, stateOf, columnOf, matches, filtering, repos, cardsOf, peopleOn, alsoWith };
+  const api = { COLUMNS, DONE_SHOWN, PRIORITIES, GROUP_FROM, NO_LABEL, priorityOf, labelsOf, groupsOf, stateOf, columnOf, matches, filtering, repos, cardsOf, peopleOn, alsoWith, proposalText, closedText, waitsOnYou };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.BoardModel = api;
 })(this);

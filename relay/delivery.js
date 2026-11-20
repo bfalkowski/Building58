@@ -42,7 +42,10 @@
 //
 // After a note goes in, the relay checks that the session took it up: that a hook said a turn began
 // within TOLD_CHECK. If not, it tries once more, or PROMPT_TRIES more for a first prompt (relay/terminal.js
-// nudge: Enter if the note still shows, or the note typed again), and checks again after each. If it still has not started, the session is stuck
+// nudge: Enter if the note still shows, or the note typed again), and checks again after each. For TOLD_HOLD
+// (RELAY_TOLD_HOLD_MS, 15 seconds) after a note goes in, nothing else is typed into that session unless a hook
+// says its turn began, and then the turn holds the rest: a hook can come seconds after Enter, and a note typed
+// then sits unsent in the prompt while the turn counts for it (T-353). If it still has not started, the session is stuck
 // (t.stuck: when it was told, and why where the relay can tell), the Floor says so, and the relay
 // stops trying and leaves it to the person. Nothing else is typed into a session while it is stuck. The note is saved again for that session id, so Bring back gets it, but a
 // turn that begins in the stuck session itself drops it: that session has it already.
@@ -126,6 +129,7 @@ function pending(channel) {
 }
 
 const PROMPT_TRIES = 3;
+const TOLD_HOLD = Number(process.env.RELAY_TOLD_HOLD_MS) > 0 ? Number(process.env.RELAY_TOLD_HOLD_MS) : 15 * 1000;
 const READY_LIMIT = () => config.get('readyMinutes') * 60 * 1000;
 const watching = new Map();
 const stuckFns = [];
@@ -138,6 +142,7 @@ const WHY = {
 const WAITS = Object.assign({}, WHY, {
   ended: 'its session is not running', restarting: 'an update is restarting the relay', leaving: 'it is ending', working: 'it is in a turn',
   waiting: 'it waits on an answer', briefing: 'its first brief has not gone in yet', stuck: 'it is stuck on an earlier message',
+  told: 'the last message the relay typed into it has not started a turn yet',
 });
 const whyWaits = (blocked) => WAITS[blocked] || 'the relay cannot tell why';
 function whyStuck(t, text, problem) {
@@ -186,6 +191,8 @@ function heldBy(channel, t, d) {
   if (!t) return null;
   if (t.stuck) return 'stuck';
   if (!d.first && listOf(channel).some((x) => x.first && x !== d && targetOf(channel, x) === t)) return 'briefing';
+  const w = watching.get(t.id);
+  if (w && w.d.key !== d.key && !tookUp(t, w.at) && Date.now() - w.at < TOLD_HOLD) return 'told';
   return null;
 }
 function landing(channel, d, t) {
