@@ -226,7 +226,7 @@ let closing = false, savedText = null;
 function keepOf(t) {
   return { sessionId: t.sessionId, seat: t.seat || undefined, who: t.who || undefined, talked: !!t.talked, cwd: t.cwd, from: t.from, title: t.title, customTitle: t.customTitle || undefined, task: t.task, role: t.role, pr: t.pr,
     lead: !!t.lead, board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, owesBrief: !!t.owesBrief, owesPrompt: t.owesPrompt || undefined, reviewOf: t.reviewOf || undefined, round: t.round || undefined, posted: t.posted || undefined, cols: t.cols, rows: t.rows,
-    terminal: t.id, state: t.state, message: t.message || undefined, waitingAt: t.state === 'waiting' ? t.waitingAt : undefined, hooked: !!t.hooked, heard: !!t.heard, spoke: !!t.spoke, hookAt: t.hookAt || undefined };
+    terminal: t.id, state: t.state, message: t.message || undefined, waitingAt: t.state === 'waiting' ? t.waitingAt : undefined, hooked: !!t.hooked, heard: !!t.heard, spoke: !!t.spoke, hookAt: t.hookAt || undefined, actAt: t.lastActAt || undefined };
 }
 const FAIL_WITHIN = 10 * 1000, MAX_TRIES = 3;
 const failed = new Map();
@@ -387,7 +387,7 @@ function start(channel, body, ctx, onExit, own) {
     if (h) delete h['saved ' + restoring.sessionId];
     if (n) delete n['saved ' + restoring.sessionId];
   }
-  if (adopted) { t.state = ['working', 'waiting'].includes(adopted.state) ? adopted.state : 'idle'; t.message = adopted.message || null; if (t.state === 'waiting') t.waitingAt = adopted.waitingAt || Date.now(); t.hooked = !!adopted.hooked; t.heard = !!adopted.heard; t.hookAt = Number(adopted.hookAt) || 0; }
+  if (adopted) { t.state = ['working', 'waiting'].includes(adopted.state) ? adopted.state : 'idle'; t.message = adopted.message || null; if (t.state === 'waiting') t.waitingAt = adopted.waitingAt || Date.now(); t.hooked = !!adopted.hooked; t.heard = !!adopted.heard; t.hookAt = Number(adopted.hookAt) || 0; t.lastActAt = Number(adopted.actAt) || t.hookAt || t.lastActAt; }
   if (kept && kept.posted && t.reviewOf) {
     t.posted = kept.posted;
     t.ending = setTimeout(() => { t.ending = null; reviewDone(channel, t); }, REVIEW_GRACE());
