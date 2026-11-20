@@ -20,6 +20,7 @@ const { pmBrief } = require('./pm-brief.js');
 const { boardOrder, lastRank, placeNear } = require('./ticket-order.js');
 const { heldBack, MARKS, proposalWords } = require('./autopilot-plan.js');
 const { likelyTwins } = require('./ticket-twins.js');
+const { writeLine } = require('./needs-you-plan.js');
 
 const STATUSES = ['triage', 'ready', 'started', 'done', 'rejected'];
 const PRIORITIES = ['high', 'normal', 'low'];
@@ -64,7 +65,7 @@ tasks.events.on('state', async (channel, task) => {
   try {
     const t = await store.get(channel, task.ticket);
     if (t && t.createdAt === task.ticketAt) await store.update(channel, t.id, { status: task.state === 'done' ? 'done' : 'started' });
-  } catch (e) { console.error('Ticket store (' + store.name + '): ' + e.message); }
+  } catch (e) { if (!e.waits) console.error('Ticket store (' + store.name + '): ' + e.message); }
 });
 
 tasks.onClean(async (channel, task) => {
@@ -99,20 +100,23 @@ const clean = (v) => keepLines(v).trim();
 const blockersOf = (ticket, all, statuses) => (ticket.blockedBy || []).filter((id) => { const b = all.find((x) => x.id === id); return b && statuses.includes(b.status); });
 const waitingFor = (ticket, all) => blockersOf(ticket, all, ['triage', 'ready', 'started']);
 const startedBy = (task) => task.by || ((task.history || []).find((h) => h.type === 'created') || {}).by || 'you';
+const writeErrors = (channel, now) => (typeof store.writeErrors === 'function' ? store.writeErrors(channel) : []).map((w) => Object.assign({}, w, { inMs: w.nextAt - now }));
 const needsYouOf = (channel) => require('./needs-you.js').boardOf(channel, Date.now());
 async function view(channel, ticket, all, needs) {
   const task = tasks.ofTicket(channel, ticket);
   const { assignee, history: steps } = history.view(channel, ticket, task);
   const board = task && task.state !== 'done' && (needs === undefined ? needsYouOf(channel) : needs);
   const look = board ? board.get(task.id) || { needsYou: null, reviewRuns: false } : null;
-  return Object.assign({}, ticket, { assignee, history: steps, approved: personApproved(ticket), proposal: ticket.proposal || undefined, heldBack: heldBack(ticket, all), waitingFor: waitingFor(ticket, all), rejectedBlockers: blockersOf(ticket, all, ['rejected']), task: task ? Object.assign({ id: task.id, state: task.state, branch: task.branch, pr: task.pr, by: startedBy(task), startedAt: task.createdAt, pipeline: task.pipeline, waitsOn: task.waitsOn || null }, look) : null });
+  const failed = writeErrors(channel, Date.now()).find((w) => w.id === ticket.id);
+  return Object.assign({}, ticket, { writeError: failed ? writeLine(failed) : null, assignee, history: steps, approved: personApproved(ticket), proposal: ticket.proposal || undefined, heldBack: heldBack(ticket, all), waitingFor: waitingFor(ticket, all), rejectedBlockers: blockersOf(ticket, all, ['rejected']), task: task ? Object.assign({ id: task.id, state: task.state, branch: task.branch, pr: task.pr, by: startedBy(task), startedAt: task.createdAt, pipeline: task.pipeline, waitsOn: task.waitsOn || null }, look) : null });
 }
 async function followTasks(channel, list) {
   for (const t of list) {
     if (t.status !== 'started' && t.status !== 'done') continue;
     const task = tasks.ofTicket(channel, t);
     const should = task && (task.state === 'done' ? 'done' : 'started');
-    if (should && should !== t.status) Object.assign(t, await store.update(channel, t.id, { status: should }));
+    if (!should || should === t.status) continue;
+    try { Object.assign(t, await store.update(channel, t.id, { status: should })); } catch (e) { if (!e.waits) console.error('Ticket store (' + store.name + ') could not move ' + t.id + ' to ' + should + ': ' + e.message); }
   }
   return list;
 }
@@ -680,4 +684,4 @@ async function handle(req, res, channel, rest, ctx) {
 
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { handle, listAll, board, onChange, onFiled, startBy, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { handle, listAll, writeErrors, board, onChange, onFiled, startBy, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
