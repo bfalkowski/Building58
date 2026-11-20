@@ -30,7 +30,8 @@
 //   permission   a session waits on the person, and its message asks for permission
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   desks        reviews wait for a desk, and the relay may stop none of the sessions that hold them all
-//   ticket-write the last write to a ticket's GitHub issue failed, until a write to it goes through
+//   ticket-write the last write to a ticket's GitHub issue failed, until a write goes through, GitHub shows what it
+//                wanted, or a read comes after the wait
 //   merge        an open PR that only the person may merge
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
 //                with the next step a review posted after it gives
