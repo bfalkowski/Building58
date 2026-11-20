@@ -89,7 +89,7 @@ npm run test:browser
 A failed test leaves a screenshot and the page's console in `test-results/browser/`.
 
 GitHub runs lint, `npm test` and the room's browser tests on every pull request, on the current LTS, as jobs that run side by side on arm64 Linux runners, the cheaper kind. A pull request waits for the slowest job, not for all of them in a row. A change to docs only runs just the manual's checks. A last job named `pipeline`, the check `main` requires, passes when every job passed or was skipped. GitHub runs lint and `npm test` on Node 18
-too once a week, and when you press Run workflow on the CI workflow in Actions, and those runs include every test. Nothing runs on a push to `main`, since the pull request already passed. In the room, an automatic review waits until a pull request's
+too once a week, and when you press Run workflow on the CI workflow in Actions, and those runs include every test. Each push to `main` runs what a pull request runs, since two pull requests that each passed can break `main` when they merge close together. The room shows a red `main`, see [A red main](docs/manual/roles.html#red-main). In the room, an automatic review waits until a pull request's
 pipeline is green. See [A clean pipeline before review](docs/manual/roles.html#pipeline).
 
 A pre-commit hook stops commits that add keys or passwords. `npm ci` turns it on, or run

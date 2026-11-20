@@ -1,11 +1,14 @@
 name: CI
 
-# Pull requests only. A merge to main is the pull request's last commit, which already passed, so a
-# run on main tested nothing new and cost minutes. Node 18, the oldest Node we support, runs once a
-# week and on demand (Actions, CI, Run workflow), not on every push. GitHub emails the repo's owner when
-# a scheduled run fails.
+# Each pull request, and each push to main. Two pull requests that each pass can break main when they
+# merge minutes apart, since neither was tested with the other, so main is tested after each merge. The
+# room shows a red main and Autopilot starts no new ticket until it passes (relay/main-ci.js). Node 18,
+# the oldest Node we support, runs once a week and on demand (Actions, CI, Run workflow), not on every
+# push. GitHub emails the repo's owner when a scheduled run fails.
 on:
   pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: '17 6 * * 1'
   workflow_dispatch:
@@ -14,7 +17,7 @@ permissions:
   contents: read
 
 # A new push to a pull request cancels its run that is still going, which tested an old commit.
-# A scheduled or by-hand run is never cancelled.
+# A run on main, scheduled or by hand is never cancelled, so each merge to main gets its own result.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -35,7 +38,7 @@ jobs:
 
   # What the change touches, so the jobs after it skip what it cannot break. A change to docs only
   # (docs/, design/ and Markdown files) needs only the manual's checks: its links, its anchors and no em
-  # dashes. A run with no pull request, weekly or by hand, runs everything.
+  # dashes. A run with no pull request, on main, weekly or by hand, runs everything.
   changes:
     name: What changed
     runs-on: ubuntu-24.04-arm
@@ -56,7 +59,8 @@ jobs:
           echo "$files"
           if [ -n "$files" ] && [ "$files" != unknown ] && ! echo "$files" | grep -qvE '^(docs/|design/)|\.md$'; then echo "Docs only."; echo "docs=true" >> "$GITHUB_OUTPUT"; exit 0; fi
 
-  # Lint and npm test. The weekly and by-hand runs also use Node 18, the oldest Node we support.
+  # Lint and npm test. The weekly and by-hand runs also use Node 18, the oldest Node we support. A push
+  # to main runs what a pull request runs.
   # The browser tests run beside this job, not after it, so a pull request waits for the slowest
   # job, not for all of them in a row. Each job is an arm64 runner, which costs less a minute than
   # x64 Linux, and GitHub rounds each job up to a minute.
@@ -68,7 +72,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ${{ github.event_name == 'pull_request' && fromJSON('["lts/*"]') || fromJSON('["18", "lts/*"]') }}
+        node: ${{ (github.event_name == 'pull_request' || github.event_name == 'push') && fromJSON('["lts/*"]') || fromJSON('["18", "lts/*"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
