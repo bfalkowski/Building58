@@ -12,7 +12,8 @@
 //      only a person merges is still read at each look (follow): its reason follows its review, CI and
 //      GitHub, and says ready for your merge when the same merge test passes. It is never merged here.
 //   2. While fewer than RELAY_AUTOPILOT_AT_ONCE tasks (1) are open, it starts the next Ready ticket a
-//      person approved, in Board order. With "only" set, just those tickets. When every desk is taken, it
+//      person approved, in Board order. With "only" set, just those tickets. While the latest CI run on the
+//      ticket's base branch failed (relay/main-ci.js), it starts none, and its idle line says main is red. When every desk is taken, it
 //      frees one of its own sessions the Lead may stop (freeADesk). If none is, it waits for a desk and
 //      tries again on its next look. It turns itself off only for a start that fails for another reason.
 // Reviews: relay/reviews.js starts the first review and, while Autopilot is on, a follow-up after each
@@ -38,6 +39,8 @@ const state = require('./state.js');
 const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const tickets = require('./tickets.js');
+const mainCi = require('./main-ci.js');
+const { redMain } = require('./needs-you-plan.js');
 const reviews = require('./reviews.js');
 const prComments = require('./pr-comments.js');
 const update = require('./update.js');
@@ -440,6 +443,8 @@ async function maybeStart(channel) {
     const all = await tickets.listAll(channel);
     const next = plan.nextTicket(all, (t) => !!tasks.ofTicket(channel, t), c.only);
     if (!next) { c.idle = c.only ? plan.whyNoneAllowed(all, (t) => !!tasks.ofTicket(channel, t), c.only) : 'Nothing in Ready that a person approved and that is not blocked, on hold, replaced or waiting on a design ticket.'; return; }
+    const main = await mainCi.check(channel, next.repo, next.base || await tasks.git(next.repo, ['symbolic-ref', '--short', 'HEAD']).catch(() => 'main'));
+    if (main && main.state === 'red') { c.idle = 'Main is red, so ' + next.id + ' waits: ' + redMain({ name: path.basename(next.repo), branch: main.branch, run: main.run }); return; }
     const waitWip = (message) => { c.idle = 'Waiting for room under the WIP limit: ' + message; };
     const building = tasks.building(channel);
     if (building >= tasks.wipLimit()) { waitWip(building + (building === 1 ? ' task is' : ' tasks are') + ' being built, and the limit is ' + tasks.wipLimit() + '.'); return; }

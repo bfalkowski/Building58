@@ -22,7 +22,8 @@
 //   node relay/ticket.js chat T-1              (the newest posts in #T-1)
 //   node relay/ticket.js post T-1 "Pushed the fix, @Lead"   (mention one session by name to have it told)
 // Only the Lead can read the floor: each session's name, role, ticket, PR, state, whether it can be stopped,
-// and for a Dev whose PR is open, any merge hold: why a merge now would leave its work out (relay/merge-hold.js):
+// and for a Dev whose PR is open, any merge hold: why a merge now would leave its work out (relay/merge-hold.js),
+// and above them a line for each main whose latest CI run failed (relay/main-ci.js):
 //   node relay/ticket.js floor
 // The Lead asks the relay how tired it is: how full its context is, from its status line (relay/lead-tired.js):
 //   node relay/ticket.js tired
@@ -217,6 +218,7 @@ async function main() {
     const r = await (await fetch(URL_.replace(/\/tickets$/, '/floor'), { headers })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     if (r.leadEnded) console.log(r.leadEnded.says);
+    for (const m of r.mainRed || []) console.log(m.says);
     if (!r.sessions.length) console.log('No sessions are running.');
     for (const s of r.sessions) console.log(floorLine(s));
     return 0;
