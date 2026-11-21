@@ -68,9 +68,11 @@ npm test
 The tests need `python3` and `git`. Lint checks for mistakes only, not style, so long lines are fine.
 `npm test` runs each test file with its own empty home folder, so the tests never touch your
 room's files, and several checkouts can run it at the same time. Each run starts up to 6 files at
-once (`TEST_JOBS` sets it), and all runs on one computer share 12 test slots (`TEST_SLOTS` sets it,
-`0` turns the limit off, and a value that is not a whole number counts as 12). So when four checkouts run the suite together, 12 files run at once,
-not 24. A run that finds every slot taken prints `waiting for a test slot` once, and when a slot
+once (`TEST_JOBS` sets it), and all runs on one computer share one test slot for each core
+(`TEST_SLOTS` sets the number, `0` turns the limit off, and a value that is not a whole number counts as
+the number of cores). So on a 10-core computer, when four checkouts run the suite together, 10 files run at once,
+not 24. Sessions the room starts take the same slots for the test files of every repo they work in
+(see Given to sessions in `docs/manual/settings.html`). A run that finds every slot taken prints `waiting for a test slot` once, and when a slot
 frees, the run that started first takes it. A run killed while it held or waited for a slot
 blocks no one for more than 30 seconds. A file that has not ended after
 10 minutes (`TEST_FILE_SECONDS` sets it) is stopped with everything it started, and fails, so one

@@ -16,18 +16,19 @@
 // the session that runs the tests (OFFICE_*, RELAY_*, CLAUDE_CODE_*, PORT, HOST). Some tests load relay modules in their
 // own process, and those keep their files under ~/.office-world, so with your HOME they would read
 // your room's files and fight every other checkout that runs the tests at the same time.
-// Every run on this computer shares TEST_SLOTS (12) test slots, so at most that many files run at once
+// Every run on this computer shares TEST_SLOTS test slots, one for each core by default, so at most that many files run at once
 // across all checkouts (relay/test/slots.js). Four Devs once ran the suite together, 24 files at a time,
 // and the runs took 20 minutes instead of 6, with files failing on the slow machine (T-351). A run
 // that must wait says so once, and when slots free, the run that started first goes first. TEST_SLOTS=0
-// turns the limit off, and a value that is not a whole number counts as 12. Each file runs with
+// turns the limit off, and a value that is not a whole number counts as the default. Test files of
+// other repos that sessions of the room run take the same slots, through relay/test/slot-gate.js. Each file runs with
 // TEST_SLOTS=0, so a run inside a test never waits behind its own parent. TEST_SLOTS_DIR moves the slots' folder, for the runner's own tests.
 'use strict';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
-const { slots, DIR } = require('./slots.js');
+const { slots, sizeOf, DIR } = require('./slots.js');
 const { withoutRoom } = require('./helpers.js');
 
 const [major, minor] = process.versions.node.split('.').map(Number);
@@ -39,7 +40,7 @@ const files = asked.length ? asked.map((f) => path.resolve(f)).flatMap((f) => (f
 const JOBS = Math.max(1, Number(process.env.TEST_JOBS) || 6);
 const LIMIT = Math.max(1, Number(process.env.TEST_FILE_SECONDS) || 600);
 const HELD_SECONDS = 5;
-const SLOTS = /^\d+$/.test(process.env.TEST_SLOTS || '') ? Number(process.env.TEST_SLOTS) : 12;
+const SLOTS = sizeOf(process.env.TEST_SLOTS);
 const pool = SLOTS ? slots({ dir: process.env.TEST_SLOTS_DIR || undefined, size: SLOTS }) : null;
 // Playwright looks for its browser under HOME, so the browser tests are told where it is under yours.
 const CACHE = { darwin: path.join(os.homedir(), 'Library', 'Caches'), win32: process.env.LOCALAPPDATA }[process.platform] || process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
