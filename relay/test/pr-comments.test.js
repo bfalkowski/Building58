@@ -5,7 +5,8 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, sleep, until } = require('./helpers.js');
+const { spawnSync } = require('child_process');
+const { relay, makeRepo, removeDir, sleep, until, ROOT } = require('./helpers.js');
 
 const PR = 'https://github.com/o/r/pull/7';
 const ISSUE = 'repos/o/r/issues/7/comments', REVIEWS = 'repos/o/r/pulls/7/reviews', INLINE = 'repos/o/r/pulls/7/comments';
@@ -366,4 +367,19 @@ test('a review comment on a task Autopilot handed to the person tells the Dev bu
     await until(async () => (await o.get(task.id)).state === 'changes_requested', 'Changes requested');
     assert.strictEqual((await o.told(task)).length, 2);
   });
+});
+
+test('the Exhibit summary comment is not news, and other comments still are', () => {
+  // The comment that the Exhibit Action posted on https://github.com/bfalkowski/exhibit/pull/228 as github-actions[bot].
+  const SUMMARY = '<!-- exhibit:pr-summary -->\n### Exhibit: needs a person\n\nVerdict: **needs_person** at head commit `c36bfef`.\n\nShadow mode: nothing waits on this.\n\nKinds of change: docs, tooling. Risk: medium.\n\n**Gaps (1)**\n\n1. policy-change: missing. This change edits evidence.yml, the policy that Exhibit checks changes against. A change to the policy always needs a person, so that a builder cannot change the rules to pass its own PR. Ask a maintainer to review the policy change.\n\n[The full exhibit](https://github.com/bfalkowski/exhibit/blob/880a389f9654afd9c203425ebcee98e3a7dae9fa/prs/228/c36bfef01a9f9f0f236058b0578078e770eaee07.json)\n';
+  // pr-comments.js claims state files when it loads, so it loads in a child with a state folder of its own.
+  const state = fs.mkdtempSync(path.join(os.tmpdir(), 'office-exhibit-summary-'));
+  const ask = (body, kind) => spawnSync('node', ['-e', 'process.stdout.write(String(require(' + JSON.stringify(path.join(ROOT, 'relay', 'pr-comments.js')) + ').isNews({ own: [] }, { body: process.argv[1], kind: process.argv[2], url: "u" })))', body, kind], { env: { ...process.env, HOME: state, RELAY_STATE_DIR: state, RELAY_REVIEW_POLL_SECONDS: '0' }, encoding: 'utf8' }).stdout;
+  try {
+    assert.strictEqual(ask(SUMMARY, 'c'), 'false', 'the summary has no findings, so the Dev gets no news for it');
+    assert.strictEqual(ask(SUMMARY.replace('<!-- exhibit:pr-summary -->\n', ''), 'c'), 'true', 'a github-actions[bot] comment without the mark can hold real findings');
+    assert.strictEqual(ask('Finding: this breaks when the list is empty.', 'i'), 'true', 'a review comment is still news');
+    assert.strictEqual(ask('## Review of a1b2c3d\n\nVerdict: fix', 'r'), 'true', 'a review is still news');
+    assert.strictEqual(ask('Earlier text.\n<!-- exhibit:pr-summary -->', 'c'), 'true', 'only a comment that starts with the mark is skipped');
+  } finally { removeDir(state); }
 });
