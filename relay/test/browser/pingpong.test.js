@@ -64,11 +64,20 @@ pageTest('the trailer\'s ping pong cue clears a game already going, and Kai play
   const playTo = (t) => p.page.evaluate((to) => { window.__to = to; }, t).then(() => until(p, (to) => window.trailer.clock >= to, t));
   await playTo(3);
   await until(p, () => { const d = window.run.debug('june'); return d && d.spot.startsWith('couch') && d.seated; });
-  const r = await p.page.evaluate(() => window.run.idle({ who: 'sam', do: 'pingpong' }));
-  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  // Sam starts a game. Idle people also start games on their own, so on a slow computer the room may have
+  // started one first. Either way a game is going before the cue, which is the case under test.
+  const before = await p.page.evaluate((label) => {
+    const r = window.run.idle({ who: 'sam', do: 'pingpong' });
+    return { r, players: window.run.state().workers.filter((w) => w.doing === label).map((w) => w.id) };
+  }, PLAYING);
+  assert.strictEqual(before.players.length, 2, JSON.stringify(before));
+  if (before.r.ok) assert.deepStrictEqual(before.players.sort(), ['june', 'sam'], JSON.stringify(before));
   await playTo(29.7);
-  await atTable(p, 'sam', 'pp-w');
-  await atTable(p, 'june', 'pp-e');
+  const atEitherEnd = (id) => until(p, ([who, label]) => {
+    const d = window.run.debug(who), w = window.run.state().workers.find((x) => x.id === who);
+    return d && d.spot.startsWith('pp-') && d.step && d.step.t === 'act' && w.doing === label;
+  }, [id, PLAYING]);
+  for (const id of before.players) await atEitherEnd(id);
   // The ping pong shot starts at 38.8 s, so by then Kai and a partner are at the table.
   await playTo(38.8);
   await atTable(p, 'kai', 'pp-w');
