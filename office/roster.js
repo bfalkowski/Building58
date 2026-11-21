@@ -13,14 +13,18 @@
 // in for a session and leave when it ends. The relay reads this file when it starts, so restart it
 // after you add, remove or rename someone.
 //
-// `edition` is 'people' or 'robots'. With 'robots' each person at a desk is drawn as a robot, its
-// lights in that person's `color`, and the manager stays a person (office/figures.js). ?robots in
-// the address shows robots on that page, and ?robots=off shows people.
+// `edition` is the way the room looks: 'people', or the name of one of the `editions` below. In an
+// edition with `figure: 'robot'` each person at a desk is drawn as a robot, its lights in that
+// person's `color`, and the manager stays a person (office/figures.js). ?edition=<name> in the
+// address shows that edition on that page only, and ?edition=people shows people.
 (function () {
   const roster = {
     company: 'Building58',
     neon: '#ff5fa2',
     edition: 'people',
+    editions: {
+      robots: { figure: 'robot' }
+    },
     startWith: 3,
 
     names: {

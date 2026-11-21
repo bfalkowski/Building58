@@ -3,8 +3,10 @@
 // and the head, two arms of shoulder, elbow and hand, and two legs of hip and knee. A design puts its
 // parts on those joints and never moves one, so every pose, seat, prop and party hat fits every
 // figure. office/office.js builds people with buildPerson and robots with robot(), both on skeleton().
-// edition() says whether the page shows people or robots: ?robots in the address, or edition in
-// office/roster.js. See "The robot edition" in docs/manual/how-it-works.html.
+// An edition is a way the room can look, named in `editions` in office/roster.js. edition() picks the
+// one the page shows: ?edition=<name> in the address, else the roster's `edition`, else people.
+// deskFigure() says how an edition draws a desk's person: as a robot (figure: 'robot'), or as the
+// person in the roster. See "Editions" in docs/manual/how-it-works.html.
 // Also loaded with require by relay/test/figures.test.js, which builds every design with three.js.
 (function () {
   'use strict';
@@ -29,10 +31,22 @@
     return { root, pelvis, spine, neck, head, arms, hands, legs };
   }
 
+  function editionOf(roster, name) {
+    const all = roster && roster.editions;
+    return all && typeof name === 'string' && Object.prototype.hasOwnProperty.call(all, name) ? all[name] : null;
+  }
+
   function edition(search, roster) {
-    const asked = new URLSearchParams(search || '').get('robots');
-    if (asked !== null) return asked === 'off' ? 'people' : 'robots';
-    return roster && roster.edition === 'robots' ? 'robots' : 'people';
+    const known = (name) => name === 'people' || !!editionOf(roster, name);
+    const asked = new URLSearchParams(search || '').get('edition');
+    if (asked !== null && known(asked)) return asked;
+    return roster && known(roster.edition) ? roster.edition : 'people';
+  }
+
+  function deskFigure(roster, name, def) {
+    const e = editionOf(roster, name), d = def || {};
+    if (!e || e.figure !== 'robot') return null;
+    return { design: (e.designs || {})[d.id], height: (d.look || {}).height || 1, color: d.color || '#9fd3ff' };
   }
 
   function withExtras(kit) {
@@ -109,7 +123,7 @@
     return f;
   }
 
-  const api = { skeleton, edition, robot, DESIGNS: Object.keys(DESIGNS) };
+  const api = { skeleton, edition, deskFigure, robot, DESIGNS: Object.keys(DESIGNS) };
   if (typeof module !== 'undefined') module.exports = api;
   else window.OfficeFigures = api;
 })();
