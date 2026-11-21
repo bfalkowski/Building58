@@ -752,8 +752,8 @@
     return { root, pelvis, spine, neck, head, arms, hands, legs };
   }
   function buildFigure(def) {
-    if (EDITION !== 'robots') return buildPerson(def.look);
-    return FIGURES.robot(KIT, { design: def.robot, height: (def.look || {}).height || 1, color: def.color || '#9fd3ff' });
+    const robot = FIGURES.deskFigure(ROSTER, EDITION, def);
+    return robot ? FIGURES.robot(KIT, robot) : buildPerson(def.look);
   }
 
   const tagFor = {};
