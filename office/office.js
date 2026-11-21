@@ -690,7 +690,7 @@
 
   const { POSE, RIG, typePoseFor, aimArms, chairTurn, seatOn, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE } = window.OfficePoses;
   const FIGURES = window.OfficeFigures, EDITION = FIGURES.edition(location.search, ROSTER);
-  const KIT = { THREE, RIG, C, std, metal, mesh, ball, block, cyl, rod };
+  const KIT = { THREE, RIG, C, std, metal, mesh, ball, block, cyl, rod, makeCanvas, tex };
 
   function buildPerson(look) {
     const L = Object.assign({ skin: '#d6a27c', hair: '#2a1d17', hairStyle: 'short', shirt: '#556677', pants: '#333a44', shoes: '#222222', height: 1 }, look || {});
@@ -1342,6 +1342,14 @@
     const f = w.fig;
     f.root.position.set(w.pos.x, 0, w.pos.z); f.root.rotation.y = w.yaw + w.swivel;
   }
+  function moodOf(w) {
+    const s = w.step;
+    if (w.waiting) return 'wait';
+    if (s && s.t === 'act' && s.work && w.seated) return 'work';
+    if (w.seated && SPOTS[w.spot] && SPOTS[w.spot].sit === 'couch') return 'couch';
+    if (w.hat && w.hat.visible) return 'party';
+    return 'idle';
+  }
   const upQ = new THREE.Quaternion(), tq = new THREE.Quaternion(), te = new THREE.Euler();
   function applyPose(w, dt) {
     const p = w.pose, t = w.target, k = Math.min(1, dt * (w.moving ? 10 : 7));
@@ -1394,7 +1402,7 @@
     f.arms.R.sh.rotation.set(sRx, 0, -sRz); f.arms.R.el.rotation.x = eR;
     f.legs.L.hip.rotation.x = hipL; f.legs.L.knee.rotation.x = kL; f.legs.R.hip.rotation.x = hipR; f.legs.R.knee.rotation.x = kR;
     placeFigure(w);
-    if (f.tick) f.tick(dt, { still: reduce });
+    if (f.tick) f.tick(dt, { still: reduce, mood: moodOf(w) });
     w.mug.visible = w.carry === 'mug';
     if (w.mug.visible) {
       f.root.updateMatrixWorld(true);
