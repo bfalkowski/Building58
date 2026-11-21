@@ -3,6 +3,7 @@
   "version": "0.6.0",
   "private": true,
   "description": "Rooms where Claude Code sessions work as a squad, drawn in 3D, with an HTTP relay.",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "relay": "node relay/server.js",
     "world": "node relay/world.js",
