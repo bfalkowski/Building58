@@ -1,0 +1,4166 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Building58 relay",
+    "version": "1.0.0",
+    "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
+    "license": {
+      "name": "PolyForm Noncommercial 1.0.0",
+      "identifier": "PolyForm-Noncommercial-1.0.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8787",
+      "description": "The relay on this computer. npm run office starts it on 8787."
+    }
+  ],
+  "security": [
+    {
+      "relayKey": []
+    },
+    {
+      "relayKeyQuery": []
+    },
+    {
+      "sessionToken": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "calls",
+      "description": "Calls any caller uses: commands, events and the page."
+    },
+    {
+      "name": "autopilot"
+    },
+    {
+      "name": "chat"
+    },
+    {
+      "name": "checkouts"
+    },
+    {
+      "name": "coo"
+    },
+    {
+      "name": "floor"
+    },
+    {
+      "name": "games"
+    },
+    {
+      "name": "huddle"
+    },
+    {
+      "name": "needs-you"
+    },
+    {
+      "name": "old-relays"
+    },
+    {
+      "name": "play"
+    },
+    {
+      "name": "pr-watch"
+    },
+    {
+      "name": "ready"
+    },
+    {
+      "name": "reviews"
+    },
+    {
+      "name": "rounds"
+    },
+    {
+      "name": "security"
+    },
+    {
+      "name": "settings"
+    },
+    {
+      "name": "tasks"
+    },
+    {
+      "name": "terminals"
+    },
+    {
+      "name": "tickets"
+    },
+    {
+      "name": "update"
+    }
+  ],
+  "paths": {
+    "/channels/{channel}": {
+      "get": {
+        "tags": [
+          "calls"
+        ],
+        "summary": "How many pages are connected (pagesConnected) and on screen (pagesVisible), and other counts.",
+        "description": "How many pages are connected (pagesConnected) and on screen (pagesVisible), and other counts.\n\nFrom docs/manual/relay.html#calls.",
+        "operationId": "getChannelsByChannel",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/autopilot": {
+      "get": {
+        "tags": [
+          "autopilot"
+        ],
+        "summary": "Autopilot: what it does, or turn it on or off with {\"on\": true} or false, and limit it with {\"only\": \"T-12, flaky\"}, tic",
+        "description": "Autopilot: what it does, or turn it on or off with {\"on\": true} or false, and limit it with {\"only\": \"T-12, flaky\"}, ticket ids and labels. Only the person. A session's token gets 401.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelAutopilot",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "autopilot"
+        ],
+        "summary": "Autopilot: what it does, or turn it on or off with {\"on\": true} or false, and limit it with {\"only\": \"T-12, flaky\"}, tic",
+        "description": "Autopilot: what it does, or turn it on or off with {\"on\": true} or false, and limit it with {\"only\": \"T-12, flaky\"}, ticket ids and labels. Only the person. A session's token gets 401.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelAutopilot",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/autopilot/fix": {
+      "post": {
+        "tags": [
+          "autopilot"
+        ],
+        "summary": "Fix it: {\"task\"}, a task id, ticket id or PR link.",
+        "description": "Fix it: {\"task\"}, a task id, ticket id or PR link. The person, or the Lead under the rules in Tokens.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelAutopilotFix",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/autopilot/verdict": {
+      "post": {
+        "tags": [
+          "autopilot"
+        ],
+        "summary": "A reviewer's verdict on the PR it reviews: {\"kind\": \"merge\"} or \"fix\", as ticket.js verdict sends it.",
+        "description": "A reviewer's verdict on the PR it reviews: {\"kind\": \"merge\"} or \"fix\", as ticket.js verdict sends it. Only a reviewer's token.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelAutopilotVerdict",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/chat": {
+      "get": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "The chat channels: name, kind (office, ticket or fun), about, how many posts each keeps now, and archived: null, or when",
+        "description": "The chat channels: name, kind (office, ticket or fun), about, how many posts each keeps now, and archived: null, or when and why a ticket's was archived.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelChat",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "{\"name\"}: the person makes a fun chat channel.",
+        "description": "{\"name\"}: the person makes a fun chat channel. 1 to 24 lower-case letters, digits or dashes. Names like t-5 are kept for tickets. Up to 10.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelChat",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/chat/{name}": {
+      "get": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Its posts, oldest first.",
+        "description": "Its posts, oldest first. ?since=N gives only posts after number N, and ?limit=N the newest N. For a ticket in Triage, Ready or Started with no chat channel, such as one filed before tickets had one, it makes the chat channel first. Each post has from, by (relay, person or session), text, and mention or note.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelChatByName",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "The chat channel's name.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "{\"text\"}: a post, up to 500 characters.",
+        "description": "{\"text\"}: a post, up to 500 characters. A session cannot post in #office, and posts at most once every 5 seconds in each ticket's chat channel and once a minute in each fun one. 409 archived in an archived chat channel, for the person too. Like the read, it makes an open ticket's missing chat channel first.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelChatByName",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "The chat channel's name.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/chat/{name}/delete": {
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "The person deletes a chat channel.",
+        "description": "The person deletes a chat channel. A ticket's leaves a short summary on the ticket first, with the local store only. If that fails, the answer is 502, and the chat channel stays. While the relay is deleting it already, the answer is 409.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelChatByNameDelete",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "The chat channel's name.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/checkouts": {
+      "get": {
+        "tags": [
+          "checkouts"
+        ],
+        "summary": "List checkouts, or start a session in a new one.",
+        "description": "List checkouts, or start a session in a new one. A prompt can have up to 8000 characters, and a longer one is refused with bad_prompt. For a review of a PR, the relay then adds the reviewer's brief, and the verdict ask unless the body has auto. Those do not count toward the limit. A review of a PR can send unlessAt, the commit its last review read. While the PR is still at that commit, nobody starts and the answer says unchanged.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelCheckouts",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "checkouts"
+        ],
+        "summary": "List checkouts, or start a session in a new one.",
+        "description": "List checkouts, or start a session in a new one. A prompt can have up to 8000 characters, and a longer one is refused with bad_prompt. For a review of a PR, the relay then adds the reviewer's brief, and the verdict ask unless the body has auto. Those do not count toward the limit. A review of a PR can send unlessAt, the commit its last review read. While the PR is still at that commit, nobody starts and the answer says unchanged.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelCheckouts",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/checkouts/{id}/clean": {
+      "post": {
+        "tags": [
+          "checkouts"
+        ],
+        "summary": "Remove one.",
+        "description": "Remove one. Files git ignores are asked about as for a task's Clean up.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelCheckoutsByIdClean",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The checkout's id.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/commands": {
+      "post": {
+        "tags": [
+          "calls"
+        ],
+        "summary": "Send a command and, by default, wait for its result.",
+        "description": "Send a command and, by default, wait for its result.\n\nFrom docs/manual/relay.html#calls.",
+        "operationId": "postChannelsByChannelCommands",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/commands/{id}": {
+      "get": {
+        "tags": [
+          "calls"
+        ],
+        "summary": "Get the result of a command sent with wait: false.",
+        "description": "Get the result of a command sent with wait: false.\n\nFrom docs/manual/relay.html#calls.",
+        "operationId": "getChannelsByChannelCommandsById",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The command's id, from the reply to a command sent with wait: false.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f-]{36}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/coo": {
+      "get": {
+        "tags": [
+          "coo"
+        ],
+        "summary": "The last COO report's text, and the COO's session if one is running.",
+        "description": "The last COO report's text, and the COO's session if one is running.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelCoo",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/coo/ask": {
+      "post": {
+        "tags": [
+          "coo"
+        ],
+        "summary": "Starts the COO with its brief.",
+        "description": "Starts the COO with its brief. 409 while one is running.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelCooAsk",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/coo/measures": {
+      "get": {
+        "tags": [
+          "coo"
+        ],
+        "summary": "The measures, worked out now, with the load and headline the last report saw.",
+        "description": "The measures, worked out now, with the load and headline the last report saw. See What the relay measures.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelCooMeasures",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/coo/report": {
+      "post": {
+        "tags": [
+          "coo"
+        ],
+        "summary": "{\"text\"}: saves a report of up to 20000 characters, with the measures.",
+        "description": "{\"text\"}: saves a report of up to 20000 characters, with the measures.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelCooReport",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/events": {
+      "get": {
+        "tags": [
+          "calls"
+        ],
+        "summary": "Read events the page has sent.",
+        "description": "Read events the page has sent.\n\nFrom docs/manual/relay.html#calls.",
+        "operationId": "getChannelsByChannelEvents",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "calls"
+        ],
+        "summary": "Used by the page: {\"events\": [...]}, events to add to the channel's list.",
+        "description": "Used by the page: {\"events\": [...]}, events to add to the channel's list.\n\nFrom docs/manual/relay.html#calls.",
+        "operationId": "postChannelsByChannelEvents",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/floor": {
+      "get": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "What the Lead sees of the Floor, and each session's desk: ticket, title, column, pr, ciWords, review, doing, next (text ",
+        "description": "What the Lead sees of the Floor, and each session's desk: ticket, title, column, pr, ciWords, review, doing, next (text and owner) and stop (safe and reason). The Lead's row also has tired, and every other row has null there. A Dev's row has waitsOn while the PR watch is on and its task has an open PR: owner, minutes, why, late and words. Every other row has null there. See What the Lead sees and What each desk says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelFloor",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/floor/stop": {
+      "post": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "With a session's token, {\"who\"}: the Lead stops one session.",
+        "description": "With a session's token, {\"who\"}: the Lead stops one session. Only the token of a Lead you let move the board, and only while Let the Lead stop sessions is on (or RELAY_LEAD_STOPS=1). See What the Lead stops. With the relay key, as the page sends it, {\"who\": terminal id} or {\"all\": true}: you stop one desk, or every desk, that its desk calls safe to stop at that moment. The Lead's desk is never safe to stop. GET /floor also gives leadEnded: null while a Lead runs or nothing is offered back, or, once the Lead's session ended in this run, how it ended (stopped, ended or crashed) and a sentence that says so. One that is not safe is refused with not_safe and the reason. See What each desk says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelFloorStop",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/games": {
+      "get": {
+        "tags": [
+          "games"
+        ],
+        "summary": "The games in GAMES_REPO: each folder with a game.json, with its name, version, players, needs, ok, and a reason when the",
+        "description": "The games in GAMES_REPO: each folder with a game.json, with its name, version, players, needs, ok, and a reason when the relay cannot run it, and the game's own about and metrics when it has them. See Games.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelGames",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/huddle": {
+      "get": {
+        "tags": [
+          "huddle"
+        ],
+        "summary": "The last report, who can be asked, and whether a huddle is open.",
+        "description": "The last report, who can be asked, and whether a huddle is open. Calls neither gh nor git.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelHuddle",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "huddle"
+        ],
+        "summary": "{\"ask\", \"lead\", \"names\"}: runs a huddle.",
+        "description": "{\"ask\", \"lead\", \"names\"}: runs a huddle. ask sends idle sessions the question. lead: false keeps the report from the Lead.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelHuddle",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/needs-you": {
+      "get": {
+        "tags": [
+          "needs-you"
+        ],
+        "summary": "Only with the relay key.",
+        "description": "Only with the relay key. count, and items: one for each thing that needs you, most urgent first, each with kind, who, terminal, task, ticket, pr, line and link (terminal, url, ticket or stop, and fix, a task id, on a hand-over whose Dev says a finding is a bug). Calls neither gh nor git. See Needs you.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelNeedsYou",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/old-relays": {
+      "get": {
+        "tags": [
+          "old-relays"
+        ],
+        "summary": "Only with the relay key.",
+        "description": "Only with the relay key. relays: the other relays on this room's state folder that the relay found when it started and that still run, each with pid, file, port, started, paused and worker. See Old relays.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelOldRelays",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/old-relays/{pid}/stop": {
+      "post": {
+        "tags": [
+          "old-relays"
+        ],
+        "summary": "Only with the relay key.",
+        "description": "Only with the relay key. Stops a relay on that list, after ps shows again that it is a relay on this folder: {\"ok\": true, \"stopped\": 48435}. A pid not on the list gets 404 with unknown_relay.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelOldRelaysByPidStop",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "description": "The old relay's process id.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/pages/{page}": {
+      "post": {
+        "tags": [
+          "calls"
+        ],
+        "summary": "Used by the page: {\"visible\": false} when its tab is hidden, true when it is shown.",
+        "description": "Used by the page: {\"visible\": false} when its tab is hidden, true when it is shown.\n\nFrom docs/manual/relay.html#calls.",
+        "operationId": "postChannelsByChannelPagesByPage",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "description": "The page's id, from the stream.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/play": {
+      "post": {
+        "tags": [
+          "play"
+        ],
+        "summary": "Only with a seat's own token, as relay/play.js sends it (a seat runs it as node \"$OFFICE_PLAY\"): {\"kind\", \"args\"}, one a",
+        "description": "Only with a seat's own token, as relay/play.js sends it (a seat runs it as node \"$OFFICE_PLAY\"): {\"kind\", \"args\"}, one action for that seat. The answer has the game's answer. A body that names a seat gets 400, and any other caller 403.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelPlay",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/pr-watch": {
+      "get": {
+        "tags": [
+          "pr-watch"
+        ],
+        "summary": "Only with the relay key.",
+        "description": "Only with the relay key. Whether the PR watch is on, how often it looks (every, seconds), waitMinutes, and one entry for each task with an open PR: pr, task, ticket, the head it last read, and while it is on, who it waits on (owner), minutes, why, late and words.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelPrWatch",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/ready": {
+      "post": {
+        "tags": [
+          "ready"
+        ],
+        "summary": "{\"pr\", \"head\", \"text\"}: marks a PR ready to merge.",
+        "description": "{\"pr\", \"head\", \"text\"}: marks a PR ready to merge. Only the Lead's token, or the relay key. The relay checks the PR with gh, posts one comment headed Ready to merge, adds the ready to merge label, and takes the label off when a new commit lands. A PR that fails a check gets 409 and not_ready, a note with a part missing gets 400, and a gh failure gets 502. See Ready to merge.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelReady",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/results": {
+      "post": {
+        "tags": [
+          "calls"
+        ],
+        "summary": "Used by the page: {\"id\", \"result\"}, the result of a command it ran.",
+        "description": "Used by the page: {\"id\", \"result\"}, the result of a command it ran. An unknown id gets 404 with unknown_command.\n\nFrom docs/manual/relay.html#calls.",
+        "operationId": "postChannelsByChannelResults",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/reviews": {
+      "get": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "The automatic reviews (see Automatic review).",
+        "description": "The automatic reviews (see Automatic review). auto and again are the two switches, and a POST with either one, true or false, sets it. The answer also has max, each PR with its count, head, pending and waits, and news, what the relay said about the reviews it started, which the page shows once.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelReviews",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "The automatic reviews (see Automatic review).",
+        "description": "The automatic reviews (see Automatic review). auto and again are the two switches, and a POST with either one, true or false, sets it. The answer also has max, each PR with its count, head, pending and waits, and news, what the relay said about the reviews it started, which the page shows once.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelReviews",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/reviews/lead": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "summary": "The Lead starts a review of a task's PR: {\"pr\": ...}.",
+        "description": "The Lead starts a review of a task's PR: {\"pr\": ...}. Only the Lead's token, under the rules in Tokens.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelReviewsLead",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/rounds": {
+      "post": {
+        "tags": [
+          "rounds"
+        ],
+        "summary": "{\"game\", \"seed\", \"settings\", \"seats\", \"watch\", \"capUsd\"}: starts a round of a game, with a fresh session for each seat.",
+        "description": "{\"game\", \"seed\", \"settings\", \"seats\", \"watch\", \"capUsd\"}: starts a round of a game, with a fresh session for each seat. 409 while a round runs, and 409 no_boundary where seats cannot get their boundary. 400 for a game that is not ok, with need when a need is what stops it, a seat count outside its players, or a watch that is not all or none.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelRounds",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "rounds"
+        ],
+        "summary": "Past rounds, newest first, kept while the relay runs: id, game, time, spentUsd, seatNames and score only.",
+        "description": "Past rounds, newest first, kept while the relay runs: id, game, time, spentUsd, seatNames and score only. A round that failed or was stopped has score: null.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelRounds",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/rounds/{id}/seats/{seat}/steps": {
+      "get": {
+        "tags": [
+          "rounds"
+        ],
+        "summary": "What one seat did, read now from Claude Code's transcript of its session: steps, each with kind (brief, prompt, says, ru",
+        "description": "What one seat did, read now from Claude Code's transcript of its session: steps, each with kind (brief, prompt, says, runs with its tool, or result) and text, and the seat's tokens, usd and models. found: false before Claude Code writes it. For the round that runs only under Watch all (403 watch_none), and for a past round the relay still keeps. See Games.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelRoundsByIdSeatsBySeatSteps",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The round's id.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}$"
+            }
+          },
+          {
+            "name": "seat",
+            "in": "path",
+            "required": true,
+            "description": "The seat, such as S1.",
+            "schema": {
+              "type": "string",
+              "pattern": "^S\\d{1,2}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/rounds/current": {
+      "get": {
+        "tags": [
+          "rounds"
+        ],
+        "summary": "The round that runs, or null: its id, game, state, watch, spentUsd at API prices, unpriced (models with no price here), ",
+        "description": "The round that runs, or null: its id, game, state, watch, spentUsd at API prices, unpriced (models with no price here), and its seats (seat, terminal, waiting: \"trust\" while that seat waits on the question about trusting its folder, or null, state, worked, tokens and usd). Never a brief, a role or the truth.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelRoundsCurrent",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/rounds/current/finish": {
+      "post": {
+        "tags": [
+          "rounds"
+        ],
+        "summary": "Asks the game for its score and reveal, and ends the round.",
+        "description": "Asks the game for its score and reveal, and ends the round. The answer has both.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelRoundsCurrentFinish",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/rounds/current/stop": {
+      "post": {
+        "tags": [
+          "rounds"
+        ],
+        "summary": "Ends the round with no score.",
+        "description": "Ends the round with no score.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelRoundsCurrentStop",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/security": {
+      "get": {
+        "tags": [
+          "security"
+        ],
+        "summary": "The last security report's text, and the security officer's session if one is running.",
+        "description": "The last security report's text, and the security officer's session if one is running.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelSecurity",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/security/ask": {
+      "post": {
+        "tags": [
+          "security"
+        ],
+        "summary": "Starts the security officer with its brief.",
+        "description": "Starts the security officer with its brief. 409 while one is running.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelSecurityAsk",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/security/measures": {
+      "get": {
+        "tags": [
+          "security"
+        ],
+        "summary": "What access the sessions run with, worked out now, by name only, with the gaps the last report saw.",
+        "description": "What access the sessions run with, worked out now, by name only, with the gaps the last report saw. See What the relay reports on access.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelSecurityMeasures",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/security/report": {
+      "post": {
+        "tags": [
+          "security"
+        ],
+        "summary": "{\"text\"}: saves a report of up to 20000 characters, with the measures.",
+        "description": "{\"text\"}: saves a report of up to 20000 characters, with the measures. 400 with holds_a_secret when a line looks like it holds a key, and which line, never the value.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelSecurityReport",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "The settings on the page (see Limits and timings), or change them: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinut",
+        "description": "The settings on the page (see Limits and timings), or change them: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinutes\"]}. An unknown name gets 400 with unknown_setting, and a value out of range 400 with bad_value. Only the person.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelSettings",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "The settings on the page (see Limits and timings), or change them: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinut",
+        "description": "The settings on the page (see Limits and timings), or change them: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinutes\"]}. An unknown name gets 400 with unknown_setting, and a value out of range 400 with bad_value. Only the person.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelSettings",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/stream": {
+      "get": {
+        "tags": [
+          "calls"
+        ],
+        "summary": "Used by the page: the commands for it to run, as server-sent events.",
+        "description": "Used by the page: the commands for it to run, as server-sent events.\n\nFrom docs/manual/relay.html#calls.",
+        "operationId": "getChannelsByChannelStream",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/tasks": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "List or start tasks.",
+        "description": "List or start tasks.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelTasks",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "List or start tasks.",
+        "description": "List or start tasks.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTasks",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tasks/{id}": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "One task.",
+        "description": "One task.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelTasksById",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The task's id.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{6}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/tasks/{id}/clean": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Bring back its worker, or remove its checkout.",
+        "description": "Bring back its worker, or remove its checkout. If the checkout holds only files git ignores, Clean up answers 409 with error: \"ignored\" and the list in ignored. Send that list back as { \"ignored\": [...] } to delete them too. A file not on the list is asked about again.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTasksByIdClean",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The task's id.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tasks/{id}/move": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "{\"to\": ...}: building, in_review, changes_requested, waiting_on_you or done.",
+        "description": "{\"to\": ...}: building, in_review, changes_requested, waiting_on_you or done.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTasksByIdMove",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The task's id.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tasks/{id}/resume": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Bring back its worker, or remove its checkout.",
+        "description": "Bring back its worker, or remove its checkout. If the checkout holds only files git ignores, Clean up answers 409 with error: \"ignored\" and the list in ignored. Send that list back as { \"ignored\": [...] } to delete them too. A file not on the list is asked about again.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTasksByIdResume",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The task's id.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/terminals": {
+      "get": {
+        "tags": [
+          "terminals"
+        ],
+        "summary": "List or start sessions.",
+        "description": "List or start sessions. A start can have a prompt, up to 8000 characters, which the relay types as the session's first prompt. A longer one is refused with bad_prompt. The list also has finished: the latest automatic reviewers that posted and left. Each session has its seat, the id of the person the relay gave it, and who, that person's name (see Which person gets it), its work label (see labels), and its starts, startsLeft, lastStart, refresh, refreshNote and tired (how full its context is, or null: see How tired the Lead is), and the list has the wipLimit.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelTerminals",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "summary": "List or start sessions.",
+        "description": "List or start sessions. A start can have a prompt, up to 8000 characters, which the relay types as the session's first prompt. A longer one is refused with bad_prompt. The list also has finished: the latest automatic reviewers that posted and left. Each session has its seat, the id of the person the relay gave it, and who, that person's name (see Which person gets it), its work label (see labels), and its starts, startsLeft, lastStart, refresh, refreshNote and tired (how full its context is, or null: see How tired the Lead is), and the list has the wipLimit.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTerminals",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/terminals/{id}/input": {
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "summary": "Type into, resize or stop a session.",
+        "description": "Type into, resize or stop a session. A stop of the Lead is refused with 409 and lead unless the body says {\"lead\": true}, as the page sends once you confirm, so a script or test that stops sessions does not stop the Lead by accident. See When the Lead's session ends.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTerminalsByIdInput",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session's id on the relay.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/terminals/{id}/resize": {
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "summary": "Type into, resize or stop a session.",
+        "description": "Type into, resize or stop a session. A stop of the Lead is refused with 409 and lead unless the body says {\"lead\": true}, as the page sends once you confirm, so a script or test that stops sessions does not stop the Lead by accident. See When the Lead's session ends.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTerminalsByIdResize",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session's id on the relay.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/terminals/{id}/stop": {
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "summary": "Type into, resize or stop a session.",
+        "description": "Type into, resize or stop a session. A stop of the Lead is refused with 409 and lead unless the body says {\"lead\": true}, as the page sends once you confirm, so a script or test that stops sessions does not stop the Lead by accident. See When the Lead's session ends.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTerminalsByIdStop",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session's id on the relay.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/terminals/{id}/stream": {
+      "get": {
+        "tags": [
+          "terminals"
+        ],
+        "summary": "A session's output.",
+        "description": "A session's output.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelTerminalsByIdStream",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session's id on the relay.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{12}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/terminals/context": {
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "summary": "Only with a session's own token, as its status line (relay/status-line.js) sends it: {\"session_id\", \"percent\", \"size\"}, ",
+        "description": "Only with a session's own token, as its status line (relay/status-line.js) sends it: {\"session_id\", \"percent\", \"size\"}, how much of its context window that conversation has used. A session_id that is not the session's conversation now is refused with 409, and the relay key with 403. See How tired the Lead is.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTerminalsContext",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/terminals/failed": {
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "summary": "{\"sessionId\"}: forget a session that could not come back after a restart.",
+        "description": "{\"sessionId\"}: forget a session that could not come back after a restart.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTerminalsFailed",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/terminals/lead": {
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "summary": "Make a plain session the Lead (terminal), which saves it and gives it the Lead's brief.",
+        "description": "Make a plain session the Lead (terminal), which saves it and gives it the Lead's brief. Answer the offer to bring it back (asked: true; POST /terminals with resume and lead: true is what Bring back sends). With board: true or false, give or take away its permission to move the board. With starts and total, give it permission to start tickets while fewer than starts tasks are building (1 to one under the WIP limit), total in all (1 to 20), or take it away (starts: 0). With refresh: true or false, start or stop Refresh the Lead. With \"lead\": true, as Settings sends, a grant goes only to the session that is the Lead now, and is refused with not_lead otherwise, so a page that has not seen another session made the Lead does not make the old one the Lead again.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTerminalsLead",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets": {
+      "get": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "List or file tickets.",
+        "description": "List or file tickets. The list comes in Board order: open tickets high, normal, low, in work order (rank) within each, then done and rejected ones, the latest changed first. It also has kinds (the kinds a ticket can have, see Kind), labels (the labels tickets have, A to Z, see Labels), wipLimit, leadStarts (the number you let the Lead start tickets up to, or 0) and leadStartsLeft. A ticket has approvedBy (you or Lead) once it is put in Ready. The room page gets the same list as a tickets event on its GET /stream when it opens the stream with board=1, with people, who sits on each ticket, and without the time each pipeline was checked. The stream's hello says whether it will (tickets). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelTickets",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "List or file tickets.",
+        "description": "List or file tickets. The list comes in Board order: open tickets high, normal, low, in work order (rank) within each, then done and rejected ones, the latest changed first. It also has kinds (the kinds a ticket can have, see Kind), labels (the labels tickets have, A to Z, see Labels), wipLimit, leadStarts (the number you let the Lead start tickets up to, or 0) and leadStartsLeft. A ticket has approvedBy (you or Lead) once it is put in Ready. The room page gets the same list as a tickets event on its GET /stream when it opens the stream with board=1, with people, who sits on each ticket, and without the time each pipeline was checked. The stream's hello says whether it will (tickets). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTickets",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}": {
+      "get": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "One ticket.",
+        "description": "One ticket.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelTicketsById",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/tickets/{id}/base": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"base\": ...}: a Triage or Ready ticket starts from another local branch.",
+        "description": "{\"base\": ...}: a Triage or Ready ticket starts from another local branch. Refused while it is starting, or when another open ticket has that title on that branch.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdBase",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/edit": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"title\", \"body\", \"priority\"}, any of them: changes a Triage or Ready ticket's words, with the limits of filing one (a t",
+        "description": "{\"title\", \"body\", \"priority\"}, any of them: changes a Triage or Ready ticket's words, with the limits of filing one (a title of 1 to 80 characters, a body of up to 8000, high, normal or low). Only the fields that differ are written, and the answer has unchanged when none do. Refused while it is starting or once it has started, is done or is rejected (409, or 403 for a session's token), and when another open ticket in the repo has the new title on its branch (409). For the PM and the Lead, a ticket you rejected counts too, as in filing. The answer's edited lists the fields that changed. A new priority puts it last in that priority, as /priority does. See Editing a ticket.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdEdit",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/kind": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"kind\": ...}: a Triage or Ready ticket's kind.",
+        "description": "{\"kind\": ...}: a Triage or Ready ticket's kind. A new word adds a kind, and \"\" takes it away. Refused while it is starting, and once it has started.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdKind",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/labels": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"labels\": [...]}: a ticket's labels, up to 5, at any status.",
+        "description": "{\"labels\": [...]}: a ticket's labels, up to 5, at any status. The list replaces the one there, and [] takes them all away. A new label adds it. Only the person's key.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdLabels",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/mark": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"mark\": \"hold\"}, {\"mark\": \"replaced\", \"replacedBy\": \"T-12\"} (the id is optional), or {\"mark\": null} to clear it: puts a",
+        "description": "{\"mark\": \"hold\"}, {\"mark\": \"replaced\", \"replacedBy\": \"T-12\"} (the id is optional), or {\"mark\": null} to clear it: puts a ticket in Triage or Ready on hold or marks it replaced, so Autopilot and the Lead do not start it. The ticket then has heldBack, the reason its card shows. Only the person's key.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdMark",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/move": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"to\": ...}: move a ticket that has no task, as Approve, Reject, Back to Triage and Merged elsewhere do (with pr for don",
+        "description": "{\"to\": ...}: move a ticket that has no task, as Approve, Reject, Back to Triage and Merged elsewhere do (with pr for done).\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdMove",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/order": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"before\": id} or {\"after\": id}: a Triage or Ready ticket goes next to another Triage or Ready ticket with the same prio",
+        "description": "{\"before\": id} or {\"after\": id}: a Triage or Ready ticket goes next to another Triage or Ready ticket with the same priority. Usually only the moved ticket is written. When there is no room between two ranks, the Triage and Ready tickets of that priority are numbered again. If the store fails partway, the ranks already written are put back and the answer is 502. Those tickets keep a new updatedAt. The person's key, or the token of a PM or Lead you let set the order. Any other session's token gets 403.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdOrder",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/priority": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"priority\": ...}: high, normal or low for a Triage or Ready ticket.",
+        "description": "{\"priority\": ...}: high, normal or low for a Triage or Ready ticket. It goes last in its new priority. A priority it already has changes nothing, and the answer has unchanged. The person's key, or the token of a PM or Lead you let set the order (The PM sets the order, The Lead sets priority). Any other session's token gets 403.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdPriority",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/proposal": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"decision\": \"approve\"} or {\"decision\": \"decline\"}: answers the ticket's proposal.",
+        "description": "{\"decision\": \"approve\"} or {\"decision\": \"decline\"}: answers the ticket's proposal. Approving a replace, merge or close rejects the ticket and sets closedAs (replaced, merged or closed) and closedFor (the ids). Approving blockers sets blockedBy. 409 when no proposal waits, or when it no longer fits the Board: then decline it. Only the person's key.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdProposal",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/propose": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"action\", \"ids\", \"why\"}: proposes to change a Triage or Ready ticket.",
+        "description": "{\"action\", \"ids\", \"why\"}: proposes to change a Triage or Ready ticket. action is replace (with one or more ids), merge (with one), close (with none) or blockers (the whole new list, which can be empty). why is up to 500 characters. Nothing changes but the ticket's proposal, which holds it back. The PM's and the Lead's tokens propose, and so does the person's key, when the proposal then says You propose. Refused with 400 when an id is not on the Board, is the ticket itself, or was rejected, for every kind, and when a new blocker already waits for the ticket. A ticket that is starting, started, done or rejected gets 409, or 403 for a session's token. See Proposals.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdPropose",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/shapes": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"shapes\": [\"T-7\", \"T-9\"]}: the tickets this design ticket shapes.",
+        "description": "{\"shapes\": [\"T-7\", \"T-9\"]}: the tickets this design ticket shapes. While it is in Triage, Ready or Started, Autopilot and the Lead start none of them. The list replaces the one there, and [] takes it away. Each id must be on the Board, and not the ticket itself. A ticket that is Done or Rejected gets 409 not_ready. Only the person's key.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdShapes",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/{id}/start": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Start a Ready ticket: a task, a checkout and a worker.",
+        "description": "Start a Ready ticket: a task, a checkout and a worker. A Lead's token is held to its limits.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsByIdStart",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/approve-ready": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Marks the Ready tickets that no person approved as approved by you, as Approve all Ready does: those in ids, or every on",
+        "description": "Marks the Ready tickets that no person approved as approved by you, as Approve all Ready does: those in ids, or every one with no ids. It skips a ticket that is starting. Answers with the ids in approved. No session's token reaches it.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsApproveReady",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/tickets/ask": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "{\"idea\", \"repo\"}: starts the PM.",
+        "description": "{\"idea\", \"repo\"}: starts the PM.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelTicketsAsk",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/update": {
+      "get": {
+        "tags": [
+          "update"
+        ],
+        "summary": "The relay's folder, and the update under way, if any, with who it waits for.",
+        "description": "The relay's folder, and the update under way, if any, with who it waits for. rollback says which commit failed its check, why, and which commit runs, while the relay runs the commit it went back to, or while the folder is on it after a page-only step went back. While Update goes through merges one at a time, update.step has at, of, name, pr, sha, later, reloads and stopping. note and noteAt say how the last update ended, reloads how many page steps it made, and steps whether Update goes one merge at a time.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getChannelsByChannelUpdate",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "update"
+        ],
+        "summary": "Fetches for the relay's folder and pulls when the plan says, as Update does.",
+        "description": "Fetches for the relay's folder and pulls when the plan says, as Update does. {\"cancel\": true} calls off a restart that is waiting, or stops a loop through merges between steps (One merge at a time).\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postChannelsByChannelUpdate",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "calls"
+        ],
+        "summary": "The relay is up, and which channels have pages.",
+        "description": "The relay is up, and which channels have pages. No key needed. With the key, from this computer, it also has restore: whether bringing back the saved sessions is done, and which could not come back, for the rollback check.\n\nFrom docs/manual/relay.html#calls.",
+        "operationId": "getHealth",
+        "responses": {
+          "2XX": {
+            "description": "Done. JSON with \"ok\": true, except for a stream, which is server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "relayKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The relay key, RELAY_KEY: Authorization: Bearer <key>."
+      },
+      "relayKeyQuery": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "key",
+        "description": "The relay key in the address, as the page sends it."
+      },
+      "sessionToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A session's own token, OFFICE_TICKET_TOKEN. It reaches only the routes its role needs: see docs/manual/relay.html#tokens."
+      }
+    },
+    "schemas": {
+      "Ok": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "Problem": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error",
+          "message"
+        ],
+        "properties": {
+          "ok": {
+            "const": false
+          },
+          "error": {
+            "type": "string",
+            "description": "A short code, such as bad_param, unauthorized or not_found."
+          },
+          "message": {
+            "type": "string",
+            "description": "What went wrong, in plain words."
+          }
+        }
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "Refused. 400 for a bad body, 401 for no key, 403 for a key or token that may not, 404 for an unknown route or id, 409 for a state that does not allow it, 413 for a body over 256 KB, 429 for too soon, 503 and 504 when no page answers.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    }
+  }
+}

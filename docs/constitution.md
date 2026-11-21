@@ -786,6 +786,34 @@ left to review.
 
 *Check:* lint passes with no change to the lint config or the suppressions file.
 
+### 15. The API has a version
+
+The relay's routes are an API: the room page, the hook, `ticket.js`, other worlds and your own
+scripts call them. A caller needs to know when a route it uses changed. So the API is described in
+`docs/openapi.json`, an OpenAPI document the relay serves at `/docs/openapi.json`, with a version.
+`npm run openapi` builds it from the route tables in `docs/manual/relay.html`, so the manual stays
+the one place each route is described, and the version is the one that page gives.
+
+A pull request that changes the API changes the version in the same pull request:
+
+- MAJOR for a change that can break a caller: a route, a field or an error code taken away or
+  renamed, a new required field, or a route that now does something else.
+- MINOR for something added that no caller has to use: a route, an optional field, an error code.
+- PATCH for a fix to a route's words that changes no behavior.
+
+Changes to the API go together in one pull request when they can, so each version is one pull
+request, and a caller reads one change, not a string of versions in a day. A ticket that needs a
+change to the API says so, and work that changes the API in one area is filed as one ticket.
+
+*Enforced by:* `relay/test/openapi.test.js`, in `npm test` and in CI's checks of a docs-only pull
+request. It fails when `docs/openapi.json` is not what `npm run openapi` builds from the manual,
+when a route in it does not answer on a real relay, and when it changed since the merge base with
+main without a newer version, or the version changed with no change to the API. A new route the
+manual leaves out is left to review, as is whether a change is MAJOR, MINOR or PATCH, and grouping.
+
+*Check:* a pull request that touches a route also touches `docs/manual/relay.html` and
+`docs/openapi.json`, and its description names the new version and why it is MAJOR, MINOR or PATCH.
+
 ## Open questions
 
 These are not decided. Do not settle them in passing. Settle each one with a ticket that a person
