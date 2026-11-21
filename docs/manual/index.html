@@ -25,7 +25,7 @@
 </header>
 <main>
   <div class="key">
-    <p><b>No ticket starts by itself.</b> A ticket gets a worker only when a person presses <span class="ui">Start</span>, or when a Lead you let start tickets starts one, within the limits you set (see <a href="roles.html#lead-starts">The Lead starts tickets</a>). Nothing moves a ticket past Building on its own either, not even a pull request being opened or merged. The one exception: when the relay tells a Dev about review comments, it moves their task to Changes requested. The one session that starts by itself is an <a href="roles.html#reviews">automatic review</a>, which takes a desk.</p>
+    <p><b>No ticket starts by itself, unless you turn on Autopilot.</b> A ticket gets a worker only when a person presses <span class="ui">Start</span>, when a Lead you let start tickets starts one, within the limits you set (see <a href="roles.html#lead-starts">The Lead starts tickets</a>), or while you have <a href="roles.html#autopilot">Autopilot</a> on. Without Autopilot, nothing moves a ticket past Building on its own either, not even a pull request being opened or merged. The one exception: when the relay tells a Dev about review comments, it moves their task to Changes requested. With Autopilot on, it starts the Ready tickets you approved, merges their PRs and marks their tasks Done. The sessions that start by themselves are an <a href="roles.html#reviews">automatic review</a>, which takes a desk, the Lead when the relay starts (see <a href="roles.html#lead">The Lead</a>), and the Devs Autopilot starts or brings back.</p>
   </div>
 
   <h2 id="pages">The pages</h2>
