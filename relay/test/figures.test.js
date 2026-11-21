@@ -1,5 +1,5 @@
 // The figures (office/figures.js): every robot design keeps the skeleton the poses turn, with each
-// joint where buildPerson in office/office.js always put it, and ?robots or the roster picks the
+// joint where buildPerson in office/office.js always put it, and ?edition= or the roster picks the
 // edition. Each design is built here with three.js from node_modules. Nothing here runs a browser.
 'use strict';
 const test = require('node:test');
@@ -90,26 +90,42 @@ test('a design the roster does not know is the Tin Toy', () => {
   assert.strictEqual(figures.robot(KIT, {}).design, 'tin');
 });
 
-test('?robots in the address or edition in the roster picks robots, and ?robots=off wins over the roster', () => {
+test('?edition= in the address picks a known edition, else the roster does, else people', () => {
+  const R = (edition) => ({ edition, editions: { robots: { figure: 'robot' }, xmas: { figure: 'robot' } } });
   assert.strictEqual(figures.edition('', {}), 'people');
-  assert.strictEqual(figures.edition('', { edition: 'people' }), 'people');
-  assert.strictEqual(figures.edition('', { edition: 'robots' }), 'robots');
-  assert.strictEqual(figures.edition('?robots', {}), 'robots');
-  assert.strictEqual(figures.edition('?channel=office&robots&key=k', { edition: 'people' }), 'robots');
-  assert.strictEqual(figures.edition('?robots=on', {}), 'robots');
-  assert.strictEqual(figures.edition('?robots=off', { edition: 'robots' }), 'people');
-  assert.strictEqual(figures.edition('?trailer', { edition: 'robots' }), 'robots');
-  assert.strictEqual(figures.edition('?robots', null), 'robots');
+  assert.strictEqual(figures.edition('', null), 'people');
+  assert.strictEqual(figures.edition('', R('people')), 'people');
+  assert.strictEqual(figures.edition('', R('robots')), 'robots');
+  assert.strictEqual(figures.edition('', R('xmas')), 'xmas');
+  assert.strictEqual(figures.edition('?edition=robots', R('people')), 'robots');
+  assert.strictEqual(figures.edition('?channel=office&edition=xmas&key=k', R('robots')), 'xmas');
+  assert.strictEqual(figures.edition('?edition=people', R('robots')), 'people', 'the address wins over the roster');
+  assert.strictEqual(figures.edition('?trailer', R('robots')), 'robots', 'the trailer shows the roster\'s edition');
+  assert.strictEqual(figures.edition('?edition=pirates', R('robots')), 'robots', 'an edition the roster does not have falls back to the roster');
+  assert.strictEqual(figures.edition('', { edition: 'pirates' }), 'people', 'and so does a roster edition with no entry');
+  assert.strictEqual(figures.edition('?edition=constructor', R('people')), 'people', 'a name only an object has is not an edition');
+  assert.strictEqual(figures.edition('?edition=robots', {}), 'people', 'a roster with no editions has only people');
 });
 
-test('the manager stays a person, in his robotEditionLook in the robot edition and his look otherwise', () => {
-  const M = { look: { top: 'suit' }, robotEditionLook: { top: 'suit', hat: '#4a443d' } };
-  assert.strictEqual(figures.managerLook(M, 'robots'), M.robotEditionLook);
-  assert.strictEqual(figures.managerLook(M, 'people'), M.look);
-  assert.strictEqual(figures.managerLook({ look: M.look }, 'robots'), M.look, 'with no robotEditionLook he keeps his look');
-  assert.strictEqual(figures.managerLook(undefined, 'robots'), undefined);
-  const retro = roster.manager.robotEditionLook;
-  assert.ok(retro, 'the roster has a robotEditionLook for the manager');
+test('an edition with figure robot draws each desk as a robot in its color and height, and people otherwise', () => {
+  const R = { editions: { robots: { figure: 'robot' }, plain: {} } };
+  const def = { id: 'priya', color: '#f08c7e', look: { height: 0.95 } };
+  assert.deepStrictEqual(figures.deskFigure(R, 'robots', def), { design: undefined, height: 0.95, color: '#f08c7e' });
+  assert.strictEqual(figures.deskFigure(R, 'people', def), null);
+  assert.strictEqual(figures.deskFigure(R, 'plain', def), null, 'an edition with no figure keeps people');
+  assert.strictEqual(figures.deskFigure(R, 'missing', def), null);
+  assert.deepStrictEqual(figures.deskFigure(R, 'robots', { id: 'x' }), { design: undefined, height: 1, color: '#9fd3ff' });
+});
+
+test('an edition can give the manager its own look, and he keeps his own look otherwise', () => {
+  const R = { manager: { look: { top: 'suit' } }, editions: { robots: { figure: 'robot', manager: { top: 'suit', hat: '#4a443d' } }, plain: {} } };
+  assert.strictEqual(figures.managerLook(R, 'robots'), R.editions.robots.manager);
+  assert.strictEqual(figures.managerLook(R, 'people'), R.manager.look);
+  assert.strictEqual(figures.managerLook(R, 'plain'), R.manager.look, 'an edition with no manager keeps his look');
+  assert.strictEqual(figures.managerLook(R, 'missing'), R.manager.look);
+  assert.strictEqual(figures.managerLook({}, 'robots'), undefined);
+  const retro = roster.editions.robots.manager;
+  assert.ok(retro, 'the robot edition has a look for the manager');
   assert.strictEqual(retro.top, 'suit');
   assert.ok(retro.hat && retro.extra === 'browline' && retro.clip && retro.square, 'a fedora, browline glasses, a tie clip and a pocket square');
   assert.ok(retro.height >= 0.8 && retro.height <= 1.1, 'a height the desk poses fit');
@@ -117,6 +133,7 @@ test('the manager stays a person, in his robotEditionLook in the robot edition a
   for (const def of [roster.lead].concat(roster.workers)) assert.ok(!def.look.hat && def.look.extra !== 'browline', def.id + ' gets no hat and no browline glasses');
 });
 
-test('the roster ships with people', () => {
+test('the roster ships with people, and has the robot edition to switch to', () => {
   assert.strictEqual(roster.edition, 'people');
+  assert.strictEqual(roster.editions.robots.figure, 'robot');
 });

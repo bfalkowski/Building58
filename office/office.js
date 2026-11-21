@@ -766,8 +766,8 @@
     return { root, pelvis, spine, neck, head, arms, hands, legs, hatTop: L.hat ? 0.215 : null };
   }
   function buildFigure(def) {
-    if (EDITION !== 'robots') return buildPerson(def.look);
-    return FIGURES.robot(KIT, { design: def.robot, height: (def.look || {}).height || 1, color: def.color || '#9fd3ff' });
+    const robot = FIGURES.deskFigure(ROSTER, EDITION, def);
+    return robot ? FIGURES.robot(KIT, robot) : buildPerson(def.look);
   }
 
   const tagFor = {};
@@ -988,7 +988,7 @@
   const bossSpots = ['boss-aisle', 'boss-lounge', 'boss-board'];
   const bossGrid = officeGrid.slice();
   for (const k in DESKS) for (let j = 0; j < GZ; j++) for (let i = 0; i < GX; i++) if (Math.hypot(cx(i) - DESKS[k].x, cz(j) - DESKS[k].z) < 0.55) bossGrid[j * GX + i] = 1;
-  const bossLook = FIGURES.managerLook(M, EDITION);
+  const bossLook = FIGURES.managerLook(ROSTER, EDITION);
   const bossFig = buildPerson(bossLook); scene.add(bossFig.root);
   const boss = {
     id: 'manager', boss: true, grid: bossGrid, fig: bossFig, desk: null, spot: 'boss-desk', pos: SPOTS['boss-desk'].pos.clone(), yaw: 0, speed: 1.05, typePose: typePoseFor((bossLook || {}).height || 1),
