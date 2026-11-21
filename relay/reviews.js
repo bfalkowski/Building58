@@ -227,9 +227,11 @@ function holdFirst(channel, pr, from, t) {
 function queueFirst(channel, pr, from, t) {
   if (pipeline.on()) holdFirst(channel, pr, from, t); else firstReview(channel, pr, { from, dev: t ? t.id : null, at: Date.now() });
 }
-const deskFree = (channel) => terminal.all(channel).filter((t) => !t.exited).length < terminal.DESKS;
+const startingIn = (channel) => [...starting].filter((k) => k.startsWith(channel + ' ')).length;
+const deskFree = (channel) => terminal.all(channel).filter((t) => !t.exited).length + startingIn(channel) < terminal.DESKS;
+const byWait = ([, a], [, b]) => ((a.first && a.first.at) || 0) - ((b.first && b.first.at) || 0);
 function firstReviews(channel, c) {
-  for (const [pr, r] of Object.entries(c.prs)) {
+  for (const [pr, r] of Object.entries(c.prs).sort(byWait)) {
     if (!r.first || starting.has(channel + ' ' + pr)) continue;
     if (!switchesOf(channel).auto) { delete c.prs[pr]; delivery.drop(channel, 'pipeline ' + pr); save(); continue; }
     if (r.first.desk ? !deskFree(channel) : Date.now() < (r.first.notBefore || 0)) continue;
