@@ -118,7 +118,7 @@
     <dd>The small process that runs every session's <code>claude</code>, so a relay restart leaves them running. The supervisor starts it. See <a href="running.html#session-host">the session host</a>.</dd>
 
     <dt id="stuck">Stuck</dt>
-    <dd>A session in a turn with no hook and no output for the stall time (30 minutes), or a session the relay typed a message into that did not begin a turn, even after the relay tried once more. The Floor says which, and for how long. See <a href="how-it-works.html#alive">Is a session alive</a> and <a href="how-it-works.html#stuck">A session that does not start</a>.</dd>
+    <dd>A session in a turn with no hook and no output for the stall time (30 minutes), or a session the relay typed a message into that did not begin a turn, even after the relay tried once more, or three more times for a first prompt. The Floor says which, and for how long. See <a href="how-it-works.html#alive">Is a session alive</a> and <a href="how-it-works.html#stuck">A session that does not start</a>.</dd>
 
     <dt id="supervisor">Supervisor</dt>
     <dd>The small process that runs the relay and the session host, and starts the relay again after Update. See <a href="running.html#supervisor">the supervisor</a>.</dd>
