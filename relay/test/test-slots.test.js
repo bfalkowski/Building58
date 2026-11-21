@@ -188,7 +188,7 @@ test('a session the room starts gets the slot gate through NODE_OPTIONS, unless 
 
 test('a session the relay starts gets NODE_OPTIONS with the stub in its state folder', async (t) => {
   for (const [setting, has] of [[undefined, true], ['0', false]]) {
-    const R = await relay(setting === undefined ? {} : { TEST_SLOTS: setting });
+    const R = await relay({ TEST_SLOTS: setting === undefined ? '' : setting });
     t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
     const term = (await R.call('POST', '/terminals', { cwd: makeRepo(R.home) })).body;
     await R.call('POST', '/terminals/' + term.id + '/input', { data: '/env\r' });
