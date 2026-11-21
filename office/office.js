@@ -1828,12 +1828,14 @@
         if (w.waiting) return fail('busy', w.name + ' is waiting for your OK.');
         const what = c.do || 'coffee';
         if (!IDLE_SPOTS[what]) return fail('bad_param', '"do" is one of: ' + Object.keys(IDLE_SPOTS).join(', ') + '.');
-        if (what === 'coffee') { if (!free('espresso')) return fail('busy', 'Someone is at the machine.'); coffeeRun(w); }
-        else if (what === 'desk') goTo(w, w.desk, act({ dur: rand(20, 40), pose: 'leanback', label: 'At their desk' }), 'Going to their desk');
+        const leaveTable = () => { if (w.pingpong) endPingPong(); };
+        if (what === 'coffee') { if (!free('espresso')) return fail('busy', 'Someone is at the machine.'); leaveTable(); coffeeRun(w); }
+        else if (what === 'desk') { leaveTable(); goTo(w, w.desk, act({ dur: rand(20, 40), pose: 'leanback', label: 'At their desk' }), 'Going to their desk'); }
         else if (what === 'pingpong') { const partner = people.find((p) => p !== w && !p.lead && !p.task && !p.pingpong); if (!partner || !free('pp-w') || !free('pp-e')) return fail('busy', 'Nobody to play with, or the table is taken.'); startPingPong(w, partner); }
         else {
           const keys = Object.keys(SPOTS).filter((k) => k.startsWith(IDLE_SPOTS[what]) && free(k)); if (!keys.length) return fail('busy', 'No free spot for that.');
           const k = pick(keys), pose = what === 'couch' ? 'couch' : what === 'fridge' ? 'fridge' : what === 'window' ? 'pockets' : 'stand';
+          leaveTable();
           goTo(w, k, act({ dur: what === 'fridge' ? 4 : rand(15, 30), pose, prop: what === 'couch' ? 'phone' : null, chat: what === 'chat', board: what === 'board', fridge: what === 'fridge', label: SPOTS[k].label || ({ couch: 'On the couch', chat: 'Chatting' })[what] }), 'Going over');
         }
         w.step = null; return { ok: true, who: w.id, doing: what };
