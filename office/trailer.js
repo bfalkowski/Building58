@@ -134,7 +134,12 @@
     [3.2, speed(1)],
     [15.4, () => run.say({ who: 'lead', text: 'Let\'s ship it.' })],
     [19.5, () => run.activity({ who: 'priya', text: 'All tests pass', kind: 'bash' })],
-    [29.8, () => { run.speed({ value: 8 }); run.idle({ who: 'kai', do: 'pingpong' }); run.idle({ who: 'sam', do: 'window' }); }],
+    [29.8, () => {
+      run.speed({ value: 8 });
+      run.state().workers.filter((w) => w.doing === 'Playing ping pong').forEach((w) => run.idle({ who: w.id, do: 'desk' }));
+      run.idle({ who: 'sam', do: 'window' });
+    }],
+    [29.9, () => run.idle({ who: 'kai', do: 'pingpong' })],
     [31.4, () => run.idle({ who: 'noor', do: 'coffee' })],
     [31.6, speed(1)],
     [42.8, () => { run.done({ all: true }); run.party({ on: true, seconds: 60 }); run.speed({ value: 8 }); }],
