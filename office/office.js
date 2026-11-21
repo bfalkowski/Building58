@@ -690,7 +690,7 @@
 
   const { POSE, RIG, typePoseFor, aimArms, chairTurn, seatOn, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE } = window.OfficePoses;
   const FIGURES = window.OfficeFigures, EDITION = FIGURES.edition(location.search, ROSTER);
-  const KIT = { THREE, RIG, C, std, metal, mesh, ball, block, cyl, rod };
+  const KIT = { THREE, RIG, C, std, metal, mesh, ball, block, cyl, rod, makeCanvas, tex };
 
   function buildPerson(look) {
     const L = Object.assign({ skin: '#d6a27c', hair: '#2a1d17', hairStyle: 'short', shirt: '#556677', pants: '#333a44', shoes: '#222222', height: 1 }, look || {});
@@ -713,6 +713,8 @@
       const lapel = std(L.lapel || L.shirt, { roughness: 0.6 });
       for (const s of [-1, 1]) block(spine, lapel, [0.062 * s, 0.37, 0.108], [0.04, 0.2, 0.014], [0, 0, 0.42 * s]);
       ball(spine, shirt, [0, -0.05, 0], 0.165, [1.02, 0.5, 0.72]);
+      if (L.clip) block(spine, metal(L.clip, 0.3), [0, 0.33, 0.118], [0.05, 0.006, 0.004]);
+      if (L.square) block(spine, std(L.square, { roughness: 0.6 }), [0.095, 0.36, 0.107], [0.04, 0.022, 0.01]);
     }
     cyl(neck, skin, [0, 0.04, 0], 0.045, 0.1);
     ball(head, skin, [0, 0, 0.005], 0.105, [0.92, 1.05, 0.98]);
@@ -730,6 +732,18 @@
         if (hs === 'bob') block(head, hair, [0, -0.04, -0.03], [0.22, 0.14, 0.17]);
         if (hs === 'curly') for (let i = 0; i < 14; i++) { const a = i * 2.4; ball(head, hair, [Math.sin(a) * 0.075, 0.07 + Math.cos(i) * 0.03, -0.02 + Math.cos(a) * 0.06], 0.045); }
       }
+    }
+    if (L.extra === 'browline') {
+      const rims = std(L.rims || '#3b2a20', { roughness: 0.35 });
+      for (const s of [-1, 1]) { const r = mesh(new THREE.TorusGeometry(0.026, 0.0055, 6, 18), rims, head); r.position.set(0.038 * s, 0.012, 0.102); block(head, rims, [0.038 * s, 0.034, 0.104], [0.054, 0.011, 0.009]); }
+      block(head, rims, [0, 0.016, 0.106], [0.024, 0.006, 0.006]);
+    }
+    if (L.hat) {
+      const felt = std(L.hat, { roughness: 0.9 });
+      cyl(head, felt, [0, 0.088, -0.005], 0.172, 0.012).scale.z *= 0.92;
+      const crown = mesh(new THREE.CylinderGeometry(0.088, 0.104, 0.11, 24), felt, head); crown.position.set(0, 0.148, -0.005); crown.scale.z = 0.92;
+      cyl(head, std(L.band || '#2a2622', { roughness: 0.7 }), [0, 0.108, -0.005], 0.1058, 0.026).scale.z *= 0.92;
+      ball(head, felt, [0, 0.2, -0.005], 0.088, [1, 0.16, 0.92]);
     }
     if (L.extra === 'glasses') { const gm = std(0x111111, { roughness: 0.3 }); for (const s of [-1, 1]) { const r = mesh(new THREE.TorusGeometry(0.026, 0.004, 6, 18), gm, head); r.position.set(0.038 * s, 0.012, 0.102); } block(head, gm, [0, 0.014, 0.106], [0.024, 0.005, 0.005]); }
     if (L.extra === 'beard') ball(head, hair, [0, -0.07, 0.035], 0.085, [1, 0.65, 0.9]);
@@ -749,7 +763,7 @@
       block(knee, shoe, [0, -0.455, 0.045], [0.1, 0.07, 0.25]);
     }
     root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-    return { root, pelvis, spine, neck, head, arms, hands, legs };
+    return { root, pelvis, spine, neck, head, arms, hands, legs, hatTop: L.hat ? 0.215 : null };
   }
   function buildFigure(def) {
     const robot = FIGURES.deskFigure(ROSTER, EDITION, def);
@@ -974,9 +988,10 @@
   const bossSpots = ['boss-aisle', 'boss-lounge', 'boss-board'];
   const bossGrid = officeGrid.slice();
   for (const k in DESKS) for (let j = 0; j < GZ; j++) for (let i = 0; i < GX; i++) if (Math.hypot(cx(i) - DESKS[k].x, cz(j) - DESKS[k].z) < 0.55) bossGrid[j * GX + i] = 1;
-  const bossFig = buildPerson(M.look); scene.add(bossFig.root);
+  const bossLook = FIGURES.managerLook(ROSTER, EDITION);
+  const bossFig = buildPerson(bossLook); scene.add(bossFig.root);
   const boss = {
-    id: 'manager', boss: true, grid: bossGrid, fig: bossFig, desk: null, spot: 'boss-desk', pos: SPOTS['boss-desk'].pos.clone(), yaw: 0, speed: 1.05, typePose: typePoseFor((M.look || {}).height || 1),
+    id: 'manager', boss: true, grid: bossGrid, fig: bossFig, desk: null, spot: 'boss-desk', pos: SPOTS['boss-desk'].pos.clone(), yaw: 0, speed: 1.05, typePose: typePoseFor((bossLook || {}).height || 1),
     pose: Object.assign({}, POSE.sit), target: POSE.sit, seated: true, route: {}, steps: [], step: null, doing: '', mode: 'work', task: null, waiting: null, carry: null,
     walkPhase: 0, swivel: 0, swivelTo: 0, gaze: 0, gazeTo: 0, fidget: null, moving: false, rush: false, bubbleUntil: 0, nextSip: 0, sipUntil: 0, present: false,
     mug: { visible: false }, paddle: { visible: false }
@@ -1141,7 +1156,7 @@
     return hat;
   }
   people.forEach((w, i) => { w.hat = putHatOn(w.fig, w.look, i); });
-  boss.hat = putHatOn(boss.fig, M.look, people.length);
+  boss.hat = putHatOn(boss.fig, bossLook, people.length);
 
   const cake = new THREE.Group(); cake.position.copy(CAKE_AT); cake.visible = false; scene.add(cake);
   cyl(cake, std(0xf4f1ea, { roughness: 0.3 }), [0, 0.006, 0], 0.13, 0.012);
@@ -1342,6 +1357,14 @@
     const f = w.fig;
     f.root.position.set(w.pos.x, 0, w.pos.z); f.root.rotation.y = w.yaw + w.swivel;
   }
+  function moodOf(w) {
+    const s = w.step;
+    if (w.waiting) return 'wait';
+    if (s && s.t === 'act' && s.work && w.seated) return 'work';
+    if (w.seated && SPOTS[w.spot] && SPOTS[w.spot].sit === 'couch') return 'couch';
+    if (w.hat && w.hat.visible) return 'party';
+    return 'idle';
+  }
   const upQ = new THREE.Quaternion(), tq = new THREE.Quaternion(), te = new THREE.Euler();
   function applyPose(w, dt) {
     const p = w.pose, t = w.target, k = Math.min(1, dt * (w.moving ? 10 : 7));
@@ -1394,7 +1417,7 @@
     f.arms.R.sh.rotation.set(sRx, 0, -sRz); f.arms.R.el.rotation.x = eR;
     f.legs.L.hip.rotation.x = hipL; f.legs.L.knee.rotation.x = kL; f.legs.R.hip.rotation.x = hipR; f.legs.R.knee.rotation.x = kR;
     placeFigure(w);
-    if (f.tick) f.tick(dt, { still: reduce });
+    if (f.tick) f.tick(dt, { still: reduce, mood: moodOf(w) });
     w.mug.visible = w.carry === 'mug';
     if (w.mug.visible) {
       f.root.updateMatrixWorld(true);

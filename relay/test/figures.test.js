@@ -18,7 +18,13 @@ function ball(parent, mat, p, r) { const m = mesh(new THREE.SphereGeometry(r, 6,
 function block(parent, mat, p, size) { const m = mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), mat, parent); m.position.set(p[0], p[1], p[2]); return m; }
 function cyl(parent, mat, p, r, h) { const m = mesh(new THREE.CylinderGeometry(r, r, h, 6), mat, parent); m.position.set(p[0], p[1], p[2]); return m; }
 function rod(parent, mat, a, b, r) { const m = mesh(new THREE.CylinderGeometry(r, r, 1, 6), mat, parent); m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2); return m; }
-const KIT = { THREE, RIG, C, std, metal, mesh, ball, block, cyl, rod };
+// A canvas that takes every drawing call and draws nothing, since Node has no canvas.
+function makeCanvas(width, height) {
+  const ctx = new Proxy({}, { get: (o, k) => (k in o ? o[k] : k === 'measureText' ? () => ({ width: 100 }) : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
+  return { width, height, getContext: () => ctx };
+}
+const tex = (c) => Object.assign(new THREE.Texture(), { canvas: c });
+const KIT = { THREE, RIG, C, std, metal, mesh, ball, block, cyl, rod, makeCanvas, tex };
 
 // Where buildPerson put each joint, in the figure's own units, and the joint each one hangs from.
 const JOINTS = {
@@ -71,7 +77,10 @@ test('a robot of each design keeps the skeleton, with parts on every joint and n
     f.root.traverse((o) => { if (o.isMesh) { all++; if (o.castShadow) cast++; } });
     assert.strictEqual(cast, all, label + ': every part casts a shadow, as a person does');
     assert.ok(f.hatTop > 0.1 && f.hatTop < 0.3, label + ': a party hat sits on top of the head, at ' + f.hatTop);
-    if (f.tick) { f.tick(0.016, {}); checkSkeleton(f, height, label + ' after a tick'); }
+    if (f.tick) for (const mood of ['idle', 'work', 'wait', 'couch', 'party']) for (const still of [false, true]) {
+      f.tick(0.4, { mood, still });
+      checkSkeleton(f, height, label + ' after a tick, ' + mood + (still ? ', still' : ''));
+    }
   }
 });
 
@@ -82,6 +91,16 @@ test('each design shows the role color in a light', () => {
     f.root.traverse((o) => { if (o.isMesh && o.material.emissive && o.material.emissive.equals(want)) lit++; });
     assert.ok(lit > 0, design + ' has a part that glows in the role color');
   }
+});
+
+test('there are five designs, and each desk in the roster has one of them', () => {
+  assert.deepStrictEqual(figures.DESIGNS.slice().sort(), ['ilium', 'pebble', 'tin', 'tty', 'visor']);
+  const designs = roster.editions.robots.designs;
+  for (const def of [roster.lead].concat(roster.workers)) {
+    assert.ok(figures.DESIGNS.includes(designs[def.id]), def.id + ' has a design: ' + designs[def.id]);
+    assert.strictEqual(figures.deskFigure(roster, 'robots', def).design, designs[def.id], def.id + ' is drawn in its design');
+  }
+  assert.deepStrictEqual(Object.keys(designs).sort(), [roster.lead].concat(roster.workers).map((d) => d.id).sort(), 'no design for a desk the roster does not have, and none for the manager');
 });
 
 test('a design the roster does not know is the Tin Toy', () => {
@@ -115,6 +134,22 @@ test('an edition with figure robot draws each desk as a robot in its color and h
   assert.strictEqual(figures.deskFigure(R, 'plain', def), null, 'an edition with no figure keeps people');
   assert.strictEqual(figures.deskFigure(R, 'missing', def), null);
   assert.deepStrictEqual(figures.deskFigure(R, 'robots', { id: 'x' }), { design: undefined, height: 1, color: '#9fd3ff' });
+});
+
+test('an edition can give the manager its own look, and he keeps his own look otherwise', () => {
+  const R = { manager: { look: { top: 'suit' } }, editions: { robots: { figure: 'robot', manager: { top: 'suit', hat: '#4a443d' } }, plain: {} } };
+  assert.strictEqual(figures.managerLook(R, 'robots'), R.editions.robots.manager);
+  assert.strictEqual(figures.managerLook(R, 'people'), R.manager.look);
+  assert.strictEqual(figures.managerLook(R, 'plain'), R.manager.look, 'an edition with no manager keeps his look');
+  assert.strictEqual(figures.managerLook(R, 'missing'), R.manager.look);
+  assert.strictEqual(figures.managerLook({}, 'robots'), undefined);
+  const retro = roster.editions.robots.manager;
+  assert.ok(retro, 'the robot edition has a look for the manager');
+  assert.strictEqual(retro.top, 'suit');
+  assert.ok(retro.hat && retro.extra === 'browline' && retro.clip && retro.square, 'a fedora, browline glasses, a tie clip and a pocket square');
+  assert.ok(retro.height >= 0.8 && retro.height <= 1.1, 'a height the desk poses fit');
+  assert.ok(!roster.manager.look.hat, 'his everyday look has no hat');
+  for (const def of [roster.lead].concat(roster.workers)) assert.ok(!def.look.hat && def.look.extra !== 'browline', def.id + ' gets no hat and no browline glasses');
 });
 
 test('the roster ships with people, and has the robot edition to switch to', () => {
