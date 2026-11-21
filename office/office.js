@@ -689,15 +689,15 @@
   }
 
   const { POSE, RIG, typePoseFor, aimArms, chairTurn, seatOn, towards, ARM_CARRY, ARM_CARRY_SIT, ARM_SIP, ARM_PADDLE } = window.OfficePoses;
+  const FIGURES = window.OfficeFigures, EDITION = FIGURES.edition(location.search, ROSTER);
+  const KIT = { THREE, RIG, C, std, metal, mesh, ball, block, cyl, rod };
 
   function buildPerson(look) {
     const L = Object.assign({ skin: '#d6a27c', hair: '#2a1d17', hairStyle: 'short', shirt: '#556677', pants: '#333a44', shoes: '#222222', height: 1 }, look || {});
     const skin = std(L.skin, { roughness: 0.65 }), shirt = std(L.shirt, { roughness: 0.85 }), pants = std(L.pants, { roughness: 0.85 });
     const shoe = std(L.shoes, { roughness: 0.5 }), hair = std(L.hair, { roughness: 0.9 }), dark = std(0x16110e, { roughness: 0.3 });
-    const root = new THREE.Group(); root.scale.setScalar(L.height || 1);
-    const pelvis = new THREE.Group(); root.add(pelvis); pelvis.position.y = 0.94;
+    const { root, pelvis, spine, neck, head, arms, hands, legs } = FIGURES.skeleton(THREE, RIG, L.height || 1);
     ball(pelvis, pants, [0, 0.0, 0], 0.16, [1.02, 0.55, 0.72]);
-    const spine = new THREE.Group(); pelvis.add(spine); spine.position.y = RIG.spine;
     const torso = mesh(new THREE.CylinderGeometry(0.165, 0.15, 0.44, 18), shirt, spine); torso.position.y = 0.23; torso.scale.z = 0.66;
     ball(spine, shirt, [0, 0.44, 0], 0.17, [1.12, 0.42, 0.64]);
     ball(spine, shirt, [0, 0.03, 0], 0.15, [1.02, 0.42, 0.68]);
@@ -714,9 +714,7 @@
       for (const s of [-1, 1]) block(spine, lapel, [0.062 * s, 0.37, 0.108], [0.04, 0.2, 0.014], [0, 0, 0.42 * s]);
       ball(spine, shirt, [0, -0.05, 0], 0.165, [1.02, 0.5, 0.72]);
     }
-    const neck = new THREE.Group(); spine.add(neck); neck.position.y = 0.48;
     cyl(neck, skin, [0, 0.04, 0], 0.045, 0.1);
-    const head = new THREE.Group(); neck.add(head); head.position.y = 0.17;
     ball(head, skin, [0, 0, 0.005], 0.105, [0.92, 1.05, 0.98]);
     ball(head, skin, [0, -0.06, 0.03], 0.075, [1, 0.7, 0.95]);
     for (const s of [-1, 1]) { ball(head, dark, [0.036 * s, 0.012, 0.094], 0.012, [1, 1.2, 0.6]); ball(head, skin, [0.1 * s, 0, 0.0], 0.022, [0.6, 1, 1]); }
@@ -736,34 +734,33 @@
     if (L.extra === 'glasses') { const gm = std(0x111111, { roughness: 0.3 }); for (const s of [-1, 1]) { const r = mesh(new THREE.TorusGeometry(0.026, 0.004, 6, 18), gm, head); r.position.set(0.038 * s, 0.012, 0.102); } block(head, gm, [0, 0.014, 0.106], [0.024, 0.005, 0.005]); }
     if (L.extra === 'beard') ball(head, hair, [0, -0.07, 0.035], 0.085, [1, 0.65, 0.9]);
     if (L.extra === 'headphones') { const hm = std(0x1a1a1a, { roughness: 0.4 }); mesh(new THREE.TorusGeometry(0.118, 0.012, 8, 24, Math.PI), hm, head).position.y = 0.01; for (const s of [-1, 1]) ball(head, std(L.mug || '#e3b26a', { roughness: 0.4 }), [0.112 * s, 0.0, 0.0], 0.04, [0.55, 1, 1]); }
-    const arms = {}, hands = {};
-    for (const [side, s] of [['L', 1], ['R', -1]]) {
-      const sh = new THREE.Group(); spine.add(sh); sh.position.set(RIG.shoulderX * s, RIG.shoulderY, 0);
+    for (const side of ['L', 'R']) {
+      const { sh, el } = arms[side], hand = hands[side];
       rod(sh, shirt, [0, 0.02, 0], [0, -RIG.upperArm, 0], 0.05);
-      const el = new THREE.Group(); sh.add(el); el.position.y = -RIG.upperArm; ball(el, shirt, [0, 0, 0], 0.048);
+      ball(el, shirt, [0, 0, 0], 0.048);
       rod(el, L.top === 'hoodie' || L.top === 'suit' ? shirt : skin, [0, 0, 0], [0, -0.24, 0], 0.041);
-      const hand = new THREE.Group(); el.add(hand); hand.position.y = -RIG.forearm;
       ball(hand, skin, [0, 0, 0], 0.044, [0.85, 1.1, 0.7]);
-      arms[side] = { sh, el }; hands[side] = hand;
     }
-    const legs = {};
-    for (const [side, s] of [['L', 1], ['R', -1]]) {
-      const hip = new THREE.Group(); pelvis.add(hip); hip.position.set(0.085 * s, -0.02, 0);
+    for (const side of ['L', 'R']) {
+      const { hip, knee } = legs[side];
       rod(hip, pants, [0, 0, 0], [0, -0.43, 0], 0.07);
-      const knee = new THREE.Group(); hip.add(knee); knee.position.y = -0.43; ball(knee, pants, [0, 0, 0], 0.062);
+      ball(knee, pants, [0, 0, 0], 0.062);
       rod(knee, pants, [0, 0, 0], [0, -0.42, 0], 0.057);
       block(knee, shoe, [0, -0.455, 0.045], [0.1, 0.07, 0.25]);
-      legs[side] = { hip, knee };
     }
     root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     return { root, pelvis, spine, neck, head, arms, hands, legs };
+  }
+  function buildFigure(def) {
+    const robot = FIGURES.deskFigure(ROSTER, EDITION, def);
+    return robot ? FIGURES.robot(KIT, robot) : buildPerson(def.look);
   }
 
   const tagFor = {};
   const people = [];
   const byId = {};
   function makeWorker(def, deskKey, isLead) {
-    const fig = buildPerson(def.look);
+    const fig = buildFigure(def);
     scene.add(fig.root);
     const w = {
       id: def.id, name: def.name, deskName: def.name, role: def.role, color: def.color || '#cccccc', skills: (def.skills || []).map(normSkill), floater: !!def.floater, lead: !!isLead,
@@ -1137,7 +1134,7 @@
   const HAIR_TOP = { bald: 0.105, buzz: 0.115, beanie: 0.135, curly: 0.135 };
   function putHatOn(fig, look, i) {
     const m = hatMats[i % hatMats.length], hat = new THREE.Group();
-    hat.position.y = HAIR_TOP[(look || {}).hairStyle] || 0.125; hat.rotation.z = (i % 2 ? 1 : -1) * 0.12; hat.rotation.x = -0.08;
+    hat.position.y = fig.hatTop || HAIR_TOP[(look || {}).hairStyle] || 0.125; hat.rotation.z = (i % 2 ? 1 : -1) * 0.12; hat.rotation.x = -0.08;
     const cone = mesh(hatGeo, m.cone, hat); cone.position.y = 0.095;
     ball(hat, m.pom, [0, 0.195, 0], 0.025);
     hat.visible = false; fig.head.add(hat);
@@ -1397,6 +1394,7 @@
     f.arms.R.sh.rotation.set(sRx, 0, -sRz); f.arms.R.el.rotation.x = eR;
     f.legs.L.hip.rotation.x = hipL; f.legs.L.knee.rotation.x = kL; f.legs.R.hip.rotation.x = hipR; f.legs.R.knee.rotation.x = kR;
     placeFigure(w);
+    if (f.tick) f.tick(dt, { still: reduce });
     w.mug.visible = w.carry === 'mug';
     if (w.mug.visible) {
       f.root.updateMatrixWorld(true);
@@ -1880,7 +1878,7 @@
 
   function snapshot() {
     return {
-      world: 'office', company: ROSTER.company, clock: clockText(), time: part, speed, holiday: decorState(),
+      world: 'office', edition: EDITION, company: ROSTER.company, clock: clockText(), time: part, speed, holiday: decorState(),
       busy: people.filter((p) => p.task).length, people: people.filter((p) => p.present).length, managerHere: boss.present, party: partyState(),
       waitingOnYou: people.filter((p) => p.waiting).map((p) => ({ who: p.id, name: p.name, message: p.waiting.message })),
       workers: people.map((w) => ({
