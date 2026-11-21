@@ -10,6 +10,8 @@
 // visor, ilium or pebble. Each design shows the desk's color in a light, and tick() gets the
 // figure's mood (work, wait, couch, party or idle) and whether motion is reduced, for its screens
 // and lights. See "Editions" in docs/manual/how-it-works.html.
+// person in the roster. managerLook() gives the manager his look in an edition: its `manager`, or
+// his own look. See "Editions" in docs/manual/how-it-works.html.
 // Also loaded with require by relay/test/figures.test.js, which builds every design with three.js.
 (function () {
   'use strict';
@@ -44,6 +46,11 @@
     const asked = new URLSearchParams(search || '').get('edition');
     if (asked !== null && known(asked)) return asked;
     return roster && known(roster.edition) ? roster.edition : 'people';
+  }
+
+  function managerLook(roster, name) {
+    const e = editionOf(roster, name);
+    return (e && e.manager) || ((roster && roster.manager) || {}).look;
   }
 
   function deskFigure(roster, name, def) {
@@ -360,7 +367,7 @@
     return f;
   }
 
-  const api = { skeleton, edition, deskFigure, robot, DESIGNS: Object.keys(DESIGNS) };
+  const api = { skeleton, edition, deskFigure, managerLook, robot, DESIGNS: Object.keys(DESIGNS) };
   if (typeof module !== 'undefined') module.exports = api;
   else window.OfficeFigures = api;
 })();

@@ -136,6 +136,22 @@ test('an edition with figure robot draws each desk as a robot in its color and h
   assert.deepStrictEqual(figures.deskFigure(R, 'robots', { id: 'x' }), { design: undefined, height: 1, color: '#9fd3ff' });
 });
 
+test('an edition can give the manager its own look, and he keeps his own look otherwise', () => {
+  const R = { manager: { look: { top: 'suit' } }, editions: { robots: { figure: 'robot', manager: { top: 'suit', hat: '#4a443d' } }, plain: {} } };
+  assert.strictEqual(figures.managerLook(R, 'robots'), R.editions.robots.manager);
+  assert.strictEqual(figures.managerLook(R, 'people'), R.manager.look);
+  assert.strictEqual(figures.managerLook(R, 'plain'), R.manager.look, 'an edition with no manager keeps his look');
+  assert.strictEqual(figures.managerLook(R, 'missing'), R.manager.look);
+  assert.strictEqual(figures.managerLook({}, 'robots'), undefined);
+  const retro = roster.editions.robots.manager;
+  assert.ok(retro, 'the robot edition has a look for the manager');
+  assert.strictEqual(retro.top, 'suit');
+  assert.ok(retro.hat && retro.extra === 'browline' && retro.clip && retro.square, 'a fedora, browline glasses, a tie clip and a pocket square');
+  assert.ok(retro.height >= 0.8 && retro.height <= 1.1, 'a height the desk poses fit');
+  assert.ok(!roster.manager.look.hat, 'his everyday look has no hat');
+  for (const def of [roster.lead].concat(roster.workers)) assert.ok(!def.look.hat && def.look.extra !== 'browline', def.id + ' gets no hat and no browline glasses');
+});
+
 test('the roster ships with people, and has the robot edition to switch to', () => {
   assert.strictEqual(roster.edition, 'people');
   assert.strictEqual(roster.editions.robots.figure, 'robot');
