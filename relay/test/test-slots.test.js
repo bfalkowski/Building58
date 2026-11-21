@@ -9,9 +9,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { spawn, spawnSync } = require('child_process');
 const { slots, STALE_MS } = require('./slots.js');
-const { until } = require('./helpers.js');
+const { until, relay, makeRepo } = require('./helpers.js');
 
 const tempDir = (t) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'office-slots-')); t.after(() => fs.rmSync(d, { recursive: true, force: true })); return d; };
+const runEnv = (extra) => { const env = { ...process.env, ...extra }; delete env.NODE_TEST_CONTEXT; return env; };
 const settled = (p) => { let done = false; p.then(() => { done = true; }); return () => done; };
 
 test('a run takes a free slot at once, and waits while every slot is taken', async (t) => {
@@ -129,4 +130,70 @@ test('a run that waits keeps its wait file fresh, so the order holds while it wa
   assert.ok(fs.statSync(path.join(dir, 'slot-0')).mtimeMs > Date.now() - 10000, 'and the holder touched its slot');
   held();
   (await next)();
+});
+
+test('the pool is as big as the computer has cores, unless TEST_SLOTS says otherwise', () => {
+  const { sizeOf } = require('./slots.js');
+  assert.strictEqual(sizeOf(undefined), os.availableParallelism());
+  assert.strictEqual(sizeOf(''), os.availableParallelism());
+  assert.strictEqual(sizeOf('lots'), os.availableParallelism(), 'a value that is not a whole number counts as the default');
+  assert.strictEqual(sizeOf('4'), 4);
+  assert.strictEqual(sizeOf('0'), 0, '0 turns the limit off');
+});
+
+test('the slot gate makes the test files of any node --test run share the slots', async (t) => {
+  const dir = tempDir(t), project = path.join(dir, 'project'), slotDir = path.join(dir, 'slots'), log = path.join(dir, 'times.log');
+  fs.mkdirSync(project);
+  const body = 'const fs = require("fs"); const test = require("node:test");\n'
+    + 'test("works", async () => { const s = Date.now(); await new Promise((r) => setTimeout(r, 400)); fs.appendFileSync(process.env.TIMES, s + " " + Date.now() + "\\n"); });\n';
+  for (const n of ['a', 'b', 'c']) fs.writeFileSync(path.join(project, n + '.test.js'), body);
+  const run = (slotsSetting) => {
+    fs.writeFileSync(log, '');
+    const r = spawnSync(process.execPath, ['--test'], { cwd: project, encoding: 'utf8', env: runEnv({ NODE_OPTIONS: '--require=' + JSON.stringify(path.join(__dirname, 'slot-gate.js')), TEST_SLOTS: slotsSetting, TEST_SLOTS_DIR: slotDir, TIMES: log }) });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const spans = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => l.split(' ').map(Number)).sort((x, y) => x[0] - y[0]);
+    assert.strictEqual(spans.length, 3);
+    return spans.slice(1).some((s, i) => s[0] < spans[i][1]);
+  };
+  assert.strictEqual(run('1'), false, 'with one slot, no two files run at the same time');
+  assert.strictEqual(run('3'), true, 'with three slots, they do');
+  assert.deepStrictEqual(fs.readdirSync(slotDir).filter((f) => f.startsWith('slot-') || f.startsWith('wait-')), [], 'every slot and wait file is gone after the run');
+});
+
+test('a node --test run inside a test file that holds the last slot does not wait behind it', async (t) => {
+  const dir = tempDir(t), outer = path.join(dir, 'outer'), inner = path.join(dir, 'inner');
+  fs.mkdirSync(outer); fs.mkdirSync(inner);
+  fs.writeFileSync(path.join(inner, 'inner.test.js'), 'require("node:test")("inner", () => {});\n');
+  fs.writeFileSync(path.join(outer, 'outer.test.js'), 'const { spawnSync } = require("child_process"); const assert = require("node:assert");\n'
+    + 'require("node:test")("runs the inner tests", () => { const env = { ...process.env }; delete env.NODE_TEST_CONTEXT; const r = spawnSync(process.execPath, ["--test"], { cwd: ' + JSON.stringify(inner) + ', env, encoding: "utf8", timeout: 20000 }); assert.strictEqual(r.status, 0, r.stdout + r.stderr); });\n');
+  const r = spawnSync(process.execPath, ['--test'], { cwd: outer, encoding: 'utf8', timeout: 30000, env: runEnv({ NODE_OPTIONS: '--require=' + JSON.stringify(path.join(__dirname, 'slot-gate.js')), TEST_SLOTS: '1', TEST_SLOTS_DIR: path.join(dir, 'slots') }) });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+});
+
+test('a session the room starts gets the slot gate through NODE_OPTIONS, unless TEST_SLOTS is 0', (t) => {
+  const { slotGate } = require('../session-env.js');
+  const state = tempDir(t);
+  const stub = path.join(state, 'slot-gate.js');
+  const set = slotGate({ NODE_OPTIONS: '--max-old-space-size=4096' }, state);
+  assert.strictEqual(set.NODE_OPTIONS, '--max-old-space-size=4096 --require=' + JSON.stringify(stub), 'the person\'s own NODE_OPTIONS are kept');
+  assert.ok(fs.existsSync(stub), 'the stub is written to the room\'s state folder');
+  assert.deepStrictEqual(slotGate({}, state), { NODE_OPTIONS: '--require=' + JSON.stringify(stub) });
+  assert.deepStrictEqual(slotGate({ TEST_SLOTS: '0' }, state), {}, 'TEST_SLOTS=0 leaves sessions as they were');
+  const ok = spawnSync(process.execPath, ['-e', 'process.stdout.write("started")'], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '--require=' + JSON.stringify(stub) } });
+  assert.strictEqual(ok.stdout, 'started', 'node starts with the stub');
+  fs.writeFileSync(stub, fs.readFileSync(stub, 'utf8').replace(path.join(__dirname, 'slot-gate.js'), path.join(state, 'gone', 'slot-gate.js')));
+  const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write("started")'], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '--require=' + JSON.stringify(stub) } });
+  assert.strictEqual(gone.stdout, 'started', 'node still starts when the gate is gone, as after a rollback to code without it');
+});
+
+test('a session the relay starts gets NODE_OPTIONS with the stub in its state folder', async (t) => {
+  for (const [setting, has] of [[undefined, true], ['0', false]]) {
+    const R = await relay({ TEST_SLOTS: setting === undefined ? '' : setting });
+    t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+    const term = (await R.call('POST', '/terminals', { cwd: makeRepo(R.home) })).body;
+    await R.call('POST', '/terminals/' + term.id + '/input', { data: '/env\r' });
+    const screen = (await until(async () => { const text = await R.screen(term.id); return /ENV-END/.test(text) && text; }, 'the session to print its environment')).replace(/\s+/g, '');
+    assert.strictEqual(screen.includes('NODE_OPTIONS=--require="' + path.join(R.home, '.office-world', 'slot-gate.js') + '"'), has, setting === '0' ? 'TEST_SLOTS=0 adds nothing' : 'the gate is added');
+    await R.kill(); await R.remove();
+  }
 });

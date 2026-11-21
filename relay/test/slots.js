@@ -10,6 +10,9 @@
 // took after the run died, which would otherwise look alive and block every younger run. The folder is watched, so a
 // waiting run takes a slot as soon as one frees. A killed run leaves no event, so a waiting run also
 // looks again every few seconds.
+// takeSync waits by blocking instead, for relay/test/slot-gate.js, which must hold a slot before the
+// test file it runs in loads. sizeOf turns TEST_SLOTS into the pool's size: a whole number, 0 for no
+// limit, and otherwise the number of cores, so the files that run at once match what the computer has.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -18,6 +21,7 @@ const path = require('path');
 const DIR = path.join(os.tmpdir(), 'building58-test-slots');
 const RECHECK_MS = 3000;
 const STALE_MS = 30000;
+const sizeOf = (value) => (/^\d+$/.test(value || '') ? Number(value) : os.availableParallelism());
 
 function alive(pid) {
   if (!(pid > 0)) return false;
@@ -96,8 +100,26 @@ function slots({ dir = DIR, size, started = Date.now() } = {}) {
     if (onWait) onWait();
     return new Promise((resolve) => { waiters.push(resolve); });
   };
+  const takeSync = (onWait) => {
+    let n = grab();
+    if (n < 0) {
+      fs.writeFileSync(waitFile, me);
+      waiting = true;
+      if (onWait) onWait();
+      const cell = new Int32Array(new SharedArrayBuffer(4));
+      let touched = Date.now();
+      while (n < 0) {
+        Atomics.wait(cell, 0, 0, 200);
+        if (Date.now() - touched >= RECHECK_MS) { touch(waitFile); touched = Date.now(); }
+        n = grab();
+      }
+      waiting = false;
+      try { fs.unlinkSync(waitFile); } catch (e) { /* not there */ }
+    }
+    return () => release(n);
+  };
   const olderWaiting = () => olderWaits().length > 0;
-  return { take, close, olderWaiting };
+  return { take, takeSync, close, olderWaiting };
 }
 
-module.exports = { slots, DIR, STALE_MS };
+module.exports = { slots, sizeOf, DIR, STALE_MS };
