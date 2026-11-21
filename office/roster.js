@@ -15,8 +15,9 @@
 //
 // `edition` is the way the room looks: 'people', or the name of one of the `editions` below. In an
 // edition with `figure: 'robot'` each person at a desk is drawn as a robot, its lights in that
-// person's `color`, and the manager stays a person (office/figures.js). An edition's `manager` is
-// his look in that edition: in the robot edition, a 1950s suit and fedora. ?edition=<name> in the
+// person's `color`, and the manager stays a person (office/figures.js). `designs` gives each desk's
+// robot by the desk's id: 'tin', 'tty', 'visor', 'ilium' or 'pebble'. An edition's `manager` is his
+// look in that edition: in the robot edition, a 1950s suit and fedora. ?edition=<name> in the
 // address shows that edition on that page only, and ?edition=people shows people.
 (function () {
   const roster = {
@@ -26,6 +27,7 @@
     editions: {
       robots: {
         figure: 'robot',
+        designs: { lead: 'tty', priya: 'pebble', marcus: 'tin', june: 'visor', theo: 'visor', ines: 'ilium', sam: 'ilium', kai: 'pebble', noor: 'tty' },
         manager: { skin: '#d9b08c', hair: '#9a958d', hairStyle: 'short', shirt: '#5f6163', top: 'suit', lapel: '#56585a', dress: '#ebe5d8', tie: '#5b3a37', pants: '#5f6163', shoes: '#3a2a1e',
           height: 1.05, extra: 'browline', rims: '#3b2a20', hat: '#4a443d', band: '#2a2622', clip: '#b8a26a', square: '#ebe5d8' }
       }
