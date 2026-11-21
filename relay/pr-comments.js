@@ -47,6 +47,7 @@ const ITEM_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+#(?:issueco
 const DEV_MARK = '<!-- office:dev -->', TOLD_MARK = '<!-- office:told-dev -->';
 const HOLD_MARK = '<!-- office:hold -->';
 const READY_MARK = require('./ready-plan.js').MARK;
+const EXHIBIT_MARK = '<!-- exhibit:pr-summary -->';
 const KEY = (task) => 'review-' + task.id;
 const KEY_ID = /^review-([0-9a-f]{6}|session-[\w-]+)$/;
 const ENDED = 'Review waiting, Dev session has ended';
@@ -94,7 +95,7 @@ async function itemsOf(pr) {
 
 function isNews(r, item) {
   if (r.own.includes(item.url)) return false;
-  if (item.body.startsWith(DEV_MARK) || item.body.startsWith(TOLD_MARK) || item.body.startsWith(READY_MARK)) return false;
+  if (item.body.startsWith(DEV_MARK) || item.body.startsWith(TOLD_MARK) || item.body.startsWith(READY_MARK) || item.body.startsWith(EXHIBIT_MARK)) return false;
   if (item.kind === 'r' && item.state === 'COMMENTED' && !item.body.trim()) return false;
   return true;
 }
