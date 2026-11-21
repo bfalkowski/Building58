@@ -14,8 +14,9 @@
 // after you add, remove or rename someone.
 //
 // `edition` is 'people' or 'robots'. With 'robots' each person at a desk is drawn as a robot, its
-// lights in that person's `color`, and the manager stays a person (office/figures.js). ?robots in
-// the address shows robots on that page, and ?robots=off shows people.
+// lights in that person's `color`, and the manager stays a person (office/figures.js), in his
+// `robotEditionLook`: a 1950s suit and fedora. ?robots in the address shows robots on that page,
+// and ?robots=off shows people.
 (function () {
   const roster = {
     company: 'Building58',
@@ -33,7 +34,9 @@
     manager: {
       title: 'Manager',
       everyMinutes: [6, 15],
-      look: { skin: '#d9b08c', hair: '#8d8d8d', hairStyle: 'short', shirt: '#262a33', top: 'suit', lapel: '#1c1f27', dress: '#e8e4dc', tie: '#8c2f39', pants: '#262a33', shoes: '#15120f', height: 1.05 }
+      look: { skin: '#d9b08c', hair: '#8d8d8d', hairStyle: 'short', shirt: '#262a33', top: 'suit', lapel: '#1c1f27', dress: '#e8e4dc', tie: '#8c2f39', pants: '#262a33', shoes: '#15120f', height: 1.05 },
+      robotEditionLook: { skin: '#d9b08c', hair: '#9a958d', hairStyle: 'short', shirt: '#5f6163', top: 'suit', lapel: '#56585a', dress: '#ebe5d8', tie: '#5b3a37', pants: '#5f6163', shoes: '#3a2a1e',
+        height: 1.05, extra: 'browline', rims: '#3b2a20', hat: '#4a443d', band: '#2a2622', clip: '#b8a26a', square: '#ebe5d8' }
     },
 
     lead: {

@@ -4,7 +4,8 @@
 // parts on those joints and never moves one, so every pose, seat, prop and party hat fits every
 // figure. office/office.js builds people with buildPerson and robots with robot(), both on skeleton().
 // edition() says whether the page shows people or robots: ?robots in the address, or edition in
-// office/roster.js. See "The robot edition" in docs/manual/how-it-works.html.
+// office/roster.js. managerLook() gives the manager his robotEditionLook in the robot edition.
+// See "The robot edition" in docs/manual/how-it-works.html.
 // Also loaded with require by relay/test/figures.test.js, which builds every design with three.js.
 (function () {
   'use strict';
@@ -33,6 +34,11 @@
     const asked = new URLSearchParams(search || '').get('robots');
     if (asked !== null) return asked === 'off' ? 'people' : 'robots';
     return roster && roster.edition === 'robots' ? 'robots' : 'people';
+  }
+
+  function managerLook(manager, shown) {
+    const m = manager || {};
+    return shown === 'robots' && m.robotEditionLook ? m.robotEditionLook : m.look;
   }
 
   function withExtras(kit) {
@@ -109,7 +115,7 @@
     return f;
   }
 
-  const api = { skeleton, edition, robot, DESIGNS: Object.keys(DESIGNS) };
+  const api = { skeleton, edition, robot, managerLook, DESIGNS: Object.keys(DESIGNS) };
   if (typeof module !== 'undefined') module.exports = api;
   else window.OfficeFigures = api;
 })();

@@ -102,6 +102,21 @@ test('?robots in the address or edition in the roster picks robots, and ?robots=
   assert.strictEqual(figures.edition('?robots', null), 'robots');
 });
 
+test('the manager stays a person, in his robotEditionLook in the robot edition and his look otherwise', () => {
+  const M = { look: { top: 'suit' }, robotEditionLook: { top: 'suit', hat: '#4a443d' } };
+  assert.strictEqual(figures.managerLook(M, 'robots'), M.robotEditionLook);
+  assert.strictEqual(figures.managerLook(M, 'people'), M.look);
+  assert.strictEqual(figures.managerLook({ look: M.look }, 'robots'), M.look, 'with no robotEditionLook he keeps his look');
+  assert.strictEqual(figures.managerLook(undefined, 'robots'), undefined);
+  const retro = roster.manager.robotEditionLook;
+  assert.ok(retro, 'the roster has a robotEditionLook for the manager');
+  assert.strictEqual(retro.top, 'suit');
+  assert.ok(retro.hat && retro.extra === 'browline' && retro.clip && retro.square, 'a fedora, browline glasses, a tie clip and a pocket square');
+  assert.ok(retro.height >= 0.8 && retro.height <= 1.1, 'a height the desk poses fit');
+  assert.ok(!roster.manager.look.hat, 'his everyday look has no hat');
+  for (const def of [roster.lead].concat(roster.workers)) assert.ok(!def.look.hat && def.look.extra !== 'browline', def.id + ' gets no hat and no browline glasses');
+});
+
 test('the roster ships with people', () => {
   assert.strictEqual(roster.edition, 'people');
 });
