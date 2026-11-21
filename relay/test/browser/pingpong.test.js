@@ -14,13 +14,19 @@ test.after(() => o && o.stop());
 const get = () => o;
 
 const PLAYING = 'Playing ping pong';
-const doing = (p, id) => p.page.evaluate((who) => window.run.state().workers.find((w) => w.id === who).doing, id);
+// Who is in a game: at a table spot with their paddle up, or with the table in their plan. A label can still say
+// Playing ping pong for a moment after the game ends, until the person picks what to do next.
+const playing = (p) => p.page.evaluate((label) => window.run.state().workers.filter((w) => {
+  const d = window.run.debug(w.id), s = d && d.step;
+  const headed = String((s && s.key) || '').startsWith('pp-') || d.steps.some((x) => /:pp-/.test(x));
+  return w.doing === label && !!d && ((!!s && s.t === 'act' && d.spot.startsWith('pp-')) || headed);
+}).map((w) => w.id).sort(), PLAYING);
 const atTable = (p, id, spot) => until(p, ([who, key, label]) => {
   const d = window.run.debug(who), w = window.run.state().workers.find((x) => x.id === who);
   return d && d.spot === key && d.step && d.step.t === 'act' && w.doing === label;
 }, [id, spot, PLAYING]);
 
-pageTest('someone sent to do something else ends their game, so the other player leaves the table', get, async (p) => {
+pageTest('someone sent to their desk ends their game, so the other player leaves the table', get, async (p) => {
   await p.open();
   await p.page.evaluate(() => window.run.ready());
   await p.page.evaluate(() => { window.run.cast(); window.run.speed({ value: 8 }); });
@@ -31,14 +37,16 @@ pageTest('someone sent to do something else ends their game, so the other player
   await atTable(p, partner, 'pp-e');
   // At normal speed a game lasts 37 to 57 seconds, so for the next few seconds the game can end only
   // because Sam left. The partner may start a new game with someone else, but nobody plays alone.
-  await p.page.evaluate(() => { window.run.speed({ value: 1 }); return window.run.idle({ who: 'sam', do: 'window' }); });
+  // Sam goes to his own desk, which is always free: the window or the couch can be full and refuse.
+  const away = await p.page.evaluate(() => { window.run.speed({ value: 1 }); return window.run.idle({ who: 'sam', do: 'desk' }); });
+  assert.strictEqual(away.ok, true, JSON.stringify(away));
   await p.page.waitForFunction((who) => window.run.debug(who).step === null || window.run.debug(who).step.t !== 'act', partner, { timeout: 5000 }).catch(() => {});
   for (let i = 0; i < 10; i++) {
-    const players = await p.page.evaluate(() => window.run.state().workers.filter((w) => w.doing === 'Playing ping pong').map((w) => w.id));
+    const players = await playing(p);
     assert.notStrictEqual(players.length, 1, 'one person plays alone: ' + players.join(', '));
     await p.page.waitForTimeout(400);
   }
-  assert.notStrictEqual(await doing(p, 'sam'), PLAYING);
+  assert.ok(!(await playing(p)).includes('sam'), 'Sam left the game');
   assert.deepStrictEqual(p.errors, []);
 });
 
@@ -59,8 +67,6 @@ pageTest('the trailer\'s ping pong cue clears a game already going, and Kai play
   await atTable(p, 'kai', 'pp-w');
   const partner = await p.page.evaluate(() => window.run.state().workers.find((w) => w.id !== 'kai' && w.doing === 'Playing ping pong').id);
   await atTable(p, partner, 'pp-e');
-  const players = await p.page.evaluate(() => window.run.state().workers.filter((w) => w.doing === 'Playing ping pong').map((w) => w.id).sort());
-  assert.deepStrictEqual(players, ['kai', partner].sort(), 'two players, and nobody else at the table');
-  assert.notStrictEqual(await doing(p, 'sam'), PLAYING);
+  assert.deepStrictEqual(await playing(p), ['kai', partner].sort(), 'two players, and nobody else at the table');
   assert.deepStrictEqual(p.errors, []);
 });
