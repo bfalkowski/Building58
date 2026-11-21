@@ -14,8 +14,9 @@
 // after you add, remove or rename someone.
 //
 // `edition` is 'people' or 'robots'. With 'robots' each person at a desk is drawn as a robot, its
-// lights in that person's `color`, and the manager stays a person (office/figures.js). ?robots in
-// the address shows robots on that page, and ?robots=off shows people.
+// lights in that person's `color`, and the manager stays a person (office/figures.js). `robot` is
+// that desk's design: 'tin', 'tty', 'visor', 'ilium' or 'pebble'. ?robots in the address shows
+// robots on that page, and ?robots=off shows people.
 (function () {
   const roster = {
     company: 'Building58',
@@ -37,34 +38,34 @@
     },
 
     lead: {
-      id: 'lead', name: 'Paul', kind: 'man', role: 'Coding agent',
+      id: 'lead', name: 'Paul', kind: 'man', role: 'Coding agent', robot: 'tty',
       color: '#e3b26a',
       look: { skin: '#c58c64', hair: '#2b211c', hairStyle: 'short', shirt: '#3a3f47', top: 'hoodie', pants: '#2c3440', shoes: '#e8e4dc', mug: '#e3b26a', height: 1.0, extra: 'headphones' }
     },
 
     workers: [
-      { id: 'priya', name: 'Priya', kind: 'woman', role: 'Debugging', color: '#f08c7e',
+      { id: 'priya', name: 'Priya', kind: 'woman', role: 'Debugging', color: '#f08c7e', robot: 'pebble',
         skills: ['diagnose'],
         look: { skin: '#a8714f', hair: '#1a1412', hairStyle: 'bun', shirt: '#b5523b', pants: '#2f3542', shoes: '#1f1f1f', mug: '#f08c7e', height: 0.95, extra: 'glasses' } },
-      { id: 'marcus', name: 'Marcus', kind: 'man', role: 'Tests', color: '#8fd19e',
+      { id: 'marcus', name: 'Marcus', kind: 'man', role: 'Tests', color: '#8fd19e', robot: 'tin',
         skills: ['tdd', 'migrate-to-shoehorn'],
         look: { skin: '#6b4430', hair: '#16110e', hairStyle: 'buzz', shirt: '#2f6b4f', pants: '#c9b79a', shoes: '#f2f2f2', mug: '#8fd19e', height: 1.04, extra: 'beard' } },
-      { id: 'june', name: 'June', kind: 'woman', role: 'Product', color: '#c79be0',
+      { id: 'june', name: 'June', kind: 'woman', role: 'Product', color: '#c79be0', robot: 'visor',
         skills: ['to-prd', 'write-a-prd', 'grill-me', 'grill-with-docs'],
         look: { skin: '#f1c9a5', hair: '#d9a066', hairStyle: 'long', shirt: '#e9e2d0', pants: '#384b6b', shoes: '#8a5a3c', mug: '#c79be0', height: 0.93 } },
-      { id: 'theo', name: 'Theo', kind: 'man', role: 'Issues', color: '#8fb0e3',
+      { id: 'theo', name: 'Theo', kind: 'man', role: 'Issues', color: '#8fb0e3', robot: 'visor',
         skills: ['to-issues', 'prd-to-issues', 'triage'],
         look: { skin: '#e0b08a', hair: '#7a4a2a', hairStyle: 'curly', shirt: '#4d6fa8', pants: '#3b3b3b', shoes: '#d9d4c7', mug: '#8fb0e3', height: 1.0 } },
-      { id: 'ines', name: 'Ines', kind: 'woman', role: 'Architecture', color: '#7fd8d0',
+      { id: 'ines', name: 'Ines', kind: 'woman', role: 'Architecture', color: '#7fd8d0', robot: 'ilium',
         skills: ['improve-codebase-architecture', 'zoom-out'],
         look: { skin: '#d6a27c', hair: '#2a1d17', hairStyle: 'bob', shirt: '#1f2a33', pants: '#6b5b4b', shoes: '#1f1f1f', mug: '#7fd8d0', height: 0.97, extra: 'glasses' } },
-      { id: 'sam', name: 'Sam', kind: 'man', role: 'Tooling', color: '#f0c25e',
+      { id: 'sam', name: 'Sam', kind: 'man', role: 'Tooling', color: '#f0c25e', robot: 'ilium',
         skills: ['setup-pre-commit', 'git-guardrails-claude-code', 'setup-matt-pocock-skills', 'scaffold-exercises'],
         look: { skin: '#f3d2b5', hair: '#b8461f', hairStyle: 'beanie', beanie: '#d9822b', shirt: '#5b5f66', pants: '#2d3a4f', shoes: '#c43d3d', mug: '#f0c25e', height: 1.02, extra: 'beard' } },
-      { id: 'kai', name: 'Kai', kind: 'man', role: 'Hot desk', color: '#9fd3ff', floater: true,
+      { id: 'kai', name: 'Kai', kind: 'man', role: 'Hot desk', color: '#9fd3ff', robot: 'pebble', floater: true,
         skills: [],
         look: { skin: '#e8b98f', hair: '#111111', hairStyle: 'short', shirt: '#d8d2c4', pants: '#4a4a52', shoes: '#2a2a2a', mug: '#9fd3ff', height: 0.99 } },
-      { id: 'noor', name: 'Noor', kind: 'woman', role: 'Hot desk', color: '#ffa8c5', floater: true,
+      { id: 'noor', name: 'Noor', kind: 'woman', role: 'Hot desk', color: '#ffa8c5', robot: 'tty', floater: true,
         skills: ['write-a-skill', 'caveman'],
         look: { skin: '#9a6648', hair: '#140f0c', hairStyle: 'long', shirt: '#7a3b5c', pants: '#1f2430', shoes: '#e8e4dc', mug: '#ffa8c5', height: 0.95 } }
     ]

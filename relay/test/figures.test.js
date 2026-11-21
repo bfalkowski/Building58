@@ -18,7 +18,13 @@ function ball(parent, mat, p, r) { const m = mesh(new THREE.SphereGeometry(r, 6,
 function block(parent, mat, p, size) { const m = mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), mat, parent); m.position.set(p[0], p[1], p[2]); return m; }
 function cyl(parent, mat, p, r, h) { const m = mesh(new THREE.CylinderGeometry(r, r, h, 6), mat, parent); m.position.set(p[0], p[1], p[2]); return m; }
 function rod(parent, mat, a, b, r) { const m = mesh(new THREE.CylinderGeometry(r, r, 1, 6), mat, parent); m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2); return m; }
-const KIT = { THREE, RIG, C, std, metal, mesh, ball, block, cyl, rod };
+// A canvas that takes every drawing call and draws nothing, since Node has no canvas.
+function makeCanvas(width, height) {
+  const ctx = new Proxy({}, { get: (o, k) => (k in o ? o[k] : k === 'measureText' ? () => ({ width: 100 }) : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
+  return { width, height, getContext: () => ctx };
+}
+const tex = (c) => Object.assign(new THREE.Texture(), { canvas: c });
+const KIT = { THREE, RIG, C, std, metal, mesh, ball, block, cyl, rod, makeCanvas, tex };
 
 // Where buildPerson put each joint, in the figure's own units, and the joint each one hangs from.
 const JOINTS = {
@@ -71,7 +77,10 @@ test('a robot of each design keeps the skeleton, with parts on every joint and n
     f.root.traverse((o) => { if (o.isMesh) { all++; if (o.castShadow) cast++; } });
     assert.strictEqual(cast, all, label + ': every part casts a shadow, as a person does');
     assert.ok(f.hatTop > 0.1 && f.hatTop < 0.3, label + ': a party hat sits on top of the head, at ' + f.hatTop);
-    if (f.tick) { f.tick(0.016, {}); checkSkeleton(f, height, label + ' after a tick'); }
+    if (f.tick) for (const mood of ['idle', 'work', 'wait', 'couch', 'party']) for (const still of [false, true]) {
+      f.tick(0.4, { mood, still });
+      checkSkeleton(f, height, label + ' after a tick, ' + mood + (still ? ', still' : ''));
+    }
   }
 });
 
@@ -82,6 +91,12 @@ test('each design shows the role color in a light', () => {
     f.root.traverse((o) => { if (o.isMesh && o.material.emissive && o.material.emissive.equals(want)) lit++; });
     assert.ok(lit > 0, design + ' has a part that glows in the role color');
   }
+});
+
+test('there are five designs, and each desk in the roster has one of them', () => {
+  assert.deepStrictEqual(figures.DESIGNS.slice().sort(), ['ilium', 'pebble', 'tin', 'tty', 'visor']);
+  for (const def of [roster.lead].concat(roster.workers)) assert.ok(figures.DESIGNS.includes(def.robot), def.id + ' has a design: ' + def.robot);
+  assert.strictEqual(roster.manager.robot, undefined, 'the manager stays a person');
 });
 
 test('a design the roster does not know is the Tin Toy', () => {
