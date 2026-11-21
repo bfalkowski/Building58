@@ -8,8 +8,8 @@
 'use strict';
 const { slots, sizeOf, DIR } = require('./slots.js');
 
-const size = sizeOf(process.env.TEST_SLOTS);
-if (String(process.env.NODE_TEST_CONTEXT || '').startsWith('child') && size) {
+const size = String(process.env.NODE_TEST_CONTEXT || '').startsWith('child') ? sizeOf(process.env.TEST_SLOTS) : 0;
+if (size) {
   const pool = slots({ dir: process.env.TEST_SLOTS_DIR || DIR, size });
   pool.takeSync(() => process.stderr.write('# waiting for a test slot: other test runs on this computer hold all ' + size + ' slots (TEST_SLOTS). The slots are files in ' + (process.env.TEST_SLOTS_DIR || DIR) + '\n'));
   process.env.TEST_SLOTS = '0';

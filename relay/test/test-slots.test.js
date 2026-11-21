@@ -141,6 +141,18 @@ test('the pool is as big as the computer has cores, unless TEST_SLOTS says other
   assert.strictEqual(sizeOf('0'), 0, '0 turns the limit off');
 });
 
+test('on a Node with no os.availableParallelism, any node a session runs still starts, and a test file counts the cores another way', (t) => {
+  const dir = tempDir(t), old = path.join(dir, 'old-node.js'), gate = path.join(__dirname, 'slot-gate.js');
+  fs.writeFileSync(old, 'delete require("os").availableParallelism;\n');
+  const node = (extra) => spawnSync(process.execPath, ['--require', old, '--require', gate, '-e', 'console.log(require("./relay/test/slots.js").sizeOf(undefined))'],
+    { cwd: path.join(__dirname, '..', '..'), env: runEnv({ TEST_SLOTS: '', TEST_SLOTS_DIR: path.join(dir, 'slots'), ...extra }), encoding: 'utf8' });
+  const plain = node({});
+  assert.strictEqual(plain.status, 0, plain.stderr);
+  assert.strictEqual(Number(plain.stdout), os.cpus().length);
+  const inTest = node({ NODE_TEST_CONTEXT: 'child-v8' });
+  assert.strictEqual(inTest.status, 0, inTest.stderr);
+});
+
 test('the slot gate makes the test files of any node --test run share the slots', async (t) => {
   const dir = tempDir(t), project = path.join(dir, 'project'), slotDir = path.join(dir, 'slots'), log = path.join(dir, 'times.log');
   fs.mkdirSync(project);

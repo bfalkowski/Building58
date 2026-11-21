@@ -21,7 +21,7 @@ const path = require('path');
 const DIR = path.join(os.tmpdir(), 'building58-test-slots');
 const RECHECK_MS = 3000;
 const STALE_MS = 30000;
-const sizeOf = (value) => (/^\d+$/.test(value || '') ? Number(value) : os.availableParallelism());
+const sizeOf = (value) => (/^\d+$/.test(value || '') ? Number(value) : (os.availableParallelism ? os.availableParallelism() : os.cpus().length));
 
 function alive(pid) {
   if (!(pid > 0)) return false;
