@@ -21,13 +21,27 @@ script, a coding agent's hooks) to whichever world is open.
 
 ## Run them
 
-Node 18 or later. No packages to install.
+You need:
+
+- Node 18 or later. No packages to install.
+- `git`.
+- `python3`. It runs each session's terminal, with Python's pty module, so the room runs on macOS or Linux.
+- [Claude Code](https://docs.claude.com/en/docs/claude-code), as `claude` on your `PATH`, and logged in.
+  Every worker, the Lead, each reviewer and the PM is a Claude Code session on your own plan.
+- The GitHub CLI, `gh`, logged in with `gh auth login`. Workers open pull requests, and the relay
+  reads them with `gh` for reviews, CI, Autopilot and the chat board. Without it the room opens, but
+  no review starts.
+- A repo for the work, with a GitHub remote you can push to.
+- Internet access: the page loads three.js and the terminal from CDNs.
+
+The demo (`npm run office:demo`) needs only Node, a browser and internet access.
 
 Each world runs on a relay of its own, with its own port and key, so one world's restart or key
 does not touch another:
 
 ```
-RELAY_KEY=key-one npm run office               # the office, on 8787
+RELAY_KEY=key-one npm run office               # the office, on 8787: starts its relay and opens the page
+RELAY_KEY=key-one npm run office:demo          # the same, with pretend Claude Code sessions
 RELAY_KEY=key-two npm run world -- <folder>    # another world, on the port in its world.json
 ```
 
@@ -36,13 +50,6 @@ A world can live in a repo of its own and be linked in as a folder: the relay fi
 with a `world.json`. See [Worlds](docs/manual/relay.html#worlds).
 `RELAY_KEY=pick-a-key npm run relay` still serves every world from one relay on 8787. See
 [One relay per world](docs/manual/relay.html#one-relay).
-
-Or let one command start the relay and open the page:
-
-```
-RELAY_KEY=pick-a-key npm run office        # the office, waiting for Claude Code
-RELAY_KEY=pick-a-key npm run office:demo   # the office, with pretend Claude Code sessions
-```
 
 To connect Claude Code to the room, see [office/README.md](office/README.md). Without the
 relay, serve the folder (`python3 -m http.server`) and open `office/`. The room works on its own,

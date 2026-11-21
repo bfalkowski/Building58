@@ -11,8 +11,9 @@ only for setting the room up.
 
 ## Run it
 
-Node 18 or later, `git`, and for the Claude Code panel `python3` and `claude` on your `PATH`.
-No packages to install.
+Node 18 or later, `git`, `python3`, Claude Code (`claude` on your `PATH`, logged in) and the GitHub
+CLI (`gh`, logged in). No packages to install. The full list, and what each is for, is in
+[the main README](../README.md#run-them).
 
 ```
 RELAY_KEY=pick-a-key npm run office
