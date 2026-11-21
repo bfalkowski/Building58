@@ -53,8 +53,14 @@ pageTest('someone sent to their desk ends their game, so the other player leaves
 pageTest('the trailer\'s ping pong cue clears a game already going, and Kai plays with a partner', get, async (p) => {
   await p.page.goto(o.address + '&trailer');
   await until(p, () => document.documentElement.dataset.trailer === 'playing');
-  // The trailer moves the room by its own clock, so the film is played forward here a step at a time.
-  await p.page.evaluate(() => { window.trailer.clock = 0; window.__to = 0; setInterval(() => { if (window.trailer.clock < window.__to) window.trailer.clock = Math.min(window.__to, window.trailer.clock + 0.05); }, 16); });
+  // The trailer moves the room by its own clock, so the film is played forward here one frame at a time,
+  // as npm run trailer does. The room takes at most 0.1 s of film a frame, so each step stays under that,
+  // and a slow computer only takes longer.
+  await p.page.evaluate(() => {
+    window.trailer.clock = 0; window.__to = 0;
+    const step = () => { if (window.trailer.clock < window.__to) window.trailer.clock = Math.min(window.__to, window.trailer.clock + 1 / 12); requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
   const playTo = (t) => p.page.evaluate((to) => { window.__to = to; }, t).then(() => until(p, (to) => window.trailer.clock >= to, t));
   await playTo(3);
   await until(p, () => { const d = window.run.debug('june'); return d && d.spot.startsWith('couch') && d.seated; });
@@ -63,7 +69,8 @@ pageTest('the trailer\'s ping pong cue clears a game already going, and Kai play
   await playTo(29.7);
   await atTable(p, 'sam', 'pp-w');
   await atTable(p, 'june', 'pp-e');
-  await playTo(31);
+  // The ping pong shot starts at 38.8 s, so by then Kai and a partner are at the table.
+  await playTo(38.8);
   await atTable(p, 'kai', 'pp-w');
   const partner = await p.page.evaluate(() => window.run.state().workers.find((w) => w.id !== 'kai' && w.doing === 'Playing ping pong').id);
   await atTable(p, partner, 'pp-e');
