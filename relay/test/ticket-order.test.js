@@ -72,13 +72,13 @@ test('the person changes a priority and the work order, and a session cannot', a
   assert.deepStrictEqual(await titles(), ['A', 'B', 'C', 'D', 'E', 'F']);
 
   // A new priority puts the ticket last in that group.
-  const p = await R.call('POST', '/tickets/' + ids.A + '/priority', { priority: 'normal' });
+  const p = await R.call('POST', '/tickets/' + ids.A + '/edit', { priority: 'normal' });
   assert.strictEqual(p.status, 200);
   assert.strictEqual(p.body.ticket.priority, 'normal');
   assert.deepStrictEqual(await titles(), ['B', 'C', 'D', 'E', 'A', 'F']);
-  assert.strictEqual((await R.call('POST', '/tickets/' + ids.F + '/priority', { priority: 'high' })).status, 200);
+  assert.strictEqual((await R.call('POST', '/tickets/' + ids.F + '/edit', { priority: 'high' })).status, 200);
   assert.deepStrictEqual(await titles(), ['B', 'F', 'C', 'D', 'E', 'A']);
-  assert.strictEqual((await R.call('POST', '/tickets/' + ids.F + '/priority', { priority: 'urgent' })).status, 400);
+  assert.strictEqual((await R.call('POST', '/tickets/' + ids.F + '/edit', { priority: 'urgent' })).status, 400);
 
   // A place above or below another ticket with the same priority.
   assert.strictEqual((await R.call('POST', '/tickets/' + ids.E + '/order', { before: ids.C })).status, 200);
@@ -101,7 +101,7 @@ test('the person changes a priority and the work order, and a session cannot', a
   const after = (await R.call('GET', '/tickets')).body.tickets;
   const open = (list) => list.filter((x) => x.id !== ids.D);
   assert.deepStrictEqual(open(after).map((x) => [x.id, x.rank, x.updatedAt]), open(before).map((x) => [x.id, x.rank, x.updatedAt]));
-  assert.strictEqual((await R.call('POST', '/tickets/' + ids.D + '/priority', { priority: 'high' })).status, 409, 'a rejected ticket');
+  assert.strictEqual((await R.call('POST', '/tickets/' + ids.D + '/edit', { priority: 'high' })).status, 409, 'a rejected ticket');
   assert.strictEqual((await R.call('POST', '/tickets/' + ids.C + '/order', { before: ids.D })).status, 409, 'next to a rejected ticket');
 
   // A session's token gets 403, and nothing changes.
@@ -109,7 +109,7 @@ test('the person changes a priority and the work order, and a session cannot', a
   const token = await H.until(() => { try { return H.sessionToken(worker.sessionId); } catch (e) { return null; } }, 'the session');
   const agent = { 'X-Office-Token': token };
   const shown = await titles();
-  assert.strictEqual((await R.call('POST', '/tickets/' + ids.C + '/priority', { priority: 'high' }, agent)).status, 403);
+  assert.strictEqual((await R.call('POST', '/tickets/' + ids.C + '/edit', { priority: 'high' }, agent)).status, 403);
   assert.strictEqual((await R.call('POST', '/tickets/' + ids.E + '/order', { before: ids.C }, agent)).status, 403);
   assert.deepStrictEqual(await titles(), shown);
 });

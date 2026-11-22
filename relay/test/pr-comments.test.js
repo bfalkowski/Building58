@@ -93,7 +93,7 @@ test('review comments reach the Dev', async (t) => {
     // A check already running when the answers changed can save the inline comment alone, and the next adds the review.
     await until(async () => { const p = (await get(task.id)).reviews.pending; return p && p.count === 2; }, 'both comments to be saved');
     // The COO's measures count these as comments, and the review that requested changes as blocking (relay/coo.js).
-    const q = (await R.call('GET', '/coo/measures')).body.measures.quality.prs.find((p) => p.pr === PR);
+    const q = (await R.call('GET', '/officers/coo/measures')).body.measures.quality.prs.find((p) => p.pr === PR);
     assert.strictEqual(q.blocking, 1);
     assert.ok(q.comments >= 2 && q.countedSince, JSON.stringify(q));
     await sleep(2500);

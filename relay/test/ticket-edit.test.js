@@ -177,3 +177,23 @@ test('who can edit a ticket, and in which state', async (t) => {
     assert.match(stray.stderr, /--title/);
   });
 });
+
+test('one edit changes several fields at once, and a request with one bad field changes none', async (t) => {
+  const R = await H.relay({});
+  t.after(R.stop);
+  const repo = H.makeRepo(R.home);
+  const id = (await R.call('POST', '/tickets', { title: 'Old title', repo, labels: ['flaky'] })).body.ticket.id;
+  const ticket = async () => (await R.call('GET', '/tickets/' + id)).body.ticket;
+  const one = await R.call('POST', '/tickets/' + id + '/edit', { title: 'New title', priority: 'high', kind: 'bug', labels: ['flaky', 'tests'], mark: 'hold' });
+  assert.strictEqual(one.status, 200, JSON.stringify(one.body));
+  assert.deepStrictEqual(one.body.edited.filter((k) => k !== 'replacedBy').sort(), ['kind', 'labels', 'mark', 'priority', 'title']);
+  const after = await ticket();
+  assert.deepStrictEqual([after.title, after.priority, after.kind, after.labels, after.mark], ['New title', 'high', 'bug', ['flaky', 'tests'], 'hold']);
+  const bad = await R.call('POST', '/tickets/' + id + '/edit', { title: 'Newer title', kind: 'docs', shapes: ['T-999'] });
+  assert.deepStrictEqual([bad.status, bad.body.error], [400, 'bad_shapes']);
+  const still = await ticket();
+  assert.deepStrictEqual([still.title, still.kind], ['New title', 'bug'], 'the good fields were not saved either');
+  assert.strictEqual((await R.call('POST', '/tickets/' + id + '/edit', { replacedBy: 'T-1' })).body.error, 'bad_mark', 'replacedBy goes with a mark');
+  const same = await R.call('POST', '/tickets/' + id + '/edit', { kind: 'bug', labels: ['tests', 'flaky'] });
+  assert.deepStrictEqual([same.status, same.body.unchanged, same.body.edited], [200, undefined, ['labels']], 'a label list in another order is a change of order');
+});

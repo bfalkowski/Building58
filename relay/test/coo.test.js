@@ -96,7 +96,7 @@ test('the measures for a few made-up tasks', async (t) => {
   await R.hook({ hook_event_name: 'Notification', session_id: sid, message: 'Claude needs your permission to use Bash' });
   await R.hook({ hook_event_name: 'PreToolUse', session_id: sid, tool_name: 'Bash' });
 
-  const r = await R.call('GET', '/coo/measures');
+  const r = await R.call('GET', '/officers/coo/measures');
   assert.strictEqual(r.status, 200);
   const m = r.body.measures;
   console.log(JSON.stringify(m, null, 2));  // what the COO reads, for the PR
@@ -185,9 +185,9 @@ test('Ask the COO: a session with its brief, that saves a report and gives back 
   const R = await relay({ RELAY_COO_GRACE_MS: '300' }, home);
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
 
-  const asked = await R.call('POST', '/coo/ask', {});
+  const asked = await R.call('POST', '/officers/coo/ask', {});
   assert.strictEqual(asked.status, 201, JSON.stringify(asked.body));
-  assert.strictEqual((await R.call('POST', '/coo/ask', {})).status, 409, 'one COO at a time');
+  assert.strictEqual((await R.call('POST', '/officers/coo/ask', {})).status, 409, 'one COO at a time');
   const coo = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === asked.body.terminal);
   assert.strictEqual(coo.role, 'coo');
   assert.strictEqual(coo.work.role, 'coo');
@@ -207,7 +207,7 @@ test('Ask the COO: a session with its brief, that saves a report and gives back 
   const env = { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: token['X-Office-Token'] };
   const fromCli = JSON.parse(execFileSync('node', [CLI, 'measures'], { env, encoding: 'utf8' }));
   assert.strictEqual(fromCli.measures.flow.merged, 7);
-  assert.strictEqual((await R.call('POST', '/coo/ask', {}, token)).status, 401);
+  assert.strictEqual((await R.call('POST', '/officers/coo/ask', {}, token)).status, 401);
   // It proposes only: its token lists tickets but cannot file one (review of PR 49).
   assert.strictEqual((await R.call('GET', '/tickets', null, token)).status, 200);
   assert.strictEqual((await R.call('POST', '/tickets', { title: 'From the COO' }, token)).status, 401);
@@ -216,12 +216,12 @@ test('Ask the COO: a session with its brief, that saves a report and gives back 
   assert.strictEqual((await R.call('POST', '/chat/office', { text: '@Lead hello' }, token)).status, 401);
   const other = (await R.call('POST', '/terminals', { cwd: home })).body;
   const otherToken = await tokenFor(other);
-  assert.strictEqual((await R.call('GET', '/coo/measures', null, otherToken)).status, 401);
-  assert.strictEqual((await R.call('POST', '/coo/report', { text: 'not mine' }, otherToken)).status, 401);
+  assert.strictEqual((await R.call('GET', '/officers/coo/measures', null, otherToken)).status, 401);
+  assert.strictEqual((await R.call('POST', '/officers/coo/report', { text: 'not mine' }, otherToken)).status, 401);
 
   const saved = execFileSync('node', [CLI, 'report'], { env, encoding: 'utf8', input: '# The room\n\nShipped: T-1, T-2, T-3.\n' });
   assert.match(saved, /Saved the report/);
-  const shown = (await R.call('GET', '/coo')).body;
+  const shown = (await R.call('GET', '/officers/coo')).body;
   assert.match(shown.report.text, /Shipped: T-1/);
   // By the person the relay gave the COO's session (relay/seats.js), as the page shows it.
   assert.strictEqual(shown.report.by, (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === coo.id).who);
@@ -232,15 +232,15 @@ test('Ask the COO: a session with its brief, that saves a report and gives back 
   await R.call('POST', '/terminals/' + coo.id + '/input', { data: '\x1b[I\x1b[O\x1b[12;40R' });
   await R.hook({ hook_event_name: 'Stop', session_id: coo.sessionId.slice(0, 12) });
   await until(async () => !(await R.call('GET', '/terminals')).body.terminals.some((x) => x.id === coo.id), 'the COO to leave');
-  assert.strictEqual((await R.call('GET', '/coo')).body.running, null);
+  assert.strictEqual((await R.call('GET', '/officers/coo')).body.running, null);
 
   // The next report compares with this one, and the report is still there after a restart.
   await R.kill();
   const again = await relay({}, home);
   t.after(async () => { await again.kill(); });
-  const back = (await again.call('GET', '/coo')).body;
+  const back = (await again.call('GET', '/officers/coo')).body;
   assert.match(back.report.text, /Shipped: T-1/);
-  const next = (await again.call('GET', '/coo/measures')).body;
+  const next = (await again.call('GET', '/officers/coo/measures')).body;
   assert.strictEqual(next.previous.at, back.report.at);
   assert.strictEqual(next.previous.load.hands, 3, 'the load the last report saw: T-3, T-6 and T-9 waited on you');
   assert.deepStrictEqual(next.previous.headline, { mergedAlone: 3, mergedAfterStuck: 1, mergedWithYou: 3, stuckMinutes: next.previous.headline.stuckMinutes }, 'the headline the last report saw');
@@ -253,11 +253,11 @@ test('Ask the COO: a session with its brief, that saves a report and gives back 
 test('a COO that the person talks to after its report stays', async (t) => {
   const R = await relay({ RELAY_COO_GRACE_MS: '200', NODE_OPTIONS: '--require ' + path.join(__dirname, 'coarse-clock.js') });
   t.after(() => R.stop());
-  const asked = (await R.call('POST', '/coo/ask', {})).body;
+  const asked = (await R.call('POST', '/officers/coo/ask', {})).body;
   const coo = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === asked.terminal);
   await until(async () => (await R.screen(coo.id)).includes('GOT['), 'the brief');
   const token = await tokenFor(coo);
-  assert.strictEqual((await R.call('POST', '/coo/report', { text: 'A report.' }, token)).status, 201);
+  assert.strictEqual((await R.call('POST', '/officers/coo/report', { text: 'A report.' }, token)).status, 201);
   await R.call('POST', '/terminals/' + coo.id + '/input', { data: 'why?\r' });
   await R.hook({ hook_event_name: 'Stop', session_id: coo.sessionId.slice(0, 12) });
   await new Promise((r) => setTimeout(r, 800));
@@ -280,7 +280,7 @@ test('a task Autopilot took back by itself after a stall is no wait on the perso
   fs.writeFileSync(path.join(home, '.office-world', 'tickets.json'), JSON.stringify({ t: { next: 2, tickets: [{ id: 'T-1', title: one.title, body: '', status: 'done', priority: 'normal', repo: '/nowhere', base: 'main', blockedBy: [], createdBy: 'you', createdAt: at(8), updatedAt: at(10) }] } }));
   const R = await relay({}, home);
   t.after(async () => { await R.kill(); await R.remove(); });
-  const run = (await R.call('GET', '/coo/measures')).body.measures.runs.find((x) => x.ticket === 'T-1');
+  const run = (await R.call('GET', '/officers/coo/measures')).body.measures.runs.find((x) => x.ticket === 'T-1');
   assert.deepStrictEqual(run.steps, [], 'Autopilot brought it back itself');
   assert.strictEqual(run.waitedOnYouMinutes, 0);
   assert.strictEqual(run.outcome, 'stuck');

@@ -8,6 +8,8 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { SCHEMAS, REQUESTS, RESPONSES, ref } = require('./api-schemas.js');
+const { tokenReaches } = require('./token-routes.js');
 
 const ROOT = path.join(__dirname, '..');
 const PAGE = path.join(ROOT, 'docs', 'manual', 'relay.html');
@@ -25,7 +27,8 @@ const PARAMS = {
   'rounds/id': { pattern: '^[0-9a-f]{8}$', description: 'The round\'s id.' },
   seat: { pattern: '^S\\d{1,2}$', description: 'The seat, such as S1.' },
   name: { pattern: '^[\\w-]{1,64}$', description: 'The chat channel\'s name.' },
-  pid: { pattern: '^\\d+$', description: 'The old relay\'s process id.' }
+  pid: { pattern: '^\\d+$', description: 'The old relay\'s process id.' },
+  role: { pattern: '^(coo|security)$', description: 'The officer: coo or security.' }
 };
 
 const text = (h) => h.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
@@ -35,14 +38,16 @@ function rows(html) {
   for (const id of ['calls', 'routes']) {
     const start = html.indexOf('<h2 id="' + id + '">');
     const body = html.slice(start, html.indexOf('</table>', start));
-    for (const m of body.matchAll(/<tr><td>(.*?)<\/td><td>(.*?)<\/td><\/tr>/g)) {
-      const head = text(m[1]), words = head.match(/^((?:GET|POST)(?:, (?:GET|POST))*) (\S.*)$/);
+    for (const m of body.matchAll(/<tr><td>(.*?)<\/td><td>(.*?)<\/td><td>(.*?)<\/td><\/tr>/g)) {
+      const head = text(m[2]), words = head.match(/^((?:GET|POST)(?:, (?:GET|POST))*) (\S.*)$/);
       if (!words) continue;
       const methods = words[1].split(', ');
       const [first, ...more] = words[2].split(', ');
       const stem = first.slice(0, first.lastIndexOf('/'));
       const paths = [first, ...more.map((p) => stem + p)].map((p) => p.replace(/<(\w+)>/g, '{$1}'));
-      for (const p of paths) for (const method of methods) out.push({ section: id, method, path: id === 'routes' ? '/channels/{channel}' + p : p, about: text(m[2]) });
+      const names = text(m[1]).split(', '), ops = paths.flatMap((p) => methods.map((method) => ({ method, p })));
+      if (names.length !== ops.length) throw new Error(head + ' in ' + MANUAL + ' has ' + names.length + ' names for ' + ops.length + ' operations.');
+      ops.forEach(({ method, p }, i) => out.push({ section: id, name: names[i], method, path: id === 'routes' ? '/channels/{channel}' + p : p, about: text(m[3]) }));
     }
   }
   return out;
@@ -56,22 +61,44 @@ function paramOf(name, full) {
   return { name, in: 'path', required: true, description: p.description, schema: { type: 'string', pattern: p.pattern } };
 }
 
+const ROLES = [
+  ['any session', { role: null }], ['a PM', { role: 'pm' }], ['a reviewer', { role: 'reviewer', reviewOf: 'pr' }],
+  ['the Lead', { lead: true }], ['a Lead you let move the board', { lead: true, board: true }], ['a Lead you let start tickets', { lead: true, starts: 1 }],
+  ['the COO', { role: 'coo' }], ['the security officer', { role: 'security' }]
+];
+const SAMPLE = { channel: 'c', page: '1', name: 'general', seat: 'S1', pid: '1' };
+const sample = (p) => p.replace(/\{(\w+)\}/g, (_, k) => (k === 'id' && /terminals\/\{id\}/.test(p) ? '000000000000' : k === 'id' && /tasks\/\{id\}|checkouts\/\{id\}/.test(p) ? '000000' : k === 'id' && /rounds\/\{id\}/.test(p) ? '00000000' : k === 'id' && /commands\/\{id\}/.test(p) ? '00000000-0000-0000-0000-000000000000' : k === 'id' ? 'T-1' : k === 'role' ? (p.includes('measures') || p.includes('report') ? null : 'coo') : SAMPLE[k]));
+function tokensOf(r) {
+  if (!r.path.startsWith('/channels/{channel}/')) return [];
+  const rest = r.path.slice('/channels/{channel}'.length), out = [];
+  for (const [who, agent] of ROLES) {
+    const roles = rest.includes('{role}') ? ['coo', 'security'] : [null];
+    if (roles.some((role) => tokenReaches(agent, r.method, (role ? rest.replace('{role}', role) : rest).replace(/\{\w+\}/g, (m) => sample(m)), false))) out.push(who);
+  }
+  if (tokenReaches({ role: null }, r.method, sample(rest), true)) out.push('a seat in a game round');
+  const covered = (who) => (out.includes('any session') && ['a PM', 'a reviewer', 'the Lead', 'a Lead you let move the board', 'a Lead you let start tickets'].includes(who))
+    || (out.includes('the Lead') && who.startsWith('a Lead you let'));
+  return out.filter((who) => !covered(who));
+}
+const words = (name) => name.replace(/([A-Z])/g, ' $1').toLowerCase().replace(/^./, (c) => c.toUpperCase()).replace(/\bpm\b/i, 'PM');
+
 function operation(r) {
   const parts = r.path.split('/').filter(Boolean), tag = r.path === '/health' ? 'relay' : parts[0] === 'channels' && parts[2] ? parts[2].replace(/[{}]/g, '') : 'channel';
+  const key = r.method + ' ' + r.path.replace('/channels/{channel}', ''), stream = /\/stream$/.test(r.path), tokens = tokensOf(r);
+  const success = stream ? { description: 'A stream of server-sent events, open until either side closes it.', content: { 'text/event-stream': { schema: { type: 'string' } } } }
+    : { description: 'Done.', content: { 'application/json': { schema: ref(RESPONSES[key] || 'Ok') } } };
   const op = {
     tags: [r.section === 'calls' ? 'calls' : tag],
-    summary: r.about.split(/(?<=\.) /)[0].slice(0, 120),
-    description: r.about + '\n\nFrom ' + MANUAL + '#' + r.section + '.',
-    operationId: (r.method.toLowerCase() + r.path.replace(/\{(\w+)\}/g, 'By-$1').replace(/[^\w]+(\w)/g, (_, c) => c.toUpperCase())).replace(/[^\w]/g, ''),
-    responses: {
-      '2XX': { description: 'Done. JSON with "ok": true, except for a stream, which is server-sent events.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Ok' } } } },
-      default: { $ref: '#/components/responses/Problem' }
-    }
+    summary: words(r.name),
+    description: r.about + (r.path === '/health' ? '' : '\n\nTokens: ' + (tokens.length ? 'the relay key, and the token of ' + tokens.join(', ') + '. A route a token reaches can still refuse it, as the description says.' : 'the relay key only.')) + '\n\nFrom ' + MANUAL + '#' + r.section + '.',
+    operationId: r.name,
+    'x-tokens': tokens,
+    responses: { '2XX': success, default: { $ref: '#/components/responses/Problem' } }
   };
   const params = [...r.path.matchAll(/\{(\w+)\}/g)].map((m) => paramOf(m[1], r.path));
   if (params.length) op.parameters = params;
   if (r.path === '/health') op.security = [];
-  if (r.method === 'POST') op.requestBody = { required: false, description: 'JSON. The fields are in the description.', content: { 'application/json': { schema: { type: 'object' } } } };
+  if (r.method === 'POST') op.requestBody = REQUESTS[key] ? { required: true, content: { 'application/json': { schema: ref(REQUESTS[key]) } } } : { required: false, description: 'JSON. The fields are in the description.', content: { 'application/json': { schema: { type: 'object' } } } };
   return op;
 }
 
@@ -102,10 +129,7 @@ function build(html) {
         relayKeyQuery: { type: 'apiKey', in: 'query', name: 'key', description: 'The relay key in the address, as the page sends it.' },
         sessionToken: { type: 'http', scheme: 'bearer', description: 'A session\'s own token, OFFICE_TICKET_TOKEN. It reaches only the routes its role needs: see ' + MANUAL + '#tokens.' }
       },
-      schemas: {
-        Ok: { type: 'object', required: ['ok'], properties: { ok: { const: true } }, additionalProperties: true },
-        Problem: { type: 'object', required: ['ok', 'error', 'message'], properties: { ok: { const: false }, error: { type: 'string', description: 'A short code, such as bad_param, unauthorized or not_found.' }, message: { type: 'string', description: 'What went wrong, in plain words.' } } }
-      },
+      schemas: SCHEMAS,
       responses: {
         Problem: { description: 'Refused. 400 for a bad body, 401 for no key, 403 for a key or token that may not, 404 for an unknown route or id, 409 for a state that does not allow it, 413 for a body over 256 KB, 429 for too soon, 503 and 504 when no page answers.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Problem' } } } }
       }

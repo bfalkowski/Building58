@@ -200,7 +200,7 @@ pageTest('the relay pushes a change to the room page\'s Board, which replaces on
   await page.evaluate((list) => list.forEach((id) => { document.querySelector('#board-cols li[data-ticket="' + id + '"]').mine = id; }), ids);
   asked.length = 0;  // the page asks once as it loads, before its stream is open
 
-  await o.R.call('POST', '/tickets/' + ids[1] + '/base', { base: 'other' });
+  await o.R.call('POST', '/tickets/' + ids[1] + '/edit', { base: 'other' });
   await until(p, (sel) => /base other/.test(document.querySelector(sel).textContent), cardOf(ids[1]));
   const marks = await page.evaluate((list) => list.map((id) => document.querySelector('#board-cols li[data-ticket="' + id + '"]').mine || null), ids);
   assert.deepStrictEqual(marks, [ids[0], null, ids[2]], 'only the changed card is a new element');

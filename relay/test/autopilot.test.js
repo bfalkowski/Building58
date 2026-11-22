@@ -200,7 +200,7 @@ test('a ticket filed before the merge and made a bug after it marks a fix after 
   const run = async () => (await R.call('GET', '/autopilot')).body.runs.recent.find((x) => x.task === 'a1b2c3');
   assert.deepStrictEqual([(await run()).fixAfter, (await run()).outcome], [null, 'success']);
   const before = new Date().toISOString();
-  assert.strictEqual((await R.call('POST', '/tickets/' + early.id + '/kind', { kind: 'bug' })).status, 200);
+  assert.strictEqual((await R.call('POST', '/tickets/' + early.id + '/edit', { kind: 'bug' })).status, 200);
   const after = new Date().toISOString();
   const marked = await run();
   assert.strictEqual(marked.fixAfter.ticket, early.id);

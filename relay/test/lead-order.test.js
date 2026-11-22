@@ -48,7 +48,7 @@ test('the Lead sets priority and order only with the switch on, only in Triage o
   // A worker files one, which waits in Triage.
   ids.T = (await R.call('POST', '/tickets', { title: 'In triage', priority: 'normal' }, workerT)).body.ticket.id;
   const ticket = async (id) => (await R.call('GET', '/tickets/' + id)).body.ticket;
-  const prio = (id, priority, who) => R.call('POST', '/tickets/' + id + '/priority', { priority }, who);
+  const prio = (id, priority, who) => R.call('POST', '/tickets/' + id + '/edit', { priority }, who);
   const order = (id, where, who) => R.call('POST', '/tickets/' + id + '/order', where, who);
   const titles = async () => (await R.call('GET', '/tickets')).body.tickets.map((x) => x.title);
 
@@ -99,7 +99,7 @@ test('the Lead sets priority and order only with the switch on, only in Triage o
   await t.test('on: the switch does not let the Lead move, start or rebase a ticket', async () => {
     assert.strictEqual((await R.call('POST', '/tickets/' + ids.T + '/move', { to: 'ready' }, leadT)).status, 401);
     assert.strictEqual((await R.call('POST', '/tickets/' + ids.A + '/start', {}, leadT)).status, 401);
-    assert.strictEqual((await R.call('POST', '/tickets/' + ids.A + '/base', { base: 'main' }, leadT)).status, 401);
+    assert.strictEqual((await R.call('POST', '/tickets/' + ids.A + '/edit', { base: 'main' }, leadT)).status, 403);
     assert.strictEqual((await ticket(ids.T)).status, 'triage');
     assert.strictEqual((await ticket(ids.A)).status, 'ready');
   });
@@ -133,11 +133,11 @@ test('the Lead sets priority and order only with the switch on, only in Triage o
     assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: worker.id })).status, 200);
     const old = await prio(ids.B, 'low', leadT);
     assert.strictEqual(old.status, 403, 'the old Lead');
-    assert.match(old.body.message, /^Only the person sets a ticket's priority/, 'the old Lead is told it is not its to set');
+    assert.match(old.body.message, /^Only the person, the PM and the Lead edit a ticket\./, 'the old Lead is told it is not its to set');
     const env = { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: leadT['X-Office-Token'] };
     const before = await ticket(ids.B);
     assert.throws(() => execFileSync('node', [path.join(H.ROOT, 'relay', 'ticket.js'), 'priority', ids.B, 'low'], { env, encoding: 'utf8', stdio: 'pipe' }),
-      (e) => /Only the person sets a ticket's priority/.test(String(e.stderr) + String(e.stdout)), 'ticket.js priority from the old Lead');
+      (e) => /Only the person, the PM and the Lead edit a ticket\./.test(String(e.stderr) + String(e.stdout)), 'ticket.js priority from the old Lead');
     const after = await ticket(ids.B);
     assert.deepStrictEqual([after.priority, after.orderedBy], [before.priority, before.orderedBy], 'the old Lead changed nothing');
     assert.strictEqual((await prio(ids.B, 'low', workerT)).status, 200, 'the new Lead');

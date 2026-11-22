@@ -12,6 +12,8 @@ delete process.env.RELAY_KEY; delete process.env.RELAY_KEY_RANDOM;
 
 const http = require('http');
 const fs = require('fs');
+const api = require('./api-schemas.js');
+const { tokenReaches } = require('./token-routes.js');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -226,27 +228,14 @@ async function handle(req, res) {
   }
 
   const agent = authorized(req, url) || !office ? null : office.terminal.agentFor(req);
-  const proposer = agent && (agent.role === 'coo' || agent.role === 'security');
   const seat = !!(agent && office.games.isSeat(agent));
   const plays = req.method === 'POST' && m[2] === '/play';
-  const tokenMay = agent && agent.channel === m[1] && (plays || (seat ? req.method === 'POST' && (m[2] === '/commands' || m[2] === '/terminals/context') : ((m[2] === '/tickets' && !(proposer && req.method !== 'GET')) || (!proposer && /^\/chat(\/[\w-]{1,64})?$/.test(m[2] || '')) || (agent.lead && req.method === 'GET' && m[2] === '/floor') ||
-    (agent.board && ((req.method === 'GET' && m[2] === '/tasks') || (req.method === 'POST' && (m[2] === '/floor/stop' || /^\/(tasks|tickets)\/[^/]+\/move$/.test(m[2] || ''))))) ||
-    (agent.lead && agent.starts > 0 && req.method === 'POST' && /^\/tickets\/[^/]+\/start$/.test(m[2] || '')) ||
-    (agent.lead && req.method === 'POST' && m[2] === '/ready') ||
-    (agent.role === 'coo' && ((req.method === 'GET' && m[2] === '/coo/measures') || (req.method === 'POST' && m[2] === '/coo/report'))) ||
-    (agent.role === 'security' && ((req.method === 'GET' && m[2] === '/security/measures') || (req.method === 'POST' && m[2] === '/security/report'))) ||
-    ((agent.role === 'reviewer' || !!agent.reviewOf) && req.method === 'POST' && m[2] === '/autopilot/verdict') ||
-    ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) ||
-    ((agent.role === 'pm' || agent.lead) && req.method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(edit|propose)$/.test(m[2] || '')) ||
-    (agent.lead && req.method === 'POST' && m[2] === '/reviews/lead') ||
-    (agent.lead && req.method === 'POST' && m[2] === '/autopilot/fix') ||
-    (req.method === 'POST' && m[2] === '/terminals/context') ||
-    (req.method === 'POST' && m[2] === '/commands'))));
+  const tokenMay = agent && agent.channel === m[1] && tokenReaches(agent, req.method, m[2] || '', seat);
   if (!authorized(req, url) && !tokenMay && (seat || (office && plays))) { problem(res, 403, 'forbidden', seat ? 'A seat in a round only plays, with node "$OFFICE_PLAY".' : 'Only a seat in the round that runs can play.'); return; }
-  if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(priority|order)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.'); return; }
+  if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/order$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person, the PM and the Lead edit a ticket.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/propose$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the PM and the Lead propose to replace, merge or close a ticket, or to change its blockers. File a ticket instead.'); return; }
-  if (!authorized(req, url) && agent && agent.role === 'pm' && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(move|start|base|kind)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'The PM does not move or start a ticket, or change its base or kind. It edits the title and body of tickets in Triage or Ready, and with Let the PM set the order on, their priority and place.'); return; }
+  if (!authorized(req, url) && agent && agent.role === 'pm' && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(move|start)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'The PM does not move or start a ticket, or change its base or kind. It edits the title and body of tickets in Triage or Ready, and with Let the PM set the order on, their priority and place.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && m[2] === '/floor') { problem(res, 401, 'unauthorized', 'Only the Lead can read the floor.'); return; }
   if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : (givenKey(req, url) ? 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>.')); return; }
   let name = '';
@@ -256,7 +245,12 @@ async function handle(req, res) {
   const ch = channel(name);
 
   try {
-    const ctx = { port: PORT, key: KEY, agent, send, problem, readJson, log, command: (c, cmd) => sendCommand(channel(c), cmd) };
+    const asked = api.requestSchema(req.method, rest);
+    const body = asked ? await readJson(req) : undefined;
+    const wrong = asked ? api.check(asked.schema, body, { typesOnly: true }) : [];
+    if (wrong.length) { problem(res, 400, 'bad_type', wrong[0]); return; }
+    const bodyOf = asked ? () => Promise.resolve(body) : readJson;
+    const ctx = { port: PORT, key: KEY, agent, send, problem, readJson: bodyOf, log, command: (c, cmd) => sendCommand(channel(c), cmd) };
     for (const part of ROUTES) if (await part.handle(req, res, name, rest, ctx)) return;
     if (req.method === 'GET' && rest === '') {
       send(res, 200, { ok: true, channel: name, pagesConnected: ch.pages.length, pagesVisible: visibleCount(ch), lastSeen: ch.lastSeen,
@@ -291,8 +285,7 @@ async function handle(req, res) {
     }
 
     if (req.method === 'POST' && rest === '/commands') {
-      const body = await readJson(req);
-      const command = Object.assign({}, body);
+      const command = Object.assign({}, await bodyOf(req));
       const wait = command.wait !== undefined ? command.wait !== false && command.wait !== 'false' : url.searchParams.get('wait') !== 'false';
       const timeout = Math.min(120, Math.max(1, Number(command.timeout || url.searchParams.get('timeout') || 30)));
       delete command.wait; delete command.timeout;

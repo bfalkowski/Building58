@@ -274,7 +274,7 @@ async function main() {
     return 0;
   }
   if (cmd === 'measures') {
-    const r = await (await fetch(URL_.replace(/\/tickets$/, '/coo/measures'), { headers })).json();
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/officers/coo/measures'), { headers })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log(JSON.stringify({ measures: r.measures, previous: r.previous }, null, 2));
     return 0;
@@ -282,13 +282,13 @@ async function main() {
   if (cmd === 'report') {
     let text = '';
     for await (const chunk of process.stdin) text += chunk;
-    const r = await (await fetch(URL_.replace(/\/tickets$/, '/coo/report'), { method: 'POST', headers, body: JSON.stringify({ text }) })).json();
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/officers/coo/report'), { method: 'POST', headers, body: JSON.stringify({ text }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log('Saved the report (' + r.report.id + '). The room shows it, and ends this session once this turn ends.');
     return 0;
   }
   if (cmd === 'access') {
-    const r = await (await fetch(URL_.replace(/\/tickets$/, '/security/measures'), { headers })).json();
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/officers/security/measures'), { headers })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log(JSON.stringify({ measures: r.measures, previous: r.previous }, null, 2));
     return 0;
@@ -296,7 +296,7 @@ async function main() {
   if (cmd === 'access-report') {
     let text = '';
     for await (const chunk of process.stdin) text += chunk;
-    const r = await (await fetch(URL_.replace(/\/tickets$/, '/security/report'), { method: 'POST', headers, body: JSON.stringify({ text }) })).json();
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/officers/security/report'), { method: 'POST', headers, body: JSON.stringify({ text }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log('Saved the report (' + r.report.id + '). The room shows it, and ends this session once this turn ends.');
     return 0;
@@ -323,7 +323,7 @@ async function main() {
     return 0;
   }
   if (cmd === 'priority' && args[0] && args[1]) {
-    const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/priority', { method: 'POST', headers, body: JSON.stringify({ priority: args[1] }) })).json();
+    const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/edit', { method: 'POST', headers, body: JSON.stringify({ priority: args[1] }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log((r.unchanged ? 'Already ' + r.ticket.priority + ', nothing changed: ' : 'Priority: ') + r.ticket.id + '  ' + r.ticket.priority + '  ' + r.ticket.title);
     return 0;

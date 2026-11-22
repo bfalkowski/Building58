@@ -78,7 +78,7 @@
     const input = document.createElement('input'); input.type = 'text'; input.value = editingBase.get(t.id); input.setAttribute('aria-label', 'Base branch for ' + t.id); input.spellcheck = false;
     input.addEventListener('input', () => editingBase.set(t.id, input.value));
     const save = document.createElement('button'); save.type = 'submit'; save.className = 'btn primary'; save.textContent = 'Save';
-    f.addEventListener('submit', (ev) => { ev.preventDefault(); act(t, 'base', { base: input.value }, () => editingBase.delete(t.id)); });
+    f.addEventListener('submit', (ev) => { ev.preventDefault(); act(t, 'edit', { base: input.value }, () => editingBase.delete(t.id)); });
     f.append(input, save, button('Cancel', false, () => { editingBase.delete(t.id); last = ''; redraw(); }));
     return f;
   }
@@ -116,7 +116,7 @@
     const input = document.createElement('input'); input.type = 'text'; input.value = editingKind.get(t.id); input.setAttribute('list', kindList.id); input.placeholder = 'docs, tests, bug, feature'; input.setAttribute('aria-label', 'Kind of ' + t.id); input.spellcheck = false;
     input.addEventListener('input', () => editingKind.set(t.id, input.value));
     const save = document.createElement('button'); save.type = 'submit'; save.className = 'btn primary'; save.textContent = 'Save';
-    f.addEventListener('submit', (ev) => { ev.preventDefault(); act(t, 'kind', { kind: input.value }, () => editingKind.delete(t.id)); });
+    f.addEventListener('submit', (ev) => { ev.preventDefault(); act(t, 'edit', { kind: input.value }, () => editingKind.delete(t.id)); });
     f.append(input, save, button('Cancel', false, () => { editingKind.delete(t.id); last = ''; redraw(); }));
     return f;
   }
@@ -128,7 +128,7 @@
     input.placeholder = labelsInUse.length ? 'In use: ' + labelsInUse.join(', ') : 'Words with commas between, like flaky, follow-up';
     input.addEventListener('input', () => editingLabels.set(t.id, input.value));
     const save = document.createElement('button'); save.type = 'submit'; save.className = 'btn primary'; save.textContent = 'Save';
-    f.addEventListener('submit', (ev) => { ev.preventDefault(); act(t, 'labels', { labels: input.value.split(',').map((x) => x.trim()).filter(Boolean) }, () => editingLabels.delete(t.id)); });
+    f.addEventListener('submit', (ev) => { ev.preventDefault(); act(t, 'edit', { labels: input.value.split(',').map((x) => x.trim()).filter(Boolean) }, () => editingLabels.delete(t.id)); });
     f.append(input, save, button('Cancel', false, () => { editingLabels.delete(t.id); last = ''; redraw(); }));
     return f;
   }
@@ -142,8 +142,8 @@
     f.append(input, save, button('Cancel', false, () => { edits.delete(t.id); last = ''; redraw(); }));
     return f;
   }
-  const replacedForm = (t) => idsForm(t, markingReplaced, 'Ticket that replaces ' + t.id, 'The ticket that replaces it, like T-12, or leave it empty', 'Mark replaced', (ids, then) => act(t, 'mark', { mark: 'replaced', replacedBy: ids[0] || null }, then));
-  const shapesForm = (t) => idsForm(t, editingShapes, 'Tickets ' + t.id + ' shapes', 'Ids with commas between, like T-7, T-9', 'Save', (ids, then) => act(t, 'shapes', { shapes: ids }, then));
+  const replacedForm = (t) => idsForm(t, markingReplaced, 'Ticket that replaces ' + t.id, 'The ticket that replaces it, like T-12, or leave it empty', 'Mark replaced', (ids, then) => act(t, 'edit', { mark: 'replaced', replacedBy: ids[0] || null }, then));
+  const shapesForm = (t) => idsForm(t, editingShapes, 'Tickets ' + t.id + ' shapes', 'Ids with commas between, like T-7, T-9', 'Save', (ids, then) => act(t, 'edit', { shapes: ids }, then));
   const markingDone = new Map();
   function doneForm(t) {
     const f = document.createElement('form'); f.className = 'card-actions';
@@ -188,7 +188,7 @@
     const at = same.findIndex((x) => x.id === t.id), up = same[at - 1], down = same[at + 1];
     const pick = document.createElement('select'); pick.setAttribute('aria-label', 'Priority of ' + t.id);
     for (const p of PRIORITIES) { const o = document.createElement('option'); o.value = p; o.textContent = p; o.selected = p === (t.priority || 'normal'); pick.append(o); }
-    pick.addEventListener('change', () => { pick.blur(); act(t, 'priority', { priority: pick.value }); });
+    pick.addEventListener('change', () => { pick.blur(); act(t, 'edit', { priority: pick.value }); });
     const upB = button('Up', false, () => act(t, 'order', { before: up.id })); upB.disabled = !up; if (up) upB.dataset.past = up.id; upB.setAttribute('aria-label', 'Move ' + t.id + ' up');
     const downB = button('Down', false, () => act(t, 'order', { after: down.id })); downB.disabled = !down; if (down) downB.dataset.past = down.id; downB.setAttribute('aria-label', 'Move ' + t.id + ' down');
     return [pick, upB, downB];
@@ -232,8 +232,8 @@
     if ((t.status === 'triage' || t.status === 'ready') && !editingBase.has(t.id)) row.append(button('Change base', false, () => { editingBase.set(t.id, t.base || ''); last = ''; redraw(); }));
     if ((t.status === 'triage' || t.status === 'ready') && !editingKind.has(t.id)) row.append(button('Change kind', false, () => { editingKind.set(t.id, t.kind || ''); last = ''; redraw(); }));
     if (!editingLabels.has(t.id)) row.append(button('Labels', false, () => { editingLabels.set(t.id, M.labelsOf(t).join(', ')); last = ''; redraw(); }));
-    if ((t.status === 'triage' || t.status === 'ready') && t.mark) row.append(button(t.mark === 'hold' ? 'Take off hold' : 'Not replaced', false, () => act(t, 'mark', { mark: null })));
-    if ((t.status === 'triage' || t.status === 'ready') && !t.mark) row.append(button('Hold', false, () => act(t, 'mark', { mark: 'hold' })));
+    if ((t.status === 'triage' || t.status === 'ready') && t.mark) row.append(button(t.mark === 'hold' ? 'Take off hold' : 'Not replaced', false, () => act(t, 'edit', { mark: null })));
+    if ((t.status === 'triage' || t.status === 'ready') && !t.mark) row.append(button('Hold', false, () => act(t, 'edit', { mark: 'hold' })));
     if ((t.status === 'triage' || t.status === 'ready') && !t.mark && !markingReplaced.has(t.id)) row.append(button('Replaced', false, () => { markingReplaced.set(t.id, ''); last = ''; redraw(); }));
     if (['triage', 'ready', 'started'].includes(t.status) && !editingShapes.has(t.id)) row.append(button('Shapes', false, () => { editingShapes.set(t.id, (t.shapes || []).join(', ')); last = ''; redraw(); }));
     if ((t.status === 'triage' || t.status === 'ready') && !markingDone.has(t.id)) row.append(button('Merged elsewhere', false, () => { markingDone.set(t.id, ''); last = ''; redraw(); }));

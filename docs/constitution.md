@@ -807,7 +807,8 @@ change to the API says so, and work that changes the API in one area is filed as
 
 *Enforced by:* `relay/test/openapi.test.js`, in `npm test` and in CI's checks of a docs-only pull
 request. It fails when `docs/openapi.json` is not what `npm run openapi` builds from the manual,
-when a route in it does not answer on a real relay, and when it changed since the merge base with
+when a route in it does not answer on a real relay, when a real answer does not fit its schema in
+`relay/api-schemas.js`, when a request that breaks its schema is not refused, and when it changed since the merge base with
 main without a newer version, or the version changed with no change to the API. A new route the
 manual leaves out is left to review, as is whether a change is MAJOR, MINOR or PATCH, and grouping.
 

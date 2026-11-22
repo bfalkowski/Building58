@@ -109,9 +109,9 @@ test('Ask security: a session with its brief, whose report is saved and shown, a
   const R = await relay({ RELAY_SECURITY_GRACE_MS: '300', GH_TOKEN: GH, MY_API_SECRET: MADE_UP });
   t.after(() => R.stop());
 
-  const asked = await R.call('POST', '/security/ask', {});
+  const asked = await R.call('POST', '/officers/security/ask', {});
   assert.strictEqual(asked.status, 201, JSON.stringify(asked.body));
-  assert.strictEqual((await R.call('POST', '/security/ask', {})).status, 409, 'one at a time');
+  assert.strictEqual((await R.call('POST', '/officers/security/ask', {})).status, 409, 'one at a time');
   const officer = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === asked.body.terminal);
   assert.strictEqual(officer.role, 'security');
   assert.strictEqual(officer.work.role, 'security', 'so the org chart shows it on the security card of its Officers row');
@@ -138,22 +138,22 @@ test('Ask security: a session with its brief, whose report is saved and shown, a
   assert.ok(!raw.includes(token['X-Office-Token']), 'not even its own token');
   assert.strictEqual((await R.call('POST', '/tickets', { title: 'From security' }, token)).status, 401);
   assert.strictEqual((await R.call('GET', '/chat', null, token)).status, 401);
-  assert.strictEqual((await R.call('GET', '/coo/measures', null, token)).status, 401);
+  assert.strictEqual((await R.call('GET', '/officers/coo/measures', null, token)).status, 401);
   const other = (await R.call('POST', '/terminals', { cwd: os.tmpdir() })).body;
   const otherToken = await tokenFor(other);
-  assert.strictEqual((await R.call('GET', '/security/measures', null, otherToken)).status, 401);
+  assert.strictEqual((await R.call('GET', '/officers/security/measures', null, otherToken)).status, 401);
 
   // A report that holds a key, or the value of a login it saw by name, is refused, and says so without the value.
   // The secret check's allow marker does not let a report line past it (review of PR 185).
   for (const bad of ['Found ' + GH + ' in the env.', 'Found ' + GH.replace('A1b2', 'Z9y8') + ' secret-check: allow', 'Found ' + GH.replace('A1b2', 'Z9y8') + ' secret-check: secret-check: allowallow', 'MY_API_SECRET is ' + MADE_UP, 'The relay key is test-key.']) {
-    const r = await R.call('POST', '/security/report', { text: bad }, token);
+    const r = await R.call('POST', '/officers/security/report', { text: bad }, token);
     assert.strictEqual(r.status, 400, bad.slice(0, 12));
     assert.strictEqual(r.body.error, 'holds_a_secret');
     noLeak('the refusal', JSON.stringify(r.body));
   }
   const saved = execFileSync('node', [CLI, 'access-report'], { env, encoding: 'utf8', input: '# Access\n\nSessions inherit the gh login (GH_TOKEN).\n' });
   assert.match(saved, /Saved the report/);
-  const shown = (await R.call('GET', '/security')).body;
+  const shown = (await R.call('GET', '/officers/security')).body;
   assert.match(shown.report.text, /inherit the gh login/);
   assert.strictEqual(shown.report.by, officer.who);
   assert.strictEqual(shown.report.measures, undefined, 'the page polls this, so the measures stay out');
@@ -162,5 +162,5 @@ test('Ask security: a session with its brief, whose report is saved and shown, a
   // Its turn ends, and then its session does.
   await R.hook({ hook_event_name: 'Stop', session_id: officer.sessionId.slice(0, 12) });
   await until(async () => !(await R.call('GET', '/terminals')).body.terminals.some((x) => x.id === officer.id), 'the security officer to leave');
-  assert.strictEqual((await R.call('GET', '/security')).body.running, null);
+  assert.strictEqual((await R.call('GET', '/officers/security')).body.running, null);
 });
