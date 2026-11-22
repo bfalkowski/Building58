@@ -1,0 +1,7 @@
+node_modules
+.worktrees
+test-results
+trailer*.mp4
+trailer-*.png
+.env
+.DS_Store
