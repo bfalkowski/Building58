@@ -1,0 +1,71 @@
+name: Release image
+
+# On a version tag such as v0.7.0, build the room's image (Dockerfile) for arm64 and amd64, run the
+# container smoke test (docker/smoke.sh) on it first, and only then publish it to
+# ghcr.io/bfalkowski/building58 as 0.7.0, 0.7 and latest. Run by hand (Actions, Release image, Run
+# workflow), it builds and tests, and publishes nothing.
+#
+# The image copies .git, so a room can update itself from its first start. So the checkout keeps no
+# credentials, and none reach the image. docker/start.sh puts a room built from a tag on main.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    name: build, test and publish the image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: No credentials in the copy the image takes
+        run: |
+          if git config --local --get-regexp 'http\..*extraheader|credential' ; then echo "The checkout kept credentials."; exit 1; fi
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Build for this runner, to test
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: building58:local
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test
+        run: sh docker/smoke.sh building58:local
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/building58
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          flavor: latest=auto
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish for arm64 and amd64
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha

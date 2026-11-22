@@ -3,8 +3,10 @@
 # See docs/manual/running.html#container.
 services:
   room:
+    # The published image, made and tested by .github/workflows/release.yml. To build it from this
+    # folder instead: docker compose up -d --build. BUILDING58_VERSION picks a release, such as 0.7.0.
+    image: ghcr.io/bfalkowski/building58:${BUILDING58_VERSION:-latest}
     build: .
-    image: building58:local
     env_file: .env
     environment:
       PORT: ${ROOM_PORT:-8787}

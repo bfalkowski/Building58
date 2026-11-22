@@ -14,6 +14,11 @@ if [ ! -e "$APP/.git" ]; then
   fi
   cp -a "$SEED/." "$APP/"
   git -C "$APP" remote set-url origin "${BUILDING58_REPO:-https://github.com/bfalkowski/Building58.git}"
+  # An image built from a release tag holds no branch, and Update works only on main. A release is a
+  # commit of main, so start main there, following origin's main.
+  if ! git -C "$APP" symbolic-ref -q HEAD >/dev/null; then git -C "$APP" checkout -q -B main; fi
+  git -C "$APP" config branch.main.remote origin
+  git -C "$APP" config branch.main.merge refs/heads/main
   echo "Copied Building58 into $APP."
 fi
 
