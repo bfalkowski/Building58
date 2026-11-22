@@ -23,6 +23,7 @@ if [ -z "${RELAY_KEY:-}" ]; then
 fi
 
 cd "$APP"
+node relay/container-setup.js
 # The room's own sessions report with their own token, so the hooks need no key. Every session can
 # read ~/.claude/settings.json, so the real key stays out of it, and the hooks get a placeholder.
 env -u RELAY_KEY OFFICE_RELAY_KEY=sessions-use-their-token node relay/office-hook.js --install >/dev/null
