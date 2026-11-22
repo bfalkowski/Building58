@@ -19,6 +19,12 @@
 //      again and goes on where it stopped, with no ticket filed twice.
 //   4. Blockers are set by their new issue numbers. A blocker that is closed is left out, since it no
 //      longer blocks, and so is one that did not move.
+//
+//   node relay/move-tickets.js --to owner/repo --refolder <old folder> --folder <new folder> [--state <folder>] [--dry-run]
+//
+// Changes the repo folder of each open ticket in those issues from the old folder to the new one, as when
+// a room moves into a container and the repo moves from /Users/me/code/repo/app to /home/node/repos/app.
+// A ticket worked in another folder is left as it is.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -78,15 +84,30 @@ async function move(o) {
   return { moved: Object.keys(moved.map).length, closed: closed.length, linked, map: moved.map };
 }
 
+async function refolder(o) {
+  const all = await o.store.list(o.channel);
+  const hits = all.filter((t) => OPEN.includes(t.status) && t.repo === o.from);
+  if (!o.dryRun) for (const t of hits) { await o.store.update(o.channel, t.id, { repo: o.to }); if (o.pauseMs) await new Promise((r) => setTimeout(r, o.pauseMs)); }
+  return { changed: hits.map((t) => t.id), open: all.filter((t) => OPEN.includes(t.status)).length };
+}
+
 function cli(argv) {
   const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
   const to = opt('--to'), stateDir = path.resolve(opt('--state', path.join(os.homedir(), '.office-world'))), channel = opt('--channel', 'office');
   const folder = opt('--folder') ? path.resolve(opt('--folder')) : null;
   if (!to || !/^[\w.-]+\/[\w.-]+$/.test(to)) { console.error('Usage: node relay/move-tickets.js --to owner/repo [--state <folder>] [--channel office] [--folder <repo folder>] [--dry-run]'); process.exit(2); }
+  const store = require('./ticket-stores/github.js').open({ repo: channel + '=' + to, keyFile: path.join(stateDir, 'github-store.key'), folder: folder || undefined, cacheMs: 0 });
+  if (opt('--refolder')) {
+    if (!folder) { console.error('Say the new folder with --folder.'); process.exit(2); }
+    const from = opt('--refolder'), dryRun = argv.includes('--dry-run');
+    refolder({ store, channel, from, to: folder, dryRun, pauseMs: 500 }).then((r) => {
+      console.log((dryRun ? 'Dry run, nothing written. ' : '') + r.changed.length + ' of ' + r.open + ' open tickets in ' + to + (dryRun ? ' would move' : ' moved') + ' from ' + from + ' to ' + folder + '.');
+    }, (e) => { console.error('Stopped: ' + e.message + '\nRun it again: tickets already changed are skipped.'); process.exit(1); });
+    return;
+  }
   const file = path.join(stateDir, 'tickets.json');
   const data = JSON.parse(fs.readFileSync(file, 'utf8'));
   const tickets = (data[channel] && data[channel].tickets) || [];
-  const store = require('./ticket-stores/github.js').open({ repo: channel + '=' + to, keyFile: path.join(stateDir, 'github-store.key'), folder: folder || undefined, cacheMs: 0 });
   move({ tickets, store, channel, to, folder, dryRun: argv.includes('--dry-run'), pauseMs: 1000, closedFile: path.join(stateDir, 'tickets-closed.json'), movedFile: path.join(stateDir, 'tickets-moved.json'), say: console.log }).then((r) => {
     if (r.stopped === 'secrets') { console.error('Stopped before writing anything. These tickets look like they hold a secret:'); for (const h of r.hits) console.error('  ' + h.id + ': ' + h.what); process.exit(1); }
     if (r.dryRun) { console.log('Dry run, nothing written. From ' + file + ', channel ' + channel + ':'); console.log('  ' + r.open + ' open tickets would become issues in ' + to + (folder ? ', worked in ' + folder : '') + '.'); console.log('  ' + r.started.length + ' started (' + r.started.join(', ') + ') would come over as ready.'); console.log('  ' + r.blocked + ' have blockers, set again by issue number.'); console.log('  ' + r.closed + ' closed tickets would be saved to ' + path.join(stateDir, 'tickets-closed.json') + '.'); console.log('  The secret check found nothing.'); return; }
@@ -95,4 +116,4 @@ function cli(argv) {
 }
 
 if (require.main === module) cli(process.argv.slice(2));
-module.exports = { move, secretsIn, fieldsOf };
+module.exports = { move, refolder, secretsIn, fieldsOf };

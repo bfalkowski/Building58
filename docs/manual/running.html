@@ -265,6 +265,7 @@ docker compose up -d</code></pre>
     <li>Blockers are set by their new issue numbers. A blocker that is closed is left out, since it no longer blocks, and so is one that did not move.</li>
   </ol>
   <p>The issues are signed with <code>github-store.key</code> in that state folder, so start the room on the same folder, with <code>RELAY_TICKET_STORE</code> and <code>RELAY_TICKET_REPO</code> as above. Text in a ticket that names another ticket, such as <code>T-12</code>, keeps the old name: <code>tickets-moved.json</code> says which issue it became.</p>
+  <p id="refolder"><b>When the repo moves.</b> Each ticket keeps the folder it is worked in. When a room moves, as into a container, where <code>/Users/me/code/repo/app</code> becomes <code>/home/node/repos/app</code>, run <code>node relay/move-tickets.js --to owner/repo --refolder /Users/me/code/repo/app --folder /home/node/repos/app</code>, with <code>--state</code> for the room's state folder, whose key signs the issues. It changes the folder of each open ticket that had the old one, and leaves the rest. <code>--dry-run</code> says how many it would change. A run that stops can be run again: tickets already changed no longer match.</p>
 
 <h2 id="messages">Common messages, and what to do</h2>
   <table>

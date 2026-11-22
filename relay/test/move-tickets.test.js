@@ -7,7 +7,7 @@ const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 const github = require('../ticket-stores/github.js');
-const { move, fieldsOf } = require('../move-tickets.js');
+const { move, refolder, fieldsOf } = require('../move-tickets.js');
 
 const fakeGh = path.join(__dirname, 'fake-github.js');
 function setup() {
@@ -68,5 +68,22 @@ test('a dry run writes nothing', async () => {
   assert.deepStrictEqual([r.open, r.closed, r.started], [1, 1, ['T-1']]);
   assert.ok(!fs.existsSync(path.join(d, 'state.json')) && !fs.existsSync(base.closedFile) && !fs.existsSync(base.movedFile));
   assert.deepStrictEqual(Object.keys(fieldsOf(t('T-1', 'ready'), null)).sort(), ['base', 'body', 'createdBy', 'priority', 'repo', 'status', 'title']);
+  fs.rmSync(d, { recursive: true, force: true });
+});
+
+test('refolder moves the open tickets of one folder to another, and leaves the rest', async () => {
+  const { d, store } = setup();
+  const a = await store.create('office', { title: 'A', status: 'ready', repo: '/Users/me/app' });
+  const b = await store.create('office', { title: 'B', status: 'ready', repo: '/Users/me/other' });
+  const c = await store.create('office', { title: 'C', status: 'ready', repo: '/Users/me/app' });
+  await store.update('office', c.id, { status: 'done' });
+  const dry = await refolder({ store, channel: 'office', from: '/Users/me/app', to: '/home/node/repos/app', dryRun: true });
+  assert.deepStrictEqual(dry.changed, [a.id]);
+  assert.strictEqual((await store.get('office', a.id)).repo, '/Users/me/app', 'a dry run writes nothing');
+  const r = await refolder({ store, channel: 'office', from: '/Users/me/app', to: '/home/node/repos/app' });
+  assert.deepStrictEqual([r.changed, r.open], [[a.id], 2]);
+  assert.strictEqual((await store.get('office', a.id)).repo, '/home/node/repos/app');
+  assert.strictEqual((await store.get('office', b.id)).repo, '/Users/me/other', 'another folder is left');
+  assert.strictEqual((await store.get('office', c.id)).repo, '/Users/me/app', 'a closed ticket is left');
   fs.rmSync(d, { recursive: true, force: true });
 });
