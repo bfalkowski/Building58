@@ -51,3 +51,14 @@ test('ROOM_REPOS is a list of owner/name, by spaces or commas, and anything else
   assert.deepStrictEqual(bad, ['../etc', 'acme/..', '-x/y"', 'other/app (a repo with that name is listed already)']);
   assert.deepStrictEqual(repoList(''), { ok: [], bad: [] });
 });
+
+test('the folders the room works in are trusted, so a new checkout under one asks no trust question', () => {
+  const d = dir();
+  fs.writeFileSync(path.join(d, '.claude.json'), JSON.stringify({ projects: { '/home/node/repos/app': { allowedTools: ['Bash'] }, '/elsewhere': { hasTrustDialogAccepted: false } } }));
+  const config = read(claudeConfig({ CLAUDE_CONFIG_DIR: d }, ['/home/node/building58', '/home/node/repos/app']));
+  assert.deepStrictEqual(config.projects['/home/node/repos/app'], { allowedTools: ['Bash'], hasTrustDialogAccepted: true }, 'what was there is kept');
+  assert.strictEqual(config.projects['/home/node/building58'].hasTrustDialogAccepted, true);
+  assert.strictEqual(config.projects['/elsewhere'].hasTrustDialogAccepted, false, 'a folder not listed is left as it is');
+  assert.strictEqual(read(claudeConfig({ CLAUDE_CONFIG_DIR: dir() })).projects, undefined, 'none listed, none added');
+  fs.rmSync(d, { recursive: true });
+});

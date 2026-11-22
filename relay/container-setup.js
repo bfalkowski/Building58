@@ -3,7 +3,10 @@
 //
 // Claude Code: a new Claude Code first asks for a text style, and asks again whether to use an API key
 // found in the environment. Nobody answers those in a room, so this marks the first run done in
-// CLAUDE_CONFIG_DIR/.claude.json and approves the ANTHROPIC_API_KEY the person put in .env. It reads the
+// CLAUDE_CONFIG_DIR/.claude.json and approves the ANTHROPIC_API_KEY the person put in .env. Claude Code
+// also asks whether to trust each new folder, and a new task's checkout is a new folder. The person listed
+// the repos in ROOM_REPOS, and the room runs from the Building58 folder, so those folders are marked trusted:
+// Claude Code trusts a folder inside a trusted one, so each checkout under .worktrees starts with no question. It reads the
 // sign-in from `claude auth status`, which sees that a token is there, not that it works.
 //
 // GitHub: with GITHUB_APP_ID, the room acts as that GitHub App (relay/github-app.js): this makes its first
@@ -32,7 +35,7 @@ function readJson(file) {
   }
 }
 
-function claudeConfig(env) {
+function claudeConfig(env, trusted) {
   const dir = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
   const file = path.join(dir, '.claude.json');
   const config = readJson(file);
@@ -44,6 +47,10 @@ function claudeConfig(env) {
     const approved = Array.isArray(answers.approved) ? answers.approved : [];
     const rejected = Array.isArray(answers.rejected) ? answers.rejected : [];
     config.customApiKeyResponses = { approved: approved.includes(tail) ? approved : approved.concat(tail), rejected: rejected.filter((x) => x !== tail) };
+  }
+  if (trusted && trusted.length) {
+    config.projects = config.projects && typeof config.projects === 'object' ? config.projects : {};
+    for (const folder of trusted) config.projects[folder] = Object.assign({}, config.projects[folder], { hasTrustDialogAccepted: true });
   }
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(file + '.tmp', JSON.stringify(config, null, 2));
@@ -117,10 +124,12 @@ function repos(env, home) {
 }
 
 async function main(env) {
-  try { claudeConfig(env); } catch (e) { console.log('Claude Code: could not write its settings: ' + said(e)); }
+  const home = os.homedir();
+  const trusted = [path.join(home, 'building58')].concat(repoList(env.ROOM_REPOS).ok.map((r) => path.join(home, 'repos', r.name)));
+  try { claudeConfig(env, trusted); } catch (e) { console.log('Claude Code: could not write its settings: ' + said(e)); }
   console.log(claudeSignIn());
   console.log(env.GITHUB_APP_ID ? await gitHubApp(env) : gitHub(env));
-  for (const line of repos(env, os.homedir())) console.log(line);
+  for (const line of repos(env, home)) console.log(line);
 }
 
 if (require.main === module) main(process.env).catch((e) => console.log('Setup: ' + said(e)));
