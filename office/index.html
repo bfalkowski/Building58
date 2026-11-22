@@ -340,6 +340,8 @@
   #cc-term .xterm { height: 100%; }
   .cc-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--pane-line); color: var(--pane-strong); }
   .cc-ask[hidden] { display: none; }
+  .needs-relay { margin-left: 6px; font-size: 11px; color: var(--pane-dim); white-space: nowrap; }
+  details.no-relay > summary { cursor: default; color: var(--pane-dim); }
   .cc-ask span { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
   #cc-hooks-warn { border-left: 3px solid var(--wait); }
   #cc-hooks-warn code { color: var(--pane-strong); overflow-wrap: anywhere; }
@@ -527,12 +529,13 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
     <div class="ob-line">
       <span class="ob-chips" id="ob-chips"></span>
       <span class="ob-grow"></span>
-      <button class="btn" id="cc-update" type="button">Update</button>
+      <button class="btn" id="cc-update" type="button" data-needs-relay>Update</button>
       <button class="btn" id="cc-update-off" type="button" hidden>Call off the restart</button>
       <a class="btn ob-help" href="../docs/manual/roles.html" target="_blank" rel="noopener" title="How work moves" aria-label="How work moves">?</a>
     </div>
     <span id="cc-update-note" role="status" hidden></span>
     <div id="office-notes">
+      <p class="cc-ask" id="no-relay" role="status" hidden><span><b>No relay.</b> This page is not connected to a relay, so the room plays on its own. Press <b>Run a demo</b> to watch three pretend sessions at work. Live Claude Code sessions, tickets and Update need the relay on your own computer: <code>RELAY_KEY=pick-a-key npm run office</code>. <a class="help-link" href="../docs/manual/running.html#no-relay" target="_blank" rel="noopener">What this means</a></span><button class="btn" id="no-relay-demo" type="button">Run a demo</button></p>
       <p class="cc-ask" id="key-warn" role="alert" hidden><span>This page's key is not the relay's key, so nothing on this page reaches the relay. Open the room with the key the relay was started with (<code>RELAY_KEY</code>): the link <code>npm run office</code> printed has it, after <code>key=</code>. <a class="help-link" href="../docs/manual/running.html#wrong-key" target="_blank" rel="noopener">What this means</a></span></p>
       <p class="cc-ask" id="cc-hooks-warn" role="status" hidden><span>The room hooks in ~/.claude/settings.json run <code id="cc-hooks-from"></code>, not this relay's copy, so sessions run old hook code and newer features fail without a message. To fix it, run: <code id="cc-hooks-fix"></code> <a class="help-link" href="../docs/manual/running.html#hooks-checkout" target="_blank" rel="noopener">What this means</a></span></p>
     </div>
@@ -604,10 +607,10 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
         <h2 id="cc-title">Claude Code</h2>
         <form id="cc-form" autocomplete="off">
           <label for="cc-cwd">Folder</label>
-          <input id="cc-cwd" type="text" spellcheck="false" value="~">
+          <input id="cc-cwd" type="text" spellcheck="false" value="~" data-needs-relay>
           <label for="cc-resume">Resume</label>
-          <input id="cc-resume" type="text" spellcheck="false" placeholder="optional session id">
-          <button class="btn primary" id="cc-start" type="submit">Add worker</button>
+          <input id="cc-resume" type="text" spellcheck="false" placeholder="optional session id" data-needs-relay>
+          <button class="btn primary" id="cc-start" type="submit" data-needs-relay>Add worker</button>
           <button class="btn" id="cc-stop" type="button" hidden>Stop this session</button>
         </form>
         <span id="cc-status">Starting</span>
@@ -769,7 +772,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
     </section>
   </div>
 
-  <details>
+  <details data-needs-relay>
     <summary>Use your own terminal instead</summary>
     <p>Add the room hooks to <code>~/.claude/settings.json</code> once, then every new <code>claude</code> session on this computer gets a worker here while the relay runs. You can watch those sessions but only type into the ones added above:</p>
     <pre>RELAY_KEY=pick-a-key npm run office:hooks</pre>
@@ -879,6 +882,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
 <script src="officers.js"></script>
 <script src="desks.js"></script>
 <script src="update.js"></script>
+<script src="no-relay.js"></script>
 <script src="trailer.js"></script>
 </body>
 </html>
