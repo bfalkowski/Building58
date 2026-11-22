@@ -448,20 +448,52 @@
   let leftoversDrawn = '', lastLeftovers = [];
   const asking = new Map();
   function leftoverButton(text, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = text; b.addEventListener('click', fn); return b; }
-  async function cleanLeftover(c, ignored) {
+  async function cleanOne(c, ignored) {
     const r = await api('/' + c.id + '/clean', { ignored }, '/checkouts');
     asking.delete(c.id);
     if (r.error === 'ignored') asking.set(c.id, r.ignored);
-    else tell(r.ok ? 'Removed ' + home(c.path) + '.' + (r.branches.length ? ' Still there: ' + r.branches.join(', ') + '.' : '') : r.message, r.ok ? '' : 'off');
+    return r;
+  }
+  async function cleanLeftover(c, ignored) {
+    const r = await cleanOne(c, ignored);
+    if (r.error !== 'ignored') tell(r.ok ? 'Removed ' + home(c.path) + '.' + (r.branches.length ? ' Still there: ' + r.branches.join(', ') + '.' : '') : r.message, r.ok ? '' : 'off');
     drawLeftovers(lastLeftovers);
     syncLeftovers();
   }
+  let cleaningAll = false;
+  const leftoverPile = (list) => list.filter((c) => !c.running && !asking.has(c.id));
+  async function cleanAllLeftovers() {
+    const list = leftoverPile(lastLeftovers);
+    cleaningAll = true; drawLeftovers(lastLeftovers);
+    let removed = 0, asked = 0;
+    const failed = [];
+    for (const c of list) {
+      const r = await cleanOne(c);
+      if (r.ok) removed++; else if (r.error === 'ignored') asked++; else failed.push(home(c.path) + ' (' + r.message + ')');
+    }
+    cleaningAll = false;
+    tell(pileLine(removed, 'checkout', asked, failed), failed.length ? 'off' : '');
+    drawLeftovers(lastLeftovers);
+    syncLeftovers();
+  }
+  function pileLine(removed, noun, asked, failed) {
+    return 'Clean up all removed ' + removed + ' ' + noun + (removed === 1 ? '' : 's') + '.' +
+      (asked ? ' ' + asked + (asked === 1 ? ' holds files git ignores and asks' : ' hold files git ignores and ask') + ' before it deletes them.' : '') +
+      (failed.length ? ' Could not clean up: ' + failed.join('; ') + '.' : '');
+  }
+  function allRow(text, button) { const row = document.createElement('div'), label = document.createElement('span'); row.className = 'cc-ask'; label.textContent = text; row.append(label, button); return row; }
   function drawLeftovers(list) {
     lastLeftovers = list;
-    const waiting = list.filter((c) => !c.running), text = JSON.stringify([waiting, [...asking]]);
+    const waiting = list.filter((c) => !c.running), text = JSON.stringify([waiting, [...asking], cleaningAll]);
     if (text === leftoversDrawn) return;
     leftoversDrawn = text;
     leftovers.textContent = '';
+    const pile = leftoverPile(list);
+    if (pile.length > 1) {
+      const all = leftoverButton(cleaningAll ? 'Cleaning up…' : 'Clean up all', cleanAllLeftovers);
+      all.disabled = cleaningAll;
+      leftovers.append(allRow(pile.length + ' checkouts with nobody in them.', all));
+    }
     for (const c of waiting) {
       const row = document.createElement('div'), label = document.createElement('span'), ignored = asking.get(c.id);
       row.className = 'cc-ask';
@@ -470,7 +502,9 @@
         row.append(label, leftoverButton('Delete them too', () => cleanLeftover(c, ignored)), leftoverButton('Keep', () => { asking.delete(c.id); drawLeftovers(lastLeftovers); }));
       } else {
         label.textContent = 'Checkout' + (c.owner ? ' for ' + c.owner : '') + ' with nobody in it: ' + home(c.path) + (c.branch ? ' on ' + c.branch : '') + (c.left ? '. ' + c.left : '');
-        row.append(label, leftoverButton('Clean up', () => cleanLeftover(c)));
+        const one = leftoverButton('Clean up', () => cleanLeftover(c));
+        one.disabled = cleaningAll;
+        row.append(label, one);
       }
       leftovers.append(row);
     }
@@ -510,6 +544,8 @@
     if (text === finishedDrawn) return;
     finishedDrawn = text;
     finishedBox.textContent = '';
+    const see = (fs) => { for (const f of fs) seen.add(f.id + f.at); store(localStorage, 'office.finishedSeen', JSON.stringify([...seen].slice(-50))); drawFinished(list); };
+    if (shown.length > 1) finishedBox.append(allRow(shown.length + ' reviews finished.', leftoverButton('OK all', () => see(shown))));
     for (const f of shown) {
       const row = document.createElement('div'), label = document.createElement('span'), link = document.createElement('a');
       row.className = 'cc-ask';
@@ -517,7 +553,7 @@
       label.textContent = (names.get(f.id) || 'A reviewer') + ' finished ' + (f.title || 'a review') + ', posted ' + what + ' and gave their desk back. ';
       link.textContent = f.url && f.url.includes('#issuecomment-') ? 'See the comment' : 'See the PR';
       if (GITHUB.test(f.url || '')) { link.href = f.url; link.target = '_blank'; link.rel = 'noopener'; label.append(link); }
-      row.append(label, leftoverButton('OK', () => { seen.add(f.id + f.at); store(localStorage, 'office.finishedSeen', JSON.stringify([...seen].slice(-50))); drawFinished(list); }));
+      row.append(label, leftoverButton('OK', () => see([f])));
       finishedBox.append(row);
     }
   }
