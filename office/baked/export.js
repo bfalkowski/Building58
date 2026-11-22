@@ -30,7 +30,7 @@ const TYPES = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/cs
   page.on('pageerror', (e) => console.log('page error:', e.message));
   await page.route('**/*', (route) => {
     const url = route.request().url();
-    if (LOCAL[url]) return route.fulfill({ path: path.join(MODULES, LOCAL[url]), contentType: TYPES['.js'] });
+    if (LOCAL[url]) return route.fulfill({ path: path.join(MODULES, LOCAL[url]), contentType: TYPES['.js'], headers: { 'access-control-allow-origin': '*' } });
     if (!url.startsWith(ORIGIN)) return route.fulfill({ status: 200, body: '', contentType: 'text/css' });
     let p = decodeURIComponent(new URL(url).pathname);
     if (p.endsWith('/')) p += 'index.html';

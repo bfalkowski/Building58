@@ -1,5 +1,6 @@
 // The room runs with no install (CLAUDE.md, docs/constitution.md article 9). package.json has no
-// runtime dependencies, and each library the pages load from a CDN names an exact version.
+// runtime dependencies, and each library the pages load from a CDN names an exact version and carries its
+// hash, so the browser refuses a CDN file that changed.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
@@ -52,4 +53,34 @@ test('each CDN link in office/ and shared/ names an exact version', () => {
   }
   assert.ok(seen > 0, 'the scan finds the CDN links the room page loads');
   assert.deepStrictEqual(found, [], 'Name the exact version, like three@0.160.0, not three, three@0 or three@latest.');
+});
+
+test('each CDN file in office/ and shared/ carries its sha384 hash', () => {
+  const HASH = /^sha384-[A-Za-z0-9+/]{64}$/;
+  const found = [];
+  let seen = 0;
+  for (const top of ['office', 'shared']) {
+    for (const file of filesIn(path.join(REPO, top))) {
+      const text = fs.readFileSync(file, 'utf8');
+      const where = path.relative(REPO, file);
+      if (file.endsWith('.html')) {
+        for (const tag of text.matchAll(/<(?:script|link)\b[^>]*>/g)) {
+          const url = tag[0].match(/\b(?:src|href)="(https?:\/\/([\w.-]+)\/[^"]*)"/);
+          if (!url || !CDNS.includes(url[2])) continue;
+          seen++;
+          const hash = tag[0].match(/\bintegrity="([^"]*)"/);
+          if (!hash || !HASH.test(hash[1]) || !/\bcrossorigin="anonymous"/.test(tag[0])) found.push(where + ': ' + url[1]);
+        }
+        continue;
+      }
+      if (text.startsWith('#!')) continue;
+      for (const m of text.matchAll(/'(https?:\/\/([\w.-]+)\/[^']*)'(: '([^']*)')?/g)) {
+        if (!CDNS.includes(m[2])) continue;
+        seen++;
+        if (!m[4] || !HASH.test(m[4])) found.push(where + ': ' + m[1]);
+      }
+    }
+  }
+  assert.ok(seen > 0, 'the scan finds the CDN files the room page loads');
+  assert.deepStrictEqual(found, [], 'Add integrity="sha384-..." crossorigin="anonymous" to the tag, or a \'url\': \'sha384-...\' entry where a script loads it. Make the hash with: curl -sL URL | openssl dgst -sha384 -binary | openssl base64 -A');
 });
