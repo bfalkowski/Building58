@@ -144,7 +144,10 @@ Your editor's ESLint may not read the suppressions file, so it can show every ol
 How the room and the relay behave is in one place, the manual in
 [docs/manual/](docs/manual/index.html). The pages are HTML, so GitHub shows their source. Read
 them at `http://localhost:8787/docs/manual/` while the relay runs, or open the files. It has the relay's
-calls and routes, every setting, and where each part of the code lives. The rules for sessions
+calls and routes, every setting, and where each part of the code lives. The relay's calls and routes are also in
+[docs/openapi.json](docs/openapi.json), an OpenAPI 3.1 document with a version, which the relay serves at
+`/docs/openapi.json`. `npm run openapi` builds it from the manual (see
+[the API's version](docs/manual/relay.html#openapi)). The rules for sessions
 are in [CLAUDE.md](CLAUDE.md) and [docs/constitution.md](docs/constitution.md).
 
 ## License

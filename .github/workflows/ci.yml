@@ -37,8 +37,8 @@ jobs:
       - run: node .githooks/check-secrets.js --all
 
   # What the change touches, so the jobs after it skip what it cannot break. A change to docs only
-  # (docs/, design/ and Markdown files) needs only the manual's checks: its links, its anchors and no em
-  # dashes. A run with no pull request, on main, weekly or by hand, runs everything.
+  # (docs/, design/ and Markdown files) needs only the manual's checks: its links, its anchors, no em
+  # dashes, and docs/openapi.json built from its route tables with a new version for a change. A run with no pull request, on main, weekly or by hand, runs everything.
   changes:
     name: What changed
     runs-on: ubuntu-24.04-arm
@@ -93,7 +93,7 @@ jobs:
       - run: npm run lint
       - name: the manual's checks
         if: needs.changes.outputs.docs == 'true'
-        run: node relay/test/run.js relay/test/manual.test.js
+        run: node relay/test/run.js relay/test/manual.test.js relay/test/openapi.test.js
       - name: npm test
         if: needs.changes.outputs.docs != 'true'
         run: npm test
