@@ -142,7 +142,7 @@
 
   <h2 id="files">Files on disk</h2>
   <p>The relay keeps its state in one folder, the state folder. <code>RELAY_STATE_DIR</code> sets it, and each file's own variable below still wins over it. The Lead's handoff notes, the GitHub store's key and the settings from the page are there too. A second room on the same computer needs only its own port and its own state folder (see <a href="running.html#second-office">A second room</a>).</p>
-  <p>One relay owns each of the tasks, checkouts, sessions, reviews, deliveries and Lead files at a time: a second one using it keeps that state in memory only, and says so.</p>
+  <p>One relay owns each of the tasks, checkouts, sessions, reviews, deliveries and Lead files at a time: a second one using it keeps that state in memory only, and says so. A relay claims a file with a <code>.lock</code> beside it that holds its pid. A relay that was killed leaves its <code>.lock</code> files, and after a reboot, or in a new container, which numbers its processes from 1 again, that pid can belong to another process. So a claim counts only while its pid is still a <code>relay/server.js</code> process, and the next relay takes the file.</p>
   <table>
     <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
     <tbody>
