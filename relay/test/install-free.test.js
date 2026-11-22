@@ -1,6 +1,7 @@
 // The room runs with no install (CLAUDE.md, docs/constitution.md article 9). package.json has no
 // runtime dependencies, and each library the pages load from a CDN names an exact version and carries its
-// hash, so the browser refuses a CDN file that changed.
+// hash, so the browser refuses a CDN file that changed. Each is also in devDependencies at the same
+// version, so npm audit (.github/workflows/audit.yml) checks what the page runs.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
@@ -83,4 +84,42 @@ test('each CDN file in office/ and shared/ carries its sha384 hash', () => {
   }
   assert.ok(seen > 0, 'the scan finds the CDN files the room page loads');
   assert.deepStrictEqual(found, [], 'Add integrity="sha384-..." crossorigin="anonymous" to the tag, or a \'url\': \'sha384-...\' entry where a script loads it. Make the hash with: curl -sL URL | openssl dgst -sha384 -binary | openssl base64 -A');
+});
+
+// The npm package and version a CDN link names. cdnjs names three.js as three.js/r128, which is npm's three@0.128.0.
+function pkgOf(url) {
+  const u = new URL(url);
+  if (u.hostname === 'cdnjs.cloudflare.com') {
+    const m = u.pathname.match(/^\/ajax\/libs\/([^/]+)\/([^/]+)\//);
+    if (!m) return null;
+    const r = m[1] === 'three.js' && m[2].match(/^r(\d+)$/);
+    return r ? { name: 'three', version: '0.' + r[1] + '.0' } : { name: m[1], version: m[2] };
+  }
+  const m = u.pathname.replace(/^\/npm\//, '/').match(/^\/((?:@[^/@]+\/)?[^/@]+)@([^/]+)/);
+  return m ? { name: m[1], version: m[2] } : null;
+}
+
+test('each library the page loads from a CDN is in devDependencies at the same version, so npm audit checks it', () => {
+  assert.deepStrictEqual(pkgOf('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'), { name: 'three', version: '0.128.0' });
+  assert.deepStrictEqual(pkgOf('https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js'), { name: '@xterm/xterm', version: '5.5.0' });
+  const dev = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).devDependencies || {};
+  const lock = JSON.parse(fs.readFileSync(path.join(REPO, 'package-lock.json'), 'utf8')).packages || {};
+  const found = [];
+  let seen = 0;
+  for (const top of ['office', 'shared']) {
+    for (const file of filesIn(path.join(REPO, top))) {
+      const text = fs.readFileSync(file, 'utf8');
+      if (text.startsWith('#!')) continue;
+      for (const m of text.matchAll(/https?:\/\/([\w.-]+)\/[^\s"'`)<>]*/g)) {
+        if (!CDNS.includes(m[1])) continue;
+        const p = pkgOf(m[0]);
+        if (!p) continue;
+        seen++;
+        const locked = (lock['node_modules/' + p.name] || {}).version;
+        if (dev[p.name] !== p.version || locked !== p.version) found.push(path.relative(REPO, file) + ': ' + p.name + '@' + p.version + ', package.json has ' + dev[p.name] + ', package-lock.json has ' + locked);
+      }
+    }
+  }
+  assert.ok(seen > 0, 'the scan finds the CDN links the room page loads');
+  assert.deepStrictEqual(found, [], 'Put the same version in devDependencies and run npm install, so npm audit (.github/workflows/audit.yml) checks what the page runs.');
 });

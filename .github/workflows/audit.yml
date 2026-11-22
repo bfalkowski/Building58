@@ -1,0 +1,36 @@
+name: Audit
+
+# Known vulnerabilities (CVEs) in the libraries the repo uses: npm audit reads package-lock.json, and the
+# libraries the room page loads from a CDN are in devDependencies at the same versions
+# (relay/test/install-free.test.js checks that). It fails on a high or critical advisory, and GitHub emails
+# the repo's owner. It runs every Monday, since a new advisory needs no change here, on demand (Actions,
+# Audit, Run workflow), and on a push to main that changes the libraries. Only that push run can make main
+# red in the room (relay/main-ci.js counts push runs), so a new advisory found on a Monday never stops
+# Autopilot by itself. It is not part of the required pipeline check, so it never blocks a pull request.
+on:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - package-lock.json
+      - office/index.html
+      - office/look.js
+      - .github/workflows/audit.yml
+  schedule:
+    - cron: '0 13 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - run: npm audit --audit-level=high

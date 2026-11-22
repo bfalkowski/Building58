@@ -471,7 +471,7 @@
 
 <!-- ============================================================ THE CODE -->
 <h2 id="code">The code</h2>
-<p>Where each part lives. It uses three.js r128 from cdnjs and its OrbitControls from jsDelivr (<code>three@0.128.0</code>), and xterm.js for the panel. Each file from a CDN carries its sha384 hash, on its tag in <code>office/index.html</code> or in <code>office/look.js</code> for the files the baked look loads, so the browser refuses a file that changed.</p>
+<p>Where each part lives. It uses three.js r128 from cdnjs and its OrbitControls from jsDelivr (<code>three@0.128.0</code>), and xterm.js for the panel. Each file from a CDN carries its sha384 hash, on its tag in <code>office/index.html</code> or in <code>office/look.js</code> for the files the baked look loads, so the browser refuses a file that changed. Each of these libraries is also in <code>devDependencies</code> at the same version, which <code>npm test</code> checks, so <code>npm audit</code> covers what the page runs. The Audit workflow (<code>.github/workflows/audit.yml</code>) runs <code>npm audit --audit-level=high</code> every Monday at 13:00 UTC, when you press Run workflow on it in Actions, and on a push to <code>main</code> that changes <code>package.json</code>, <code>package-lock.json</code>, <code>office/index.html</code> or <code>office/look.js</code>. It fails on a high or critical advisory, and GitHub emails the repo's owner. Only the push run can make <a href="roles.html#red-main">main red</a> in the room. It is not part of the <code>pipeline</code> check, so it never blocks a pull request.</p>
 <table>
   <thead><tr><th>Path</th><th>What it is</th></tr></thead>
   <tbody>
