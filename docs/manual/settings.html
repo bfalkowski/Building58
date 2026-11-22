@@ -136,6 +136,7 @@
       <tr><td><code>RELAY_TICKET_RETRY_MS</code></td><td class="plain"><code>15000</code></td><td>The GitHub store: how long a write to an issue waits after it first fails. Each next failure waits twice as long (see <a href="running.html#github-write-fails">When a write to GitHub fails</a>).</td></tr>
       <tr><td><code>RELAY_TICKET_RETRY_CAP_MS</code></td><td class="plain"><code>300000</code></td><td>The GitHub store: the longest wait between two tries of a failed write.</td></tr>
       <tr><td><code>RELAY_TICKET_FOLDER</code></td><td class="plain">the repo folder that holds the relay</td><td>The GitHub store: where a ticket filed on GitHub, or one whose note does not check, is worked on.</td></tr>
+      <tr><td><code>RELAY_REPOS_DIR</code></td><td class="plain">the folder that holds <code>RELAY_TICKET_FOLDER</code></td><td>The GitHub store: where to look for this computer's clone of a repo a ticket names as <code>owner/name</code>, as a folder of that name whose <code>origin</code> is that repo. Several folders can be given, with <code>:</code> or <code>,</code> between them.</td></tr>
       <tr><td><code>RELAY_TICKET_KEY_FILE</code></td><td class="plain"><code>github-store.key</code> in the state folder</td><td>The GitHub store: the key that signs each ticket's hidden note.</td></tr>
     </tbody>
   </table>

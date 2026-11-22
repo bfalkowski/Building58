@@ -17,6 +17,13 @@
 //              Otherwise the ticket's repo is RELAY_TICKET_FOLDER (by default the folder that holds
 //              this code), it has no base, so it starts from that folder's branch, and createdBy is the
 //              issue's author on GitHub. A note that does not check is kept as it is on every write.
+//   repo       the note keeps the repo by its GitHub name, owner/name, read from the folder's origin, so
+//              the tickets do not name a folder on one computer. Read back, the name becomes this
+//              computer's clone of it: RELAY_TICKET_FOLDER if that is a clone of it, or else the folder of
+//              that name in RELAY_REPOS_DIR (by default the folder that holds RELAY_TICKET_FOLDER) whose
+//              origin is that repo. A note from before that names a folder this computer does not have is
+//              read the same way, by the folder's name. A folder whose origin is not on GitHub is kept as
+//              a folder.
 //   status     triage, ready and started are the labels office:triage, office:ready, office:started.
 //              done is closed as completed, and rejected is closed as not planned.
 //   priority   the label office:priority-high, -normal or -low
@@ -41,7 +48,7 @@
 // after the wait. The tries are kept until a write goes through, so the next failure waits longer still.
 'use strict';
 const { keepLines, oneLine } = require('../clean.js');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -80,6 +87,36 @@ function open(options) {
   const RETRY = msOf(o.retryMs, 'RELAY_TICKET_RETRY_MS', 15000), CAP = msOf(o.retryCapMs, 'RELAY_TICKET_RETRY_CAP_MS', 300000);
   const clock = o.now || Date.now;
   const FOLDER = o.folder || process.env.RELAY_TICKET_FOLDER || path.resolve(__dirname, '..', '..');
+  const DIRS = String(o.reposDir || process.env.RELAY_REPOS_DIR || path.dirname(FOLDER)).split(/[,:]/).filter(Boolean).map((d) => path.resolve(d));
+  const origins = new Map();
+  function originOf(folder) {
+    if (!origins.has(folder)) {
+      let name = null;
+      try {
+        const url = execFileSync('git', ['-C', folder, 'remote', 'get-url', 'origin'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }).trim();
+        const m = url.match(/github\.com[:/]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/);
+        name = m ? m[1] + '/' + m[2] : null;
+      } catch (e) { name = null; }
+      origins.set(folder, name);
+    }
+    return origins.get(folder);
+  }
+  const REPO_NAME = /^[\w.-]+\/[\w.-]+$/;
+  function nameOf(repo) {
+    if (typeof repo !== 'string' || !repo || REPO_NAME.test(repo)) return repo;
+    return (fs.existsSync(repo) && originOf(repo)) || repo;
+  }
+  function folderOf(repo) {
+    if (typeof repo !== 'string' || !repo) return repo;
+    if (REPO_NAME.test(repo)) {
+      const base = repo.split('/')[1];
+      const hit = [FOLDER].concat(DIRS.map((d) => path.join(d, base))).find((f) => fs.existsSync(f) && String(originOf(f) || '').toLowerCase() === repo.toLowerCase());
+      return hit || path.join(DIRS[0], base);
+    }
+    if (fs.existsSync(repo)) return repo;
+    const base = path.basename(repo);
+    return [FOLDER].concat(DIRS.map((d) => path.join(d, base))).find((f) => path.basename(f) === base && fs.existsSync(f)) || repo;
+  }
   const KEY_FILE = o.keyFile || state.file('github-store.key', 'RELAY_TICKET_KEY_FILE');
   let key = null;
   function keyNow() {
@@ -152,6 +189,7 @@ function open(options) {
       : (Object.keys(STATUS_LABELS).find((s) => labels.includes(STATUS_LABELS[s])) || 'triage');
     const priority = PRIORITIES.find((p) => labels.includes('office:priority-' + p)) || 'normal';
     const { blockedBy: extra, ...rest } = note;
+    if ('repo' in rest) rest.repo = folderOf(rest.repo);
     return Object.assign({}, rest, {
       id: String(issue.number),
       title: clean(issue.title).replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE),
@@ -240,7 +278,7 @@ function open(options) {
     if (STATUS_LABELS[ticket.status]) next.push(STATUS_LABELS[ticket.status]);
     next.push('office:priority-' + (PRIORITIES.includes(ticket.priority) ? ticket.priority : 'normal'));
     const note = {};
-    for (const [k, v] of Object.entries(ticket)) if (!NATIVE.includes(k)) note[k] = v;
+    for (const [k, v] of Object.entries(ticket)) if (!NATIVE.includes(k)) note[k] = k === 'repo' ? nameOf(v) : v;
     if (extra.length) note.blockedBy = extra;
     const closed = ticket.status === 'done' || ticket.status === 'rejected';
     return {
