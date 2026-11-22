@@ -54,6 +54,33 @@ test('the build refuses a page with no version, or a route with a parameter it h
   assert.ok(rows(html).length >= 70, 'the manual\'s tables still list the routes');
 });
 
+test('each operation has its own description, and each tag a readable name and a description', () => {
+  const s = spec(), seen = new Map();
+  for (const { method, path: p, op } of ops(s)) {
+    const about = op.description.split('\n\nTokens:')[0].split('\n\nFrom ')[0];
+    assert.ok(!seen.has(about), method + ' ' + p + ' has the same description as ' + seen.get(about) + ': give each its own row in ' + PAGE);
+    seen.set(about, method + ' ' + p);
+  }
+  const used = new Set(ops(s).map(({ op }) => op.tags[0]));
+  assert.deepStrictEqual(s.tags.map((t) => t.name).sort(), [...used].sort(), 'the tags listed are the tags the operations use');
+  for (const t of s.tags) {
+    assert.match(t.name, /^[A-Z][A-Za-z]*(?: [a-z]+)*$/, 'tag ' + t.name + ' reads as words, not a path');
+    assert.ok(t.description && !t.description.includes('\n'), 'tag ' + t.name + ' has a one-line description');
+  }
+  assert.throws(() => build(fs.readFileSync(PAGE, 'utf8').replace('<code>GET /floor</code>', '<code>GET /nowhere</code>')), /No tag for GET \/channels\/\{channel\}\/nowhere/);
+});
+
+test('each request schema has an example, and each example fits its schema', () => {
+  const bad = [];
+  for (const name of new Set(Object.values(api.REQUESTS))) {
+    const examples = api.SCHEMAS[name].examples;
+    if (!Array.isArray(examples) || !examples.length) { bad.push(name + ' has no example'); continue; }
+    for (const e of examples) for (const p of api.check(api.SCHEMAS[name], e)) bad.push(name + ': ' + p);
+  }
+  assert.deepStrictEqual(bad, [], 'request schemas whose example is missing or does not fit');
+  assert.deepStrictEqual(api.check(api.SCHEMAS.TaskMove, { to: 'shipped' }), ['"to" is one of "building", "in_review", "changes_requested", "waiting_on_you", "done".'], 'the check above can tell a bad example');
+});
+
 test('the relay serves docs/openapi.json, each route in it answers, and a made-up one does not', async (t) => {
   const R = await relay();
   t.after(R.stop);

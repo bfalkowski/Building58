@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -28,72 +28,83 @@
   ],
   "tags": [
     {
-      "name": "calls",
+      "name": "Calls",
       "description": "Calls any caller uses: commands, events and the page."
     },
     {
-      "name": "autopilot"
+      "name": "Autopilot",
+      "description": "Autopilot, which starts and merges work by itself, and the verdicts and fixes it asks for."
     },
     {
-      "name": "chat"
+      "name": "Chat",
+      "description": "The chat channels: #office, one for each ticket, and fun ones."
     },
     {
-      "name": "checkouts"
+      "name": "Checkouts",
+      "description": "Sessions that start in a new checkout of their own, and cleaning a checkout up."
     },
     {
-      "name": "floor"
+      "name": "Floor",
+      "description": "What the Lead sees of each session at work, and the Lead stopping one."
     },
     {
-      "name": "games"
+      "name": "Games",
+      "description": "The games there are, their rounds, and each seat's actions."
     },
     {
-      "name": "huddle"
+      "name": "Huddle",
+      "description": "A question to the idle sessions, and the report of their answers."
     },
     {
-      "name": "needs-you"
+      "name": "Needs you",
+      "description": "The things that wait on the person, most urgent first."
     },
     {
-      "name": "officers"
+      "name": "Officers",
+      "description": "The COO and the security officer: their reports, and what they write from."
     },
     {
-      "name": "old-relays"
+      "name": "Old relays",
+      "description": "Other relays that still run on this room's state folder, and stopping one."
     },
     {
-      "name": "play"
+      "name": "PR watch",
+      "description": "The PR watch, and each task with an open PR that it looks at."
     },
     {
-      "name": "pr-watch"
+      "name": "Ready to merge",
+      "description": "Marking a PR ready to merge."
     },
     {
-      "name": "ready"
+      "name": "Reviews",
+      "description": "The automatic reviews of PRs."
     },
     {
-      "name": "reviews"
+      "name": "Settings",
+      "description": "The settings on the room page."
     },
     {
-      "name": "rounds"
+      "name": "Tasks",
+      "description": "Tasks: the work a session does on its own branch, from the start to the merge."
     },
     {
-      "name": "settings"
+      "name": "Sessions",
+      "description": "The Claude Code sessions the relay runs: start, list, watch, type into, resize and stop them."
     },
     {
-      "name": "tasks"
+      "name": "Tickets",
+      "description": "The Board: file, edit, move, order, approve and start tickets."
     },
     {
-      "name": "terminals"
-    },
-    {
-      "name": "tickets"
-    },
-    {
-      "name": "update"
+      "name": "Update",
+      "description": "Updating the relay's own folder, and rolling a bad update back."
     }
   ],
   "paths": {
     "/channels/{channel}": {
       "get": {
         "tags": [
-          "calls"
+          "Calls"
         ],
         "summary": "Get channel",
         "description": "How many pages are connected (pagesConnected) and on screen (pagesVisible), and other counts.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#calls.",
@@ -131,10 +142,10 @@
     "/channels/{channel}/autopilot": {
       "get": {
         "tags": [
-          "autopilot"
+          "Autopilot"
         ],
         "summary": "Get autopilot",
-        "description": "Autopilot: what it does, or turn it on or off with {\"on\": true} or false, and limit it with {\"only\": \"T-12, flaky\"}, ticket ids and labels. Only the person. A session's token gets 401.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "What Autopilot does now. Only the person. A session's token gets 401.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getAutopilot",
         "x-tokens": [],
         "responses": {
@@ -167,10 +178,10 @@
       },
       "post": {
         "tags": [
-          "autopilot"
+          "Autopilot"
         ],
         "summary": "Set autopilot",
-        "description": "Autopilot: what it does, or turn it on or off with {\"on\": true} or false, and limit it with {\"only\": \"T-12, flaky\"}, ticket ids and labels. Only the person. A session's token gets 401.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Turn Autopilot on or off with {\"on\": true} or false, and limit it with {\"only\": \"T-12, flaky\"}, ticket ids and labels. Only the person. A session's token gets 401.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "setAutopilot",
         "x-tokens": [],
         "responses": {
@@ -216,7 +227,7 @@
     "/channels/{channel}/autopilot/fix": {
       "post": {
         "tags": [
-          "autopilot"
+          "Autopilot"
         ],
         "summary": "Fix findings",
         "description": "Fix it: {\"task\"}, a task id, ticket id or PR link. The person, or the Lead under the rules in Tokens.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -267,7 +278,7 @@
     "/channels/{channel}/autopilot/verdict": {
       "post": {
         "tags": [
-          "autopilot"
+          "Autopilot"
         ],
         "summary": "Post verdict",
         "description": "A reviewer's verdict on the PR it reviews: {\"kind\": \"merge\"} or \"fix\", as ticket.js verdict sends it. Only a reviewer's token.\n\nTokens: the relay key, and the token of a reviewer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -317,7 +328,7 @@
     "/channels/{channel}/chat": {
       "get": {
         "tags": [
-          "chat"
+          "Chat"
         ],
         "summary": "List chat channels",
         "description": "The chat channels: name, kind (office, ticket or fun), about, how many posts each keeps now, and archived: null, or when and why a ticket's was archived.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -355,7 +366,7 @@
       },
       "post": {
         "tags": [
-          "chat"
+          "Chat"
         ],
         "summary": "Create chat channel",
         "description": "{\"name\"}: the person makes a fun chat channel. 1 to 24 lower-case letters, digits or dashes. Names like t-5 are kept for tickets. Up to 10.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -406,7 +417,7 @@
     "/channels/{channel}/chat/{name}": {
       "get": {
         "tags": [
-          "chat"
+          "Chat"
         ],
         "summary": "Read chat",
         "description": "Its posts, oldest first. ?since=N gives only posts after number N, and ?limit=N the newest N. For a ticket in Triage, Ready or Started with no chat channel, such as one filed before tickets had one, it makes the chat channel first. Each post has from, by (relay, person or session), text, and mention or note.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -454,7 +465,7 @@
       },
       "post": {
         "tags": [
-          "chat"
+          "Chat"
         ],
         "summary": "Post in chat",
         "description": "{\"text\"}: a post, up to 500 characters. A session cannot post in #office, and posts at most once every 5 seconds in each ticket's chat channel and once a minute in each fun one. 409 archived in an archived chat channel, for the person too. Like the read, it makes an open ticket's missing chat channel first.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -515,7 +526,7 @@
     "/channels/{channel}/chat/{name}/delete": {
       "post": {
         "tags": [
-          "chat"
+          "Chat"
         ],
         "summary": "Delete chat channel",
         "description": "The person deletes a chat channel. A ticket's leaves a short summary on the ticket first, with the local store only. If that fails, the answer is 502, and the chat channel stays. While the relay is deleting it already, the answer is 409.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -574,10 +585,10 @@
     "/channels/{channel}/checkouts": {
       "get": {
         "tags": [
-          "checkouts"
+          "Checkouts"
         ],
         "summary": "List checkouts",
-        "description": "List checkouts, or start a session in a new one. A prompt can have up to 8000 characters, and a longer one is refused with bad_prompt. For a review of a PR, the relay then adds the reviewer's brief, and the verdict ask unless the body has auto. Those do not count toward the limit. A review of a PR can send unlessAt, the commit its last review read. While the PR is still at that commit, nobody starts and the answer says unchanged.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "List the checkouts.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listCheckouts",
         "x-tokens": [],
         "responses": {
@@ -610,10 +621,10 @@
       },
       "post": {
         "tags": [
-          "checkouts"
+          "Checkouts"
         ],
         "summary": "Create checkout",
-        "description": "List checkouts, or start a session in a new one. A prompt can have up to 8000 characters, and a longer one is refused with bad_prompt. For a review of a PR, the relay then adds the reviewer's brief, and the verdict ask unless the body has auto. Those do not count toward the limit. A review of a PR can send unlessAt, the commit its last review read. While the PR is still at that commit, nobody starts and the answer says unchanged.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Start a session in a new checkout. A prompt can have up to 8000 characters, and a longer one is refused with bad_prompt. For a review of a PR, the relay then adds the reviewer's brief, and the verdict ask unless the body has auto. Those do not count toward the limit. A review of a PR can send unlessAt, the commit its last review read. While the PR is still at that commit, nobody starts and the answer says unchanged.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "createCheckout",
         "x-tokens": [],
         "responses": {
@@ -659,7 +670,7 @@
     "/channels/{channel}/checkouts/{id}/clean": {
       "post": {
         "tags": [
-          "checkouts"
+          "Checkouts"
         ],
         "summary": "Clean checkout",
         "description": "Remove one. Files git ignores are asked about as for a task's Clean up.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -718,7 +729,7 @@
     "/channels/{channel}/commands": {
       "post": {
         "tags": [
-          "calls"
+          "Calls"
         ],
         "summary": "Send command",
         "description": "Send a command and, by default, wait for its result.\n\nTokens: the relay key, and the token of any session, the COO, the security officer, a seat in a game round. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#calls.",
@@ -771,7 +782,7 @@
     "/channels/{channel}/commands/{id}": {
       "get": {
         "tags": [
-          "calls"
+          "Calls"
         ],
         "summary": "Get command",
         "description": "Get the result of a command sent with wait: false.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#calls.",
@@ -819,7 +830,7 @@
     "/channels/{channel}/events": {
       "get": {
         "tags": [
-          "calls"
+          "Calls"
         ],
         "summary": "List events",
         "description": "Read events the page has sent.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#calls.",
@@ -855,7 +866,7 @@
       },
       "post": {
         "tags": [
-          "calls"
+          "Calls"
         ],
         "summary": "Post events",
         "description": "Used by the page: {\"events\": [...]}, events to add to the channel's list.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#calls.",
@@ -904,7 +915,7 @@
     "/channels/{channel}/floor": {
       "get": {
         "tags": [
-          "floor"
+          "Floor"
         ],
         "summary": "Get floor",
         "description": "What the Lead sees of the Floor, and each session's desk: ticket, title, column, pr, ciWords, review, doing, next (text and owner) and stop (safe and reason). The Lead's row also has tired, and every other row has null there. A Dev's row has waitsOn while the PR watch is on and its task has an open PR: owner, minutes, why, late and words. Every other row has null there. See What the Lead sees and What each desk says.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -944,7 +955,7 @@
     "/channels/{channel}/floor/stop": {
       "post": {
         "tags": [
-          "floor"
+          "Floor"
         ],
         "summary": "Lead stops session",
         "description": "With a session's token, {\"who\"}: the Lead stops one session. Only the token of a Lead you let move the board, and only while Let the Lead stop sessions is on (or RELAY_LEAD_STOPS=1). See What the Lead stops. With the relay key, as the page sends it, {\"who\": terminal id} or {\"all\": true}: you stop one desk, or every desk, that its desk calls safe to stop at that moment. The Lead's desk is never safe to stop. GET /floor also gives leadEnded: null while a Lead runs or nothing is offered back, or, once the Lead's session ended in this run, how it ended (stopped, ended or crashed) and a sentence that says so. One that is not safe is refused with not_safe and the reason. See What each desk says.\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -995,7 +1006,7 @@
     "/channels/{channel}/games": {
       "get": {
         "tags": [
-          "games"
+          "Games"
         ],
         "summary": "List games",
         "description": "The games in GAMES_REPO: each folder with a game.json, with its name, version, players, needs, ok, and a reason when the relay cannot run it, and the game's own about and metrics when it has them. See Games.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1033,7 +1044,7 @@
     "/channels/{channel}/huddle": {
       "get": {
         "tags": [
-          "huddle"
+          "Huddle"
         ],
         "summary": "Get huddle",
         "description": "The last report, who can be asked, and whether a huddle is open. Calls neither gh nor git.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1069,7 +1080,7 @@
       },
       "post": {
         "tags": [
-          "huddle"
+          "Huddle"
         ],
         "summary": "Start huddle",
         "description": "{\"ask\", \"lead\", \"names\"}: runs a huddle. ask sends idle sessions the question. lead: false keeps the report from the Lead.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1118,7 +1129,7 @@
     "/channels/{channel}/needs-you": {
       "get": {
         "tags": [
-          "needs-you"
+          "Needs you"
         ],
         "summary": "Get needs you",
         "description": "Only with the relay key. count, and items: one for each thing that needs you, most urgent first, each with kind, who, terminal, task, ticket, pr, line and link (terminal, url, ticket or stop, and fix, a task id, on a hand-over whose Dev says a finding is a bug). Calls neither gh nor git. See Needs you.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1156,7 +1167,7 @@
     "/channels/{channel}/officers/{role}": {
       "get": {
         "tags": [
-          "officers"
+          "Officers"
         ],
         "summary": "Get officer",
         "description": "{role} is coo or security. The officer's last report's text, and its session if one is running (The COO, The security officer).\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1204,7 +1215,7 @@
     "/channels/{channel}/officers/{role}/ask": {
       "post": {
         "tags": [
-          "officers"
+          "Officers"
         ],
         "summary": "Ask officer",
         "description": "Starts the officer with its brief. 409 while one is running.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1263,7 +1274,7 @@
     "/channels/{channel}/officers/{role}/measures": {
       "get": {
         "tags": [
-          "officers"
+          "Officers"
         ],
         "summary": "Get officer measures",
         "description": "What the officer writes from, worked out now: for the COO, the measures, with the load and headline the last report saw (What the relay measures); for security, what access the sessions run with, by name only, with the gaps the last report saw (What the relay reports on access).\n\nTokens: the relay key, and the token of the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -1314,7 +1325,7 @@
     "/channels/{channel}/officers/{role}/report": {
       "post": {
         "tags": [
-          "officers"
+          "Officers"
         ],
         "summary": "Post officer report",
         "description": "{\"text\"}: saves a report of up to 20000 characters, with the measures. For security, 400 with holds_a_secret when a line looks like it holds a key, and which line, never the value.\n\nTokens: the relay key, and the token of the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -1376,7 +1387,7 @@
     "/channels/{channel}/old-relays": {
       "get": {
         "tags": [
-          "old-relays"
+          "Old relays"
         ],
         "summary": "List old relays",
         "description": "Only with the relay key. relays: the other relays on this room's state folder that the relay found when it started and that still run, each with pid, file, port, started, paused and worker. See Old relays.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1414,7 +1425,7 @@
     "/channels/{channel}/old-relays/{pid}/stop": {
       "post": {
         "tags": [
-          "old-relays"
+          "Old relays"
         ],
         "summary": "Stop old relay",
         "description": "Only with the relay key. Stops a relay on that list, after ps shows again that it is a relay on this folder: {\"ok\": true, \"stopped\": 48435}. A pid not on the list gets 404 with unknown_relay.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1473,7 +1484,7 @@
     "/channels/{channel}/pages/{page}": {
       "post": {
         "tags": [
-          "calls"
+          "Calls"
         ],
         "summary": "Set page visible",
         "description": "Used by the page: {\"visible\": false} when its tab is hidden, true when it is shown.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#calls.",
@@ -1532,7 +1543,7 @@
     "/channels/{channel}/play": {
       "post": {
         "tags": [
-          "play"
+          "Games"
         ],
         "summary": "Play",
         "description": "Only with a seat's own token, as relay/play.js sends it (a seat runs it as node \"$OFFICE_PLAY\"): {\"kind\", \"args\"}, one action for that seat. The answer has the game's answer. A body that names a seat gets 400, and any other caller 403.\n\nTokens: the relay key, and the token of any session, the COO, the security officer, a seat in a game round. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -1586,7 +1597,7 @@
     "/channels/{channel}/pr-watch": {
       "get": {
         "tags": [
-          "pr-watch"
+          "PR watch"
         ],
         "summary": "Get pr watch",
         "description": "Only with the relay key. Whether the PR watch is on, how often it looks (every, seconds), waitMinutes, and one entry for each task with an open PR: pr, task, ticket, the head it last read, and while it is on, who it waits on (owner), minutes, why, late and words.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1624,7 +1635,7 @@
     "/channels/{channel}/ready": {
       "post": {
         "tags": [
-          "ready"
+          "Ready to merge"
         ],
         "summary": "Mark ready",
         "description": "{\"pr\", \"head\", \"text\"}: marks a PR ready to merge. Only the Lead's token, or the relay key. The relay checks the PR with gh, posts one comment headed Ready to merge, adds the ready to merge label, and takes the label off when a new commit lands. A PR that fails a check gets 409 and not_ready, a note with a part missing gets 400, and a gh failure gets 502. See Ready to merge.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -1675,7 +1686,7 @@
     "/channels/{channel}/results": {
       "post": {
         "tags": [
-          "calls"
+          "Calls"
         ],
         "summary": "Post command result",
         "description": "Used by the page: {\"id\", \"result\"}, the result of a command it ran. An unknown id gets 404 with unknown_command.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#calls.",
@@ -1724,10 +1735,10 @@
     "/channels/{channel}/reviews": {
       "get": {
         "tags": [
-          "reviews"
+          "Reviews"
         ],
         "summary": "Get reviews",
-        "description": "The automatic reviews (see Automatic review). auto and again are the two switches, and a POST with either one, true or false, sets it. The answer also has max, each PR with its count, head, pending and waits, and news, what the relay said about the reviews it started, which the page shows once.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "The automatic reviews (see Automatic review): the two switches, auto and again, and max, each PR with its count, head, pending and waits, and news, what the relay said about the reviews it started, which the page shows once.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getReviews",
         "x-tokens": [],
         "responses": {
@@ -1760,10 +1771,10 @@
       },
       "post": {
         "tags": [
-          "reviews"
+          "Reviews"
         ],
         "summary": "Set reviews",
-        "description": "The automatic reviews (see Automatic review). auto and again are the two switches, and a POST with either one, true or false, sets it. The answer also has max, each PR with its count, head, pending and waits, and news, what the relay said about the reviews it started, which the page shows once.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Turn a switch of the automatic reviews on or off. Send auto or again, or both, as true or false.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "setReviews",
         "x-tokens": [],
         "responses": {
@@ -1809,7 +1820,7 @@
     "/channels/{channel}/reviews/lead": {
       "post": {
         "tags": [
-          "reviews"
+          "Reviews"
         ],
         "summary": "Lead starts review",
         "description": "The Lead starts a review of a task's PR: {\"pr\": ...}. Only the Lead's token, under the rules in Tokens.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -1860,7 +1871,7 @@
     "/channels/{channel}/rounds": {
       "post": {
         "tags": [
-          "rounds"
+          "Games"
         ],
         "summary": "Start round",
         "description": "{\"game\", \"seed\", \"settings\", \"seats\", \"watch\", \"capUsd\"}: starts a round of a game, with a fresh session for each seat. 409 while a round runs, and 409 no_boundary where seats cannot get their boundary. 400 for a game that is not ok, with need when a need is what stops it, a seat count outside its players, or a watch that is not all or none.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1907,7 +1918,7 @@
       },
       "get": {
         "tags": [
-          "rounds"
+          "Games"
         ],
         "summary": "List rounds",
         "description": "Past rounds, newest first, kept while the relay runs: id, game, time, spentUsd, seatNames and score only. A round that failed or was stopped has score: null.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -1945,7 +1956,7 @@
     "/channels/{channel}/rounds/{id}/seats/{seat}/steps": {
       "get": {
         "tags": [
-          "rounds"
+          "Games"
         ],
         "summary": "Get seat steps",
         "description": "What one seat did, read now from Claude Code's transcript of its session: steps, each with kind (brief, prompt, says, runs with its tool, or result) and text, and the seat's tokens, usd and models. found: false before Claude Code writes it. For the round that runs only under Watch all (403 watch_none), and for a past round the relay still keeps. See Games.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -2003,7 +2014,7 @@
     "/channels/{channel}/rounds/current": {
       "get": {
         "tags": [
-          "rounds"
+          "Games"
         ],
         "summary": "Get current round",
         "description": "The round that runs, or null: its id, game, state, watch, spentUsd at API prices, unpriced (models with no price here), and its seats (seat, terminal, waiting: \"trust\" while that seat waits on the question about trusting its folder, or null, state, worked, tokens and usd). Never a brief, a role or the truth.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -2041,7 +2052,7 @@
     "/channels/{channel}/rounds/current/finish": {
       "post": {
         "tags": [
-          "rounds"
+          "Games"
         ],
         "summary": "Finish round",
         "description": "Asks the game for its score and reveal, and ends the round. The answer has both.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -2090,7 +2101,7 @@
     "/channels/{channel}/rounds/current/stop": {
       "post": {
         "tags": [
-          "rounds"
+          "Games"
         ],
         "summary": "Stop round",
         "description": "Ends the round with no score.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -2139,10 +2150,10 @@
     "/channels/{channel}/settings": {
       "get": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "Get settings",
-        "description": "The settings on the page (see Limits and timings), or change them: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinutes\"]}. An unknown name gets 400 with unknown_setting, and a value out of range 400 with bad_value. Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "The settings on the page (see Limits and timings). Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getSettings",
         "x-tokens": [],
         "responses": {
@@ -2175,10 +2186,10 @@
       },
       "post": {
         "tags": [
-          "settings"
+          "Settings"
         ],
         "summary": "Set settings",
-        "description": "The settings on the page (see Limits and timings), or change them: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinutes\"]}. An unknown name gets 400 with unknown_setting, and a value out of range 400 with bad_value. Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Change the settings on the page, or set them back to their defaults: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinutes\"]}. An unknown name gets 400 with unknown_setting, and a value out of range 400 with bad_value. Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "setSettings",
         "x-tokens": [],
         "responses": {
@@ -2224,7 +2235,7 @@
     "/channels/{channel}/stream": {
       "get": {
         "tags": [
-          "calls"
+          "Calls"
         ],
         "summary": "Open page stream",
         "description": "Used by the page: the commands for it to run, as server-sent events.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#calls.",
@@ -2262,10 +2273,10 @@
     "/channels/{channel}/tasks": {
       "get": {
         "tags": [
-          "tasks"
+          "Tasks"
         ],
         "summary": "List tasks",
-        "description": "List or start tasks.\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "List the tasks.\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listTasks",
         "x-tokens": [
           "a Lead you let move the board"
@@ -2300,10 +2311,10 @@
       },
       "post": {
         "tags": [
-          "tasks"
+          "Tasks"
         ],
         "summary": "Create task",
-        "description": "List or start tasks.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Start a task. The body needs a title, and can have repo, brief, base and lead. The answer has the new task.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "createTask",
         "x-tokens": [],
         "responses": {
@@ -2348,7 +2359,7 @@
     "/channels/{channel}/tasks/{id}": {
       "get": {
         "tags": [
-          "tasks"
+          "Tasks"
         ],
         "summary": "Get task",
         "description": "One task.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -2396,10 +2407,10 @@
     "/channels/{channel}/tasks/{id}/clean": {
       "post": {
         "tags": [
-          "tasks"
+          "Tasks"
         ],
         "summary": "Clean task",
-        "description": "Bring back its worker, or remove its checkout. If the checkout holds only files git ignores, Clean up answers 409 with error: \"ignored\" and the list in ignored. Send that list back as { \"ignored\": [...] } to delete them too. A file not on the list is asked about again.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Remove the task's checkout. If the checkout holds only files git ignores, Clean up answers 409 with error: \"ignored\" and the list in ignored. Send that list back as { \"ignored\": [...] } to delete them too. A file not on the list is asked about again.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "cleanTask",
         "x-tokens": [],
         "responses": {
@@ -2455,7 +2466,7 @@
     "/channels/{channel}/tasks/{id}/move": {
       "post": {
         "tags": [
-          "tasks"
+          "Tasks"
         ],
         "summary": "Move task",
         "description": "{\"to\": ...}: building, in_review, changes_requested, waiting_on_you or done.\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -2515,10 +2526,10 @@
     "/channels/{channel}/tasks/{id}/resume": {
       "post": {
         "tags": [
-          "tasks"
+          "Tasks"
         ],
         "summary": "Resume task",
-        "description": "Bring back its worker, or remove its checkout. If the checkout holds only files git ignores, Clean up answers 409 with error: \"ignored\" and the list in ignored. Send that list back as { \"ignored\": [...] } to delete them too. A file not on the list is asked about again.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Bring back the task's worker.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "resumeTask",
         "x-tokens": [],
         "responses": {
@@ -2574,10 +2585,10 @@
     "/channels/{channel}/terminals": {
       "get": {
         "tags": [
-          "terminals"
+          "Sessions"
         ],
         "summary": "List sessions",
-        "description": "List or start sessions. A start can have a prompt, up to 8000 characters, which the relay types as the session's first prompt. A longer one is refused with bad_prompt. The list also has finished: the latest automatic reviewers that posted and left. Each session has its seat, the id of the person the relay gave it, and who, that person's name (see Which person gets it), its work label (see labels), and its starts, startsLeft, lastStart, refresh, refreshNote and tired (how full its context is, or null: see How tired the Lead is), and the list has the wipLimit.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "List the sessions. The list has finished: the latest automatic reviewers that posted and left. Each session has its seat, the id of the person the relay gave it, and who, that person's name (see Which person gets it), its work label (see labels), and its starts, startsLeft, lastStart, refresh, refreshNote and tired (how full its context is, or null: see How tired the Lead is), and the list has the wipLimit.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listSessions",
         "x-tokens": [],
         "responses": {
@@ -2610,10 +2621,10 @@
       },
       "post": {
         "tags": [
-          "terminals"
+          "Sessions"
         ],
         "summary": "Start session",
-        "description": "List or start sessions. A start can have a prompt, up to 8000 characters, which the relay types as the session's first prompt. A longer one is refused with bad_prompt. The list also has finished: the latest automatic reviewers that posted and left. Each session has its seat, the id of the person the relay gave it, and who, that person's name (see Which person gets it), its work label (see labels), and its starts, startsLeft, lastStart, refresh, refreshNote and tired (how full its context is, or null: see How tired the Lead is), and the list has the wipLimit.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Start a session. The body can have a prompt, up to 8000 characters, which the relay types as the session's first prompt. A longer one is refused with bad_prompt.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "startSession",
         "x-tokens": [],
         "responses": {
@@ -2659,10 +2670,10 @@
     "/channels/{channel}/terminals/{id}/input": {
       "post": {
         "tags": [
-          "terminals"
+          "Sessions"
         ],
         "summary": "Type into session",
-        "description": "Type into, resize or stop a session. A stop of the Lead is refused with 409 and lead unless the body says {\"lead\": true}, as the page sends once you confirm, so a script or test that stops sessions does not stop the Lead by accident. See When the Lead's session ends.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Type into a session: {\"data\": \"yes\\r\"} sends the text as keys. A session that has ended answers 409 with ended.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "typeIntoSession",
         "x-tokens": [],
         "responses": {
@@ -2718,10 +2729,10 @@
     "/channels/{channel}/terminals/{id}/resize": {
       "post": {
         "tags": [
-          "terminals"
+          "Sessions"
         ],
         "summary": "Resize session",
-        "description": "Type into, resize or stop a session. A stop of the Lead is refused with 409 and lead unless the body says {\"lead\": true}, as the page sends once you confirm, so a script or test that stops sessions does not stop the Lead by accident. See When the Lead's session ends.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Resize a session's screen: {\"cols\": 120, \"rows\": 32}, from 20 to 400 columns and 5 to 200 rows.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "resizeSession",
         "x-tokens": [],
         "responses": {
@@ -2777,10 +2788,10 @@
     "/channels/{channel}/terminals/{id}/stop": {
       "post": {
         "tags": [
-          "terminals"
+          "Sessions"
         ],
         "summary": "Stop session",
-        "description": "Type into, resize or stop a session. A stop of the Lead is refused with 409 and lead unless the body says {\"lead\": true}, as the page sends once you confirm, so a script or test that stops sessions does not stop the Lead by accident. See When the Lead's session ends.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Stop a session. A stop of the Lead is refused with 409 and lead unless the body says {\"lead\": true}, as the page sends once you confirm, so a script or test that stops sessions does not stop the Lead by accident. See When the Lead's session ends.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "stopSession",
         "x-tokens": [],
         "responses": {
@@ -2836,7 +2847,7 @@
     "/channels/{channel}/terminals/{id}/stream": {
       "get": {
         "tags": [
-          "terminals"
+          "Sessions"
         ],
         "summary": "Open session stream",
         "description": "A session's output.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -2884,7 +2895,7 @@
     "/channels/{channel}/terminals/context": {
       "post": {
         "tags": [
-          "terminals"
+          "Sessions"
         ],
         "summary": "Report context",
         "description": "Only with a session's own token, as its status line (relay/status-line.js) sends it: {\"session_id\", \"percent\", \"size\"}, how much of its context window that conversation has used. A session_id that is not the session's conversation now is refused with 409, and the relay key with 403. See How tired the Lead is.\n\nTokens: the relay key, and the token of any session, the COO, the security officer, a seat in a game round. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -2938,7 +2949,7 @@
     "/channels/{channel}/terminals/failed": {
       "post": {
         "tags": [
-          "terminals"
+          "Sessions"
         ],
         "summary": "Forget failed session",
         "description": "{\"sessionId\"}: forget a session that could not come back after a restart.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -2987,7 +2998,7 @@
     "/channels/{channel}/terminals/lead": {
       "post": {
         "tags": [
-          "terminals"
+          "Sessions"
         ],
         "summary": "Set lead",
         "description": "Make a plain session the Lead (terminal), which saves it and gives it the Lead's brief. Answer the offer to bring it back (asked: true; POST /terminals with resume and lead: true is what Bring back sends). With board: true or false, give or take away its permission to move the board. With starts and total, give it permission to start tickets while fewer than starts tasks are building (1 to one under the WIP limit), total in all (1 to 20), or take it away (starts: 0). With refresh: true or false, start or stop Refresh the Lead. With \"lead\": true, as Settings sends, a grant goes only to the session that is the Lead now, and is refused with not_lead otherwise, so a page that has not seen another session made the Lead does not make the old one the Lead again.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -3036,10 +3047,10 @@
     "/channels/{channel}/tickets": {
       "get": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "List tickets",
-        "description": "List or file tickets. The list comes in Board order: open tickets high, normal, low, in work order (rank) within each, then done and rejected ones, the latest changed first. It also has kinds (the kinds a ticket can have, see Kind), labels (the labels tickets have, A to Z, see Labels), wipLimit, leadStarts (the number you let the Lead start tickets up to, or 0) and leadStartsLeft. A ticket has approvedBy (you or Lead) once it is put in Ready. The room page gets the same list as a tickets event on its GET /stream when it opens the stream with board=1, with people, who sits on each ticket, and without the time each pipeline was checked. The stream's hello says whether it will (tickets). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer.\n\nTokens: the relay key, and the token of any session, the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "List the tickets, in Board order: open tickets high, normal, low, in work order (rank) within each, then done and rejected ones, the latest changed first. It also has kinds (the kinds a ticket can have, see Kind), labels (the labels tickets have, A to Z, see Labels), wipLimit, leadStarts (the number you let the Lead start tickets up to, or 0) and leadStartsLeft. A ticket has approvedBy (you or Lead) once it is put in Ready. The room page gets the same list as a tickets event on its GET /stream when it opens the stream with board=1, with people, who sits on each ticket, and without the time each pipeline was checked. The stream's hello says whether it will (tickets). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer.\n\nTokens: the relay key, and the token of any session, the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listTickets",
         "x-tokens": [
           "any session",
@@ -3076,10 +3087,10 @@
       },
       "post": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Create ticket",
-        "description": "List or file tickets. The list comes in Board order: open tickets high, normal, low, in work order (rank) within each, then done and rejected ones, the latest changed first. It also has kinds (the kinds a ticket can have, see Kind), labels (the labels tickets have, A to Z, see Labels), wipLimit, leadStarts (the number you let the Lead start tickets up to, or 0) and leadStartsLeft. A ticket has approvedBy (you or Lead) once it is put in Ready. The room page gets the same list as a tickets event on its GET /stream when it opens the stream with board=1, with people, who sits on each ticket, and without the time each pipeline was checked. The stream's hello says whether it will (tickets). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "File a ticket. The body needs a title, and can have body, priority, repo, kind, labels and blockedBy. The answer has the new ticket.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "createTicket",
         "x-tokens": [
           "any session"
@@ -3126,7 +3137,7 @@
     "/channels/{channel}/tickets/{id}": {
       "get": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Get ticket",
         "description": "One ticket.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -3174,7 +3185,7 @@
     "/channels/{channel}/tickets/{id}/edit": {
       "post": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Edit ticket",
         "description": "Changes any of a ticket's fields, saved together, or none when one is refused: title (1 to 80 characters) and body (up to 8000) of a Triage or Ready ticket; priority, high, normal or low, which puts it last in that priority; kind, a word, or \"\" to take it away (Kind); labels, up to 5, at any status, the list replacing the one there (Labels); mark, \"hold\", \"replaced\" with an optional replacedBy, or null to clear it (On hold, replaced, and design tickets); shapes, the tickets this design ticket shapes, while it is in Triage, Ready or Started; and base, another local branch to start from. Each field keeps its own error code, such as bad_title, bad_priority, bad_kind, bad_label, bad_mark, bad_shapes, bad_base or no_base. A field the ticket's state does not allow gets 409 not_ready, or 403 for a session's token, and a title or base another open ticket in the repo has on that branch gets 409 duplicate. For the PM and the Lead, a ticket you rejected counts too, as in filing. Only the fields that differ are written: the answer's edited lists them, and has unchanged when none do. The PM and the Lead send only title, body and priority, and priority only while you let them set the order (The PM sets the order, The Lead sets priority); anything else gets 403. Any other session's token gets 403. See Editing a ticket.\n\nTokens: the relay key, and the token of a PM, the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -3235,7 +3246,7 @@
     "/channels/{channel}/tickets/{id}/move": {
       "post": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Move ticket",
         "description": "{\"to\": ...}: move a ticket that has no task, as Approve, Reject, Back to Triage and Merged elsewhere do (with pr for done).\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -3296,7 +3307,7 @@
     "/channels/{channel}/tickets/{id}/order": {
       "post": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Order ticket",
         "description": "{\"before\": id} or {\"after\": id}: a Triage or Ready ticket goes next to another Triage or Ready ticket with the same priority. Usually only the moved ticket is written. When there is no room between two ranks, the Triage and Ready tickets of that priority are numbered again. If the store fails partway, the ranks already written are put back and the answer is 502. Those tickets keep a new updatedAt. The person's key, or the token of a PM or Lead you let set the order. Any other session's token gets 403.\n\nTokens: the relay key, and the token of a PM, the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -3358,7 +3369,7 @@
     "/channels/{channel}/tickets/{id}/proposal": {
       "post": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Decide proposal",
         "description": "{\"decision\": \"approve\"} or {\"decision\": \"decline\"}: answers the ticket's proposal. Approving a replace, merge or close rejects the ticket and sets closedAs (replaced, merged or closed) and closedFor (the ids). Approving blockers sets blockedBy. 409 when no proposal waits, or when it no longer fits the Board: then decline it. Only the person's key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -3417,7 +3428,7 @@
     "/channels/{channel}/tickets/{id}/propose": {
       "post": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Propose ticket change",
         "description": "{\"action\", \"ids\", \"why\"}: proposes to change a Triage or Ready ticket. action is replace (with one or more ids), merge (with one), close (with none) or blockers (the whole new list, which can be empty). why is up to 500 characters. Nothing changes but the ticket's proposal, which holds it back. The PM's and the Lead's tokens propose, and so does the person's key, when the proposal then says You propose. Refused with 400 when an id is not on the Board, is the ticket itself, or was rejected, for every kind, and when a new blocker already waits for the ticket. A ticket that is starting, started, done or rejected gets 409, or 403 for a session's token. See Proposals.\n\nTokens: the relay key, and the token of a PM, the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -3479,7 +3490,7 @@
     "/channels/{channel}/tickets/{id}/start": {
       "post": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Start ticket",
         "description": "Start a Ready ticket: a task, a checkout and a worker. A Lead's token is held to its limits.\n\nTokens: the relay key, and the token of a Lead you let start tickets. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
@@ -3540,7 +3551,7 @@
     "/channels/{channel}/tickets/approve-ready": {
       "post": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Approve ready tickets",
         "description": "Marks the Ready tickets that no person approved as approved by you, as Approve all Ready does: those in ids, or every one with no ids. It skips a ticket that is starting. Answers with the ids in approved. No session's token reaches it.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -3589,7 +3600,7 @@
     "/channels/{channel}/tickets/ask": {
       "post": {
         "tags": [
-          "tickets"
+          "Tickets"
         ],
         "summary": "Ask PM",
         "description": "{\"idea\", \"repo\"}: starts the PM.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -3638,7 +3649,7 @@
     "/channels/{channel}/update": {
       "get": {
         "tags": [
-          "update"
+          "Update"
         ],
         "summary": "Get update",
         "description": "The relay's folder, and the update under way, if any, with who it waits for. rollback says which commit failed its check, why, and which commit runs, while the relay runs the commit it went back to, or while the folder is on it after a page-only step went back. While Update goes through merges one at a time, update.step has at, of, name, pr, sha, later, reloads and stopping. note and noteAt say how the last update ended, reloads how many page steps it made, and steps whether Update goes one merge at a time.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -3674,7 +3685,7 @@
       },
       "post": {
         "tags": [
-          "update"
+          "Update"
         ],
         "summary": "Start update",
         "description": "Fetches for the relay's folder and pulls when the plan says, as Update does. {\"cancel\": true} calls off a restart that is waiting, or stops a loop through merges between steps (One merge at a time).\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
@@ -3723,7 +3734,7 @@
     "/health": {
       "get": {
         "tags": [
-          "calls"
+          "Calls"
         ],
         "summary": "Get health",
         "description": "The relay is up, and which channels have pages. No key needed. With the key, from this computer, it also has restore: whether bringing back the saved sessions is done, and which could not come back, for the rollback check.\n\nFrom docs/manual/relay.html#calls.",
@@ -4103,7 +4114,18 @@
         "required": [
           "title"
         ],
-        "additionalProperties": true
+        "additionalProperties": true,
+        "examples": [
+          {
+            "title": "Flaky test in tasks.test.js",
+            "body": "It fails about one run in ten on CI.",
+            "priority": "normal",
+            "kind": "bug",
+            "labels": [
+              "flaky"
+            ]
+          }
+        ]
       },
       "TicketEdit": {
         "type": "object",
@@ -4179,7 +4201,13 @@
         "required": [],
         "additionalProperties": true,
         "minProperties": 1,
-        "description": "Any of these, saved together, or none when one is refused. A PM or the Lead sends only title, body and priority."
+        "description": "Any of these, saved together, or none when one is refused. A PM or the Lead sends only title, body and priority.",
+        "examples": [
+          {
+            "title": "Flaky test in tasks.test.js on CI",
+            "priority": "high"
+          }
+        ]
       },
       "Task": {
         "type": "object",
@@ -4354,7 +4382,13 @@
         "required": [
           "title"
         ],
-        "additionalProperties": true
+        "additionalProperties": true,
+        "examples": [
+          {
+            "title": "Fix the flaky test in tasks.test.js",
+            "brief": "Find why it fails about one run in ten on CI, and fix it."
+          }
+        ]
       },
       "TaskMove": {
         "type": "object",
@@ -4379,7 +4413,13 @@
         "required": [
           "to"
         ],
-        "additionalProperties": true
+        "additionalProperties": true,
+        "examples": [
+          {
+            "to": "in_review",
+            "pr": "https://github.com/owner/repo/pull/12"
+          }
+        ]
       },
       "Session": {
         "type": "object",
@@ -4617,7 +4657,13 @@
           "action"
         ],
         "additionalProperties": true,
-        "description": "The command, with the fields its action takes."
+        "description": "The command, with the fields its action takes.",
+        "examples": [
+          {
+            "action": "idle",
+            "wait": false
+          }
+        ]
       },
       "CommandResult": {
         "type": "object",
@@ -4707,7 +4753,12 @@
         "required": [
           "kind"
         ],
-        "additionalProperties": true
+        "additionalProperties": true,
+        "examples": [
+          {
+            "kind": "merge"
+          }
+        ]
       }
     },
     "responses": {
