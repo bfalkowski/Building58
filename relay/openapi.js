@@ -48,9 +48,9 @@ const TAGS = {
   ready: ['Ready to merge', 'Marking a PR ready to merge.'],
   reviews: ['Reviews', 'The automatic reviews of PRs.'],
   settings: ['Settings', 'The settings on the room page.'],
-  tasks: ['Tasks', 'Tasks: the work a session does on its own branch, from the start to the merge.'],
-  terminals: ['Sessions', 'The Claude Code sessions the relay runs: start, list, watch, type into, resize and stop them.'],
-  tickets: ['Tickets', 'The Board: file, edit, move, order, approve and start tickets.'],
+  tasks: ['Tasks', 'The work a session does on its own branch, from the start to the merge.'],
+  terminals: ['Sessions', 'The Claude Code sessions the relay runs: start, list, watch, type into, resize and stop them, and which one is the Lead.'],
+  tickets: ['Tickets', 'The Board: file, edit, move, order, approve and start tickets, and proposals and questions about them.'],
   update: ['Update', 'Updating the relay\'s own folder, and rolling a bad update back.']
 };
 const SEGMENT_TAG = { rounds: 'games', play: 'games' };

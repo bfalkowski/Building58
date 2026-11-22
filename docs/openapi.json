@@ -85,15 +85,15 @@
     },
     {
       "name": "Tasks",
-      "description": "Tasks: the work a session does on its own branch, from the start to the merge."
+      "description": "The work a session does on its own branch, from the start to the merge."
     },
     {
       "name": "Sessions",
-      "description": "The Claude Code sessions the relay runs: start, list, watch, type into, resize and stop them."
+      "description": "The Claude Code sessions the relay runs: start, list, watch, type into, resize and stop them, and which one is the Lead."
     },
     {
       "name": "Tickets",
-      "description": "The Board: file, edit, move, order, approve and start tickets."
+      "description": "The Board: file, edit, move, order, approve and start tickets, and proposals and questions about them."
     },
     {
       "name": "Update",
@@ -2314,7 +2314,7 @@
           "Tasks"
         ],
         "summary": "Create task",
-        "description": "Start a task. The body needs a title, and can have repo, brief, base and lead. The answer has the new task.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Start a task. The body needs a title, and can have repo, brief and base. The answer has the new task.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "createTask",
         "x-tokens": [],
         "responses": {
@@ -2732,7 +2732,7 @@
           "Sessions"
         ],
         "summary": "Resize session",
-        "description": "Resize a session's screen: {\"cols\": 120, \"rows\": 32}, from 20 to 400 columns and 5 to 200 rows.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Resize a session's screen: {\"cols\": 120, \"rows\": 32}, from 20 to 400 columns and 5 to 200 rows. A value outside that range, or a missing one, is moved to the nearest end of it, so {} gives 20 by 5. The answer has the cols and rows it set.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "resizeSession",
         "x-tokens": [],
         "responses": {
@@ -3090,7 +3090,7 @@
           "Tickets"
         ],
         "summary": "Create ticket",
-        "description": "File a ticket. The body needs a title, and can have body, priority, repo, kind, labels and blockedBy. The answer has the new ticket.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "File a ticket. The body needs a title, and can have body, priority, repo, kind, labels, blockedBy and shapes. The answer has the new ticket. When the same repo already has an open ticket with the same title, the answer is that ticket, with duplicate: true, and nothing new is filed. For a session's token, a rejected ticket counts too.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "createTicket",
         "x-tokens": [
           "any session"
@@ -4417,7 +4417,7 @@
         "examples": [
           {
             "to": "in_review",
-            "pr": "https://github.com/owner/repo/pull/12"
+            "note": "The PR is open for review."
           }
         ]
       },
@@ -4660,8 +4660,9 @@
         "description": "The command, with the fields its action takes.",
         "examples": [
           {
-            "action": "idle",
-            "wait": false
+            "action": "say",
+            "who": "marcus",
+            "text": "Hello"
           }
         ]
       },

@@ -92,7 +92,7 @@ const SCHEMAS = {
   TaskList: okWith({ states: list(S({ enum: STATES })), tasks: list(ref('Task')) }, ['tasks']),
   TaskOne: okWith({ task: ref('Task') }, ['task']),
   NewTask: obj({ title: S({ minLength: 1, maxLength: 80 }), repo: S(), brief: S(), base: S(), lead: B }, ['title'], { examples: [{ title: 'Fix the flaky test in tasks.test.js', brief: 'Find why it fails about one run in ten on CI, and fix it.' }] }),
-  TaskMove: obj({ to: S({ enum: STATES }), note: S(), pr: S() }, ['to'], { examples: [{ to: 'in_review', pr: 'https://github.com/owner/repo/pull/12' }] }),
+  TaskMove: obj({ to: S({ enum: STATES }), note: S(), pr: S() }, ['to'], { examples: [{ to: 'in_review', note: 'The PR is open for review.' }] }),
   Session: obj({
     id: S({ pattern: '^[0-9a-f]{12}$' }),
     who: orNull(S()),
@@ -127,7 +127,7 @@ const SCHEMAS = {
     wait: { type: ['boolean', 'string'], description: 'false sends it and answers at once with its id.' },
     timeout: { type: ['number', 'string'], description: 'Seconds to wait, 1 to 120, 30 by default.' },
     source: S()
-  }, ['action'], { description: 'The command, with the fields its action takes.', examples: [{ action: 'idle', wait: false }] }),
+  }, ['action'], { description: 'The command, with the fields its action takes.', examples: [{ action: 'say', who: 'marcus', text: 'Hello' }] }),
   CommandResult: obj({ id: S(), channel: S(), action: S(), status: S({ enum: ['pending', 'done'] }), ok: B }, ['id']),
   Event: obj({ rseq: N({ description: 'The relay\'s number for it, for ?since=.' }), receivedAt: S(), type: S() }, ['rseq', 'type']),
   EventList: okWith({ channel: S(), events: list(ref('Event')), lastEventSeq: N() }, ['events', 'lastEventSeq']),
