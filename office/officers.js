@@ -17,7 +17,7 @@
     const leave = () => { if (dlg && dlg.open) dlg.close(); };
     const when = (at) => new Date(at).toDateString() === new Date().toDateString() ? new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : new Date(at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const url = (verb) => location.origin + '/channels/' + encodeURIComponent(channel) + '/' + base + (verb ? '/' + verb : '') + '?key=' + encodeURIComponent(key);
+    const url = (verb) => location.origin + '/channels/' + encodeURIComponent(channel) + '/officers/' + base + (verb ? '/' + verb : '') + '?key=' + encodeURIComponent(key);
     function api(verb, body) {
       const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
       return fetch(url(verb), opt).then((r) => r.json()).catch(() => ({ ok: false, message: 'The relay did not answer.' }));

@@ -131,8 +131,8 @@ function saveReport(channel, body, agent, ctx) {
 const lastReport = (channel) => { const r = of(channel).reports, x = r[r.length - 1]; return x ? { id: x.id, at: x.at, by: x.by, text: x.text } : null; };
 
 async function handle(req, res, channel, rest, ctx) {
-  const route = rest.match(/^\/security(?:\/(ask|measures|report))?$/);
-  if (!route) { if (!/^\/security(\/|$)/.test(rest)) return false; ctx.problem(res, 404, 'not_found', 'Unknown security route.'); return true; }
+  const route = rest.match(/^\/officers\/security(?:\/(ask|measures|report))?$/);
+  if (!route) { if (!/^\/officers\/security(\/|$)/.test(rest)) return false; ctx.problem(res, 404, 'not_found', 'Unknown security route.'); return true; }
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'The security officer needs the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }

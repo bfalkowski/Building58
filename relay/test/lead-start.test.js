@@ -43,7 +43,7 @@ test('the Lead starts tickets', async (t) => {
   const urgent = await fileReady('Urgent but blocked', { priority: 'high', blockedBy: [first.id] });
   const later = await fileReady('Later low', { priority: 'low' });
   const held = await fileReady('Urgent but on hold', { priority: 'high' });
-  await R.call('POST', '/tickets/' + held.id + '/mark', { mark: 'hold' });
+  await R.call('POST', '/tickets/' + held.id + '/edit', { mark: 'hold' });
 
   await t.test('it is off by default, even for a Lead that can move the board', async () => {
     const r = await startAs(first.id, leadToken);

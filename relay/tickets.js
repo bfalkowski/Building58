@@ -228,52 +228,6 @@ function prOwner(channel, pr, ticket, all) {
   return other ? 'ticket ' + other.id + ' · ' + other.title : null;
 }
 
-async function setBase(channel, ticket, body) {
-  const base = clean(body.base);
-  if (!base) return [400, { ok: false, error: 'bad_base', message: 'Name the branch to start from.' }];
-  const unusable = tasks.baseProblem(base);
-  if (unusable) return [400, { ok: false, error: 'bad_base', message: unusable }];
-  if (!(await tasks.hasBranch(ticket.repo, base))) return [400, { ok: false, error: 'no_base', message: 'There is no local branch ' + base + ' with any commits in ' + ticket.repo + '.' }];
-  return inTurn(channel, async () => {
-    const all = await listAll(channel);
-    const now = all.find((t) => t.id === ticket.id) || ticket;
-    const state = starting.has(channel + '/' + now.id) ? 'starting' : now.status;
-    if (state !== 'triage' && state !== 'ready') return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can change its base. This one is ' + state + '.' }];
-    const twin = all.find((t) => t.id !== now.id && t.status !== 'done' && t.status !== 'rejected' && t.repo === now.repo && t.title.toLowerCase() === now.title.toLowerCase() && (!t.base || t.base === base));
-    if (twin) return [409, { ok: false, error: 'duplicate', message: twin.id + ' already has that title' + (twin.base ? ' on ' + twin.base : ' in this repo') + '. Use that ticket, or reject one of them.', ticket: await view(channel, twin, all) }];
-    return [200, { ok: true, ticket: await view(channel, await store.update(channel, now.id, { base }), all) }];
-  });
-}
-
-function setKind(channel, ticket, body) {
-  return inTurn(channel, async () => {
-    const all = await listAll(channel);
-    const { kind, error } = kindFrom(body.kind, all, null);
-    if (error) return error;
-    const now = all.find((t) => t.id === ticket.id) || ticket;
-    const state = starting.has(channel + '/' + now.id) ? 'starting' : now.status;
-    if (state !== 'triage' && state !== 'ready') return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can change its kind. This one is ' + state + '.' }];
-    if ((now.kind || null) === kind) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
-    const changed = await store.update(channel, now.id, { kind });
-    filed(channel, changed, null, new Date().toISOString());
-    return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
-  });
-}
-
-function setLabels(channel, ticket, body) {
-  return inTurn(channel, async () => {
-    const all = await listAll(channel);
-    if (body.labels === undefined) return [400, { ok: false, error: 'bad_param', message: 'Give "labels", a list of labels, or [] for none.' }];
-    const { labels, error } = labelsFrom(body.labels, all, null);
-    if (error) return error;
-    const now = all.find((t) => t.id === ticket.id) || ticket;
-    const had = Array.isArray(now.labels) ? now.labels : [];
-    if (had.join(',') === labels.join(',')) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
-    const changed = await store.update(channel, now.id, { labels });
-    return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
-  });
-}
-
 function shapesFrom(value, all, self) {
   if (value === undefined || value === null) return { shapes: [] };
   if (!Array.isArray(value) || value.some((x) => typeof x !== 'string' && typeof x !== 'number')) return { error: [400, { ok: false, error: 'bad_shapes', message: '"shapes" is a list of ticket ids.' }] };
@@ -283,36 +237,6 @@ function shapesFrom(value, all, self) {
   if (unknown.length) return { error: [400, { ok: false, error: 'bad_shapes', message: 'No such ticket: ' + unknown.join(', ') + '.' }] };
   return { shapes };
 }
-function setShapes(channel, ticket, body) {
-  return inTurn(channel, async () => {
-    const all = await listAll(channel);
-    if (body.shapes === undefined) return [400, { ok: false, error: 'bad_param', message: 'Give "shapes", a list of the ticket ids this design ticket shapes, or [] for none.' }];
-    const now = all.find((t) => t.id === ticket.id) || ticket;
-    if (!['triage', 'ready', 'started'].includes(now.status)) return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage, Ready or Started can change what it shapes. This one is ' + now.status + '.' }];
-    const { shapes, error } = shapesFrom(body.shapes, all, now.id);
-    if (error) return error;
-    const had = Array.isArray(now.shapes) ? now.shapes : [];
-    if (had.join(',') === shapes.join(',')) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
-    const changed = await store.update(channel, now.id, { shapes });
-    return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
-  });
-}
-function setMark(channel, ticket, body) {
-  const mark = body.mark === null || body.mark === '' ? null : String(body.mark || '');
-  if (mark !== null && !MARKS.includes(mark)) return [400, { ok: false, error: 'bad_mark', message: 'A mark is ' + MARKS.join(' or ') + ', or null to clear it.' }];
-  const replacedBy = mark === 'replaced' && body.replacedBy ? clean(body.replacedBy) : null;
-  return inTurn(channel, async () => {
-    const all = await listAll(channel);
-    const now = all.find((t) => t.id === ticket.id) || ticket;
-    const state = starting.has(channel + '/' + now.id) ? 'starting' : now.status;
-    if (mark && !ORDERABLE.includes(state)) return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can be marked. This one is ' + state + '.' }];
-    if (replacedBy && (replacedBy === now.id || !all.some((t) => t.id === replacedBy))) return [400, { ok: false, error: 'bad_mark', message: replacedBy === now.id ? 'A ticket cannot replace itself.' : 'No such ticket: ' + replacedBy + '.' }];
-    if ((now.mark || null) === mark && (now.replacedBy || null) === replacedBy) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
-    const changed = await store.update(channel, now.id, { mark, replacedBy });
-    return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
-  });
-}
-
 const ORDERABLE = ['triage', 'ready'];
 const notReady = (agent, what, state) => [agent ? 403 : 409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can change its ' + what + '. This one is ' + state + '.' }];
 const setBy = (agent, what) => ({ orderedBy: !agent ? 'you' : agent.lead ? 'Lead' : 'PM', orderedWhat: what });
@@ -329,63 +253,6 @@ function orderOff(channel, agent) {
   const no = agent && sessionMayOrder(channel, agent);
   return no ? [403, { ok: false, error: 'forbidden', message: no }] : null;
 }
-function setPriority(channel, ticket, body, agent) {
-  const priority = String(body.priority || '');
-  if (!PRIORITIES.includes(priority)) return [400, { ok: false, error: 'bad_priority', message: 'Priority is one of: ' + PRIORITIES.join(', ') + '.' }];
-  return inTurn(channel, async () => {
-    const off = orderOff(channel, agent);
-    if (off) return off;
-    const all = await listAll(channel);
-    const now = all.find((t) => t.id === ticket.id) || ticket;
-    const state = starting.has(channel + '/' + now.id) ? 'starting' : now.status;
-    if (!ORDERABLE.includes(state)) return notReady(agent, 'priority', state);
-    if ((now.priority || 'normal') === priority) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
-    const changed = await store.update(channel, now.id, Object.assign({ priority, rank: lastRank(all.filter((t) => t.id !== now.id), priority, Date.now()) }, setBy(agent, 'priority')));
-    return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
-  });
-}
-const EDITABLE = ['title', 'body', 'priority'];
-function edit(channel, ticket, body, agent) {
-  const asked = EDITABLE.filter((k) => body[k] !== undefined);
-  if (!asked.length) return [400, { ok: false, error: 'bad_param', message: 'Give at least one of "title", "body" or "priority".' }];
-  const want = {};
-  if (body.title !== undefined) {
-    want.title = clean(body.title).replace(/\s+/g, ' ');
-    if (!want.title) return [400, { ok: false, error: 'bad_title', message: 'A ticket needs a title.' }];
-    if (want.title.length > MAX_TITLE) return [400, { ok: false, error: 'bad_title', message: 'Keep the title to ' + MAX_TITLE + ' characters.' }];
-  }
-  if (body.body !== undefined) {
-    want.body = clean(body.body);
-    if (want.body.length > MAX_BODY) return [400, { ok: false, error: 'bad_body', message: 'Keep the body to ' + MAX_BODY + ' characters.' }];
-  }
-  if (body.priority !== undefined) {
-    want.priority = String(body.priority);
-    if (!PRIORITIES.includes(want.priority)) return [400, { ok: false, error: 'bad_priority', message: 'Priority is one of: ' + PRIORITIES.join(', ') + '.' }];
-  }
-  return inTurn(channel, async () => {
-    const all = await listAll(channel);
-    const now = all.find((t) => t.id === ticket.id) || ticket;
-    const state = starting.has(channel + '/' + now.id) ? 'starting' : now.status;
-    if (!ORDERABLE.includes(state)) return [agent ? 403 : 409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can be edited. This one is ' + state + '.' }];
-    const what = asked.filter((k) => (k === 'priority' ? (now.priority || 'normal') : (now[k] || '')) !== want[k]);
-    if (!what.length) return [200, { ok: true, unchanged: true, ticket: await view(channel, now, all) }];
-    if (what.includes('priority')) { const off = orderOff(channel, agent); if (off) return off; }
-    if (what.includes('title')) {
-      const twin = all.find((t) => t.id !== now.id && t.status !== 'done' && (agent || t.status !== 'rejected') && t.repo === now.repo && t.title.toLowerCase() === want.title.toLowerCase() && (!t.base || t.base === now.base));
-      if (twin) return [409, { ok: false, error: 'duplicate', message: twin.id + ' already has that title' + (twin.base ? ' on ' + twin.base : ' in this repo') + (twin.status === 'rejected' ? ', and the person rejected it' : '') + '. Use another title, or that ticket.', ticket: await view(channel, twin, all) }];
-    }
-    const changes = {};
-    for (const k of what) changes[k] = want[k];
-    if (what.includes('priority')) Object.assign(changes, { rank: lastRank(all.filter((t) => t.id !== now.id), want.priority, Date.now()) }, setBy(agent, 'priority'));
-    const approvalTaken = !!agent && now.status === 'ready' && personApproved(now) && (what.includes('title') || what.includes('body'));
-    if (approvalTaken) changes.approvedBy = 'none';
-    const edited = await store.update(channel, now.id, changes);
-    if (what.includes('title')) chat.openTicketRoom(channel, chatOf(edited));
-    history.add(channel, now, { stage: 'edited', by: !agent ? 'you' : agent.lead ? 'Lead' : 'PM', what }, agent || null);
-    return [200, Object.assign({ ok: true, edited: what, ticket: await view(channel, edited, all.map((t) => (t.id === now.id ? edited : t))) }, approvalTaken ? { approvalTaken } : {})];
-  });
-}
-
 const PROPOSALS = ['replace', 'merge', 'close', 'blockers'];
 const CLOSED_AS = { replace: 'replaced', merge: 'merged', close: 'closed' };
 const MAX_WHY = 500;
@@ -616,8 +483,80 @@ const onFiled = (fn) => filedWatchers.push(fn);
 const filed = (channel, ticket, agent, at) => filedWatchers.forEach((fn) => { try { fn(channel, ticket, agent || null, at); } catch (e) { console.error('A watcher of filed tickets failed: ' + e.message); } });
 const changed = (channel) => changeWatchers.forEach((fn) => fn(channel));
 
+const EDITABLE = ['title', 'body', 'priority', 'kind', 'labels', 'mark', 'replacedBy', 'shapes', 'base'];
+const PERSON_ONLY = ['kind', 'labels', 'mark', 'replacedBy', 'shapes', 'base'];
+async function edit(channel, ticket, body, agent) {
+  const asked = EDITABLE.filter((k) => body[k] !== undefined);
+  if (!asked.length) return [400, { ok: false, error: 'bad_param', message: 'Give at least one of ' + EDITABLE.map((k) => '"' + k + '"').join(', ') + '.' }];
+  const theirs = agent ? asked.filter((k) => PERSON_ONLY.includes(k)) : [];
+  if (theirs.length) return [403, { ok: false, error: 'forbidden', message: 'Only the person changes a ticket\'s ' + theirs.join(', ') + '. A PM or Lead edits its title, body and priority.' }];
+  if (agent && body.priority !== undefined) { const off = orderOff(channel, agent); if (off) return off; }
+  if (body.replacedBy !== undefined && body.mark === undefined) return [400, { ok: false, error: 'bad_mark', message: 'Send "replacedBy" with "mark": "replaced".' }];
+  const want = {};
+  if (body.title !== undefined) {
+    want.title = clean(body.title).replace(/\s+/g, ' ');
+    if (!want.title) return [400, { ok: false, error: 'bad_title', message: 'A ticket needs a title.' }];
+    if (want.title.length > MAX_TITLE) return [400, { ok: false, error: 'bad_title', message: 'Keep the title to ' + MAX_TITLE + ' characters.' }];
+  }
+  if (body.body !== undefined) {
+    want.body = clean(body.body);
+    if (want.body.length > MAX_BODY) return [400, { ok: false, error: 'bad_body', message: 'Keep the body to ' + MAX_BODY + ' characters.' }];
+  }
+  if (body.priority !== undefined) {
+    want.priority = String(body.priority);
+    if (!PRIORITIES.includes(want.priority)) return [400, { ok: false, error: 'bad_priority', message: 'Priority is one of: ' + PRIORITIES.join(', ') + '.' }];
+  }
+  if (body.mark !== undefined) {
+    want.mark = body.mark === null || body.mark === '' ? null : String(body.mark);
+    if (want.mark !== null && !MARKS.includes(want.mark)) return [400, { ok: false, error: 'bad_mark', message: 'A mark is ' + MARKS.join(' or ') + ', or null to clear it.' }];
+    want.replacedBy = want.mark === 'replaced' && body.replacedBy ? clean(body.replacedBy) : null;
+  }
+  if (body.base !== undefined) {
+    want.base = clean(body.base);
+    if (!want.base) return [400, { ok: false, error: 'bad_base', message: 'Name the branch to start from.' }];
+    const unusable = tasks.baseProblem(want.base);
+    if (unusable) return [400, { ok: false, error: 'bad_base', message: unusable }];
+    if (!(await tasks.hasBranch(ticket.repo, want.base))) return [400, { ok: false, error: 'no_base', message: 'There is no local branch ' + want.base + ' with any commits in ' + ticket.repo + '.' }];
+  }
+  return inTurn(channel, async () => {
+    const all = await listAll(channel);
+    const now = all.find((t) => t.id === ticket.id) || ticket;
+    const state = starting.has(channel + '/' + now.id) ? 'starting' : now.status;
+    const open = ORDERABLE.includes(state);
+    if ((body.title !== undefined || body.body !== undefined) && !open) return [agent ? 403 : 409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can be edited. This one is ' + state + '.' }];
+    if (body.priority !== undefined && !open) return notReady(agent, 'priority', state);
+    if (body.kind !== undefined && !open) return notReady(agent, 'kind', state);
+    if (body.base !== undefined && !open) return notReady(agent, 'base', state);
+    if (want.mark && !open) return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can be marked. This one is ' + state + '.' }];
+    if (body.shapes !== undefined && !['triage', 'ready', 'started'].includes(now.status)) return [409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage, Ready or Started can change what it shapes. This one is ' + now.status + '.' }];
+    if (body.kind !== undefined) { const r = kindFrom(body.kind, all, null); if (r.error) return r.error; want.kind = r.kind; }
+    if (body.labels !== undefined) { const r = labelsFrom(body.labels, all, null); if (r.error) return r.error; want.labels = r.labels; }
+    if (body.shapes !== undefined) { const r = shapesFrom(body.shapes, all, now.id); if (r.error) return r.error; want.shapes = r.shapes; }
+    if (want.replacedBy && (want.replacedBy === now.id || !all.some((t) => t.id === want.replacedBy))) return [400, { ok: false, error: 'bad_mark', message: want.replacedBy === now.id ? 'A ticket cannot replace itself.' : 'No such ticket: ' + want.replacedBy + '.' }];
+    const had = (k) => (k === 'priority' ? (now.priority || 'normal') : k === 'labels' || k === 'shapes' ? (Array.isArray(now[k]) ? now[k] : []).join(',') : k === 'mark' || k === 'replacedBy' || k === 'kind' ? (now[k] || null) : (now[k] || ''));
+    const what = Object.keys(want).filter((k) => had(k) !== (Array.isArray(want[k]) ? want[k].join(',') : want[k]));
+    if (!what.length) return [200, { ok: true, unchanged: true, edited: [], ticket: await view(channel, now, all) }];
+    const title = want.title !== undefined ? want.title : now.title, base = want.base !== undefined ? want.base : now.base;
+    if (what.includes('title') || what.includes('base')) {
+      const twin = all.find((t) => t.id !== now.id && t.status !== 'done' && (agent || t.status !== 'rejected') && t.repo === now.repo && t.title.toLowerCase() === title.toLowerCase() && (!t.base || t.base === base));
+      if (twin) return [409, { ok: false, error: 'duplicate', message: twin.id + ' already has that title' + (twin.base ? ' on ' + twin.base : ' in this repo') + (twin.status === 'rejected' ? ', and the person rejected it' : '') + (what.includes('title') ? '. Use another title, or that ticket.' : '. Use that ticket, or reject one of them.'), ticket: await view(channel, twin, all) }];
+    }
+    const changes = {};
+    for (const k of what) changes[k] = want[k];
+    if (what.includes('mark') || what.includes('replacedBy')) Object.assign(changes, { mark: want.mark, replacedBy: want.replacedBy });
+    if (what.includes('priority')) Object.assign(changes, { rank: lastRank(all.filter((t) => t.id !== now.id), want.priority, Date.now()) }, setBy(agent, 'priority'));
+    const approvalTaken = !!agent && now.status === 'ready' && personApproved(now) && (what.includes('title') || what.includes('body'));
+    if (approvalTaken) changes.approvedBy = 'none';
+    const edited = await store.update(channel, now.id, changes);
+    if (what.includes('title')) chat.openTicketRoom(channel, chatOf(edited));
+    if (what.includes('kind')) filed(channel, edited, null, new Date().toISOString());
+    if (what.some((k) => ['title', 'body', 'priority'].includes(k))) history.add(channel, now, { stage: 'edited', by: !agent ? 'you' : agent.lead ? 'Lead' : 'PM', what: what.filter((k) => ['title', 'body', 'priority'].includes(k)) }, agent || null);
+    return [200, Object.assign({ ok: true, edited: what, ticket: await view(channel, edited, all.map((t) => (t.id === now.id ? edited : t))) }, approvalTaken ? { approvalTaken } : {})];
+  });
+}
+
 async function handle(req, res, channel, rest, ctx) {
-  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|base|kind|labels|mark|shapes|priority|order|edit|propose|proposal)|\/([\w-]{1,64}))?$/);
+  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|order|edit|propose|proposal)|\/([\w-]{1,64}))?$/);
   if (!route) { if (!/^\/tickets(\/|$)/.test(rest)) return false; ctx.problem(res, 404, 'not_found', 'Unknown ticket route.'); return true; }
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
@@ -648,7 +587,6 @@ async function handle(req, res, channel, rest, ctx) {
           ctx.log('The Lead started ' + ticket.id + ' (task ' + out[1].task.id + '). ' + (ctx.agent.startsLeft ? ctx.agent.startsLeft + ' starts left.' : 'That was its last start, so it can no longer start tickets.'));
         }
       }
-      else if (req.method === 'POST' && verb === 'base') out = await setBase(channel, ticket, body || {});
       else if (req.method === 'POST' && verb === 'edit') {
         out = await edit(channel, ticket, body || {}, ctx.agent);
         if (ctx.agent && out[1].ok && !out[1].unchanged) ctx.log('The ' + (ctx.agent.lead ? 'Lead' : 'PM') + ' edited ' + ticket.id + ': ' + out[1].edited.join(', ') + (out[1].approvalTaken ? '. It needs your approval again.' : ''));
@@ -661,15 +599,11 @@ async function handle(req, res, channel, rest, ctx) {
         if (ctx.agent) { ctx.problem(res, 401, 'unauthorized', 'Only the person approves or declines a proposal.'); return true; }
         out = await decide(channel, ticket, body || {});
       }
-      else if (req.method === 'POST' && verb === 'kind') out = await setKind(channel, ticket, body || {});
-      else if (req.method === 'POST' && verb === 'labels') out = await setLabels(channel, ticket, body || {});
-      else if (req.method === 'POST' && verb === 'mark') out = await setMark(channel, ticket, body || {});
-      else if (req.method === 'POST' && verb === 'shapes') out = await setShapes(channel, ticket, body || {});
-      else if (req.method === 'POST' && (verb === 'priority' || verb === 'order')) {
+      else if (req.method === 'POST' && verb === 'order') {
         const refused = ctx.agent && sessionMayOrder(channel, ctx.agent);
         if (refused) { ctx.problem(res, 403, 'forbidden', refused); return true; }
-        out = await (verb === 'priority' ? setPriority : setPlace)(channel, ticket, body || {}, ctx.agent);
-        if (ctx.agent && out[1].ok) ctx.log('The ' + (ctx.agent.lead ? 'Lead' : 'PM') + ' set the ' + (verb === 'priority' ? 'priority' : 'place') + ' of ' + ticket.id);
+        out = await setPlace(channel, ticket, body || {}, ctx.agent);
+        if (ctx.agent && out[1].ok) ctx.log('The ' + (ctx.agent.lead ? 'Lead' : 'PM') + ' set the place of ' + ticket.id);
       }
     }
   } catch (e) {

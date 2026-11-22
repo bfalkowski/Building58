@@ -219,18 +219,18 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       const d = (await call('POST', '/tickets', { title: 'Design first', repo, shapes: [a.id] })).body.ticket;
       assert.deepStrictEqual(d.shapes, [a.id]);
       assert.match((await call('GET', '/tickets/' + a.id)).body.ticket.heldBack, new RegExp('design ticket ' + d.id));
-      assert.strictEqual((await call('POST', '/tickets/' + d.id + '/shapes', { shapes: [d.id] })).body.error, 'bad_shapes', 'a ticket cannot shape itself');
-      assert.deepStrictEqual((await call('POST', '/tickets/' + d.id + '/shapes', { shapes: [a.id, b.id] })).body.ticket.shapes, [a.id, b.id]);
+      assert.strictEqual((await call('POST', '/tickets/' + d.id + '/edit', { shapes: [d.id] })).body.error, 'bad_shapes', 'a ticket cannot shape itself');
+      assert.deepStrictEqual((await call('POST', '/tickets/' + d.id + '/edit', { shapes: [a.id, b.id] })).body.ticket.shapes, [a.id, b.id]);
       await call('POST', '/tickets/' + d.id + '/move', { to: 'rejected' });
       assert.strictEqual((await call('GET', '/tickets/' + a.id)).body.ticket.heldBack, null, 'a rejected design ticket frees what it shaped');
-      assert.strictEqual((await call('POST', '/tickets/' + b.id + '/mark', { mark: 'paused' })).body.error, 'bad_mark');
-      assert.strictEqual((await call('POST', '/tickets/' + b.id + '/mark', { mark: 'replaced', replacedBy: b.id })).body.error, 'bad_mark');
-      assert.match((await call('POST', '/tickets/' + b.id + '/mark', { mark: 'hold' })).body.ticket.heldBack, /^On hold/);
-      const replaced = (await call('POST', '/tickets/' + b.id + '/mark', { mark: 'replaced', replacedBy: a.id })).body.ticket;
+      assert.strictEqual((await call('POST', '/tickets/' + b.id + '/edit', { mark: 'paused' })).body.error, 'bad_mark');
+      assert.strictEqual((await call('POST', '/tickets/' + b.id + '/edit', { mark: 'replaced', replacedBy: b.id })).body.error, 'bad_mark');
+      assert.match((await call('POST', '/tickets/' + b.id + '/edit', { mark: 'hold' })).body.ticket.heldBack, /^On hold/);
+      const replaced = (await call('POST', '/tickets/' + b.id + '/edit', { mark: 'replaced', replacedBy: a.id })).body.ticket;
       assert.strictEqual(replaced.mark, 'replaced');
       assert.match(replaced.heldBack, new RegExp('Replaced by ' + a.id));
-      assert.strictEqual((await call('POST', '/tickets/' + b.id + '/mark', { mark: 'hold' }, agent)).status, 401, 'only the person marks a ticket');
-      assert.strictEqual((await call('POST', '/tickets/' + a.id + '/shapes', { shapes: [] }, agent)).status, 401);
+      assert.strictEqual((await call('POST', '/tickets/' + b.id + '/edit', { mark: 'hold' }, agent)).status, 403, 'only the person marks a ticket');
+      assert.strictEqual((await call('POST', '/tickets/' + a.id + '/edit', { shapes: [] }, agent)).status, 403);
       const ready = await call('POST', '/tickets', { title: 'Agent design on Ready', shapes: [a.id] }, agent);
       assert.strictEqual(ready.status, 403, 'a session cannot make a ticket the person approved wait');
       assert.strictEqual(ready.body.error, 'bad_shapes');
@@ -246,12 +246,12 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       assert.strictEqual(again.body.ticket.id, design.body.ticket.id);
       assert.match((await call('GET', '/tickets/' + triaged.id)).body.ticket.heldBack, new RegExp('design ticket ' + design.body.ticket.id), 'a ticket approved after the filing still waits');
       for (const x of [triaged, design.body.ticket]) await call('POST', '/tickets/' + x.id + '/move', { to: 'rejected' });
-      const cleared = (await call('POST', '/tickets/' + b.id + '/mark', { mark: null })).body.ticket;
+      const cleared = (await call('POST', '/tickets/' + b.id + '/edit', { mark: null })).body.ticket;
       assert.strictEqual(cleared.heldBack, null);
       assert.strictEqual(cleared.mark, null);
       for (const x of [a, b]) await call('POST', '/tickets/' + x.id + '/move', { to: 'rejected' });
       for (const x of [a, d]) {
-        const late = await call('POST', '/tickets/' + x.id + '/shapes', { shapes: [b.id] });
+        const late = await call('POST', '/tickets/' + x.id + '/edit', { shapes: [b.id] });
         assert.strictEqual(late.status, 409, 'a rejected ticket keeps no shapes list (T-291)');
         assert.strictEqual(late.body.error, 'not_ready');
         assert.match(late.body.message, /Triage, Ready or Started.*rejected/);
@@ -259,7 +259,7 @@ for (const [name, store] of [['local', ''], ['memory', path.join(__dirname, 'mem
       assert.deepStrictEqual((await call('GET', '/tickets/' + d.id)).body.ticket.shapes, [a.id, b.id], 'the list stays as it was');
       const done = (await call('POST', '/tickets', { title: 'Merged design', repo, shapes: [b.id] })).body.ticket;
       assert.strictEqual((await call('POST', '/tickets/' + done.id + '/move', { to: 'done', pr: 'https://github.com/o/r/pull/45' })).body.ticket.status, 'done');
-      const afterDone = await call('POST', '/tickets/' + done.id + '/shapes', { shapes: [] });
+      const afterDone = await call('POST', '/tickets/' + done.id + '/edit', { shapes: [] });
       assert.deepStrictEqual([afterDone.status, afterDone.body.error], [409, 'not_ready'], 'a done ticket keeps its shapes list too');
       assert.match(afterDone.body.message, /This one is done\./);
     });
@@ -696,18 +696,18 @@ test('a person can change a ticket\'s base before it starts, and the brief follo
   const triaged = (await R.call('POST', '/tickets', { title: 'From an agent' }, agent)).body.ticket;
 
   for (const [base, error] of [['', 'bad_base'], ['fix#12', 'bad_base'], ['nope', 'no_base']]) {
-    const r = await R.call('POST', '/tickets/' + filed.id + '/base', { base });
+    const r = await R.call('POST', '/tickets/' + filed.id + '/edit', { base });
     assert.strictEqual(r.status, 400, base);
     assert.strictEqual(r.body.error, error, base);
   }
-  assert.strictEqual((await R.call('POST', '/tickets/' + filed.id + '/base', { base: 'main' }, agent)).status, 401, 'not a session');
+  assert.strictEqual((await R.call('POST', '/tickets/' + filed.id + '/edit', { base: 'main' }, agent)).status, 403, 'not a session');
   assert.strictEqual((await R.call('GET', '/tickets/' + filed.id)).body.ticket.base, 'feature', 'nothing refused changed it');
 
-  const triage = await R.call('POST', '/tickets/' + triaged.id + '/base', { base: 'feature' });
+  const triage = await R.call('POST', '/tickets/' + triaged.id + '/edit', { base: 'feature' });
   assert.strictEqual(triage.status, 200, 'Triage too');
   assert.strictEqual(triage.body.ticket.base, 'feature');
 
-  const changed = await R.call('POST', '/tickets/' + filed.id + '/base', { base: 'main' });
+  const changed = await R.call('POST', '/tickets/' + filed.id + '/edit', { base: 'main' });
   assert.strictEqual(changed.status, 200, JSON.stringify(changed.body));
   assert.strictEqual(changed.body.ticket.base, 'main');
   assert.strictEqual((await R.call('GET', '/tickets')).body.tickets.find((x) => x.id === filed.id).base, 'main');
@@ -716,7 +716,7 @@ test('a person can change a ticket\'s base before it starts, and the brief follo
   assert.ok(!fs.existsSync(path.join(task.worktree, 'only-here.txt')));
   assert.match(await briefOf(R, task), /pull request against main\./);
 
-  const late = await R.call('POST', '/tickets/' + filed.id + '/base', { base: 'feature' });
+  const late = await R.call('POST', '/tickets/' + filed.id + '/edit', { base: 'feature' });
   assert.strictEqual(late.status, 409, 'not once it has started');
   assert.strictEqual(late.body.error, 'not_ready');
 });
@@ -752,19 +752,19 @@ for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..'
     assert.match(cli('create', 'Another chore', '--kind', 'chore', '--body', 'Tidy'), /Filed:/);
 
     // Only the person changes it: a session's token cannot.
-    assert.strictEqual((await R.call('POST', '/tickets/' + docs.id + '/kind', { kind: 'bug' }, agent)).status, 401, 'not a session');
-    const changed = await R.call('POST', '/tickets/' + docs.id + '/kind', { kind: 'bug' });
+    assert.strictEqual((await R.call('POST', '/tickets/' + docs.id + '/edit', { kind: 'bug' }, agent)).status, 403, 'not a session');
+    const changed = await R.call('POST', '/tickets/' + docs.id + '/edit', { kind: 'bug' });
     assert.strictEqual(changed.status, 200, JSON.stringify(changed.body));
     assert.strictEqual(changed.body.ticket.kind, 'bug');
     assert.strictEqual((await R.call('GET', '/tickets/' + docs.id)).body.ticket.kind, 'bug', 'the store kept it');
-    assert.strictEqual((await R.call('POST', '/tickets/' + fromCli.id + '/kind', { kind: 'feature' })).status, 200, 'Triage too');
-    const cleared = await R.call('POST', '/tickets/' + fromCli.id + '/kind', { kind: '' });
+    assert.strictEqual((await R.call('POST', '/tickets/' + fromCli.id + '/edit', { kind: 'feature' })).status, 200, 'Triage too');
+    const cleared = await R.call('POST', '/tickets/' + fromCli.id + '/edit', { kind: '' });
     assert.ok(!cleared.body.ticket.kind, 'an empty kind takes it away');
-    assert.strictEqual((await R.call('POST', '/tickets/' + docs.id + '/kind', { kind: 'Not ok!' })).body.error, 'bad_kind');
+    assert.strictEqual((await R.call('POST', '/tickets/' + docs.id + '/edit', { kind: 'Not ok!' })).body.error, 'bad_kind');
 
     if (name !== 'local') return;  // starting needs a checkout, which the fake GitHub has no use for
     assert.strictEqual((await R.call('POST', '/tickets/' + docs.id + '/start', {})).status, 200);
-    const late = await R.call('POST', '/tickets/' + docs.id + '/kind', { kind: 'docs' });
+    const late = await R.call('POST', '/tickets/' + docs.id + '/edit', { kind: 'docs' });
     assert.strictEqual(late.status, 409, 'not once it has started');
     assert.strictEqual(late.body.error, 'not_ready');
     assert.strictEqual((await R.call('GET', '/tickets/' + docs.id)).body.ticket.kind, 'bug');
@@ -833,19 +833,19 @@ for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..'
     assert.throws(() => cli('create', 'A chore', '--label', 'chore', '--body', 'Tidy'), /Only the person adds a new label/);
 
     // Only the person changes them: a session's token cannot.
-    assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/labels', { labels: ['tests'] }, agent)).status, 401, 'not a session');
-    const changed = await R.call('POST', '/tickets/' + flaky.id + '/labels', { labels: ['ci', 'flaky'] });
+    assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/edit', { labels: ['tests'] }, agent)).status, 403, 'not a session');
+    const changed = await R.call('POST', '/tickets/' + flaky.id + '/edit', { labels: ['ci', 'flaky'] });
     assert.strictEqual(changed.status, 200, JSON.stringify(changed.body));
     assert.deepStrictEqual(changed.body.ticket.labels, ['ci', 'flaky'], 'the list given replaces the one there');
     assert.deepStrictEqual((await R.call('GET', '/tickets/' + flaky.id)).body.ticket.labels, ['ci', 'flaky'], 'the store kept them');
     assert.deepStrictEqual((await R.call('GET', '/tickets')).body.labels, ['ci', 'flaky'], 'a label no ticket has goes from the list');
-    assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/labels', {})).body.error, 'bad_param');
-    const cleared = await R.call('POST', '/tickets/' + fromCli.id + '/labels', { labels: [] });
+    assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/edit', {})).body.error, 'bad_param');
+    const cleared = await R.call('POST', '/tickets/' + fromCli.id + '/edit', { labels: [] });
     assert.deepStrictEqual(cleared.body.ticket.labels, [], '[] takes them away');
 
     if (name !== 'local') return;  // starting needs a checkout, which the fake GitHub has no use for
     assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/start', {})).status, 200);
-    const late = await R.call('POST', '/tickets/' + flaky.id + '/labels', { labels: ['flaky'] });
+    const late = await R.call('POST', '/tickets/' + flaky.id + '/edit', { labels: ['flaky'] });
     assert.strictEqual(late.status, 200, 'labels still change once it has started');
     assert.deepStrictEqual(late.body.ticket.labels, ['flaky']);
   });
@@ -856,13 +856,13 @@ test('a base change that would make two open tickets with one title on one branc
   const onOld = (await R.call('POST', '/tickets', { title: 'Fix login', repo: wt })).body.ticket;
   const onMain = (await R.call('POST', '/tickets', { title: 'fix login', repo: R.repo })).body.ticket;
   assert.notStrictEqual(onOld.id, onMain.id);
-  const r = await R.call('POST', '/tickets/' + onOld.id + '/base', { base: 'main' });
+  const r = await R.call('POST', '/tickets/' + onOld.id + '/edit', { base: 'main' });
   assert.strictEqual(r.status, 409);
   assert.strictEqual(r.body.error, 'duplicate');
   assert.strictEqual(r.body.ticket.id, onMain.id);
   assert.strictEqual((await R.call('GET', '/tickets/' + onOld.id)).body.ticket.base, 'old');
   await R.call('POST', '/tickets/' + onMain.id + '/move', { to: 'rejected' });
-  assert.strictEqual((await R.call('POST', '/tickets/' + onOld.id + '/base', { base: 'main' })).status, 200, 'a rejected twin does not count');
+  assert.strictEqual((await R.call('POST', '/tickets/' + onOld.id + '/edit', { base: 'main' })).status, 200, 'a rejected twin does not count');
 });
 test('a base change at the same moment as Start either lands first or is refused, never half', async (t) => {
   const R = await relay(); t.after(R.stop);
@@ -870,7 +870,7 @@ test('a base change at the same moment as Start either lands first or is refused
   for (let i = 0; i < 8; i++) {
     const wt = branchedRepo(R, 'race-' + i);
     const a = (await R.call('POST', '/tickets', { title: 'Race ' + i, repo: wt })).body.ticket;
-    const changing = R.call('POST', '/tickets/' + a.id + '/base', { base: 'main' });
+    const changing = R.call('POST', '/tickets/' + a.id + '/edit', { base: 'main' });
     await H.sleep(i * 12);
     const [started, changed] = await Promise.all([R.call('POST', '/tickets/' + a.id + '/start', {}), changing]);
     assert.strictEqual(started.status, 200, JSON.stringify(started.body));
@@ -993,7 +993,7 @@ test('a base that has since been deleted says so, and the ticket stays Ready for
   assert.match(r.body.message, /Change this ticket's base on the Board/);
   assert.strictEqual((await R.call('GET', '/tickets/' + a.id)).body.ticket.status, 'ready');
   assert.deepStrictEqual((await R.call('GET', '/tasks')).body.tasks, []);
-  assert.strictEqual((await R.call('POST', '/tickets/' + a.id + '/base', { base: 'main' })).status, 200, 'its base can be changed');
+  assert.strictEqual((await R.call('POST', '/tickets/' + a.id + '/edit', { base: 'main' })).status, 200, 'its base can be changed');
   assert.strictEqual((await R.call('POST', '/tickets/' + a.id + '/start', {})).body.task.base, 'main', 'and then it starts');
 });
 test('Start again on a deleted base leaves a ticket that can be rejected', async (t) => {

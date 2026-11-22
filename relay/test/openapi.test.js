@@ -9,7 +9,9 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { build, render, rows, OUT, PAGE } = require('../openapi.js');
-const { relay } = require('./helpers.js');
+const { relay, makeRepo, until, sessionToken } = require('./helpers.js');
+const agentHeaders = (token) => ({ 'X-Office-Token': token });
+const api = require('../api-schemas.js');
 
 const ROOT = path.join(__dirname, '..', '..');
 const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -49,14 +51,14 @@ test('the build refuses a page with no version, or a route with a parameter it h
   const html = fs.readFileSync(PAGE, 'utf8');
   assert.throws(() => build(html.replace(/<code id="api-version">[^<]+<\/code>/, '')), /api-version/);
   assert.throws(() => build(html.replace('<code>GET /tickets/{id}</code>', '<code>GET /tickets/{nope}</code>')), /No pattern for \{nope\}/);
-  assert.ok(rows(html).length >= 85, 'the manual\'s tables still list the routes');
+  assert.ok(rows(html).length >= 70, 'the manual\'s tables still list the routes');
 });
 
 test('the relay serves docs/openapi.json, each route in it answers, and a made-up one does not', async (t) => {
   const R = await relay();
   t.after(R.stop);
   const base = 'http://127.0.0.1:' + R.port;
-  const sample = { channel: 't', page: '1', id: '000000', name: 'general', seat: 'S1', pid: '1' };
+  const sample = { channel: 't', page: '1', id: '000000', name: 'general', seat: 'S1', pid: '1', role: 'coo' };
   const fill = (p) => p.replace(/\{(\w+)\}/g, (_, k) => (k === 'id' && /commands\/\{id\}/.test(p) ? '00000000-0000-0000-0000-000000000000'
     : k === 'id' && /terminals\/\{id\}/.test(p) ? '000000000000' : k === 'id' && /rounds\/\{id\}/.test(p) ? '00000000' : sample[k]));
   const ask = async (method, p) => {
@@ -102,4 +104,79 @@ test('a change to docs/openapi.json since main comes with a newer version', (t) 
     return;
   }
   assert.strictEqual(versionProblem(before, spec()), null);
+});
+
+test('real answers fit their schemas: tickets, tasks, sessions, the Floor, events and a command', async (t) => {
+  const R = await relay();
+  t.after(R.stop);
+  const repo = makeRepo(R.home), wrong = [];
+  const fitted = new Set();
+  const fit = (key, r) => {
+    fitted.add(key);
+    const name = api.RESPONSES[key];
+    assert.ok(name, key + ' has a response schema');
+    assert.ok(r.status >= 200 && r.status < 300, key + ': ' + r.status + ' ' + JSON.stringify(r.body));
+    for (const p of api.check(api.SCHEMAS[name], r.body)) wrong.push(key + ': ' + p);
+    return r.body;
+  };
+  const made = fit('POST /tickets', await R.call('POST', '/tickets', { title: 'A ticket', body: 'Its body.', priority: 'high', kind: 'bug', labels: ['flaky'], repo }));
+  fit('GET /tickets', await R.call('GET', '/tickets'));
+  fit('GET /tickets/{id}', await R.call('GET', '/tickets/' + made.ticket.id));
+  fit('POST /tickets/{id}/edit', await R.call('POST', '/tickets/' + made.ticket.id + '/edit', { title: 'A ticket, edited', mark: 'hold' }));
+  const task = fit('POST /tasks', await R.call('POST', '/tasks', { title: 'Some work', repo })).task;
+  await until(async () => (await R.screen(task.owner.terminal)).includes('GOT['), 'the task brief');
+  fit('GET /tasks', await R.call('GET', '/tasks'));
+  fit('GET /tasks/{id}', await R.call('GET', '/tasks/' + task.id));
+  fit('POST /tasks/{id}/move', await R.call('POST', '/tasks/' + task.id + '/move', { to: 'in_review' }));
+  fit('GET /terminals', await R.call('GET', '/terminals'));
+  fit('GET /floor', await R.call('GET', '/floor'));
+  await R.call('POST', '/events', { events: [{ type: 'worker.doing', who: 'sam' }] });
+  const events = fit('GET /events', await R.call('GET', '/events'));
+  assert.strictEqual(events.events.length, 1, 'the event posted is in the list');
+  const sent = await R.call('POST', '/commands', { action: 'state', wait: false });
+  assert.deepStrictEqual([sent.status, sent.body.error], [503, 'no_page'], 'no page is open, so a command cannot be sent');
+  assert.deepStrictEqual(wrong, [], 'answers that do not fit their schema');
+  assert.deepStrictEqual(Object.keys(api.RESPONSES).filter((k) => !['GET /commands/{id}'].includes(k)).filter((k) => !fitted.has(k)), [], 'every response schema but a command\'s result is checked against a real answer');
+});
+
+test('the relay refuses each request that breaks its schema: a wrong type with bad_type, a wrong value with the route\'s own error', async (t) => {
+  const R = await relay();
+  t.after(R.stop);
+  const repo = makeRepo(R.home);
+  const id = (await R.call('POST', '/tickets', { title: 'To edit', repo })).body.ticket.id;
+  const task = (await R.call('POST', '/tasks', { title: 'To move', repo })).body.task;
+  const reviewer = (await R.call('POST', '/terminals', { cwd: repo, role: 'reviewer', pr: 'https://github.com/o/r/pull/7', title: 'Review' })).body;
+  const reviewerT = agentHeaders(await until(() => { try { return sessionToken(reviewer.sessionId); } catch (e) { return null; } }, 'the reviewer\'s token'));
+  const who = { 'POST /autopilot/verdict': reviewerT };
+  const routes = { 'POST /tickets': ['/tickets', { title: 'Fine', repo }], 'POST /tickets/{id}/edit': ['/tickets/' + id + '/edit', { title: 'Fine' }],
+    'POST /tasks': ['/tasks', { title: 'Fine', repo }], 'POST /tasks/{id}/move': ['/tasks/' + task.id + '/move', { to: 'building' }],
+    'POST /commands': ['/commands', { action: 'state', wait: false }], 'POST /autopilot/verdict': ['/autopilot/verdict', { kind: 'merge' }] };
+  assert.deepStrictEqual(Object.keys(routes).sort(), Object.keys(api.REQUESTS).sort(), 'each request schema is checked here');
+  const refused = [];
+  for (const [key, [p, good]] of Object.entries(routes)) {
+    const schema = api.SCHEMAS[api.REQUESTS[key]];
+    assert.deepStrictEqual(api.check(schema, good), [], key + ': the good body fits its schema');
+    for (const [field, sub] of Object.entries(schema.properties)) {
+      const types = [].concat(sub.type || []);
+      const bad = types.includes('number') || types.includes('array') ? { x: 1 } : 12345;
+      const r = await R.call('POST', p, { ...good, [field]: types.includes('number') && types.includes('string') ? true : bad }, who[key]);
+      if (r.status !== 400 || r.body.error !== 'bad_type') refused.push(key + ' ' + field + ' of the wrong type: ' + r.status + ' ' + JSON.stringify(r.body));
+    }
+    const values = [];
+    for (const [field, sub] of Object.entries(schema.properties)) {
+      if (sub.enum) values.push([field, 'not-one-of-them']);
+      if (sub.maxLength) values.push([field, 'x'.repeat(sub.maxLength + 1)]);
+      if (sub.minLength) values.push([field, '']);
+    }
+    for (const field of schema.required || []) values.push([field, undefined]);
+    for (const [field, value] of values) {
+      const body = { ...good, [field]: value };
+      if (value === undefined) delete body[field];
+      assert.ok(api.check(schema, body).length, key + ' ' + field + ' = ' + JSON.stringify(value) + ' breaks the schema');
+      const r = await R.call('POST', p, body, who[key]);
+      if (r.status === 403 || r.status === 401) refused.push(key + ' ' + field + ': refused for who sent it, not for the value: ' + r.status);
+      else if (!(r.status >= 400 && r.status < 500) || r.body.ok !== false) refused.push(key + ' ' + field + ' = ' + JSON.stringify(value) + ' was not refused: ' + r.status + ' ' + JSON.stringify(r.body));
+    }
+  }
+  assert.deepStrictEqual(refused, [], 'requests that break a schema but were not refused as they should be');
 });

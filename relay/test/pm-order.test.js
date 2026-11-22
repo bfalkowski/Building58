@@ -32,7 +32,7 @@ test('the PM sets priority and order only with the switch on, only in Triage or 
   const pm = await start({ role: 'pm', title: 'PM: an idea' });
   const pmT = await tokenOf(pm);
   const ticket = async (id) => (await R.call('GET', '/tickets/' + id)).body.ticket;
-  const prio = (id, priority, who) => R.call('POST', '/tickets/' + id + '/priority', { priority }, who);
+  const prio = (id, priority, who) => R.call('POST', '/tickets/' + id + '/edit', { priority }, who);
   const order = (id, where, who) => R.call('POST', '/tickets/' + id + '/order', where, who);
   const titles = async () => (await R.call('GET', '/tickets')).body.tickets.map((x) => x.title);
 
@@ -86,7 +86,7 @@ test('the PM sets priority and order only with the switch on, only in Triage or 
       assert.strictEqual((await R.call('POST', '/tickets/' + ids.T + '/move', { to: 'ready' }, pmT)).status, 403);
       assert.strictEqual((await R.call('POST', '/tickets/' + ids.A + '/move', { to: 'rejected' }, pmT)).status, 403);
       assert.strictEqual((await R.call('POST', '/tickets/' + ids.A + '/start', {}, pmT)).status, 403);
-      assert.strictEqual((await R.call('POST', '/tickets/' + ids.A + '/base', { base: 'main' }, pmT)).status, 403);
+      assert.strictEqual((await R.call('POST', '/tickets/' + ids.A + '/edit', { base: 'main' }, pmT)).status, 403);
       assert.strictEqual((await ticket(ids.T)).status, 'triage');
       assert.strictEqual((await ticket(ids.A)).status, 'ready');
     }

@@ -20,7 +20,7 @@ test('quiet, stuck and gone, on the Floor and in the COO\'s measures', async (t)
   const turn = (s) => R.hook({ hook_event_name: 'UserPromptSubmit', session_id: s.sessionId.slice(0, 12) });
   const keys = (s, data) => R.call('POST', '/terminals/' + s.id + '/input', { data });
   const rowOf = async (s) => (await R.call('GET', '/floor')).body.sessions.find((r) => r.terminal === s.id);
-  const recovery = async () => (await R.call('GET', '/coo/measures')).body.measures.recovery;
+  const recovery = async () => (await R.call('GET', '/officers/coo/measures')).body.measures.recovery;
 
   const spinning = await start(), silent = await start(), ending = await start();
   for (const s of [spinning, silent, ending]) await until(async () => (await R.screen(s.id)).includes('❯'), 'its prompt');

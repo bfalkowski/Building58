@@ -154,7 +154,7 @@ test('the chat board', async (t) => {
     const card = (await call('GET', '/tasks/' + task.id)).body.task;
     assert.notStrictEqual(card.state, 'done');
     assert.deepStrictEqual(card.history.filter((h) => h.type === 'merged').map((h) => h.at), ['2026-11-03T10:05:00.000Z']);
-    const shipped = (await call('GET', '/coo/measures')).body.measures.shipped;
+    const shipped = (await call('GET', '/officers/coo/measures')).body.measures.shipped;
     assert.deepStrictEqual(shipped.map((x) => [x.ticket, x.at, x.card]), [[ticket.id, '2026-11-03T10:05:00.000Z', card.state]]);
     assert.ok((await texts('office')).includes('PR #7 merged: T-1 Chat about it.'));
     assert.ok((await texts('office')).includes('Archived #T-1 because PR #7 merged. It is kept to read.'));

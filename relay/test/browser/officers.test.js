@@ -26,14 +26,14 @@ pageTest('Ask security starts its session, and its report shows on the Floor', g
 
   // Its report, saved with its own token, opens by itself on the Floor, under the people.
   const token = { 'X-Office-Token': await until(() => { try { return sessionToken(officer.sessionId); } catch (e) { return null; } }, 'its token') };
-  assert.strictEqual((await o.R.call('POST', '/security/report', { text: '# Access\n\nEvery session inherits the gh login.' }, token)).status, 201);
+  assert.strictEqual((await o.R.call('POST', '/officers/security/report', { text: '# Access\n\nEvery session inherits the gh login.' }, token)).status, 201);
   await page.locator('#security-report:not([hidden])').waitFor();
   assert.match(await page.locator('#security-text').innerText(), /inherits the gh login/);
   assert.match(await page.locator('#security-title').innerText(), /^Security report · /);
   assert.strictEqual(await page.locator('#people').isVisible(), true, 'the people stay on the Floor next to the report');
 
   // The COO's report and this one take turns: one shows at a time.
-  assert.strictEqual((await o.R.call('POST', '/coo/report', { text: 'The room ran alone.' })).status, 201);
+  assert.strictEqual((await o.R.call('POST', '/officers/coo/report', { text: 'The room ran alone.' })).status, 201);
   await page.locator('#coo-last', { hasText: /^Last COO report, from / }).waitFor({ state: 'attached' });
   await page.click('#org-btn');
   await page.click('#coo-last');
