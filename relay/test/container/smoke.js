@@ -45,6 +45,8 @@ function ok(what, cond, detail) {
   const settings = fs.readFileSync(path.join(os.homedir(), '.claude', 'settings.json'), 'utf8');
   ok('the hooks are in ~/.claude/settings.json', settings.includes('office-hook.js'));
   ok('the key is not in ~/.claude/settings.json', !settings.includes(process.env.RELAY_KEY));
+  const config = JSON.parse(fs.readFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, '.claude.json'), 'utf8'));
+  ok('Claude Code\'s first run is marked done, so no text style question blocks a session', config.hasCompletedOnboarding === true);
 
   const list = await call('GET', '/channels/office/terminals');
   ok('the Claude Code panel is on', list.status === 200 && list.body.enabled === true, JSON.stringify(list.body));

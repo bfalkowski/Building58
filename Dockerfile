@@ -17,6 +17,8 @@ RUN apt-get update \
 # One Claude Code version, and no self-update: a new version changes only with a new image.
 RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" && npm cache clean --force
 ENV DISABLE_AUTOUPDATER=1
+# Claude Code keeps all of its files, .claude.json too, in the claude volume.
+ENV CLAUDE_CONFIG_DIR=/home/node/.claude
 
 # The code the first start copies into the Building58 volume, with its git history, so Update works there.
 COPY --chown=node:node . /opt/building58
