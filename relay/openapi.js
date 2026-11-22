@@ -3,6 +3,8 @@
 // the one the page gives in <code id="api-version">. npm run openapi writes the file, and
 // relay/test/openapi.test.js checks that the file is what this builds, that each route in it answers,
 // and that a change since main came with a new version (docs/constitution.md, article 15).
+// Each operation's tag comes from the first part of its path, and TAGS gives each one the name and
+// line the docs show, so a new group of routes needs its own entry there.
 //   node relay/openapi.js           writes docs/openapi.json
 //   node relay/openapi.js --check   exits 1 if docs/openapi.json is out of date
 'use strict';
@@ -30,6 +32,34 @@ const PARAMS = {
   pid: { pattern: '^\\d+$', description: 'The old relay\'s process id.' },
   role: { pattern: '^(coo|security)$', description: 'The officer: coo or security.' }
 };
+
+const TAGS = {
+  calls: ['Calls', 'Calls any caller uses: commands, events and the page.'],
+  autopilot: ['Autopilot', 'Autopilot, which starts and merges work by itself, and the verdicts and fixes it asks for.'],
+  chat: ['Chat', 'The chat channels: #office, one for each ticket, and fun ones.'],
+  checkouts: ['Checkouts', 'Sessions that start in a new checkout of their own, and cleaning a checkout up.'],
+  floor: ['Floor', 'What the Lead sees of each session at work, and the Lead stopping one.'],
+  games: ['Games', 'The games there are, their rounds, and each seat\'s actions.'],
+  huddle: ['Huddle', 'A question to the idle sessions, and the report of their answers.'],
+  'needs-you': ['Needs you', 'The things that wait on the person, most urgent first.'],
+  officers: ['Officers', 'The COO and the security officer: their reports, and what they write from.'],
+  'old-relays': ['Old relays', 'Other relays that still run on this room\'s state folder, and stopping one.'],
+  'pr-watch': ['PR watch', 'The PR watch, and each task with an open PR that it looks at.'],
+  ready: ['Ready to merge', 'Marking a PR ready to merge.'],
+  reviews: ['Reviews', 'The automatic reviews of PRs.'],
+  settings: ['Settings', 'The settings on the room page.'],
+  tasks: ['Tasks', 'The work a session does on its own branch, from the start to the merge.'],
+  terminals: ['Sessions', 'The Claude Code sessions the relay runs: start, list, watch, type into, resize and stop them, and which one is the Lead.'],
+  tickets: ['Tickets', 'The Board: file, edit, move, order, approve and start tickets, and proposals and questions about them.'],
+  update: ['Update', 'Updating the relay\'s own folder, and rolling a bad update back.']
+};
+const SEGMENT_TAG = { rounds: 'games', play: 'games' };
+function tagOf(r) {
+  const part = r.section === 'calls' ? 'calls' : r.path.split('/')[3];
+  const key = SEGMENT_TAG[part] || part;
+  if (!TAGS[key]) throw new Error('No tag for ' + r.method + ' ' + r.path + '. Add "' + key + '" to TAGS in relay/openapi.js.');
+  return TAGS[key][0];
+}
 
 const text = (h) => h.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
@@ -83,12 +113,11 @@ function tokensOf(r) {
 const words = (name) => name.replace(/([A-Z])/g, ' $1').toLowerCase().replace(/^./, (c) => c.toUpperCase()).replace(/\bpm\b/i, 'PM');
 
 function operation(r) {
-  const parts = r.path.split('/').filter(Boolean), tag = r.path === '/health' ? 'relay' : parts[0] === 'channels' && parts[2] ? parts[2].replace(/[{}]/g, '') : 'channel';
   const key = r.method + ' ' + r.path.replace('/channels/{channel}', ''), stream = /\/stream$/.test(r.path), tokens = tokensOf(r);
   const success = stream ? { description: 'A stream of server-sent events, open until either side closes it.', content: { 'text/event-stream': { schema: { type: 'string' } } } }
     : { description: 'Done.', content: { 'application/json': { schema: ref(RESPONSES[key] || 'Ok') } } };
   const op = {
-    tags: [r.section === 'calls' ? 'calls' : tag],
+    tags: [tagOf(r)],
     summary: words(r.name),
     description: r.about + (r.path === '/health' ? '' : '\n\nTokens: ' + (tokens.length ? 'the relay key, and the token of ' + tokens.join(', ') + '. A route a token reaches can still refuse it, as the description says.' : 'the relay key only.')) + '\n\nFrom ' + MANUAL + '#' + r.section + '.',
     operationId: r.name,
@@ -121,7 +150,7 @@ function build(html) {
     },
     servers: [{ url: 'http://localhost:8787', description: 'The relay on this computer. npm run office starts it on 8787.' }],
     security: [{ relayKey: [] }, { relayKeyQuery: [] }, { sessionToken: [] }],
-    tags: [{ name: 'calls', description: 'Calls any caller uses: commands, events and the page.' }, ...[...new Set(Object.values(paths).flatMap((o) => Object.values(o).map((x) => x.tags[0])))].filter((t) => t !== 'calls').sort().map((name) => ({ name }))],
+    tags: Object.values(TAGS).filter(([name]) => Object.values(paths).some((o) => Object.values(o).some((x) => x.tags[0] === name))).map(([name, description]) => ({ name, description })),
     paths: Object.fromEntries(Object.entries(paths).sort(([a], [b]) => a.localeCompare(b))),
     components: {
       securitySchemes: {
@@ -150,4 +179,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, rows, render, OUT, PAGE };
+module.exports = { build, rows, render, OUT, PAGE, TAGS };

@@ -3,7 +3,8 @@
 // to a route in REQUESTS before the route reads it, and answers 400 with bad_type when one is wrong. Each
 // route still checks the values itself, with its own error codes. relay/openapi.js puts these schemas in
 // docs/openapi.json, and relay/test/openapi.test.js checks real answers against RESPONSES and that each
-// route refuses a request that breaks its schema. Keys are a method and a path under /channels/{channel}.
+// route refuses a request that breaks its schema. Each request schema has an example, which the test
+// checks against the schema. Keys are a method and a path under /channels/{channel}.
 'use strict';
 
 const S = (extra) => Object.assign({ type: 'string' }, extra);
@@ -59,7 +60,7 @@ const SCHEMAS = {
     labels: { type: ['array', 'string'], items: S({ pattern: WORD }), description: 'A list, or one string with commas between.' },
     blockedBy: list(S()),
     shapes: list({ type: ['string', 'number'] })
-  }, ['title']),
+  }, ['title'], { examples: [{ title: 'Flaky test in tasks.test.js', body: 'It fails about one run in ten on CI.', priority: 'normal', kind: 'bug', labels: ['flaky'] }] }),
   TicketEdit: obj({
     title: S({ minLength: 1, maxLength: 80 }),
     body: S({ maxLength: 8000 }),
@@ -70,7 +71,7 @@ const SCHEMAS = {
     replacedBy: S({ description: 'With "mark": "replaced": the ticket that replaces it.' }),
     shapes: list({ type: ['string', 'number'] }),
     base: S({ minLength: 1, description: 'The person only. A local branch with commits.' })
-  }, [], { minProperties: 1, description: 'Any of these, saved together, or none when one is refused. A PM or the Lead sends only title, body and priority.' }),
+  }, [], { minProperties: 1, description: 'Any of these, saved together, or none when one is refused. A PM or the Lead sends only title, body and priority.', examples: [{ title: 'Flaky test in tasks.test.js on CI', priority: 'high' }] }),
   Task: obj({
     id: S({ pattern: '^[0-9a-f]{6}$' }),
     title: S(),
@@ -90,8 +91,8 @@ const SCHEMAS = {
   }, ['id', 'title', 'state'], { description: 'A session\'s token gets only id, state, title, branch and pr.' }),
   TaskList: okWith({ states: list(S({ enum: STATES })), tasks: list(ref('Task')) }, ['tasks']),
   TaskOne: okWith({ task: ref('Task') }, ['task']),
-  NewTask: obj({ title: S({ minLength: 1, maxLength: 80 }), repo: S(), brief: S(), base: S(), lead: B }, ['title']),
-  TaskMove: obj({ to: S({ enum: STATES }), note: S(), pr: S() }, ['to']),
+  NewTask: obj({ title: S({ minLength: 1, maxLength: 80 }), repo: S(), brief: S(), base: S(), lead: B }, ['title'], { examples: [{ title: 'Fix the flaky test in tasks.test.js', brief: 'Find why it fails about one run in ten on CI, and fix it.' }] }),
+  TaskMove: obj({ to: S({ enum: STATES }), note: S(), pr: S() }, ['to'], { examples: [{ to: 'in_review', note: 'The PR is open for review.' }] }),
   Session: obj({
     id: S({ pattern: '^[0-9a-f]{12}$' }),
     who: orNull(S()),
@@ -126,11 +127,11 @@ const SCHEMAS = {
     wait: { type: ['boolean', 'string'], description: 'false sends it and answers at once with its id.' },
     timeout: { type: ['number', 'string'], description: 'Seconds to wait, 1 to 120, 30 by default.' },
     source: S()
-  }, ['action'], { description: 'The command, with the fields its action takes.' }),
+  }, ['action'], { description: 'The command, with the fields its action takes.', examples: [{ action: 'say', who: 'marcus', text: 'Hello' }] }),
   CommandResult: obj({ id: S(), channel: S(), action: S(), status: S({ enum: ['pending', 'done'] }), ok: B }, ['id']),
   Event: obj({ rseq: N({ description: 'The relay\'s number for it, for ?since=.' }), receivedAt: S(), type: S() }, ['rseq', 'type']),
   EventList: okWith({ channel: S(), events: list(ref('Event')), lastEventSeq: N() }, ['events', 'lastEventSeq']),
-  Verdict: obj({ kind: S({ enum: ['merge', 'fix'] }) }, ['kind'])
+  Verdict: obj({ kind: S({ enum: ['merge', 'fix'] }) }, ['kind'], { examples: [{ kind: 'merge' }] })
 };
 
 const REQUESTS = {
