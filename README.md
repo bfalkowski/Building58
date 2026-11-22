@@ -36,6 +36,8 @@ You need:
 
 The demo (`npm run office:demo`) needs only Node, a browser and internet access.
 
+To run a room in a container instead, see [In a container](docs/manual/running.html#container).
+
 Each world runs on a relay of its own, with its own port and key, so one world's restart or key
 does not touch another:
 

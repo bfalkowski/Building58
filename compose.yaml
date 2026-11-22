@@ -1,0 +1,24 @@
+# One Building58 room. Fill in .env from .env.example, then: docker compose up -d
+# See docs/manual/running.html#container.
+services:
+  room:
+    build:
+      context: .
+      args:
+        CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.330}
+    image: building58:local
+    env_file: .env
+    restart: unless-stopped
+    cpus: ${ROOM_CPUS:-4}
+    mem_limit: ${ROOM_MEMORY:-8g}
+    volumes:
+      - building58:/home/node/building58
+      - state:/home/node/.office-world
+      - claude:/home/node/.claude
+      - repos:/home/node/repos
+
+volumes:
+  building58:
+  state:
+  claude:
+  repos:

@@ -123,11 +123,25 @@ jobs:
           path: test-results/browser/
           if-no-files-found: ignore
 
+  # The room in a container (Dockerfile, compose.yaml). It builds the image and runs the smoke test
+  # (docker/smoke.sh): the image's tools run, the relay is healthy, a session starts and its hook
+  # reaches the relay. The fake claude stands in for Claude Code, so it needs no sign-in.
+  container:
+    name: the room in a container
+    needs: changes
+    if: needs.changes.outputs.docs != 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t building58:local .
+      - run: sh docker/smoke.sh building58:local
+
   # The check branch protection requires. It passes when every job above passed or was skipped
   # because the change cannot reach it, and fails when any of them failed or was cancelled.
   pipeline:
     name: pipeline
-    needs: [changes, tests, browser]
+    needs: [changes, tests, browser, container]
     if: always()
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 5
