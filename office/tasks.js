@@ -115,7 +115,7 @@
       if (r.ok) removed++; else if (r.error === 'ignored') asked++; else failed.push(task.title + ' (' + r.message + ')');
     }
     cleaningAll = false;
-    say('Clean up all removed ' + removed + ' task' + (removed === 1 ? '' : 's') + '. Their branches are still there.' +
+    say('Clean up all removed ' + removed + ' task' + (removed === 1 ? '' : 's') + '.' + (removed ? ' Their branches are still there.' : '') +
       (asked ? ' ' + asked + (asked === 1 ? ' holds files git ignores and asks' : ' hold files git ignores and ask') + ' before it deletes them.' : '') +
       (failed.length ? ' Could not clean up: ' + failed.join('; ') + '.' : ''), failed.length > 0);
     lastDrawn = '';
