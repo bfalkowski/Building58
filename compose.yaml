@@ -1,4 +1,5 @@
 # One Building58 room. Fill in .env from .env.example, then: docker compose up -d
+# Open http://localhost:8787/office/?channel=office&key=<your RELAY_KEY>
 # See docs/manual/running.html#container.
 services:
   room:
@@ -8,6 +9,11 @@ services:
         CLAUDE_CODE_VERSION: ${CLAUDE_CODE_VERSION:-2.1.330}
     image: building58:local
     env_file: .env
+    environment:
+      PORT: ${ROOM_PORT:-8787}
+    # Only this computer: the room page can run any command in the container.
+    ports:
+      - "127.0.0.1:${ROOM_PORT:-8787}:8800"
     restart: unless-stopped
     cpus: ${ROOM_CPUS:-4}
     mem_limit: ${ROOM_MEMORY:-8g}
