@@ -23,6 +23,8 @@ if [ -z "${RELAY_KEY:-}" ]; then
 fi
 
 cd "$APP"
+# With a GitHub App, gh reads the App's token from its hosts.yml, which is renewed. A GH_TOKEN would win over it.
+if [ -n "${GITHUB_APP_ID:-}" ]; then unset GH_TOKEN GITHUB_TOKEN; fi
 node relay/container-setup.js
 # The room's own sessions report with their own token, so the hooks need no key. Every session can
 # read ~/.claude/settings.json, so the real key stays out of it, and the hooks get a placeholder.
