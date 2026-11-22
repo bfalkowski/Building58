@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { claudeConfig } = require('../container-setup.js');
+const { claudeConfig, repoList } = require('../container-setup.js');
 
 const dir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'container-setup-'));
 const read = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -43,4 +43,11 @@ test('a file that is not JSON is set aside and kept, not a reason to stop', () =
   assert.strictEqual(kept.length, 1);
   assert.strictEqual(fs.readFileSync(path.join(d, kept[0]), 'utf8'), '{ not json');
   fs.rmSync(d, { recursive: true });
+});
+
+test('ROOM_REPOS is a list of owner/name, by spaces or commas, and anything else is left out', () => {
+  const { ok, bad } = repoList('acme/app, acme/api.git\n  other/tool acme/app2 ../etc acme/.. -x/y" other/app');
+  assert.deepStrictEqual(ok.map((r) => r.full), ['acme/app', 'acme/api', 'other/tool', 'acme/app2']);
+  assert.deepStrictEqual(bad, ['../etc', 'acme/..', '-x/y"', 'other/app (a repo with that name is listed already)']);
+  assert.deepStrictEqual(repoList(''), { ok: [], bad: [] });
 });

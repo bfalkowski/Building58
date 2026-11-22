@@ -8,6 +8,9 @@
 //
 // GitHub: with GH_TOKEN, gh is signed in already. This checks the token with `gh api user`, lets git
 // push with it (`gh auth setup-git`), and names the commits after that account unless git has a name.
+//
+// Repos: each owner/name in ROOM_REPOS that is not in ~/repos yet is cloned there, into the repos
+// volume. One already there is left as it is: the room fetches what it needs.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -15,7 +18,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { oneLine } = require('./clean.js');
 
-const run = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 }).trim();
+const run = (cmd, args, ms) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: ms || 20000 }).trim();
 const said = (e) => oneLine((e && (e.stderr || e.message)) || e, 200);
 
 function readJson(file) {
@@ -67,11 +70,47 @@ function gitHub(env) {
   return 'GitHub: signed in as ' + login + '. git pushes with the same token.';
 }
 
+const REPO = /^([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/;
+function repoList(value) {
+  const ok = [], bad = [];
+  for (const item of String(value || '').split(/[\s,]+/).filter(Boolean)) {
+    const m = item.match(REPO);
+    if (!m || m[2] === '.' || m[2] === '..') bad.push(oneLine(item, 100));
+    else if (!ok.some((r) => r.name === m[2])) ok.push({ owner: m[1], name: m[2], full: m[1] + '/' + m[2] });
+    else bad.push(oneLine(item, 100) + ' (a repo with that name is listed already)');
+  }
+  return { ok, bad };
+}
+
+function repos(env, home) {
+  const { ok, bad } = repoList(env.ROOM_REPOS);
+  const lines = bad.map((b) => 'Repos: ' + b + ' is not owner/name, so it is left out.');
+  if (!ok.length && !bad.length) return ['Repos: none in ROOM_REPOS. Add owner/name for each repo the room works on.'];
+  for (const r of ok) {
+    const dir = path.join(home, 'repos', r.name);
+    if (fs.existsSync(path.join(dir, '.git'))) { lines.push('Repos: ' + r.full + ' is in ' + dir + '.'); continue; }
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length) { lines.push('Repos: ' + dir + ' is there but is not a git repo, so ' + r.full + ' is not cloned.'); continue; }
+    const part = dir + '.cloning';
+    fs.rmSync(part, { recursive: true, force: true });
+    try {
+      run('git', ['clone', '--quiet', 'https://github.com/' + r.full + '.git', part], 600000);
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.renameSync(part, dir);
+      lines.push('Repos: cloned ' + r.full + ' into ' + dir + '.');
+    } catch (e) {
+      fs.rmSync(part, { recursive: true, force: true });
+      lines.push('Repos: could not clone ' + r.full + ', so the next start tries again: ' + said(e));
+    }
+  }
+  return lines;
+}
+
 function main(env) {
   try { claudeConfig(env); } catch (e) { console.log('Claude Code: could not write its settings: ' + said(e)); }
   console.log(claudeSignIn());
   console.log(gitHub(env));
+  for (const line of repos(env, os.homedir())) console.log(line);
 }
 
 if (require.main === module) main(process.env);
-module.exports = { claudeConfig };
+module.exports = { claudeConfig, repoList };
