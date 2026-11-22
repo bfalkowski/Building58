@@ -384,6 +384,10 @@
 <p>The room looks like a loft in New York: exposed brick, steel factory windows with water towers outside, cast iron columns, ductwork, Edison bulbs, a coffee bar and a couch. People are built from spheres, cylinders and boxes on a rig of joints (pelvis, spine, neck, shoulders, elbows, hips, knees), posed by joint angles in <code>POSE</code>. They walk on a 15 cm grid with A*, and each plan is a list of steps: stand, walk, face, sit, act.</p>
 
 <!-- ============================================================ GUARDS AND RUNGS -->
+<h2 id="claude-version">Claude Code versions</h2>
+<p>The relay depends on parts of Claude Code that can change in any release: its hooks, its menus and trust question, its status line and its transcripts. Safe typing reads the menus and the trust question, so a changed screen can break it with no error. And a Claude Code on your computer updates itself while the room runs.</p>
+<p>So the relay knows the range of Claude Code versions the room was tested with (<code>TESTED</code> in <code>relay/claude-version.js</code>). It reads <code>claude --version</code>, or the command in <code>CLAUDE_CMD</code>, when the room page first asks <a href="roles.html#needs-you">Needs you</a>, and again each hour. When the version is outside the range, Needs you has a line that says so. The container image pins the newest tested version and turns off Claude Code's own updates (<a href="running.html#container">In a container</a>), so a new version reaches it only with a new image. A test checks that the pin and the newest tested version are the same, so moving one moves the other, in the same pull request.</p>
+
 <h2 id="guards">Guards at each boundary</h2>
 <p>What stops the room from doing what it should not.</p>
 <table>

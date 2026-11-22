@@ -4,7 +4,7 @@
 // list, so all three agree. A plain function with no side effects, so the tests run it without a relay.
 // See docs/manual/roles.html#needs-you.
 //
-//   listOf({ seats, tasks, waits, relays, desks, mains, writes }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
+//   listOf({ seats, tasks, waits, relays, desks, mains, writes, claude }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
 //   writeLine(write) -> the line for one GitHub write that failed, which the ticket's card shows too
 //
 // A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh, continuing },
@@ -22,6 +22,7 @@
 // why }, where terminal is the running session it is for, and why says in plain words what holds it.
 // A relay is another relay on this room's state folder (relay/old-relays.js): { pid, file, port, started, paused, worker }.
 // desks is reviews that wait for a desk while the relay may stop no session: { prs, taken }, the longest wait first.
+// claude is the Claude Code the sessions run, from relay/claude-version.js: { version, oldest, newest, ok }.
 // A main is one base branch whose latest CI run failed (relay/main-ci.js): { name, branch, run: { workflow, sha, url, conclusion } }.
 // A write is one ticket whose last write to the GitHub ticket store failed (relay/ticket-stores/github.js):
 // { id, what, message, inMs }, where message is what GitHub said and inMs is the time to the next try.
@@ -52,7 +53,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'ticket-write', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -161,11 +162,21 @@ function listOf(input) {
     const url = oneLine(m.run.url, 300);
     items.push({ kind: 'main', who: 'CI', terminal: null, task: null, ticket: null, pr: null, line: 'Look at the failed CI run on ' + redMain(m), link: url ? { url } : {} });
   }
+  const claude = claudeItem(input && input.claude);
+  if (claude) items.push(claude);
   for (const w of (input && input.writes) || []) {
     if (!w || !/^[\w.-]{1,20}$/.test(String(w.id))) continue;
     items.push({ kind: 'ticket-write', who: 'the relay', terminal: null, task: null, ticket: String(w.id), pr: null, line: writeLine(w), link: { ticket: String(w.id) } });
   }
   return items.map((it, i) => [it, i]).sort((a, b) => KINDS.indexOf(a[0].kind) - KINDS.indexOf(b[0].kind) || a[1] - b[1]).map((x) => x[0]);
+}
+
+function claudeItem(c) {
+  if (!c || c.ok !== false) return null;
+  const v = oneLine(c.version, 20), oldest = oneLine(c.oldest, 20), newest = oneLine(c.newest, 20);
+  if (!v) return null;
+  const which = oldest === newest ? 'version ' + newest : 'versions ' + oldest + ' to ' + newest;
+  return { kind: 'claude', who: 'Claude Code', terminal: null, task: null, ticket: null, pr: null, line: 'Check the sessions: they run Claude Code ' + v + ', and the room was tested with ' + which + '. Safe typing reads Claude Code\'s screens and hooks, which a new version can change, so watch the first turns.', link: {} };
 }
 
 module.exports = { listOf, redMain, writeLine, KINDS };
