@@ -284,3 +284,40 @@ test('github: a write nobody tries again clears at the first read after its wait
   const [e] = s.writeErrors('p');
   assert.deepStrictEqual([e.tries, e.nextAt - clock.at], [2, 30000]);
 });
+
+// A ticket names its repo by its GitHub name, so a room on another computer, or in a container, finds its
+// own clone of it, and tickets moved with a folder from one computer still find the repo on another.
+test('github: the repo is kept as owner/name, and read back as this computer\'s clone', async () => {
+  const { execFileSync } = require('child_process');
+  const root = fs.mkdtempSync(path.join(dir, 'clones-'));
+  const clone = (where, origin) => { fs.mkdirSync(where, { recursive: true }); execFileSync('git', ['init', '-q', where]); if (origin) execFileSync('git', ['-C', where, 'remote', 'add', 'origin', origin]); return fs.realpathSync(where); };
+  const mac = clone(path.join(root, 'mac', 'code', 'app'), 'git@github.com:Acme/app.git');
+  const box = clone(path.join(root, 'box', 'repos', 'app'), 'https://github.com/acme/app');
+  const other = clone(path.join(root, 'box', 'repos', 'tool'), 'https://github.com/acme/tool.git');
+  const local = clone(path.join(root, 'box', 'repos', 'notes'), null);
+  const d = fs.mkdtempSync(path.join(dir, 'github-'));
+  process.env.FAKE_GITHUB_DIR = d;
+  const at = (folder) => github.open({ repo: 'p=o/r', gh: fakeGh, folder, keyFile: path.join(d, 'key'), cacheMs: 0 });
+  const note = (n) => JSON.parse(JSON.parse(fs.readFileSync(path.join(d, 'state.json'), 'utf8'))['o/r'].issues[n - 1].body.match(/<!-- office (\{.*\}) -->/s)[1]);
+
+  const onMac = at(mac);
+  const t = await onMac.create('p', { title: 'A', status: 'ready', repo: mac });
+  assert.strictEqual(note(1).repo, 'Acme/app', 'the note names the repo, not the folder');
+  assert.strictEqual((await onMac.get('p', t.id)).repo, mac);
+  assert.strictEqual((await at(box).get('p', t.id)).repo, box, 'another computer reads its own clone');
+  assert.strictEqual((await at(other).get('p', t.id)).repo, box, 'found by name beside the ticket folder');
+
+  const old = await onMac.create('p', { title: 'Moved before', status: 'ready', repo: mac });
+  await onMac.update('p', old.id, { repo: '/Users/nobody/code/repo/app' });
+  assert.strictEqual(note(2).repo, '/Users/nobody/code/repo/app', 'a folder with no clone here is kept as it was');
+  assert.strictEqual((await at(box).get('p', old.id)).repo, box, 'a folder from another computer is found by its name');
+  await at(box).update('p', old.id, { status: 'started' });
+  assert.strictEqual(note(2).repo, 'acme/app', 'the next write keeps it by name');
+
+  const plain = await at(local).create('p', { title: 'No GitHub', status: 'ready', repo: local });
+  assert.strictEqual(note(3).repo, local, 'a folder with no GitHub origin stays a folder');
+  assert.strictEqual((await at(local).get('p', plain.id)).repo, local);
+
+  const gone = await at(box).create('p', { title: 'Elsewhere', status: 'ready', repo: 'acme/missing' });
+  assert.strictEqual((await at(box).get('p', gone.id)).repo, path.join(path.dirname(box), 'missing'), 'a repo with no clone here names where it would be');
+});
