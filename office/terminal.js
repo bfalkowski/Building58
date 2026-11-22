@@ -14,7 +14,7 @@
   let heldUntil = 0;
   function tell(text, state) { heldUntil = Date.now() + 15000; say(text, state); const s = $('settings-said'); if (s && $('settings').open) { s.textContent = text; s.dataset.state = state || ''; } }
   function off(text) { note.textContent = text; note.hidden = false; startBtn.disabled = true; cwdIn.disabled = true; resumeIn.disabled = true; box.hidden = true; say('Off', 'off'); }
-  if (!channel) { off('To run Claude Code here, open the room through the relay: RELAY_KEY=pick-a-key npm run office, then the link it prints.'); return; }
+  if (!channel) { off('Needs a relay. To run Claude Code here, start the room with the relay on your own computer: RELAY_KEY=pick-a-key npm run office, then open the link it prints.'); return; }
   if (!window.Terminal || !window.FitAddon) { off('The terminal library did not load, so the panel is off. Check the network and reload.'); return; }
 
   const url = (p, area) => location.origin + '/channels/' + encodeURIComponent(channel) + (area || '/terminals') + p + '?key=' + encodeURIComponent(key);
