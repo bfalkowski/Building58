@@ -34,11 +34,17 @@
     const el = document.activeElement;
     if (el && el.tagName === 'SELECT' && el.closest('#task-rows') && Date.now() - selectFocusAt < SELECT_HOLD) return;
     lastTasks = tasks;
-    const text = JSON.stringify([tasks, [...asking]]);
+    const text = JSON.stringify([tasks, [...asking], cleaningAll]);
     if (text === lastDrawn) return;
     lastDrawn = text;
     rows.textContent = '';
     if (!tasks.length) { const li = document.createElement('li'); li.className = 'task-empty'; li.textContent = 'No tasks yet.'; rows.append(li); return; }
+    const pile = cleanPile(tasks);
+    if (pile.length > 1) {
+      const li = document.createElement('li'), label = document.createElement('span'), all = button(cleaningAll ? 'Cleaning up…' : 'Clean up all', cleanAll);
+      li.className = 'task-all'; label.textContent = pile.length + ' done tasks with no worker.'; all.disabled = cleaningAll;
+      li.append(label, all); rows.append(li);
+    }
     for (const task of tasks) {
       const li = document.createElement('li'); li.dataset.state = task.state;
       const main = document.createElement('button'); main.type = 'button'; main.className = 'task-main';
@@ -66,7 +72,7 @@
         ask.textContent = 'Its checkout holds files git ignores, and Clean up would delete them: ' + ignored.slice(0, 8).join(', ') + (ignored.length > 8 ? ' and ' + (ignored.length - 8) + ' more' : '');
         main.append(ask);
         li.append(button('Delete them too', () => clean(task, ignored)), button('Keep', () => { asking.delete(task.id); draw(lastTasks); }));
-      } else if (task.state === 'done' && !task.worker) li.append(button('Clean up', () => clean(task)));
+      } else if (task.state === 'done' && !task.worker) { const one = button('Clean up', () => clean(task)); one.disabled = cleaningAll; li.append(one); }
       rows.append(li);
     }
   }
@@ -85,10 +91,33 @@
     say(r.ok ? '' : r.message, !r.ok);
     refresh();
   }
-  async function clean(task, ignored) {
+  async function cleanOne(task, ignored) {
     const r = await api('/' + task.id + '/clean', { ignored: ignored || [] });
     asking.delete(task.id);
-    if (r.error === 'ignored') { asking.set(task.id, r.ignored); say(''); } else say(r.ok ? 'Removed its checkout. Branch ' + task.branch + ' is still there.' : r.message, !r.ok);
+    if (r.error === 'ignored') asking.set(task.id, r.ignored);
+    return r;
+  }
+  async function clean(task, ignored) {
+    const r = await cleanOne(task, ignored);
+    if (r.error === 'ignored') say(''); else say(r.ok ? 'Removed its checkout. Branch ' + task.branch + ' is still there.' : r.message, !r.ok);
+    lastDrawn = '';
+    refresh();
+  }
+  let cleaningAll = false;
+  const cleanPile = (tasks) => tasks.filter((t) => t.state === 'done' && !t.worker && !asking.has(t.id));
+  async function cleanAll() {
+    const pile = cleanPile(lastTasks);
+    cleaningAll = true; lastDrawn = ''; draw(lastTasks);
+    let removed = 0, asked = 0;
+    const failed = [];
+    for (const task of pile) {
+      const r = await cleanOne(task);
+      if (r.ok) removed++; else if (r.error === 'ignored') asked++; else failed.push(task.title + ' (' + r.message + ')');
+    }
+    cleaningAll = false;
+    say('Clean up all removed ' + removed + ' task' + (removed === 1 ? '' : 's') + '.' + (removed ? ' Their branches are still there.' : '') +
+      (asked ? ' ' + asked + (asked === 1 ? ' holds files git ignores and asks' : ' hold files git ignores and ask') + ' before it deletes them.' : '') +
+      (failed.length ? ' Could not clean up: ' + failed.join('; ') + '.' : ''), failed.length > 0);
     lastDrawn = '';
     refresh();
   }
