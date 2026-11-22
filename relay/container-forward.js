@@ -5,6 +5,8 @@
 // (docs/manual/how-it-works.html#guards).
 //
 // It starts the relay as its child and ends with it, so the container stops when either one stops.
+// With GITHUB_APP_ID, it makes a new GitHub App token every 45 minutes (relay/github-app.js), since each
+// lasts one hour, and says when that fails.
 'use strict';
 const net = require('net');
 const path = require('path');
@@ -17,6 +19,11 @@ const relay = spawn(process.execPath, [path.join(__dirname, 'server.js')], { std
 let failed = false;
 relay.on('exit', (code, signal) => process.exit(failed ? 1 : code === null ? (signal === 'SIGTERM' ? 0 : 1) : code));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => relay.kill(sig));
+
+if (process.env.GITHUB_APP_ID) {
+  const renew = () => require('./github-app.js').signIn(process.env).then(() => {}, (e) => console.error('GitHub: the App could not make a new token: ' + e.message));
+  setInterval(renew, 45 * 60 * 1000).unref();
+}
 
 const server = net.createServer((client) => {
   const to = net.connect(RELAY_PORT, '127.0.0.1');

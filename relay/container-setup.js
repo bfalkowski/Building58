@@ -6,7 +6,9 @@
 // CLAUDE_CONFIG_DIR/.claude.json and approves the ANTHROPIC_API_KEY the person put in .env. It reads the
 // sign-in from `claude auth status`, which sees that a token is there, not that it works.
 //
-// GitHub: with GH_TOKEN, gh is signed in already. This checks the token with `gh api user`, lets git
+// GitHub: with GITHUB_APP_ID, the room acts as that GitHub App (relay/github-app.js): this makes its first
+// token, and relay/container-forward.js makes a new one every 45 minutes. Commits are named after its bot.
+// Otherwise, with GH_TOKEN, gh is signed in already. This checks the token with `gh api user`, lets git
 // push with it (`gh auth setup-git`), and names the commits after that account unless git has a name.
 //
 // Repos: each owner/name in ROOM_REPOS that is not in ~/repos yet is cloned there, into the repos
@@ -58,6 +60,15 @@ function claudeSignIn() {
   return 'Claude Code: not signed in. Set CLAUDE_CODE_OAUTH_TOKEN (from claude setup-token) or ANTHROPIC_API_KEY in .env, then run docker compose up -d again.';
 }
 
+async function gitHubApp(env) {
+  let r;
+  try { r = await require('./github-app.js').signIn(env); } catch (e) { return 'GitHub: the App could not sign in: ' + said(e); }
+  try { run('gh', ['auth', 'setup-git']); } catch (e) { return 'GitHub: signed in as ' + r.login + ', but git cannot push with it: ' + said(e); }
+  run('git', ['config', '--global', 'user.name', r.login]);
+  run('git', ['config', '--global', 'user.email', r.botId + '+' + r.login + '@users.noreply.github.com']);
+  return 'GitHub: signed in as the App ' + r.login + '. Its token is made again every 45 minutes. git pushes with it.';
+}
+
 function gitHub(env) {
   if (!env.GH_TOKEN) return 'GitHub: no GH_TOKEN in .env. Sessions cannot push or open pull requests.';
   let user;
@@ -105,12 +116,12 @@ function repos(env, home) {
   return lines;
 }
 
-function main(env) {
+async function main(env) {
   try { claudeConfig(env); } catch (e) { console.log('Claude Code: could not write its settings: ' + said(e)); }
   console.log(claudeSignIn());
-  console.log(gitHub(env));
+  console.log(env.GITHUB_APP_ID ? await gitHubApp(env) : gitHub(env));
   for (const line of repos(env, os.homedir())) console.log(line);
 }
 
-if (require.main === module) main(process.env);
+if (require.main === module) main(process.env).catch((e) => console.log('Setup: ' + said(e)));
 module.exports = { claudeConfig, repoList };

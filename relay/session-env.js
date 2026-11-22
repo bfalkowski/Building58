@@ -3,7 +3,8 @@
 // the sessions really get.
 //
 // A session gets the relay's own environment, which is the person's, with these taken out:
-//   the relay's key and settings, so a session cannot act as the relay or as the person's room page
+//   the relay's key and settings, so a session cannot act as the relay or as the person's room page, and
+//   the GitHub App's private key in a container, so a session gets only the App's one-hour token
 //   the variables of a Claude Code session that started the relay. A child session saves no
 //   conversation, so it could never be brought back.
 // and the room's own variables added: its desk, channel, ticket token and where to send its hooks, and
@@ -19,7 +20,7 @@ const path = require('path');
 
 const GATE = path.join(__dirname, 'test', 'slot-gate.js');
 
-const RELAY = ['RELAY_KEY', 'OFFICE_RELAY_KEY', 'RELAY_TERMINAL', 'RELAY_KEY_RANDOM',
+const RELAY = ['RELAY_KEY', 'OFFICE_RELAY_KEY', 'GITHUB_APP_PRIVATE_KEY', 'RELAY_TERMINAL', 'RELAY_KEY_RANDOM',
   'RELAY_WORKER', 'RELAY_SUPERVISED', 'RELAY_HOST_SOCKET'];
 const INHERITED = ['CLAUDECODE', 'CLAUDE_PID', 'CLAUDE_EFFORT', 'AI_AGENT', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_EXECPATH', 'CLAUDE_CODE_SESSION_ID',
   'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_SESSION_ATTENDED', 'CLAUDE_CODE_MESSAGING_SOCKET', 'CLAUDE_CODE_MESSAGING_TOKEN'];
