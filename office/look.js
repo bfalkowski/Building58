@@ -7,16 +7,22 @@
 // The baked look also draws through a few effects, unless the address has fx=off: bloom, so the
 // bulbs, the neon and the windows glow; a haze that grows with distance; and a colour grade with a
 // vignette, each set for the time of day. They are three.js r128's own add-ons, from the CDN at that
-// exact version.
+// exact version. Each file it loads has its hash in INTEGRITY, so the browser refuses a file that changed.
 // Also loaded with require by the tests, so the rules for what is baked are checked without a browser.
 (function (root) {
   'use strict';
   const BASE = 'baked/';
-  const LOADER = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+  const INTEGRITY = {
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js': 'sha384-fljlqkjWlmSFjkESkQvm77heIZpoWmXEOzlCA7kOpGUH+95Zk0yGfQieWM2q136E',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js': 'sha384-nhO9toQuMo5osCuA0l+YFpSqscZWxDu251Bnho2gD3kSPv1neEwHg0LyEmrA+mPj',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js': 'sha384-mY+ii969jnDCI2HjRHftH2NZVkIO5ZGUkcnGCg3oVJ3kVstWQXwerYWBg+nbUG4R',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js': 'sha384-GkidzTYmQg24v13sa3xhBBbvOLbVLO1QxfyKLdOWweQqNqS/iWwUst2T1fER2Xrg',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js': 'sha384-2EpLreWSFuZsk4hcSplXLhlHd/wzvDNF907bTGIXSXM0SlhJNzy4YK0DhBFvkFEs',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js': 'sha384-I3lsvPeDJYFrEAzn/TA0yhc/SCYKwpyfyq8lKzHYKohu43H9f7xc/Q9ZWgSVUDl3',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js': 'sha384-aVQ2QnWkoxhOefDB0YZB64OPVzujvccydpcC7UqMDJUK0ChwA382zOHmrWHGDRRa'
+  };
+  const [LOADER, ...ADDONS] = Object.keys(INTEGRITY);
   const MIN_SIZE = 0.3;
-  const ADDONS = ['shaders/CopyShader.js', 'shaders/LuminosityHighPassShader.js', 'postprocessing/EffectComposer.js',
-    'postprocessing/RenderPass.js', 'postprocessing/ShaderPass.js', 'postprocessing/UnrealBloomPass.js']
-    .map((f) => 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/' + f);
   const FX = {
     evening: { bloom: { strength: 0.7, radius: 0.55, threshold: 0.72 }, haze: { colour: 0x6b4430, density: 0.022 }, grade: { warmth: 0.06, contrast: 1.16, saturation: 1.05, vignette: 0.6 } },
     day: { bloom: { strength: 0.3, radius: 0.5, threshold: 0.85 }, haze: { colour: 0xb7c3cc, density: 0.011 }, grade: { warmth: 0.02, contrast: 1.08, saturation: 1.04, vignette: 0.35 } },
@@ -66,7 +72,7 @@
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
-      const s = document.createElement('script'); s.src = src; s.onload = resolve;
+      const s = document.createElement('script'); s.src = src; s.integrity = INTEGRITY[src]; s.crossOrigin = 'anonymous'; s.onload = resolve;
       s.onerror = () => reject(new Error('could not load ' + src)); document.head.appendChild(s);
     });
   }
@@ -300,7 +306,7 @@
     if (wantBaked) part(c.part());
   }
 
-  const api = { wanted, wantFx, meshKey, materialName, bakeable, MIN_SIZE, FX, ADDONS, state, attach, part, render, liveParts: () => liveParts() };
+  const api = { wanted, wantFx, meshKey, materialName, bakeable, MIN_SIZE, FX, ADDONS, INTEGRITY, state, attach, part, render, liveParts: () => liveParts() };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfficeLook = api;
 })(typeof window !== 'undefined' ? window : this);

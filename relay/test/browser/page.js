@@ -64,7 +64,7 @@ async function office(options) {
     p.on('pageerror', (e) => note('pageerror: ' + (e.stack || e.message), true));
     await context.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => {
       const u = route.request().url();
-      if (LOCAL[u]) return route.fulfill({ path: path.join(MODULES, LOCAL[u]) });
+      if (LOCAL[u]) return route.fulfill({ path: path.join(MODULES, LOCAL[u]), headers: { 'access-control-allow-origin': '*' } });
       if (u.startsWith('https://fonts.googleapis.com/')) return route.fulfill({ contentType: 'text/css', body: '' });
       note('outside request refused: ' + u, true);
       return route.abort();

@@ -471,7 +471,7 @@
 
 <!-- ============================================================ THE CODE -->
 <h2 id="code">The code</h2>
-<p>Where each part lives. It uses three.js r128 from cdnjs and its OrbitControls from jsDelivr (<code>three@0.128.0</code>), and xterm.js for the panel.</p>
+<p>Where each part lives. It uses three.js r128 from cdnjs and its OrbitControls from jsDelivr (<code>three@0.128.0</code>), and xterm.js for the panel. Each file from a CDN carries its sha384 hash, on its tag in <code>office/index.html</code> or in <code>office/look.js</code> for the files the baked look loads, so the browser refuses a file that changed.</p>
 <table>
   <thead><tr><th>Path</th><th>What it is</th></tr></thead>
   <tbody>
