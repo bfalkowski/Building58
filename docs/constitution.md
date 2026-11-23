@@ -256,6 +256,9 @@ The pull request body follows Pocock's `/pr`:
 - **Changed tests:** a green check can mislead, because an agent can change a test to make it
   pass. A pull request that changes what an existing test asserts says why, and the review checks
   that reason.
+- **Flaky tests:** a flaky test is a bug, so never skip it, add a sleep, or retry it until it
+  passes, because a test retried until green proves nothing. Find the cause. If you cannot, delete
+  the test and say in the pull request why, and what it checked.
 - **Merge danger:** a one-way or a two-way door, and the blast radius.
 
 A review comes from a session that did not write the change, and it reads the diff cold. It
@@ -466,9 +469,11 @@ start. The relay, not a brief, holds it to these:
   or unpushed work or work git cannot check, or gone with review news it was never told. It names
   that commit to GitHub, which refuses the merge if the PR moved since. A branch behind main
   merges as it is, since main does not ask for branches to be up to date.
-- It works only on tasks it started. It never merges a change to this file, `CLAUDE.md` or the lint rules. Its loop is limited: after 2 review rounds
-  that still say fix, a failed check, a closed pull request or a failed merge, the task goes to
-  Waiting on you with the reason, and it leaves it alone. It merges at most 10 pull requests a day.
+- It works only on tasks it started. It never merges a change to this file, `CLAUDE.md` or the
+  lint rules. Its loop is limited: after the number of review rounds that the person sets in
+  **Review rounds** in Settings (2 by default, 1 to 5) that still say fix, a failed check, a
+  closed pull request or a failed merge, the task goes to Waiting on you with the reason, and it
+  leaves it alone. It merges at most 10 pull requests a day.
 - After a merge it pulls main into the relay's own folder, as **Update** does, and starts nothing
   while that runs.
 

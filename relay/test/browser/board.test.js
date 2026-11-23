@@ -254,7 +254,7 @@ pageTest('How work moves opens the manual in a new tab', get, async (p) => {
   await tab.waitForLoadState();
   assert.match(tab.url(), /\/docs\/manual\/roles\.html$/);
   assert.match(await tab.title(), /\S/);
-  assert.strictEqual(p.page.url(), o.address, 'the room stays open in its own tab');
+  assert.strictEqual(p.page.url(), o.address.replace('&key=test-key', ''), 'the room stays open in its own tab, with no key in its address');
   assert.deepStrictEqual(p.errors, []);
 });
 

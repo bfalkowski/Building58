@@ -45,6 +45,7 @@ function termsOf(channel) {
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 const LOCAL_ADDRS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 function localOnly(req, port) {
+  if (require('./cf-access.js').CF_HEADERS.some((h) => req.headers[h] !== undefined)) return 'The terminal does not answer through a tunnel.';
   if (!LOCAL_ADDRS.has(req.socket.remoteAddress)) return 'The terminal only answers this computer.';
   const host = String(req.headers.host || '').replace(/:\d+$/, '').toLowerCase();
   if (!LOCAL_HOSTS.has(host)) return 'The terminal only answers http://localhost:' + port + ', not ' + host + '.';
@@ -207,7 +208,7 @@ const briefHeld = (t) => t.state !== 'idle' || (t.spoke && !t.hooked);
 const autopilotOn = (channel) => require('./autopilot.js').isOn(channel);
 function briefLead(channel, t) {
   t.owesBrief = true;
-  delivery().save(channel, { key: BRIEF_KEY, to: 'lead', terminal: t.id, sessionId: t.sessionId, first: true, text: (leadBrief(__dirname, { merge: !!t.merge, autopilot: autopilotOn(channel), order: !!config.get('leadOrder') }) + skills.brief('lead')).trim(), on: (what, why) => {
+  delivery().save(channel, { key: BRIEF_KEY, to: 'lead', terminal: t.id, sessionId: t.sessionId, first: true, text: (leadBrief(__dirname, { merge: !!t.merge, autopilot: autopilotOn(channel), order: !!config.get('leadOrder') }) + skills.brief('lead') + require('./rules.js').brief()).trim(), on: (what, why) => {
     t.owesBrief = false; saveSessions();
     if (what !== 'delivered') { console.error('The Lead was not briefed: ' + why); return; }
     if (t.lead && UUID.test(t.sessionId)) { try { saveLead(channel, t); } catch (e) { console.error('Could not save the Lead: ' + e.message); } }

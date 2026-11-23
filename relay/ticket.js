@@ -31,6 +31,9 @@
 // and for a Dev whose PR is open, any merge hold: why a merge now would leave its work out (relay/merge-hold.js),
 // and above them a line for each main whose latest CI run failed (relay/main-ci.js):
 //   node relay/ticket.js floor
+// Any session can read the person's standing rules: what holds for a while, with its reason and end date.
+// They are already in the brief. Only the person adds, changes or removes one:
+//   node relay/ticket.js rules
 // The Lead asks the relay how tired it is: how full its context is, from its status line (relay/lead-tired.js):
 //   node relay/ticket.js tired
 // Only a session you made the Lead can also move things on the board:
@@ -247,6 +250,13 @@ async function main() {
     for (const m of r.mainRed || []) console.log(m.says);
     if (!r.sessions.length) console.log('No sessions are running.');
     for (const s of r.sessions) console.log(floorLine(s));
+    return 0;
+  }
+  if (cmd === 'rules') {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/rules'), { headers })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    if (!r.rules.length) console.log('The person has set no standing rules.');
+    for (const x of r.rules) console.log(x.id + '  ' + (x.ended ? 'ended' : 'in force') + '  ' + x.text + ' Why: ' + x.reason + (x.until ? ' Through ' + x.until + '.' : ' Until the person removes it.'));
     return 0;
   }
   if (cmd === 'tired') {

@@ -23,6 +23,7 @@ const PARAMS = {
   page: { pattern: '^\\d+$', description: 'The page\'s id, from the stream.' },
   'commands/id': { pattern: '^[0-9a-f-]{36}$', description: 'The command\'s id, from the reply to a command sent with wait: false.' },
   'tickets/id': { pattern: '^[\\w-]{1,64}$', description: 'The ticket\'s id, such as T-5.' },
+  'rules/id': { pattern: '^[\\w-]{1,64}$', description: 'The standing rule\'s id, such as R-1a2b3c.' },
   'tasks/id': { pattern: '^[0-9a-f]{6}$', description: 'The task\'s id.' },
   'checkouts/id': { pattern: '^[0-9a-f]{6}$', description: 'The checkout\'s id.' },
   'terminals/id': { pattern: '^[0-9a-f]{12}$', description: 'The session\'s id on the relay.' },
@@ -47,6 +48,7 @@ const TAGS = {
   'pr-watch': ['PR watch', 'The PR watch, and each task with an open PR that it looks at.'],
   ready: ['Ready to merge', 'Marking a PR ready to merge.'],
   reviews: ['Reviews', 'The automatic reviews of PRs.'],
+  rules: ['Standing rules', 'The rules the person sets for a while, which each new brief carries while they are in force.'],
   settings: ['Settings', 'The settings on the room page.'],
   tasks: ['Tasks', 'The work a session does on its own branch, from the start to the merge.'],
   terminals: ['Sessions', 'The Claude Code sessions the relay runs: start, list, watch, type into, resize and stop them, and which one is the Lead.'],
@@ -149,12 +151,13 @@ function build(html) {
       license: { name: 'PolyForm Noncommercial 1.0.0', identifier: 'PolyForm-Noncommercial-1.0.0' }
     },
     servers: [{ url: 'http://localhost:8787', description: 'The relay on this computer. npm run office starts it on 8787.' }],
-    security: [{ relayKey: [] }, { relayKeyQuery: [] }, { sessionToken: [] }],
+    security: [{ relayKey: [] }, { relayKeyQuery: [] }, { relayKeyCookie: [] }, { sessionToken: [] }],
     tags: Object.values(TAGS).filter(([name]) => Object.values(paths).some((o) => Object.values(o).some((x) => x.tags[0] === name))).map(([name, description]) => ({ name, description })),
     paths: Object.fromEntries(Object.entries(paths).sort(([a], [b]) => a.localeCompare(b))),
     components: {
       securitySchemes: {
         relayKey: { type: 'http', scheme: 'bearer', description: 'The relay key, RELAY_KEY: Authorization: Bearer <key>.' },
+        relayKeyCookie: { type: 'apiKey', in: 'cookie', name: 'relay_key_<port>', description: 'The cookie the room page gets from a first load with the right ?key=. It is HttpOnly and SameSite=Strict. Its name is relay_key_ and then the relay\'s port (relay_key_8787), not literally relay_key_<port>. The relay refuses it, with 403, when the request has an Origin that is not the relay\'s own address.' },
         relayKeyQuery: { type: 'apiKey', in: 'query', name: 'key', description: 'The relay key in the address, as the page sends it.' },
         sessionToken: { type: 'http', scheme: 'bearer', description: 'A session\'s own token, OFFICE_TICKET_TOKEN. It reaches only the routes its role needs: see ' + MANUAL + '#tokens.' }
       },
