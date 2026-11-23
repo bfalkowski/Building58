@@ -32,8 +32,7 @@ test('tasks', async (t) => {
     assert.match(out, /leave CLAUDE\.md and docs\/constitution\.md out of this pull request/, 'the code PR stays free of the two files');
     assert.match(out, /create "CLAUDE\.md and constitution updates"/, 'the wording goes to the grouped ticket');
     assert.match(out, /If it says Already filed with \(triage\) or \(ready\), that open ticket gathers these changes and you cannot edit it, so run node \S+ticket\.js post with that ticket's id from the Already filed line/, 'it posts on the grouped ticket\'s own channel');
-    assert.match(out, /names your branch and the PR/, 'with no ticket, it names its branch');
-    assert.doesNotMatch(out, /starts with @Lead/, 'it no longer needs a Lead to add the change');
+    assert.match(out, /starts with @Lead and names your branch and the PR/, 'it mentions the Lead, so a running Lead is told');
     assert.match(out, /cannot ship without the wording/, 'unless the code cannot ship without it');
     // Review of T-239: Already filed also answers for a started or rejected ticket, which nobody can edit.
     assert.match(out, /If it says \(started\) or \(rejected\), file the change as its own ticket titled "CLAUDE\.md and constitution updates for /, 'a started or rejected wording ticket gets a ticket of its own');
