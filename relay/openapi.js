@@ -151,7 +151,8 @@ function build(html) {
       license: { name: 'PolyForm Noncommercial 1.0.0', identifier: 'PolyForm-Noncommercial-1.0.0' }
     },
     servers: [{ url: 'http://localhost:8787', description: 'The relay on this computer. npm run office starts it on 8787.' }],
-    security: [{ relayKey: [] }, { relayKeyQuery: [] }, { relayKeyCookie: [] }, { sessionToken: [] }],
+    security: [{ relayKey: [] }, { relayKeyQuery: [] }, { relayKeyCookie: { type: 'apiKey', in: 'cookie', name: 'relay_key_<port>', description: 'The cookie the room page gets from a first load with the right ?key=. It is HttpOnly and SameSite=Strict. Its name is relay_key_ and then the relay\'s port (relay_key_8787), not literally relay_key_<port>. The relay refuses it, with 403, when the request has an Origin that is not the relay\'s own address.' },
+        relayKeyQuery: [] }, { relayKeyCookie: [] }, { sessionToken: [] }],
     tags: Object.values(TAGS).filter(([name]) => Object.values(paths).some((o) => Object.values(o).some((x) => x.tags[0] === name))).map(([name, description]) => ({ name, description })),
     paths: Object.fromEntries(Object.entries(paths).sort(([a], [b]) => a.localeCompare(b))),
     components: {
