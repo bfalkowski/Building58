@@ -499,4 +499,4 @@ function deskOf(channel, pr) {
 
 const failedOf = (channel, pr) => { const r = pr && recOf(channel, pr); return (r && r.failed) || null; };
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owes: (channel, pr) => owesReview(channel, pr), waiting, deskQueue, deskLine, deadlockOf, failedOf };
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owes: (channel, pr) => starting.has(channel + ' ' + pr) || unposted(channel, pr) || waiting(channel).includes(pr), waiting, deskQueue, deskLine, deadlockOf, failedOf };

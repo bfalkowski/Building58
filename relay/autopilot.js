@@ -456,7 +456,7 @@ async function maybeStart(channel) {
     const building = tasks.building(channel);
     if (building >= tasks.wipLimit()) { waitWip(building + (building === 1 ? ' task is' : ' tasks are') + ' being built, and the limit is ' + tasks.wipLimit() + '.'); return; }
     const queued = reviews.waiting(channel);
-    if (queued.length) { c.idle = 'Waiting for a free desk: the review of PR ' + number(queued[0]) + ' goes first.'; return; }
+    if (queued.length) { c.idle = 'Waiting for the review of PR ' + number(queued[0]) + ' to start: it goes first.'; return; }
     const wasWaiting = /^Waiting for a free desk/.test(c.idle || '');
     c.idle = null;
     let [status, out] = await tickets.startBy(channel, next, BY, ctx);
