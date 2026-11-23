@@ -19,8 +19,8 @@ test('review news reaches a session with no task', async (t) => {
   const env = { GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_REVIEW_POLL_SECONDS: '1' };
   let R = await relay(env, home);
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
-  const api = {};
-  const say = () => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ api }));
+  const api = {}, prs = {};
+  const say = () => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ api, prs }));
   const issue = (n) => api['repos/o/r/issues/' + n + '/comments'] || (api['repos/o/r/issues/' + n + '/comments'] = []);
   const posted = () => { try { return fs.readFileSync(path.join(ghDir, 'posted.log'), 'utf8').split('\n---\n').filter(Boolean); } catch (e) { return []; } };
   const asked = (n) => { try { return fs.readFileSync(path.join(ghDir, 'calls.log'), 'utf8').split('\n').filter((c) => c.includes('repos/o/r/issues/' + n + '/comments')).length; } catch (e) { return 0; } };
@@ -82,7 +82,7 @@ test('review news reaches a session with no task', async (t) => {
     assert.ok(saved().some((w) => w.pr === pr(11)), 'still watched');
   });
   await t.test('a merged or closed PR is no longer watched', async () => {
-    api['repos/o/r/pulls/11'] = { state: 'closed' };
+    prs[pr(11)] = { state: 'CLOSED' };
     say();
     await until(() => !saved().some((w) => w.pr === pr(11)), 'the watch to end');
     await until(() => /Stopped watching https:\/\/github\.com\/o\/r\/pull\/11 for session [0-9a-f]{8}: the PR is merged or closed\./.test(R.output()), 'the log line');

@@ -331,6 +331,47 @@ test('a merge verdict waits while the Dev works, and work left unpushed goes to 
   });
 });
 
+test('Autopilot reads the PR again just before it merges, so a check that went red on the same head stops the merge', async (t) => {
+  const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_GH_FRESH_MS: '600000', RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' });
+  t.after(async () => { await R.stop(); removeDir(ghDir); });
+  const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
+  sh(R.home, 'init', '-q', '--bare', origin);
+  fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
+  sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+  sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/' + sh(repo, 'symbolic-ref', '--short', 'HEAD'));
+  const log = (name) => { try { return fs.readFileSync(path.join(ghDir, name), 'utf8'); } catch (e) { return ''; } };
+  const views = () => log('calls.log').split('\n').filter((l) => l.startsWith('pr view ' + PR)).length;
+  const say = (s, event, extra) => R.hook(Object.assign({ hook_event_name: event, session_id: s.sessionId.slice(0, 12) }, extra));
+  const ap = async () => (await R.call('GET', '/autopilot')).body;
+  const task = async () => (await R.call('GET', '/tasks')).body.tasks[0];
+  const ticket = (await R.call('POST', '/tickets', { title: 'Make a.txt say hello', repo })).body.ticket;
+  await R.call('POST', '/autopilot', { on: true, only: ticket.id });
+  const x = await until(task, 'the task'), wt = x.worktree;
+  const dev = (await R.call('GET', '/terminals')).body.terminals.find((y) => y.id === x.worker.terminal);
+  fs.writeFileSync(path.join(wt, 'a.txt'), 'hello\n');
+  sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'hello');
+  pushPr(wt, origin);
+  const head = sh(wt, 'rev-parse', 'HEAD');
+  const answer = (rollup) => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: head, mergeStateStatus: 'CLEAN', statusCheckRollup: rollup } }, api: { 'repos/acme/widgets/pulls/7/files': [{ filename: 'a.txt' }] } }));
+  answer(GREEN);
+  await say(dev, 'PostToolUse', { pr_url: PR, cwd: wt });
+  await say(dev, 'UserPromptSubmit');
+  const r = (await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: prBrief(PR) })).body;
+  const token = { 'X-Office-Token': await until(() => { try { return sessionToken(r.sessionId); } catch (e) { return null; } }, 'its token') };
+  assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, token)).status, 200);
+  await say(r, 'UserPromptSubmit');
+  await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-101' } });
+  await say(r, 'Stop');
+  await until(async () => (await ap()).prs.some((p) => p.verdict === 'merge' && /^Its Dev is working/.test(p.why || '')), 'Autopilot to read the green PR and wait for the Dev');
+  const before = views();
+  answer([{ name: 'pipeline', status: 'COMPLETED', conclusion: 'FAILURE' }]);
+  await say(dev, 'Stop');
+  await until(() => views() > before, 'the read just before the merge, past the kept answer');
+  await sleep(1500);
+  assert.strictEqual(log('merged.log'), '', 'the kept answer said green, the fresh one said red, and nothing merged');
+});
+
 // T-226: after a merge verdict the Dev does not push. If it thinks a finding marked non-blocking is a bug, its
 // reply has <!-- office:hold -->, and the PR goes to the person. Autopilot reads the comments once more just
 // before it merges, so a reply posted after the last poll still stops the merge.

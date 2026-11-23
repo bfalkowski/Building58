@@ -33,9 +33,9 @@ const config = require('./config.js');
 const plan = require('./pr-watch-plan.js');
 const { livenessOf } = require('./liveness.js');
 const { claim } = require('./lockfile.js');
+const gh = require('./gh.js');
 
 const FILE = state.file('pr-watch.json', 'RELAY_PR_WATCH_FILE');
-const GH = process.env.GH_CMD || 'gh';
 const PR_URL = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/;
 const ON = () => config.get('prWatch');
 const LATE = () => config.get('prWatchWaitMinutes') * 60 * 1000;
@@ -63,13 +63,6 @@ const number = (pr) => '#' + pr.split('/').pop();
 let ctx = null;
 const log = (text) => { if (ctx) ctx.log('PR watch: ' + text); };
 
-function gh(args, cwd) {
-  return new Promise((resolve, reject) => {
-    execFile(GH, args, { cwd: cwd && fs.existsSync(cwd) ? cwd : undefined, timeout: 30000, maxBuffer: 16 * 1024 * 1024, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, out, errOut) => {
-      if (err) reject(new Error(String(errOut || err.message).trim().split('\n')[0])); else resolve(out);
-    });
-  });
-}
 const git = (cwd, args) => new Promise((resolve, reject) => execFile('git', ['-C', cwd].concat(args), { timeout: 10000 }, (e, out) => (e ? reject(e) : resolve(String(out).trim()))));
 
 async function unpushedIn(dir, head) {
@@ -91,7 +84,7 @@ const TEXT = {
 
 let looking = false;
 async function tick() {
-  if (looking || !ctx || !ON()) return;
+  if (looking || !ctx || !ON() || gh.paused()) return;
   looking = true;
   try {
     for (const channel of tasks.channels()) await look(channel);
@@ -111,7 +104,7 @@ function forget(channel, pr) {
   save();
 }
 async function lookAt(channel, task, now) {
-  const pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid,mergeable,mergeStateStatus,statusCheckRollup'], task.repo));
+  const pr = await gh.pr(task.pr, task.repo);
   if (pr.state !== 'OPEN' || !pr.headRefOid) { forget(channel, task.pr); return; }
   const head = pr.headRefOid;
   const dev = terminal.find(channel, task.owner && task.owner.terminal);
@@ -120,8 +113,7 @@ async function lookAt(channel, task, now) {
   const verdict = autopilot.verdictOf(channel, task.pr);
   let files = null;
   if (verdict && verdict.kind === 'merge' && verdict.posted && verdict.commit === head) {
-    const m = task.pr.match(PR_URL);
-    files = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/pulls/' + m[2] + '/files?per_page=100'], task.repo)).flat().flatMap((f) => [f.filename, f.previous_filename]).filter(Boolean);
+    files = await gh.files(task.pr, head, task.repo);
   }
   const lead = terminal.leadOf(channel);
   const move = plan.nextMove({
@@ -173,6 +165,7 @@ function lineOf(channel, task, now) {
   return plan.lineOf(r.late ? Object.assign({}, r, { owner: 'you', why: r.late, late: true }) : r, now || Date.now());
 }
 
+gh.waiting((pr) => Object.values(store).some((c) => c && c.prs && c.prs[pr] && c.prs[pr].owner === 'you'));
 function moveOf(channel, pr) {
   const r = ON() && store[channel] && store[channel].prs[pr];
   return r && r.owner ? { owner: r.owner, cause: r.cause, why: r.why } : null;

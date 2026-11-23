@@ -13,12 +13,10 @@
 // It also keeps whether the PR is still open (open: false once it merged or closed), since a review
 // that waits for a PR that is gone never starts.
 'use strict';
-const { execFile } = require('child_process');
-const fs = require('fs');
-const os = require('os');
 const config = require('./config.js');
+const gh = require('./gh.js');
 
-const GH = process.env.GH_CMD || 'gh';
+const CALM_MS = 10 * 60 * 1000;
 const OK = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 const NOT_DONE = ['PENDING', 'EXPECTED', 'QUEUED', 'IN_PROGRESS', 'WAITING', 'REQUESTED'];
 
@@ -48,19 +46,21 @@ const sources = [];
 const watch = (fn) => sources.push(fn);
 const on = () => config.get('pipelinePollSeconds') > 0;
 const of = (pr) => (pr && seen.get(pr)) || null;
+gh.waiting((pr) => { const p = seen.get(pr); return !!p && p.state !== 'pending' && p.state !== 'unknown' && p.open !== false && Date.now() - p.since > CALM_MS; });
 
-function view(pr, cwd) {
-  return new Promise((resolve) => {
-    execFile(GH, ['pr', 'view', pr, '--json', 'state,headRefOid,statusCheckRollup'], { cwd: cwd && fs.existsSync(cwd) ? cwd : os.homedir(), timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => {
-      if (err) { resolve({ state: 'unknown', error: err.code === 'ENOENT' ? 'gh is not installed' : String(stderr || err.message).trim().split('\n')[0].slice(0, 160) || 'gh failed' }); return; }
-      try { const p = JSON.parse(stdout); const prState = String(p.state || 'OPEN').toUpperCase(); resolve({ state: stateOf(p.statusCheckRollup), head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' }); } catch (e) { resolve({ state: 'unknown', error: 'gh sent something unreadable' }); }
-    });
-  });
+async function view(pr, cwd, fresh) {
+  try {
+    const p = await gh.pr(pr, cwd, { fresh });
+    const prState = String(p.state || 'OPEN').toUpperCase();
+    return { state: stateOf(p.statusCheckRollup), head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' };
+  } catch (e) {
+    return { state: 'unknown', error: e instanceof SyntaxError ? 'gh sent something unreadable' : e.message.slice(0, 160) };
+  }
 }
 const asking = new Map();
-function ask(pr, cwd) {
+function ask(pr, cwd, fresh) {
   if (asking.has(pr)) return asking.get(pr);
-  const done = view(pr, cwd).then((now) => {
+  const done = view(pr, cwd, fresh).then((now) => {
     const was = seen.get(pr), at = Date.now();
     const same = was && was.state === now.state && (now.state === 'unknown' || was.head === now.head);
     seen.set(pr, Object.assign(now, { head: now.head || (was && was.head) || null, since: same ? was.since : at, at }));
@@ -71,7 +71,7 @@ function ask(pr, cwd) {
 }
 let polling = false;
 async function poll() {
-  if (polling) return;
+  if (polling || gh.paused()) return;
   polling = true;
   try {
     const wanted = new Map();
@@ -80,7 +80,7 @@ async function poll() {
     for (const [pr, cwd] of wanted) await ask(pr, cwd);
   } finally { polling = false; }
 }
-const soon = (pr, cwd) => { if (on()) ask(pr, cwd).catch(() => {}); };
+const soon = (pr, cwd) => { if (on()) ask(pr, cwd, true).catch(() => {}); };
 const summary = (pr) => { const p = of(pr); return p ? { state: p.state, head: p.head, open: p.open !== false, at: new Date(p.at).toISOString(), error: p.error || null } : null; };
 
 let begun = false;
