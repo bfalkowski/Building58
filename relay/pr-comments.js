@@ -28,7 +28,6 @@
 // links and a count, never a comment's words. T-4's review loop can call tell() with its own news.
 'use strict';
 const { oneLine } = require('./clean.js');
-const { execFile } = require('child_process');
 const path = require('path');
 const tasks = require('./tasks.js');
 const terminal = require('./terminal.js');
@@ -36,7 +35,7 @@ const delivery = require('./delivery.js');
 const chat = require('./chat.js');
 const sessionPrs = require('./session-prs.js');
 
-const GH = process.env.GH_CMD || 'gh';
+const door = require('./gh.js');
 const GH_LIMIT = 20000;
 const config = require('./config.js');
 const TICK = 2000;
@@ -65,15 +64,9 @@ function stateOf(task) {
   return task.reviews;
 }
 
-function gh(args, input) {
-  return new Promise((resolve) => {
-    const child = execFile(GH, args, { timeout: GH_LIMIT, maxBuffer: 32 * 1024 * 1024, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => {
-      if (!err) { resolve({ out: String(stdout) }); return; }
-      resolve({ failed: err.code === 'ENOENT' ? 'gh is not installed' : err.killed ? 'gh did not answer in time' : clean(stderr, 200) || 'gh failed' });
-    });
-    child.stdin.on('error', () => {});
-    child.stdin.end(input || '');
-  });
+async function gh(args, input) {
+  const r = await door.exec(args, { timeout: GH_LIMIT, maxBuffer: 32 * 1024 * 1024, input });
+  return r.err ? { failed: r.err.code === 'ENOENT' ? 'gh is not installed' : r.err.killed ? 'gh did not answer in time' : clean(r.stderr, 200) || 'gh failed' } : { out: r.stdout };
 }
 const SOURCES = [['issues/{n}/comments', 'c'], ['pulls/{n}/reviews', 'r'], ['pulls/{n}/comments', 'i']];
 async function itemsOf(pr) {
@@ -100,10 +93,7 @@ function isNews(r, item) {
   return true;
 }
 async function closed(pr) {
-  const [, owner, repo, n] = pr.match(PR_URL);
-  const r = await gh(['api', 'repos/' + owner + '/' + repo + '/pulls/' + n]);
-  if (r.failed) return { failed: r.failed };
-  try { return { closed: JSON.parse(r.out).state === 'closed' }; } catch (e) { return { failed: 'gh sent something unreadable' }; }
+  try { return { closed: (await door.pr(pr)).state !== 'OPEN' }; } catch (e) { return { failed: e instanceof SyntaxError ? 'gh sent something unreadable' : e.message }; }
 }
 function endSession(channel, w, why) {
   if (!sessionPrs.end(channel, w.id)) return;
@@ -326,14 +316,19 @@ function reviewPosted(channel, pr, url) {
   saveOf(task);
   checkOnce(channel, task).catch((e) => log('Checking ' + task.pr + ' for review comments failed: ' + e.message));
 }
+const SLOWER = 4;
+const skip = (task) => {
+  const at = Date.parse((task.reviews || {}).checkedAt) || 0, every = config.get('reviewPollSeconds') * 1000;
+  return Date.now() - at < every * (door.spacing() * (door.onPerson(task.pr) ? SLOWER : 1) - 0.5);
+};
 let polling = false;
 async function poll() {
-  if (polling) return;
+  if (polling || door.paused()) return;
   polling = true;
   try {
     for (const channel of allChannels()) {
       for (const task of watched(channel)) {
-        if (!PR_URL.test(task.pr || '')) continue;
+        if (!PR_URL.test(task.pr || '') || skip(task)) continue;
         try { await checkOnce(channel, task); } catch (e) { log('Checking ' + task.pr + ' for review comments failed: ' + e.message); }
       }
     }

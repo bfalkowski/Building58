@@ -204,7 +204,7 @@ async function move(channel, ticket, body, agent) {
 }
 
 const GH = process.env.GH_CMD || 'gh';
-const run = (cmd, args, cwd) => new Promise((done) => execFile(cmd, args, { cwd, timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, out, errOut) => done(err ? { err: String(errOut || err.message).trim().split('\n')[0] } : { out })));
+const run = (cmd, args, cwd) => new Promise((done) => (cmd === GH && require('./gh.js').count(args), execFile(cmd, args, { cwd, timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, out, errOut) => done(err ? { err: String(errOut || err.message).trim().split('\n')[0] } : { out }))));
 const ownerRepo = (link) => { const m = /github\.com[:/]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(link) || /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\//i.exec(link); return m ? (m[1] + '/' + m[2]).toLowerCase() : null; };
 async function prDoubt(ticket, pr) {
   if (!ticket.repo || !fs.existsSync(ticket.repo)) return ['pr_unchecked', ticket.id + ' names no repo on this computer, so the relay cannot check that ' + pr + ' merged there. Ask the person to mark it Done.'];

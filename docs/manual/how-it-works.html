@@ -388,6 +388,19 @@
 <p>The relay depends on parts of Claude Code that can change in any release: its hooks, its menus and trust question, its status line and its transcripts. Safe typing reads the menus and the trust question, so a changed screen can break it with no error. And a Claude Code on your computer updates itself while the room runs.</p>
 <p>So the relay knows the range of Claude Code versions the room was tested with (<code>TESTED</code> in <code>relay/claude-version.js</code>). It reads <code>claude --version</code>, or the command in <code>CLAUDE_CMD</code>, when the room page first asks <a href="roles.html#needs-you">Needs you</a>, and again each hour. When the version is outside the range, Needs you has a line that says so. The container image pins the newest tested version and turns off Claude Code's own updates (<a href="running.html#container">In a container</a>), so a new version reaches it only with a new image. A test checks that the pin and the newest tested version are the same, so moving one moves the other, in the same pull request.</p>
 
+<h2 id="github-polling">How often the relay asks GitHub</h2>
+<p>GitHub gives an account 5000 core API calls an hour, shared by every room and tool on it. When it runs out, review news, PR lookups, comment checks and <a href="roles.html#autopilot">Autopilot</a> merges stall until the hour resets. So every <code>gh</code> call the relay makes goes through <code>relay/gh.js</code>, which counts it, shares it and slows it down.</p>
+<table>
+  <tr><th>What</th><th>How often</th></tr>
+  <tr><td>A PR's state and checks (<code>gh pr view</code>): the pipeline check, the <a href="roles.html#pr-watch">PR watch</a>, Autopilot and the chat's merge and close news</td><td>The timers run as set (pipeline 15 seconds, Autopilot 20, PR watch 120, chat 60), but they share one lookup. The relay asks GitHub once for every field any of them wants, and keeps the answer for 8 seconds. A push, and the merge itself, ask again at once.</td></tr>
+  <tr><td>A PR's changed files (for protected files)</td><td>Once for each head commit, and again after 5 minutes.</td></tr>
+  <tr><td>Review comments (three <code>gh api</code> lists for each PR)</td><td>Every <code>reviewPollSeconds</code> (60), and at once when a review is posted.</td></tr>
+  <tr><td>Main's CI, and the ready to merge label</td><td>Every <code>mainCiPollSeconds</code> (120), and the pipeline setting.</td></tr>
+</table>
+<p><b>A PR that waits on the person</b> is asked about less. That is a PR the PR watch says waits on you, or one whose checks have not changed for 10 minutes and are not running. Its state is kept for 5 minutes, and its comments are checked every fourth poll. Anything that starts new work on the PR, such as a push, asks again at once.</p>
+<p><b>Back off when the count is low.</b> Every minute the relay reads <code>gh api rate_limit</code>, which costs no call. With less than half the hour's calls left it polls twice as slowly, below a quarter four times, below a tenth eight times. With under 100 left it stops polling until the reset time and answers from what it kept. Merges, comments and labels that a person or a session asked for are never held back.</p>
+<p><b>See where the calls go.</b> Every 5 minutes the relay logs a line with the count of <code>gh</code> calls in that time, by kind and by PR, and how many calls are left, as <code>GitHub calls in the last 5 minutes: ...</code>. Set <code>RELAY_GH_BUDGET=off</code> to turn the line and the minute check off, and <code>RELAY_GH_FRESH_MS</code> to change how long a PR's state is kept (8000). At 0 nothing is kept, so a test sees each change at once.</p>
+
 <h2 id="guards">Guards at each boundary</h2>
 <p>What stops the room from doing what it should not.</p>
 <table>
