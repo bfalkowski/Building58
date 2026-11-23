@@ -60,7 +60,7 @@ const pipeline = require('./pipeline.js');
 const { oneLine } = require('./clean.js');
 
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
-const GH = process.env.GH_CMD || 'gh';
+const ghDoor = require('./gh.js');
 const config = require('./config.js');
 const AT_ONCE = () => config.get('autopilotAtOnce');
 const MAX_ROUNDS = () => config.get('autopilotRounds'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges');
@@ -117,13 +117,7 @@ function note(channel, text) {
   if (ctx) ctx.log('Autopilot: ' + text);
 }
 
-function gh(args, cwd) {
-  return new Promise((resolve, reject) => {
-    execFile(GH, args, { cwd, timeout: 30000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1' }) }, (err, out, errOut) => {
-      if (err) reject(new Error(String(errOut || err.message).trim().split('\n')[0])); else resolve(out);
-    });
-  });
-}
+const gh = (args, cwd) => ghDoor.run(args, { cwd });
 const git = (cwd, args) => new Promise((resolve, reject) => execFile('git', args, { cwd, timeout: 10000 }, (e, out) => (e ? reject(e) : resolve(out.trim()))));
 
 const verdictAsk = () => ' Mark each finding blocking, fix now or follow-up. Blocking: a bug, or something that does not do what the PR says. ' +
@@ -285,10 +279,9 @@ async function look(channel) {
 }
 async function readPr(task, rec) {
   let pr = null, files = null;
-  try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid,mergeStateStatus,statusCheckRollup'], task.repo)); } catch (e) { rec.why = 'gh pr view failed: ' + e.message; return null; }
+  try { pr = await ghDoor.pr(task.pr, task.repo); } catch (e) { rec.why = 'gh pr view failed: ' + e.message; return null; }
   if (pr.state === 'OPEN') {
-    const m = task.pr.match(/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/);
-    try { files = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/pulls/' + m[2] + '/files?per_page=100'], task.repo)).flat().flatMap((f) => [f.filename, f.previous_filename]).filter(Boolean); } catch (e) { rec.why = 'Could not list the PR\'s files: ' + e.message; return null; }
+    try { files = await ghDoor.files(task.pr, pr.headRefOid, task.repo); } catch (e) { rec.why = 'Could not list the PR\'s files: ' + e.message; return null; }
   }
   return { pr, files };
 }
@@ -338,8 +331,12 @@ async function lookAt(channel, task) {
     if (!(await prComments.checkNow(channel, task))) { rec.why = 'Ready to merge, but its comments could not be read, so it waits for the next look.'; return; }
     if (rec.handedOver) return;
     if (task.reviews && task.reviews.pending) { rec.why = 'New review news came in as it was about to merge, so its Dev hears it first.'; rec.act = 'wait'; return; }
+    const again = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch((e) => ({ failed: e.message }));
+    if (again.failed) { rec.why = 'Ready to merge, but gh could not read the PR again just before: ' + again.failed; rec.act = 'wait'; return; }
+    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
+    if (last.act !== 'merge') { rec.why = last.why; rec.act = last.act; return; }
     try { await gh(['pr', 'merge', task.pr, '--merge', '--match-head-commit', pr.headRefOid], task.repo); } catch (e) {
-      const now = await gh(['pr', 'view', task.pr, '--json', 'state,headRefOid'], task.repo).then(JSON.parse, () => null);
+      const now = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch(() => null);
       if (now && now.state === 'MERGED') { counted(channel, task, rec, pr.headRefOid); note(channel, 'Merged PR ' + number(task.pr) + ', though gh said: ' + e.message); return; }
       if (now && now.headRefOid !== pr.headRefOid) { rec.why = 'New commits arrived as it was about to merge, so they get a review first.'; return; }
       handOver(channel, task, rec, 'gh pr merge failed: ' + e.message, 'merge-failed', pr.headRefOid); return;
@@ -422,7 +419,7 @@ function markDone(channel, task) {
 }
 async function mergedYet(channel, task) {
   let pr;
-  try { pr = JSON.parse(await gh(['pr', 'view', task.pr, '--json', 'state'], task.repo)); } catch (e) { return; }
+  try { pr = await ghDoor.pr(task.pr, task.repo); } catch (e) { return; }
   if (pr.state === 'MERGED') markDone(channel, task);
 }
 function handOver(channel, task, rec, why, reason, head) {
@@ -437,8 +434,15 @@ function pullMain(channel) {
 }
 async function maybeStart(channel) {
   const c = chOf(channel);
-  if (starting || tasks.busy() || update.restarting() || tasks.list(channel).filter((t) => open(channel, t)).length >= AT_ONCE()) return;
-  if (c.merged >= MAX_MERGES_A_DAY()) return;
+  if (starting || tasks.busy() || update.restarting()) return;
+  const limit = MAX_MERGES_A_DAY();
+  if (c.merged >= limit) {
+    const why = 'Autopilot merged ' + c.merged + ' PR' + (c.merged === 1 ? '' : 's') + ' today, its limit. It starts again tomorrow, or raise Merges a day in Settings.';
+    if (c.idle !== why) { c.idle = why; note(channel, why); }
+    return;
+  }
+  if (/^Autopilot merged \d+ PRs? today, its limit\./.test(c.idle || '')) { c.idle = null; save(); }
+  if (tasks.list(channel).filter((t) => open(channel, t)).length >= AT_ONCE()) return;
   const held = tickets.heldWhy(channel);
   if (held) { c.idle = held; return; }
   starting = true;

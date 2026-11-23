@@ -3,10 +3,16 @@ const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, sleep, until } = require('./helpers.js');
+const { execFileSync } = require('child_process');
+const { relay, makeRepo, sleep, until, ROOT } = require('./helpers.js');
 
 test('tasks', async (t) => {
   const R = await relay(), { call, screen } = R, repo = makeRepo(R.home);
+  const plain = makeRepo(R.home, 'plain');
+  const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd });
+  fs.mkdirSync(path.join(repo, '.claude', 'skills', 'verify'), { recursive: true });
+  fs.copyFileSync(path.join(ROOT, '.claude', 'skills', 'verify', 'SKILL.md'), path.join(repo, '.claude', 'skills', 'verify', 'SKILL.md'));
+  git(repo, 'add', '.'); git(repo, 'commit', '-qm', 'skill');
   t.after(R.stop);
   const talk = (sessionId) => R.hook({ hook_event_name: 'UserPromptSubmit', session_id: sessionId.slice(0, 12) });
   const stopAndWait = async (id) => { await call('POST', '/terminals/' + id + '/stop', {}); await until(async () => !(await call('GET', '/terminals')).body.terminals.some((x) => x.id === id), 'it to stop'); };
@@ -29,10 +35,23 @@ test('tasks', async (t) => {
     assert.match(out, /cannot ship without the wording/, 'unless the code cannot ship without it');
     // Review of T-239: Already filed also answers for a started or rejected ticket, which nobody can edit.
     assert.match(out, /If it says \(started\) or \(rejected\), file the change as its own ticket titled "CLAUDE\.md and constitution updates for /, 'a started or rejected wording ticket gets a ticket of its own');
+    // T-296: a change to the room page or the routes is checked in a running room, with the repo's verify skill.
+    assert.match(out, /use the verify skill \(\.claude\/skills\/verify\/SKILL\.md\)/, 'the brief names the verify skill');
+    assert.match(fs.readFileSync(path.join(ROOT, '.claude', 'skills', 'verify', 'SKILL.md'), 'utf8'), /^---\nname: verify\n/, 'the skill the brief names is in this repo');
+    // T-387: the brief is one paste, so it stays under a size that Claude Code takes whole.
+    assert.ok(out.match(/GOT\[([^\]]*)\]/)[1].length < 6500, 'the brief is ' + out.match(/GOT\[([^\]]*)\]/)[1].length + ' characters');
     await sleep(1200);
     assert.strictEqual((await call('GET', '/tasks/' + task.id)).body.task.briefed, false, 'typed is not in: no turn has begun');
     await talk(task.owner.sessionId);
     await until(async () => (await call('GET', '/tasks/' + task.id)).body.task.briefed === true, 'it to be marked');
+  });
+  await t.test('a repo with no verify skill gets a brief that does not name it', async () => {
+    const other = (await call('POST', '/tasks', { title: 'No skill here', repo: plain })).body.task;
+    const out = await until(async () => { const s = await screen(other.worker.terminal); return /GOT\[[^\]\r\n]*\]/.test(s) && s; }, 'the brief');
+    assert.match(out, /build this now: No skill here/);
+    assert.doesNotMatch(out, /verify skill/);
+    await call('POST', '/terminals/' + other.worker.terminal + '/stop', {});
+    await until(async () => !(await call('GET', '/terminals')).body.terminals.some((x) => x.id === other.worker.terminal), 'it to stop');
   });
   await t.test('a checkout with a session in it cannot be cleaned up', async () => {
     const other = (await call('POST', '/terminals', { cwd: task.worktree })).body;

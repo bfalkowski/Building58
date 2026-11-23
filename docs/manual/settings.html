@@ -46,6 +46,12 @@
     <tbody>
       <tr><td><code>RELAY_KEY</code></td><td class="plain">random, printed at start</td><td>The key every call to <code>/channels/...</code> must send. The supervisor hands it to the relay it starts, and both take it out of their own environments, so nothing they run is given it: not a session, not git or <code>gh</code>, not the git a rollback runs, and not the session host.</td></tr>
       <tr><td><code>PORT</code></td><td class="plain"><code>8787</code>, or the world's <code>port</code></td><td>Port to listen on. With <code>RELAY_WORLD</code>, the default is the <code>port</code> in that world's <code>world.json</code>.</td></tr>
+      <tr id="remote"><td><code>RELAY_REMOTE</code></td><td class="plain">off</td><td><code>1</code> turns on <a href="relay.html#remote">remote mode</a>: a request for the public address must carry a Cloudflare Access sign-in of the owner, with MFA. Needs the four variables below, or the relay does not start. Keep them in <code>.env</code>, not in the repo.</td></tr>
+      <tr><td><code>RELAY_REMOTE_URL</code></td><td class="plain">none</td><td>The room's public address, such as <code>https://room.example.com</code>. It must be https. A request whose <code>Host</code> is its host is remote, and an <code>Origin</code> must be this address.</td></tr>
+      <tr><td><code>RELAY_ACCESS_TEAM</code></td><td class="plain">none</td><td>The Access team domain, such as <code>myteam.cloudflareaccess.com</code>. It gives the issuer and where the public keys are.</td></tr>
+      <tr><td><code>RELAY_ACCESS_AUD</code></td><td class="plain">none</td><td>The application's audience tag, from the Access application's overview.</td></tr>
+      <tr><td><code>RELAY_ACCESS_EMAIL</code></td><td class="plain">none</td><td>The owner's email. No other email gets in.</td></tr>
+      <tr><td><code>RELAY_ACCESS_CERTS_URL</code></td><td class="plain">the team's <code>/cdn-cgi/access/certs</code></td><td>Where the relay fetches the team's keys. Only tests set it. Whoever can set it can choose the keys, so leave it unset.</td></tr>
       <tr><td><code>RELAY_WORLD</code></td><td class="plain">none: every world</td><td>A world's folder. The relay serves that world alone, and loads the room's parts only if its <code>world.json</code> says <code>"sessions": true</code>. <code>npm run world -- &lt;folder&gt;</code> sets it, and <code>npm run office</code> sets it to <code>office</code>. See <a href="relay.html#one-relay">One relay per world</a>.</td></tr>
       <tr><td><code>HOST</code></td><td class="plain"><code>127.0.0.1</code></td><td>Address to listen on. A tunnel connects locally, so this can stay as it is.</td></tr>
       <tr><td><code>RELAY_ROOT</code></td><td class="plain">the repo folder</td><td>Where the page files are served from. See <a href="relay.html#static">what the relay serves</a>. Files under <code>relay/</code> are never served.</td></tr>
@@ -189,6 +195,7 @@
       <tr><td><code>RELAY_URL</code></td><td class="plain"><code>http://localhost:8787</code></td><td><code>npm run office</code> and <code>office:demo</code>: the relay to use.</td></tr>
       <tr><td><code>CHANNEL</code></td><td class="plain"><code>office</code></td><td>The channel to open.</td></tr>
       <tr><td><code>DEMO_SPEED</code></td><td class="plain"><code>1</code></td><td><code>npm run office:demo</code>: <code>2</code> plays it twice as fast.</td></tr>
+      <tr><td><code>RELAY_ROOM_NAME</code></td><td class="plain">none</td><td><code>npm run office</code> and <code>office:demo</code>: the room's name. The link they open and print carries it as <code>name=</code>. See <a href="running.html#room-name">The room's name</a>.</td></tr>
       <tr><td><code>OPEN_CMD</code></td><td class="plain">the system's</td><td><code>npm run office</code> and <code>office:demo</code>: the command that opens a link.</td></tr>
     </tbody>
   </table>
@@ -208,6 +215,10 @@
     </tbody>
   </table>
   <p>What each of these changes is in <a href="how-it-works.html#hook-sends">What the hook sends</a>.</p>
+
+  <h2 id="rules">Standing rules</h2>
+  <p>A standing rule is something you want to hold for a while, such as "do not touch the payments folder until Friday". Keep them in <span class="ui">Settings</span>, under <span class="ui">Standing rules</span>: type the rule, why, and the day it ends (or leave the day empty for until you remove it), then press <span class="ui">Add rule</span>. <span class="ui">Remove</span> deletes one. The room keeps 10, each with up to 200 characters of rule and 200 of reason. The list is kept through a restart in <code>~/.office-world/rules.json</code> (<code>RELAY_RULES_FILE</code>).</p>
+  <p>The brief the relay types for each new Dev, reviewer, Lead and PM ends with the rules in force, each with its reason and end date. The brief says that a standing rule never overrides <code>CLAUDE.md</code> or the constitution. A rule holds through its end date. After that day it leaves new briefs by itself, and the list shows it as ended until you remove it. A new rule reaches sessions that start after you add it, not sessions already running. A session can read the list with <code>ticket.js rules</code>, and cannot add, change or remove a rule (<code>/rules</code> in <a href="relay.html#routes">the routes</a>).</p>
 
   <h2 id="models">Models and skills for each role</h2>
   <p>In <span class="ui">Settings</span>, under <span class="ui">Models and skills</span>, each role has a model and a list of skills: the Lead, Devs, reviewers, the PM, the COO and the security officer. They have no variables, and are kept with the other page values in <code>~/.office-world/settings.json</code>. <span class="ui">Reset</span> goes back to the default. The code is in <code>relay/skills.js</code>.</p>

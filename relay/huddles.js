@@ -18,6 +18,7 @@ const { listOf } = require('./needs-you-plan.js');
 const { livenessOf } = require('./liveness.js');
 
 const GH = process.env.GH_CMD || 'gh';
+const door = require('./gh.js');
 const GH_LIMIT = 10000, GIT_LIMIT = 5000;
 const config = require('./config.js');
 const ANSWER_LIMIT = () => config.get('huddleAnswerSeconds') * 1000;
@@ -30,6 +31,7 @@ const clean = oneLine;
 const ago = (s) => s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
 
 function run(cmd, args, cwd, timeout) {
+  if (cmd === GH) door.count(args);
   return new Promise((resolve) => {
     execFile(cmd, args, { cwd, timeout, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => {
       resolve({ err, stdout: String(stdout), stderr: String(stderr).trim() });

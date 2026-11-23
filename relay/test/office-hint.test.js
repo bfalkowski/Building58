@@ -76,3 +76,53 @@ test('with no room page on screen, the printed link has a placeholder, and only 
   assert.ok(!r.out.includes(KEY), 'the key was printed:\n' + r.out);
   assert.match(fs.readFileSync(opened, 'utf8'), new RegExp('&key=' + KEY + '$'), 'the browser was not given the key');
 });
+
+// The room's name on the link npm run office opens and prints (T-304). OPEN_CMD is a fake opener
+// that writes the link it was given to a file.
+function openedLink(env) {
+  return new Promise((resolve) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-name-'));
+    const opener = path.join(dir, 'open.js');
+    const out = path.join(dir, 'link.txt');
+    fs.writeFileSync(opener, '#!/usr/bin/env node\nrequire("fs").writeFileSync(' + JSON.stringify(out) + ', process.argv[2]);\n', { mode: 0o755 });
+    const server = http.createServer((req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(req.url === '/health' ? { ok: true } : { ok: true, pagesVisible: /\/channels\/(.*)/.test(req.url) && fs.existsSync(out) ? 1 : 0 }));
+    });
+    server.listen(0, '127.0.0.1', () => {
+      runOffice(Object.assign({ RELAY_URL: 'http://127.0.0.1:' + server.address().port, OPEN_CMD: opener }, env)).then((r) => {
+        server.close();
+        resolve({ r, link: fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : null });
+      });
+    });
+  });
+}
+
+test('RELAY_ROOM_NAME puts the encoded name in the opened and printed link, and nothing else', async () => {
+  const name = 'Room C & D #1 é日本';
+  const { r, link } = await openedLink({ RELAY_ROOM_NAME: '  ' + name + '\n', RELAY_OTHER_VALUE: 'zzz-value' });
+  assert.strictEqual(r.code, 0, r.out);
+  const url = new URL(link);
+  assert.strictEqual(url.searchParams.get('name'), name);
+  assert.strictEqual(url.searchParams.get('key'), KEY);
+  assert.ok(r.out.includes('&name=' + encodeURIComponent(name)), r.out);
+  assert.ok(!link.includes('zzz-value') && !r.out.includes('zzz-value'));
+  assert.deepStrictEqual([...url.searchParams.keys()], ['channel', 'key', 'name']);
+});
+
+test('RELAY_ROOM_NAME is cut to 40 characters', async () => {
+  const { link } = await openedLink({ RELAY_ROOM_NAME: 'x'.repeat(60) });
+  assert.strictEqual(new URL(link).searchParams.get('name'), 'x'.repeat(40));
+});
+
+test('with no RELAY_ROOM_NAME the link has no name', async () => {
+  const { r, link } = await openedLink({});
+  assert.ok(link && !link.includes('name='), link);
+  assert.ok(!r.out.includes('name='), r.out);
+});
+
+test('RELAY_ROOM_NAME cut in the middle of an emoji does not break the link', async () => {
+  const { r, link } = await openedLink({ RELAY_ROOM_NAME: 'x'.repeat(39) + '😀' });
+  assert.strictEqual(r.code, 0, r.out);
+  assert.strictEqual(new URL(link).searchParams.get('name'), 'x'.repeat(39));
+});

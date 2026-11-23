@@ -6,11 +6,19 @@
 #   1. .env from .env.example, readable only by you, with a random RELAY_KEY.
 #   2. Claude Code: a token from `claude setup-token`, or a Claude Console API key, pasted once.
 #   3. GitHub: the room's own GitHub App (relay/github-app.js create), then a link to install it. With no
-#      Node on this computer, the helper runs inside the room's image.
+#      Node 18 or later on this computer, the helper runs in a container from the room's image, with this
+#      clone's relay/github-app.js copied in, so any image version works. It listens on 127.0.0.1 at
+#      SETUP_APP_PORT, 47123 unless you set it.
 #   4. ROOM_REPOS: the repos the room works on, as owner/name.
 set -eu
 cd "$(dirname "$0")"
 ENV=.env
+HELPER=building58-setup-app
+APP_PORT=${SETUP_APP_PORT:-47123}
+cleanup() { stty echo 2>/dev/null || true; docker rm -f "$HELPER" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT TERM
+trap 'cleanup; exit 129' HUP
 
 say() { printf '%s\n' "$*"; }
 stop() { printf '%s\n' "$*" >&2; exit 1; }
@@ -25,10 +33,11 @@ put() {
   chmod 600 "$tmp"; mv "$tmp" "$ENV"
 }
 ask() { [ -t 0 ] || stop "$1 is not set in $ENV, and there is no terminal to ask in."; printf '%s ' "$2" >&2; read -r answer; printf '%s' "$answer"; }
-secret() { [ -t 0 ] || stop "$1 is not set in $ENV, and there is no terminal to ask in."; printf '%s ' "$2" >&2; stty -echo; read -r answer; stty echo; printf '\n' >&2; printf '%s' "$answer"; }
+secret() { [ -t 0 ] || stop "$1 is not set in $ENV, and there is no terminal to ask in."; printf '%s ' "$2" >&2; stty -echo; read -r answer || true; stty echo; printf '\n' >&2; printf '%s' "$answer"; }
 open_link() { if command -v open >/dev/null 2>&1; then open "$1"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$1" >/dev/null 2>&1 || true; fi; }
 
 command -v docker >/dev/null 2>&1 || stop "Install Docker first: Docker Desktop, Colima, or Docker Engine on Linux."
+command -v curl >/dev/null 2>&1 || stop "This needs curl, to check that the room answers. Install curl, then run ./setup.sh again."
 docker info >/dev/null 2>&1 || stop "Docker is installed but not running. Start it (for example: colima start), then run ./setup.sh again."
 docker compose version >/dev/null 2>&1 || stop "This needs Docker Compose (docker compose)."
 
@@ -62,18 +71,27 @@ if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
   say "The room acts on GitHub as an app of its own, which reaches only the repos you install it on."
   say "Your browser will open GitHub with the app's settings filled in. Press Create GitHub App there."
   ask GITHUB_APP_ID "Press Enter to start." >/dev/null
-  if command -v node >/dev/null 2>&1; then
+  node_major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+  if [ "$node_major" -ge 18 ] 2>/dev/null; then
     node relay/github-app.js create --env "$ENV"
     install=""
   else
     image="ghcr.io/bfalkowski/building58:$(get BUILDING58_VERSION)"; [ "$image" = "ghcr.io/bfalkowski/building58:" ] && image="ghcr.io/bfalkowski/building58:latest"
+    if curl -s -o /dev/null "http://127.0.0.1:$APP_PORT/" 2>/dev/null; then stop "Port $APP_PORT is in use. Free it, or run SETUP_APP_PORT=<another port> ./setup.sh"; fi
+    say "No Node 18 or later here, so the GitHub step runs in a container. Getting $image..."
+    docker pull -q "$image" >/dev/null || stop "Could not download $image."
+    docker rm -f "$HELPER" >/dev/null 2>&1 || true
+    docker create --name "$HELPER" -p "127.0.0.1:$APP_PORT:$APP_PORT" --entrypoint node "$image" /tmp/github-app.js create --print --host 0.0.0.0 --port "$APP_PORT" >/dev/null || stop "Could not make the helper container."
+    docker cp -q relay/github-app.js "$HELPER:/tmp/github-app.js"
     out=$(mktemp)
-    docker run --rm -p 127.0.0.1:47123:47123 --entrypoint node "$image" /opt/building58/relay/github-app.js create --print --host 0.0.0.0 --port 47123 > "$out" 2>&1 &
+    docker start -a "$HELPER" > "$out" 2>&1 &
     helper=$!
-    for i in $(seq 120); do grep -q '^Opening' "$out" && break; sleep 1; done
-    open_link "http://localhost:47123/"
-    say "If no browser opened, open http://localhost:47123/"
-    wait "$helper" || { cat "$out" >&2; rm -f "$out"; stop "The GitHub App was not made."; }
+    for i in $(seq 60); do grep -q '^Opening' "$out" && break; kill -0 "$helper" 2>/dev/null || break; sleep 1; done
+    grep -q '^Opening' "$out" || { cat "$out" >&2; rm -f "$out"; stop "The GitHub step did not start (is port $APP_PORT free?)."; }
+    open_link "http://localhost:$APP_PORT/"
+    say "If no browser opened, open http://localhost:$APP_PORT/"
+    wait "$helper" || true
+    grep -q '^GITHUB_APP_ID=' "$out" || { cat "$out" >&2; rm -f "$out"; stop "The GitHub App was not made. Run ./setup.sh again."; }
     put GITHUB_APP_ID "$(sed -n 's/^GITHUB_APP_ID=//p' "$out")"
     put GITHUB_APP_PRIVATE_KEY "$(sed -n 's/^GITHUB_APP_PRIVATE_KEY=//p' "$out")"
     install=$(sed -n 's/^GITHUB_APP_INSTALL=//p' "$out")
@@ -81,7 +99,7 @@ if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
     say "Saved the app's id and key in $ENV."
   fi
   [ -z "$(get GITHUB_APP_ID)" ] && stop "The GitHub App was not saved in $ENV. Run ./setup.sh again."
-  [ -n "$install" ] && { open_link "$install"; say "Install it on the repos the room works on: $install"; }
+  if [ -n "$install" ]; then open_link "$install"; say "Install it on the repos the room works on: $install"; else say "Install it on the repos the room works on, with the link above, or on the page GitHub showed."; fi
   ask GITHUB_APP_ID "Press Enter when the app is installed." >/dev/null
 fi
 

@@ -16,6 +16,7 @@ const api = require('./api-schemas.js');
 const { tokenReaches } = require('./token-routes.js');
 const path = require('path');
 const crypto = require('crypto');
+const cfAccess = require('./cf-access.js');
 
 const ROOT = path.resolve(process.env.RELAY_ROOT || path.join(__dirname, '..'));
 
@@ -41,7 +42,7 @@ const office = SESSIONS ? {
   terminal: require('./terminal.js'), tasks: require('./tasks.js'), checkouts: require('./checkouts.js'), tickets: require('./tickets.js'),
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
-  config: require('./config.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), keepAwake: require('./keep-awake.js'),
+  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), keepAwake: require('./keep-awake.js'),
   mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js')
 } : null;
 if (office) {
@@ -51,11 +52,13 @@ if (office) {
   }
 }
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
-const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
+const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const KEY = KEY_SET || crypto.randomBytes(12).toString('hex');
+let REMOTE = null;
+try { const cfg = cfAccess.fromEnv(process.env); REMOTE = cfg && cfAccess.gate(cfg); } catch (e) { console.error(e.message); process.exit(1); }
 const WEBHOOK_URL = process.env.RELAY_WEBHOOK_URL || '';
 const WEBHOOK_AUTH = process.env.RELAY_WEBHOOK_AUTH || '';
 const WEBHOOK_TYPES = (process.env.RELAY_WEBHOOK_TYPES || 'result,run.started,run.live,run.off,thing.added,dale.said,dale.moved,phone.rang')
@@ -88,13 +91,38 @@ function cors() {
   };
 }
 function problem(res, status, error, message, extra) { send(res, status, Object.assign({ ok: false, error, message }, extra || {})); }
+const COOKIE = 'relay_key_' + PORT;
+function cookieKey(req) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === COOKIE) { try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return ''; } }
+  }
+  return '';
+}
 function givenKey(req, url) {
   const h = req.headers.authorization || '';
-  return h.startsWith('Bearer ') ? h.slice(7) : (url.searchParams.get('key') || '');
+  return h.startsWith('Bearer ') ? h.slice(7) : (url.searchParams.get('key') || cookieKey(req));
 }
-function authorized(req, url) {
-  const a = Buffer.from(givenKey(req, url)), b = Buffer.from(KEY);
+function sameKey(given) {
+  const a = Buffer.from(given), b = Buffer.from(KEY);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+function authorized(req, url) { return sameKey(givenKey(req, url)); }
+function cookieOnly(req, url) { return !(req.headers.authorization || '').startsWith('Bearer ') && !url.searchParams.get('key') && !!cookieKey(req); }
+function foreignOrigin(req, url) {
+  if (!cookieOnly(req, url) || !authorized(req, url)) return false;
+  const origin = req.headers.origin;
+  if (!origin) return false;
+  try { return new URL(origin).host !== req.headers.host; } catch { return true; }
+}
+function keyToCookie(req, res, url) {
+  const given = url.searchParams.get('key');
+  if (!given || !sameKey(given)) return false;
+  url.searchParams.delete('key');
+  const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  res.writeHead(302, { Location: url.pathname + url.search, 'Set-Cookie': COOKIE + '=' + encodeURIComponent(given) + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000' + secure, 'Cache-Control': 'no-store' });
+  res.end();
+  return true;
 }
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -120,6 +148,7 @@ function serveStatic(req, res, url) {
   let rel;
   try { rel = decodeURIComponent(url.pathname); } catch { send(res, 404, 'Not found'); return; }
   if (rel.endsWith('/')) rel += 'index.html';
+  if (rel.endsWith('.html') && keyToCookie(req, res, url)) return;
   const file = path.resolve(ROOT, '.' + rel);
   const parts = rel.split('/');
   const refused = (p) => p.startsWith('.') || /[^\x20-\x7e]/.test(p) || ['node_modules', 'relay'].includes(p.toLowerCase());
@@ -207,6 +236,7 @@ function reply(entry, ch) {
 const nothingHere = (req, res) => { if (req.method === 'GET') send(res, 404, 'Not found'); else problem(res, 404, 'not_found', 'There is nothing here.'); };
 async function handle(req, res) {
   if (req.url.startsWith('//')) { nothingHere(req, res); return; }
+  if (REMOTE && REMOTE.applies(req) && !await REMOTE.allows(req)) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); res.end('Forbidden'); return; }
   const url = new URL(req.url, 'http://relay');
   if (req.method === 'OPTIONS') { res.writeHead(204, cors()); res.end(); return; }
 
@@ -215,6 +245,7 @@ async function handle(req, res) {
     send(res, 200, Object.assign({ ok: true, world: ONE ? ONE.dir : null, channels: [...channels.values()].map((c) => ({ channel: c.name, pages: c.pages.length, pagesVisible: visibleCount(c) })) }, restore));
     return;
   }
+  if (foreignOrigin(req, url)) { problem(res, 403, 'forbidden', 'The cookie works only for the room page on this relay\'s own address. From a script, send the key as "Authorization: Bearer <key>".'); return; }
   const m = url.pathname.match(/^\/channels\/([^/]+)(\/[^?]*)?$/);
   if (!m) { if (req.method === 'GET') serveStatic(req, res, url); else nothingHere(req, res); return; }
   if (office && !hooksOpen && req.method === 'POST' && m[2] === '/commands') {
@@ -233,11 +264,12 @@ async function handle(req, res) {
   const tokenMay = agent && agent.channel === m[1] && tokenReaches(agent, req.method, m[2] || '', seat);
   if (!authorized(req, url) && !tokenMay && (seat || (office && plays))) { problem(res, 403, 'forbidden', seat ? 'A seat in a round only plays, with node "$OFFICE_PLAY".' : 'Only a seat in the round that runs can play.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/order$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.'); return; }
+  if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/rules(\/|$)/.test(m[2] || '')) { problem(res, 403, 'person_only', 'Only the person adds, changes or removes a standing rule. A session can read the list.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person, the PM and the Lead edit a ticket.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/propose$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the PM and the Lead propose to replace, merge or close a ticket, or to change its blockers. File a ticket instead.'); return; }
   if (!authorized(req, url) && agent && agent.role === 'pm' && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(move|start)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'The PM does not move or start a ticket, or change its base or kind. It edits the title and body of tickets in Triage or Ready, and with Let the PM set the order on, their priority and place.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && m[2] === '/floor') { problem(res, 401, 'unauthorized', 'Only the Lead can read the floor.'); return; }
-  if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : (givenKey(req, url) ? 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>.')); return; }
+  if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : (givenKey(req, url) ? 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>, or open the room page with the key once to get its cookie.')); return; }
   let name = '';
   try { name = decodeURIComponent(m[1]); } catch { name = ''; }
   const rest = m[2] || '';
@@ -406,6 +438,7 @@ server.listen(PORT, HOST, async () => {
     autopilot.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.update.begin({ port: PORT, key: KEY, log });
     office.prWatch.begin({ log });
+    office.tasks.begin({ log });
     office.ready.begin({ log });
     // Replayed after reviews.begin, or reviews would ignore a queued PR or push.
     hooksOpen = true;

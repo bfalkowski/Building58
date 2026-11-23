@@ -1,7 +1,7 @@
 // The Claude Code panel under the office: terminals running `claude` on this computer, one
 // per worker. The relay runs them (relay/terminal.js) and keeps them going while you look at
 // another one. Clicking a person shows their session here. Reloading the page reconnects.
-// Needs the page to be opened through the relay with ?channel= and ?key=.
+// Needs the page to be opened through the relay with ?channel= (the relay key comes from its cookie).
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);

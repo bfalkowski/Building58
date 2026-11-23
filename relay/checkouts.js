@@ -325,7 +325,7 @@ async function make(channel, body, ctx, ask) {
   save();
   if (pr && reviewSeen) reviewSeen(channel, pr, c.commit, started.body.id);
   if (pr) noteReviewer(channel, pr, started.body.id, body.by === 'Lead' ? 'Lead' : body.auto ? 'automatic review' : 'you');
-  const typed = prompt && pr ? prompt + require('./skills.js').brief('reviewer').trimEnd() + (ask ? askOf(channel) : '') : prompt;
+  const typed = prompt && pr ? prompt + require('./skills.js').brief('reviewer').trimEnd() + require('./rules.js').brief().trimEnd() + (ask ? askOf(channel) : '') : prompt;
   if (typed) delivery.promptOnce(channel, started.body.id, typed, (problem) => { if (problem) ctx.log('The review of ' + pr + ' did not get its prompt: ' + problem); });
   return [201, Object.assign({}, started.body, { checkout: view(channel, c) })];
 }
