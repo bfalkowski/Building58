@@ -207,3 +207,51 @@ test('a PR that waits past the set time goes to the person', async (t) => {
   await sleep(2500);
   assert.strictEqual((await posts()).filter((x) => /waits on you: CI has owed/.test(x)).length, 1, 'said once');
 });
+
+test('a task with no PR finds the open PR whose head is its branch, and no other. It asks no more once it has one, with the setting at 0, or with its folder gone', async (t) => {
+  const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
+  const R = o.R, branch = o.task.branch;
+  const prOf = async () => (await R.call('GET', '/tasks/' + o.task.id)).body.task.pr;
+  const OTHER = 'https://github.com/acme/widgets/pull/9', MINE = PR;
+  const list = (lists) => fs.writeFileSync(path.join(o.ghDir, 'answers.json'), JSON.stringify({ lists }));
+  list({ [branch]: [{ url: OTHER, headRefName: 'someone-elses', isCrossRepository: false }, { url: 'https://github.com/acme/widgets/pull/8', headRefName: branch, isCrossRepository: true }], other: [{ url: MINE, headRefName: 'other', isCrossRepository: false }] });
+  await sleep(2500);
+  assert.strictEqual(await prOf(), null, 'a PR on another branch, or from a fork, is not taken');
+  list({ [branch]: [{ url: MINE, headRefName: branch, isCrossRepository: false }] });
+  await until(async () => (await prOf()) === MINE, 'the task to find its PR by its branch');
+  list({ [branch]: [{ url: OTHER, headRefName: branch, isCrossRepository: false }] });
+  await sleep(2500);
+  assert.strictEqual(await prOf(), MINE, 'a task that has a PR keeps it');
+  const asks = () => (fs.readFileSync(path.join(o.ghDir, 'calls.log'), 'utf8').match(/^pr list /gm) || []).length;
+  const before = asks();
+  await sleep(2500);
+  assert.strictEqual(asks(), before, 'a task with a PR is not looked up');
+  const bare = (await R.call('POST', '/tickets', { title: 'Another', body: 'x', repo: o.repo })).body.ticket;
+  const second = (await R.call('POST', '/tickets/' + bare.id + '/start', {})).body.task;
+  assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 0 } })).status, 200);
+  await sleep(6000);
+  const quiet = asks();
+  await sleep(2500);
+  assert.strictEqual(asks(), quiet, 'with the setting at 0 nothing is looked up');
+  assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 1 } })).status, 200);
+  const resumed = asks();
+  await until(async () => asks() > resumed, 'the second task to be looked up again');
+  removeDir(o.repo);
+  await sleep(1500);
+  const gone = asks();
+  await sleep(2500);
+  assert.strictEqual(asks(), gone, 'a task whose repo folder is gone is not looked up in the relay\'s own folder');
+  assert.strictEqual((await R.call('GET', '/tasks/' + second.id)).body.task.pr, null, 'the second task, with no PR on its branch, still has none');
+});
+
+test('a task with no PR is not looked up while the hourly GitHub budget is used up', async (t) => {
+  const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
+  const reset = Math.floor(Date.now() / 1000) + 3600, bucket = { limit: 5000, remaining: 10, reset };
+  fs.writeFileSync(path.join(o.ghDir, 'answers.json'), JSON.stringify({ api: { rate_limit: { resources: { core: bucket, graphql: bucket } } } }));
+  const asks = () => (fs.readFileSync(path.join(o.ghDir, 'calls.log'), 'utf8').match(/^pr list /gm) || []).length;
+  await until(async () => /rate_limit/.test(fs.readFileSync(path.join(o.ghDir, 'calls.log'), 'utf8')), 'the relay to read its limit', 900);
+  await sleep(1500);
+  const paused = asks();
+  await sleep(3000);
+  assert.strictEqual(asks(), paused, 'nothing is looked up while paused');
+});
