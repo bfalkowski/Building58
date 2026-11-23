@@ -56,7 +56,7 @@ function open(options) {
       const t = projectOf(project).tickets.find((x) => x.id === id);
       if (!t) return null;
       const { id: _id, createdAt: _at, ...rest } = changes;
-      Object.assign(t, rest, { updatedAt: new Date().toISOString() }); save();
+      Object.assign(t, rest, Object.keys(rest).every((k) => k === 'notes') ? {} : { updatedAt: new Date().toISOString() }); save();
       return copy(t);
     }
   };

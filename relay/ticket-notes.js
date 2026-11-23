@@ -27,9 +27,11 @@ function briefOf(ticket, max) {
     room -= lines[i].length + 1;
     kept.unshift(lines[i]);
   }
-  if (!kept.length) return body;
   const left = lines.length - kept.length;
-  return body + head + (left ? '(' + left + ' older ' + (left === 1 ? 'note' : 'notes') + ' left out.)\n' : '') + kept.join('\n');
+  const out = body + head + (left ? '(' + left + ' older ' + (left === 1 ? 'note' : 'notes') + ' left out.)\n' : '') + kept.join('\n');
+  if (kept.length || out.length <= max) return out;
+  const short = body + head + '(' + left + ' ' + (left === 1 ? 'note' : 'notes') + ' left out.)';
+  return short.length <= max ? short : body;
 }
 
 module.exports = { noteFrom, briefOf, MAX_NOTE, MAX_NOTES, HEADING };

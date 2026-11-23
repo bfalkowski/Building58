@@ -217,11 +217,11 @@ function open(options) {
     return trusted(Object.assign({}, note, { sig: mark.sig }), number);
   }
   async function notesOf(repo, issue) {
-    if (!issue.comments) return [];
+    if (!issue.comments || issue.state === 'closed') return [];
     const id = repo + ' #' + issue.number, stamp = issue.updated_at + ' ' + issue.comments, read = noteReads.get(id);
     if (read && read.stamp === stamp) return read.notes.map((n) => ({ ...n }));
     let pages;
-    try { pages = await api('GET', '/repos/' + repo + '/issues/' + issue.number + '/comments?per_page=100', null, true); } catch (e) { if (gone(e)) return []; throw e; }
+    try { pages = await api('GET', '/repos/' + repo + '/issues/' + issue.number + '/comments?per_page=100', null, true); } catch (e) { if (!gone(e)) console.error('Ticket store (github): could not read the notes of #' + issue.number + ': ' + e.message); return read ? read.notes.map((n) => ({ ...n })) : []; }
     const notes = (pages || []).flat().map((c) => noteIn(c, issue.number)).filter(Boolean);
     noteReads.set(id, { stamp, notes });
     return notes.map((n) => ({ ...n }));
