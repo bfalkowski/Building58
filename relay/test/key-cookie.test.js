@@ -37,12 +37,31 @@ test('The relay key cookie', async (t) => {
     const s = await fetch('http://127.0.0.1:' + R.port + '/channels/t/stream', { headers: { Cookie: cookie }, signal: ctl.signal });
     assert.strictEqual(s.status, 200);
     ctl.abort();
+    await s.body.cancel().catch(() => {});
   });
   await t.test('no cookie, a wrong cookie or a cookie from another port gets 401 or 403', async () => {
-    for (const h of [{}, { Cookie: name + '=wrong' }, { Cookie: 'relay_key_1=test-key' }]) {
-      const r = await at('/channels/t', h);
-      assert.ok([401, 403].includes(r.status), String(r.status));
+    for (const h of [{}, { Cookie: name + '=wrong' }, { Cookie: 'relay_key_1=test-key' }, { Cookie: name + '=%E0%A4%A' }]) {
+      assert.strictEqual((await at('/channels/t', h)).status, 401);
     }
+  });
+  await t.test('the redirect keeps the other parameters, and only a page gets one', async () => {
+    const r = await at('/office/index.html?a=1&key=test-key&b=2');
+    assert.strictEqual(r.headers.get('location'), '/office/index.html?a=1&b=2');
+    const other = await at('/office/x.js?key=test-key');
+    assert.strictEqual(other.headers.get('set-cookie'), null);
+    assert.strictEqual((await at('//office/index.html?key=test-key')).status, 404);
+  });
+  await t.test('an empty ?key= with the cookie works', async () => {
+    assert.strictEqual((await at('/channels/t?key=', { Cookie: cookie })).status, 200);
+  });
+  await t.test('the cookie from a request with another origin gets 403, a key in the header or address does not', async () => {
+    const foreign = { Cookie: cookie, Origin: 'http://localhost:9999' };
+    const r = await fetch('http://127.0.0.1:' + R.port + '/channels/t', { method: 'POST', headers: { ...foreign, 'Content-Type': 'text/plain' }, body: '{}' });
+    assert.strictEqual(r.status, 403);
+    assert.strictEqual((await at('/channels/t', foreign)).status, 403);
+    assert.strictEqual((await at('/channels/t', { ...foreign, Authorization: 'Bearer test-key' })).status, 200);
+    assert.strictEqual((await at('/channels/t?key=test-key', foreign)).status, 200);
+    assert.strictEqual((await at('/channels/t', { Cookie: cookie, Origin: 'http://127.0.0.1:' + R.port })).status, 200);
   });
   await t.test('?key= and the Bearer header still work', async () => {
     assert.strictEqual((await at('/channels/t?key=test-key')).status, 200);

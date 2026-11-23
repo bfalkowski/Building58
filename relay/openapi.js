@@ -157,7 +157,7 @@ function build(html) {
     components: {
       securitySchemes: {
         relayKey: { type: 'http', scheme: 'bearer', description: 'The relay key, RELAY_KEY: Authorization: Bearer <key>.' },
-        relayKeyCookie: { type: 'apiKey', in: 'cookie', name: 'relay_key_<port>', description: 'The cookie the room page gets from a first load with the right ?key=. HttpOnly and SameSite=Strict.' },
+        relayKeyCookie: { type: 'apiKey', in: 'cookie', name: 'relay_key_<port>', description: 'The cookie, named relay_key_ and then the relay\'s port (relay_key_8787), not literally relay_key_<port>. Refused when the request has an Origin that is not the relay\'s own address. the room page gets from a first load with the right ?key=. HttpOnly and SameSite=Strict.' },
         relayKeyQuery: { type: 'apiKey', in: 'query', name: 'key', description: 'The relay key in the address, as the page sends it.' },
         sessionToken: { type: 'http', scheme: 'bearer', description: 'A session\'s own token, OFFICE_TICKET_TOKEN. It reaches only the routes its role needs: see ' + MANUAL + '#tokens.' }
       },
