@@ -304,6 +304,7 @@ async function checkPr(channel, task) {
     if (task.ticket) archiveTicketRoom(channel, task.ticket, task.ticketAt, prName(task.pr) + ' merged');
   }
 }
+const prClosed = (channel, pr) => !!(pr && store[channel] && store[channel].prs && store[channel].prs[pr] && store[channel].prs[pr].state === 'CLOSED');
 const prMerged = (channel, pr) => !!(pr && store[channel] && store[channel].prs && store[channel].prs[pr] && store[channel].prs[pr].state === 'MERGED');
 let polling = false;
 async function poll() {
@@ -364,4 +365,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, noteHook, reviewNews, onTicketSummary, onFindTicket, openTicketRoom, archiveTicketRoom, started, poll, announce, announceAll, prMerged, nameOf };
+module.exports = { handle, noteHook, reviewNews, onTicketSummary, onFindTicket, openTicketRoom, archiveTicketRoom, started, poll, announce, announceAll, prMerged, prClosed, nameOf };
