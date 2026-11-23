@@ -345,6 +345,20 @@
   <pre><code>cloudflared tunnel --url http://localhost:8788</code></pre>
   <p>It prints an <code>https://...trycloudflare.com</code> address. Use that address as the caller's base URL, and open the world at the same address with <code>/&lt;folder&gt;/?channel=&lt;channel&gt;&amp;key=...</code>. A quick tunnel gets a new address each time it starts. Check your company's rules before opening a tunnel from a work machine. The relay can keep listening on <code>127.0.0.1</code>, since a tunnel connects locally. The room's own routes stay closed through a tunnel, and a tunnel that rewrites <code>Host</code> to <code>localhost</code> makes every request look local, so use one that passes its own hostname through (see <a href="how-it-works.html#other-computer">hooks from another computer</a>).</p>
 
+  <h2 id="remote">Remote mode: Cloudflare Access for one owner</h2>
+  <p>A tunnel makes every request reach the relay from <code>cloudflared</code> on this computer, so each one looks local, and Cloudflare Access would be the only lock. Remote mode makes the relay check the sign-in too, so a wrong Access setting cannot open the room. It is off by default (<code>relay/cf-access.js</code>). Turn it on in <code>.env</code> with <code>RELAY_REMOTE=1</code> and the four settings in <a href="settings.html#remote">Settings</a>. With <code>RELAY_REMOTE=1</code> and a setting missing, the relay does not start.</p>
+  <p>A request is remote when its <code>Host</code> is the public address, or it carries any <code>Cf-Access-Jwt-Assertion</code>, <code>Cf-Ray</code>, <code>Cf-Connecting-Ip</code> or <code>Cf-Visitor</code> header. For a remote request, any route, the page included, the relay reads <code>Cf-Access-Jwt-Assertion</code> and answers <code>403</code> with the word <code>Forbidden</code> and nothing else, unless all of these hold:</p>
+  <ul>
+    <li>The signature is RS256 and checks against the team's public keys, from <code>https://&lt;team domain&gt;/cdn-cgi/access/certs</code>. The relay keeps them for an hour, and fetches them again, at most once a minute, for a key id it does not know. It uses only Node's built-in <code>crypto</code>.</li>
+    <li>The audience tag is the application's, and the issuer is <code>https://&lt;team domain&gt;</code>.</li>
+    <li>The token has not expired, and is not before its <code>nbf</code>.</li>
+    <li>The <code>email</code> is the owner's, ignoring case.</li>
+    <li>The <code>amr</code> list, the authentication methods, holds <code>mfa</code>.</li>
+    <li>The <code>Origin</code>, if the request has one, is the public address.</li>
+  </ul>
+  <p>A request that is not remote, such as the room page at <code>http://localhost</code> and every hook, is not changed: hooks never use the tunnel. A passing check adds a lock and removes none: the relay key and the <a href="running.html#local-only">local-only rule</a> still apply, so through the tunnel the room's own routes stay closed: they refuse any request with a <code>Cf-</code> header, whatever its <code>Host</code>. A valid token with <code>Origin: null</code> gets <code>403</code>, since only the public address passes.</p>
+  <p><b>What remote mode trusts.</b> Cloudflare to sign tokens only for people who passed the Access policy, the team's keys as the relay fetches them over https, the owner's identity provider to say <code>mfa</code> in <code>amr</code>, and <code>cloudflared</code> to pass the public hostname or its <code>Cf-</code> headers. <b>What it does not.</b> It does not read a cookie or a session of its own, and it does not stop a program on this computer that sends a request with no <code>Cf-</code> header and a <code>Host</code> of <code>localhost</code>, since that is local use. It supports one owner: no list of emails, no portal. It changes nothing about session tokens. The check runs once for each request, so a stream that is already open stays open after its token expires. A key that Cloudflare revoked before the relay's hour is up still passes until the relay fetches the keys again.</p>
+
   <h2 id="limits">Limits</h2>
   <ul>
     <li>Commands go only to a page that is open and visible.</li>
