@@ -434,8 +434,15 @@ function pullMain(channel) {
 }
 async function maybeStart(channel) {
   const c = chOf(channel);
-  if (starting || tasks.busy() || update.restarting() || tasks.list(channel).filter((t) => open(channel, t)).length >= AT_ONCE()) return;
-  if (c.merged >= MAX_MERGES_A_DAY()) return;
+  if (starting || tasks.busy() || update.restarting()) return;
+  const limit = MAX_MERGES_A_DAY();
+  if (c.merged >= limit) {
+    const why = 'Autopilot merged ' + c.merged + ' PR' + (c.merged === 1 ? '' : 's') + ' today, its limit. It starts again tomorrow, or raise Merges a day in Settings.';
+    if (c.idle !== why) { c.idle = why; note(channel, why); }
+    return;
+  }
+  if (/^Autopilot merged \d+ PRs? today, its limit\./.test(c.idle || '')) { c.idle = null; save(); }
+  if (tasks.list(channel).filter((t) => open(channel, t)).length >= AT_ONCE()) return;
   const held = tickets.heldWhy(channel);
   if (held) { c.idle = held; return; }
   starting = true;
