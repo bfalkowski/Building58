@@ -14,6 +14,7 @@ const terminal = require('./terminal.js');
 const delivery = require('./delivery.js');
 const { claim } = require('./lockfile.js');
 const pipeline = require('./pipeline.js');
+const gh = require('./gh.js');
 const config = require('./config.js');
 const { WORDING_TICKET } = require('./autopilot-plan.js');
 const history = require('./ticket-history.js');
@@ -349,16 +350,14 @@ function noteHook(channel, ev) {
 }
 let log = () => {};
 const PR_LINK = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
-function ghList(task) {
-  return new Promise((resolve, reject) => execFile(process.env.GH_CMD || 'gh', ['pr', 'list', '--head', task.branch, '--state', 'open', '--json', 'url,headRefName,isCrossRepository'], { cwd: task.repo, timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, out) => (err ? reject(err) : resolve(out))));
-}
+const ghList = (task) => gh.run(['pr', 'list', '--head', task.branch, '--state', 'open', '--json', 'url,headRefName,isCrossRepository'], { cwd: task.repo, timeout: 20000 });
 let finding = false;
 function begin(ctx) {
   log = ctx.log;
   config.every('reviewPollSeconds', findPrs, 5000);
 }
 async function findPrs() {
-  if (finding) return;
+  if (finding || gh.paused()) return;
   finding = true;
   try {
     for (const channel of channels()) {

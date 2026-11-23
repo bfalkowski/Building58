@@ -243,3 +243,15 @@ test('a task with no PR finds the open PR whose head is its branch, and no other
   assert.strictEqual(asks(), gone, 'a task whose repo folder is gone is not looked up in the relay\'s own folder');
   assert.ok(second.id);
 });
+
+test('a task with no PR is not looked up while the hourly GitHub budget is used up', async (t) => {
+  const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
+  const reset = Math.floor(Date.now() / 1000) + 3600, bucket = { limit: 5000, remaining: 10, reset };
+  fs.writeFileSync(path.join(o.ghDir, 'answers.json'), JSON.stringify({ api: { rate_limit: { resources: { core: bucket, graphql: bucket } } } }));
+  const asks = () => (fs.readFileSync(path.join(o.ghDir, 'calls.log'), 'utf8').match(/^pr list /gm) || []).length;
+  await until(async () => /rate_limit/.test(fs.readFileSync(path.join(o.ghDir, 'calls.log'), 'utf8')), 'the relay to read its limit', 900);
+  await sleep(1500);
+  const paused = asks();
+  await sleep(3000);
+  assert.strictEqual(asks(), paused, 'nothing is looked up while paused');
+});
