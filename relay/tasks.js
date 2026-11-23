@@ -350,7 +350,7 @@ function noteHook(channel, ev) {
 let log = () => {};
 const PR_LINK = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 function ghList(task) {
-  return new Promise((resolve, reject) => execFile(process.env.GH_CMD || 'gh', ['pr', 'list', '--head', task.branch, '--state', 'open', '--json', 'url,headRefName,isCrossRepository'], { cwd: fs.existsSync(task.repo) ? task.repo : undefined, timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, out) => (err ? reject(err) : resolve(out))));
+  return new Promise((resolve, reject) => execFile(process.env.GH_CMD || 'gh', ['pr', 'list', '--head', task.branch, '--state', 'open', '--json', 'url,headRefName,isCrossRepository'], { cwd: task.repo, timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, out) => (err ? reject(err) : resolve(out))));
 }
 let finding = false;
 function begin(ctx) {
@@ -362,7 +362,7 @@ async function findPrs() {
   finding = true;
   try {
     for (const channel of channels()) {
-      for (const task of tasksOf(channel).filter((t) => !t.pr && t.state !== 'done' && t.branch && t.repo)) {
+      for (const task of tasksOf(channel).filter((t) => !t.pr && t.state !== 'done' && t.branch && t.repo && fs.existsSync(t.repo))) {
         try {
           const found = JSON.parse(await ghList(task)).find((p) => p.headRefName === task.branch && !p.isCrossRepository && PR_LINK.test(p.url));
           if (!found || task.pr) continue;

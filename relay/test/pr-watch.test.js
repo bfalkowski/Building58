@@ -208,7 +208,7 @@ test('a PR that waits past the set time goes to the person', async (t) => {
   assert.strictEqual((await posts()).filter((x) => /waits on you: CI has owed/.test(x)).length, 1, 'said once');
 });
 
-test('a task with no PR finds the open PR whose head is its branch, and no other', async (t) => {
+test('a task with no PR finds the open PR whose head is its branch, and no other. It asks no more once it has one, with the setting at 0, or with its folder gone', async (t) => {
   const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
   const R = o.R, branch = o.task.branch;
   const prOf = async () => (await R.call('GET', '/tasks/' + o.task.id)).body.task.pr;
@@ -222,4 +222,24 @@ test('a task with no PR finds the open PR whose head is its branch, and no other
   list({ [branch]: [{ url: OTHER, headRefName: branch, isCrossRepository: false }] });
   await sleep(2500);
   assert.strictEqual(await prOf(), MINE, 'a task that has a PR keeps it');
+  const asks = () => (fs.readFileSync(path.join(o.ghDir, 'calls.log'), 'utf8').match(/^pr list /gm) || []).length;
+  const before = asks();
+  await sleep(2500);
+  assert.strictEqual(asks(), before, 'a task with a PR is not looked up');
+  const bare = (await R.call('POST', '/tickets', { title: 'Another', body: 'x', repo: o.repo })).body.ticket;
+  const second = (await R.call('POST', '/tickets/' + bare.id + '/start', {})).body.task;
+  assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 0 } })).status, 200);
+  await sleep(6000);
+  const quiet = asks();
+  await sleep(2500);
+  assert.strictEqual(asks(), quiet, 'with the setting at 0 nothing is looked up');
+  assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 1 } })).status, 200);
+  const resumed = asks();
+  await until(async () => asks() > resumed, 'the second task to be looked up again');
+  fs.rmSync(o.repo, { recursive: true, force: true });
+  await sleep(1500);
+  const gone = asks();
+  await sleep(2500);
+  assert.strictEqual(asks(), gone, 'a task whose repo folder is gone is not looked up in the relay\'s own folder');
+  assert.ok(second.id);
 });
