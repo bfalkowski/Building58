@@ -4,7 +4,7 @@
 //   - one PR lookup is shared: the checks that want a PR's state ask pr(), which asks gh once for every field
 //     any of them wants, and keeps the answer for a few seconds, or for minutes while the PR waits on the person;
 //   - the relay backs off as the hour's calls run out: it reads gh api rate_limit (which costs no call) every
-//     minute, polls less often below half, a quarter and a tenth left, and stops polling below 100 until the reset.
+//     minute, for core and GraphQL (gh pr view spends GraphQL), whichever is lower, polls less often below half, a quarter and a tenth left, and stops polling below 100 until the reset.
 // A call a person or a session asked for (a merge, a comment, a label) always goes through. See
 // docs/manual/how-it-works.html#github-polling.
 'use strict';
@@ -15,6 +15,7 @@ const GH = process.env.GH_CMD || 'gh';
 const FIELDS = 'state,headRefOid,mergeable,mergeStateStatus,statusCheckRollup,mergedAt';
 const FRESH_MS = process.env.RELAY_GH_FRESH_MS ? Math.max(0, Number(process.env.RELAY_GH_FRESH_MS) || 0) : 8000;
 const QUIET_MS = FRESH_MS ? 5 * 60 * 1000 : 0;
+const FILES_MS = QUIET_MS;
 const LIMIT_EVERY_MS = 60 * 1000;
 const REPORT_EVERY_MS = 5 * 60 * 1000;
 const KEEP_MS = 10 * 60 * 1000;
@@ -59,8 +60,9 @@ async function readLimit() {
   const r = await exec(['api', 'rate_limit'], { timeout: 10000, quiet: true });
   if (r.err) return;
   try {
-    const core = JSON.parse(r.stdout).resources.core;
-    if (Number.isFinite(core.remaining) && core.limit > 0) Object.assign(budget, { remaining: core.remaining, limit: core.limit, reset: core.reset * 1000 });
+    const res = JSON.parse(r.stdout).resources;
+    const tight = ['core', 'graphql'].map((k) => res[k]).filter((x) => x && Number.isFinite(x.remaining) && x.limit > 0).sort((a, b) => a.remaining / a.limit - b.remaining / b.limit)[0];
+    if (tight) Object.assign(budget, { remaining: tight.remaining, limit: tight.limit, reset: tight.reset * 1000 });
   } catch (e) { return; }
 }
 function spacing() {
@@ -95,12 +97,14 @@ function pr(link, cwd, opts) {
   flights.set(link, p);
   return p;
 }
+const SLOWER = 4;
+const due = (lastAt, everyMs, link) => Date.now() - (lastAt || 0) >= everyMs * (spacing() * (onPerson(link) ? SLOWER : 1) - 0.5);
 function forget(link) { views.delete(link); }
 
 async function files(link, head, cwd) {
   const m = link.match(/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/);
   const have = listings.get(link);
-  if (have && head && have.head === head && Date.now() - have.at < QUIET_MS) return have.files;
+  if (have && head && have.head === head && Date.now() - have.at < FILES_MS) return have.files;
   const out = await run(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/pulls/' + m[2] + '/files?per_page=100'], { cwd });
   const list = JSON.parse(out).flat().flatMap((f) => [f.filename, f.previous_filename]).filter(Boolean);
   if (head) listings.set(link, { head, files: list, at: Date.now() });
@@ -116,4 +120,4 @@ if (process.env.RELAY_GH_BUDGET !== 'off') {
   setInterval(report, REPORT_EVERY_MS).unref();
 }
 
-module.exports = { count, exec, run, said, pr, forget, files, usage, spacing, paused, waiting, onPerson, readLimit, budget, FIELDS };
+module.exports = { due, count, exec, run, said, pr, forget, files, usage, spacing, paused, waiting, onPerson, readLimit, budget, FIELDS };

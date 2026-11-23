@@ -316,11 +316,7 @@ function reviewPosted(channel, pr, url) {
   saveOf(task);
   checkOnce(channel, task).catch((e) => log('Checking ' + task.pr + ' for review comments failed: ' + e.message));
 }
-const SLOWER = 4;
-const skip = (task) => {
-  const at = Date.parse((task.reviews || {}).checkedAt) || 0, every = config.get('reviewPollSeconds') * 1000;
-  return Date.now() - at < every * (door.spacing() * (door.onPerson(task.pr) ? SLOWER : 1) - 0.5);
-};
+const skip = (task) => !door.due(Date.parse((task.reviews || {}).checkedAt), config.get('reviewPollSeconds') * 1000, task.pr);
 let polling = false;
 async function poll() {
   if (polling || door.paused()) return;

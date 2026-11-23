@@ -12,7 +12,8 @@ process.env.FAKE_GH_DIR = dir;
 process.env.GH_CMD = path.join(__dirname, 'fake-gh.js');
 process.env.RELAY_GH_BUDGET = 'off';
 const PR = 'https://github.com/o/r/pull/7';
-fs.writeFileSync(path.join(dir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: 'abc', statusCheckRollup: [] } } }));
+const say = (more) => fs.writeFileSync(path.join(dir, 'answers.json'), JSON.stringify(Object.assign({ prs: { [PR]: { state: 'OPEN', headRefOid: 'abc', statusCheckRollup: [] } } }, more)));
+say({});
 const door = require('../gh.js');
 const calls = () => (fs.existsSync(path.join(dir, 'calls.log')) ? fs.readFileSync(path.join(dir, 'calls.log'), 'utf8') : '').split('\n').filter((l) => l.startsWith('pr view'));
 
@@ -65,4 +66,41 @@ test('while paused, a PR already read is answered from what was kept and an unre
   assert.strictEqual((await door.pr(PR)).headRefOid, 'abc');
   await assert.rejects(door.pr('https://github.com/o/r/pull/8'), /hourly limit/);
   assert.strictEqual(calls().length, before);
+});
+
+test('the budget is the lower share of core and GraphQL', async () => {
+  const bucket = (remaining) => ({ limit: 5000, remaining, reset: Math.floor(Date.now() / 1000) + 600 });
+  say({ api: { rate_limit: { resources: { core: bucket(4900), graphql: bucket(400) } } } });
+  await door.readLimit();
+  assert.strictEqual(door.budget.remaining, 400, 'GraphQL is the tighter one, and gh pr view spends it');
+  assert.strictEqual(door.spacing(), 8);
+  say({ api: { rate_limit: { resources: { core: bucket(1000), graphql: bucket(4900) } } } });
+  await door.readLimit();
+  assert.strictEqual(door.budget.remaining, 1000);
+  Object.assign(door.budget, { remaining: null });
+  say({});
+});
+
+test('a quiet PR is due on every fourth poll, and a slower one when the count is low', () => {
+  const link = 'https://github.com/o/r/pull/99', ago = (ms) => Date.now() - ms;
+  assert.ok(door.due(ago(20000), 60000, link) === false, 'under half a poll is too soon');
+  assert.ok(door.due(ago(60000), 60000, link), 'a PR no one waits on is due each poll');
+  door.waiting((pr) => pr === link);
+  assert.ok(!door.due(ago(180000), 60000, link), 'a quiet PR is not due after three polls');
+  assert.ok(door.due(ago(240000), 60000, link), 'it is due after four');
+  Object.assign(door.budget, { remaining: 2000, limit: 5000, reset: Date.now() + 60000 });
+  assert.ok(!door.due(ago(240000), 60000, link), 'and later still when the count is low');
+  assert.ok(door.due(ago(480000), 60000, link));
+  Object.assign(door.budget, { remaining: null });
+});
+
+test('the files of a PR are listed once for a head', async () => {
+  say({ api: { 'repos/o/r/pulls/7/files': [{ filename: 'a.txt' }] } });
+  const listed = () => fs.readFileSync(path.join(dir, 'calls.log'), 'utf8').split('\n').filter((l) => l.includes('pulls/7/files')).length;
+  const before = listed();
+  assert.deepStrictEqual(await door.files(PR, 'h1'), ['a.txt']);
+  await door.files(PR, 'h1');
+  assert.strictEqual(listed() - before, 1);
+  await door.files(PR, 'h2');
+  assert.strictEqual(listed() - before, 2, 'a new head lists again');
 });
