@@ -508,7 +508,8 @@ function notSafeToType(t, brief) {
 const { asTyped } = require('./typed.js');
 const CLEAR_PROMPT = '\x15';
 // Enter after a pause, since a TUI takes text and Enter that arrive together as a paste.
-const TYPE_SETTLE = Number(process.env.RELAY_TYPE_SETTLE_MS) >= 1 ? Number(process.env.RELAY_TYPE_SETTLE_MS) : 300;
+const TYPE_SETTLE_ENV = Number(process.env.RELAY_TYPE_SETTLE_MS);
+const TYPE_SETTLE = TYPE_SETTLE_ENV >= 1 && TYPE_SETTLE_ENV <= 60000 ? TYPE_SETTLE_ENV : 300;
 function typeIfSafe(t, text, wanted, done, brief) {
   const first = notSafeToType(t, brief);
   if (first) { done(first); return; }

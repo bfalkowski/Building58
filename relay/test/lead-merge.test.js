@@ -78,7 +78,7 @@ test('Let the Lead merge', async (t) => {
     assert.strictEqual(saved().merge, true);
     assert.strictEqual((await terminal(a.id)).merge, true);
     await lead(a.id, { merge: true });
-    await sleep(2000);
+    await sleep(4000);
     assert.strictEqual(briefs(await R.screen(a.id)).length, 2, 'turning it on again tells it nothing new');
   });
   await t.test('moving the board leaves it on', async () => {
@@ -117,7 +117,7 @@ test('Let the Lead merge', async (t) => {
     await lead(a.id, { merge: true });
     const after = (sc) => briefs(sc).map(merging).slice(sofar.length);
     await until(async () => after(await R.screen(a.id)).slice(-1)[0] === 'on', 'the last brief to say on');
-    await sleep(1500);
+    await sleep(4000);
     const sc = await R.screen(a.id);
     const now = after(sc);
     assert.ok(['on', 'off,on'].includes(now.join()), 'the new briefs are ' + now.join());
