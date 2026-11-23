@@ -340,4 +340,4 @@ config.every('reviewPollSeconds', poll, 5000);
 setInterval(tick, TICK).unref();
 
 
-module.exports = { noteHook, tell, poll, checkNow, reviewPosted, useVerdicts, useHolds, useHandOvers, isNews, DEV_MARK, TOLD_MARK, HOLD_MARK };
+module.exports = { itemsOf, noteHook, tell, poll, checkNow, reviewPosted, useVerdicts, useHolds, useHandOvers, isNews, DEV_MARK, TOLD_MARK, HOLD_MARK };
