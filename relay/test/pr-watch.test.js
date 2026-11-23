@@ -207,3 +207,19 @@ test('a PR that waits past the set time goes to the person', async (t) => {
   await sleep(2500);
   assert.strictEqual((await posts()).filter((x) => /waits on you: CI has owed/.test(x)).length, 1, 'said once');
 });
+
+test('a task with no PR finds the open PR whose head is its branch, and no other', async (t) => {
+  const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
+  const R = o.R, branch = o.task.branch;
+  const prOf = async () => (await R.call('GET', '/tasks/' + o.task.id)).body.task.pr;
+  const OTHER = 'https://github.com/acme/widgets/pull/9', MINE = PR;
+  const list = (lists) => fs.writeFileSync(path.join(o.ghDir, 'answers.json'), JSON.stringify({ lists }));
+  list({ [branch]: [{ url: OTHER, headRefName: 'someone-elses', isCrossRepository: false }, { url: 'https://github.com/acme/widgets/pull/8', headRefName: branch, isCrossRepository: true }], other: [{ url: MINE, headRefName: 'other', isCrossRepository: false }] });
+  await sleep(2500);
+  assert.strictEqual(await prOf(), null, 'a PR on another branch, or from a fork, is not taken');
+  list({ [branch]: [{ url: MINE, headRefName: branch, isCrossRepository: false }] });
+  await until(async () => (await prOf()) === MINE, 'the task to find its PR by its branch');
+  list({ [branch]: [{ url: OTHER, headRefName: branch, isCrossRepository: false }] });
+  await sleep(2500);
+  assert.strictEqual(await prOf(), MINE, 'a task that has a PR keeps it');
+});
