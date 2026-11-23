@@ -16,6 +16,7 @@ const api = require('./api-schemas.js');
 const { tokenReaches } = require('./token-routes.js');
 const path = require('path');
 const crypto = require('crypto');
+const cfAccess = require('./cf-access.js');
 
 const ROOT = path.resolve(process.env.RELAY_ROOT || path.join(__dirname, '..'));
 
@@ -56,6 +57,8 @@ const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const KEY = KEY_SET || crypto.randomBytes(12).toString('hex');
+let REMOTE = null;
+try { const cfg = cfAccess.fromEnv(process.env); REMOTE = cfg && cfAccess.gate(cfg); } catch (e) { console.error(e.message); process.exit(1); }
 const WEBHOOK_URL = process.env.RELAY_WEBHOOK_URL || '';
 const WEBHOOK_AUTH = process.env.RELAY_WEBHOOK_AUTH || '';
 const WEBHOOK_TYPES = (process.env.RELAY_WEBHOOK_TYPES || 'result,run.started,run.live,run.off,thing.added,dale.said,dale.moved,phone.rang')
@@ -233,6 +236,7 @@ function reply(entry, ch) {
 const nothingHere = (req, res) => { if (req.method === 'GET') send(res, 404, 'Not found'); else problem(res, 404, 'not_found', 'There is nothing here.'); };
 async function handle(req, res) {
   if (req.url.startsWith('//')) { nothingHere(req, res); return; }
+  if (REMOTE && REMOTE.applies(req) && !await REMOTE.allows(req)) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); res.end('Forbidden'); return; }
   const url = new URL(req.url, 'http://relay');
   if (req.method === 'OPTIONS') { res.writeHead(204, cors()); res.end(); return; }
 

@@ -32,9 +32,9 @@
   .page-theme .btn:last-of-type { border-radius: 0 4px 4px 0; }
   .page-theme .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
 
-  .bench { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .bench { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto minmax(420px, 1fr); min-height: calc(100vh - 32px); gap: 16px; align-items: start; }
   .stage { grid-column: 1; grid-row: 1; }
-  .floor { grid-column: 1; grid-row: 2; height: 420px; }
+  .floor { grid-column: 1; grid-row: 2; align-self: stretch; min-height: 420px; }
   /* the terminal stays on screen beside the office, so clicking a person shows their session */
   .cc { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 16px; height: calc(100vh - 32px); display: flex; flex-direction: column; }
   .stage { position: relative; aspect-ratio: 16 / 10; border-radius: 8px; overflow: hidden; background: var(--stage); color: var(--hud); }
@@ -86,7 +86,7 @@
   #relay-status[data-state="on"]::before { background: var(--ok); }
   #relay-status[data-state="wait"]::before { background: var(--wait); }
   /* People take the Floor's free height and scroll, sharing it with a huddle or officer report when one shows. The scrollbars stay visible, even where the system hides them. */
-  #people { list-style: none; margin: 0; padding: 4px 0; flex: 1 1 auto; min-height: 104px; overflow-y: auto; }
+  #people { list-style: none; margin: 0; padding: 4px 0; flex: 1 1 0; min-height: 168px; overflow-y: auto; }
   #people::-webkit-scrollbar, .feed-scroll::-webkit-scrollbar { width: 10px; }
   #people::-webkit-scrollbar-track, .feed-scroll::-webkit-scrollbar-track { background: var(--pane-tint); }
   #people::-webkit-scrollbar-thumb, .feed-scroll::-webkit-scrollbar-thumb { background: var(--pane-dim); border: 2px solid transparent; border-radius: 5px; background-clip: padding-box; }
@@ -149,7 +149,7 @@
   .stop-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-left: auto; }
   .stop-group:not(:has(:not([hidden]))) { display: none; }
   .huddle-bar .btn, #huddle-report .btn { font: 600 12px/1 var(--sans); padding: 5px 8px; border-color: var(--link); color: var(--link); }
-  #huddle-report { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #huddle-report { flex: 1; min-height: 90px; display: flex; flex-direction: column; }
   #huddle-report h3 { align-items: center; }
   .huddle-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 8px; }
   #huddle-headline { margin: 0 0 4px; color: var(--pane-strong); }
@@ -162,12 +162,12 @@
   #huddle-rows b { display: block; font-weight: 500; color: var(--wait); }
   #huddle-rows a { color: var(--link); margin-left: 6px; }
   /* Needs you (office/needs-you.js): the count, and one line for each thing that waits on the person. */
-  #needs-you { flex: 0 0 auto; border-bottom: 1px solid var(--pane-line); }
+  #needs-you { flex: 0 1 auto; min-height: 56px; display: flex; flex-direction: column; overflow: hidden; border-bottom: 1px solid var(--pane-line); }
   #needs-you h3 { border-top: 0; padding: 8px 12px 4px; align-items: baseline; }
   #needs-you-count { font-weight: 600; color: var(--pane-dim); }
   #needs-you:not([data-count="0"]) #needs-you-count { color: var(--wait); }
   #needs-you-empty { margin: 0; padding: 0 12px 8px; color: var(--pane-dim); }
-  #needs-you-list { list-style: none; margin: 0; padding: 0 12px 8px; display: grid; gap: 4px; max-height: 108px; overflow-y: auto; }
+  #needs-you-list { list-style: none; margin: 0; padding: 0 12px 8px; display: grid; gap: 4px; max-height: 108px; min-height: 0; overflow-y: auto; }
   #needs-you-list li { display: flex; align-items: baseline; gap: 6px; padding: 1px 0 1px 8px; border-left: 3px solid var(--wait); overflow-wrap: anywhere; }
   #needs-you-list .needs-line { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; background: none; font: inherit; color: var(--pane-strong); text-align: left; }
   #needs-you-list button.needs-line { cursor: pointer; }
@@ -175,7 +175,7 @@
   #needs-you-list button.needs-line:focus-visible { outline: 2px solid var(--pane-dim); }
   #needs-you-list a { color: var(--link); }
   #needs-you-list .needs-stop { flex: 0 0 auto; font: inherit; cursor: pointer; }
-  .officer-report { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .officer-report { flex: 1; min-height: 90px; display: flex; flex-direction: column; }
   .officer-report[hidden] { display: none; }
   .officer-report h3 { align-items: center; }
   .officer-report .btn { font: 600 12px/1 var(--sans); padding: 5px 8px; border-color: var(--link); color: var(--link); }
@@ -483,8 +483,9 @@
   }
   @media (max-width: 1100px) {
     .bench { grid-template-columns: minmax(0, 1fr); }
+    .bench { grid-template-rows: none; min-height: 0; }
     .stage, .floor, .cc { grid-column: 1; grid-row: auto; }
-    .floor { height: 460px; }
+    .floor { height: 460px; align-self: start; }
     .cc { position: static; height: 520px; }
   }
   @media (max-width: 640px) {
