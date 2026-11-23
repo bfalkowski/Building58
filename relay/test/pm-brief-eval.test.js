@@ -23,6 +23,8 @@ test('the PM brief asks the PM to mark tickets that change the same code as bloc
   assert.match(brief, /same behavior or the same part of the relay or room/);
   assert.ok(brief.includes('node relay/ticket.js blockers ID --blocked-by ID --why'), 'names the command');
   assert.match(brief, /Mark only a clear overlap/);
+  assert.match(brief, /keep the blockers it has/);
+  assert.ok(brief.includes('node relay/ticket.js show ID'), 'says how to read the blockers');
   assert.match(brief, /later one as blocked by the earlier/);
 });
 
