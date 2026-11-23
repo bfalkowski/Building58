@@ -57,6 +57,14 @@ test('the chat board', async (t) => {
     task = (await call('GET', '/tasks/' + task.id)).body.task;
     agent = { 'X-Office-Token': sessionToken(task.owner.sessionId) };
   });
+  await t.test('a Dev posts on the channel of a Triage ticket it does not own, as the wording brief says', async () => {
+    const grouped = (await call('POST', '/tickets', { title: 'CLAUDE.md and constitution updates', body: 'Gathers wording.', repo })).body.ticket;
+    assert.ok(['triage', 'ready'].includes(grouped.status), grouped.status);
+    const r = await call('POST', '/chat/' + grouped.id, { text: '@Lead ' + ticket.id + ' needs a line in CLAUDE.md, see its PR.' }, agent);
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(r.body.post.by, 'session');
+    assert.strictEqual(r.body.room.name, grouped.id);
+  });
   await t.test('a session reads and posts, but not in #office, not too often, and makes and deletes nothing', async () => {
     assert.strictEqual((await call('GET', '/chat', null, agent)).status, 200);
     const office = await call('POST', '/chat/office', { text: 'Main is broken!' }, agent);
@@ -69,16 +77,6 @@ test('the chat board', async (t) => {
     assert.strictEqual((await call('POST', '/chat/' + ticket.id, { text: 'And again.' }, agent)).status, 429);
     assert.strictEqual((await call('POST', '/chat/' + ticket.id, { text: 'x'.repeat(501) })).status, 400);
     assert.strictEqual((await call('POST', '/chat/nope', { text: 'hi' })).status, 404);
-  });
-  await t.test('a Dev posts on the channel of a Triage ticket it does not own, as the wording brief says', async () => {
-    const grouped = (await call('POST', '/tickets', { title: 'CLAUDE.md and constitution updates', body: 'Gathers wording.', repo })).body.ticket;
-    assert.ok(['triage', 'ready'].includes(grouped.status), grouped.status);
-    const post = async () => call('POST', '/chat/' + grouped.id, { text: '@Lead ' + ticket.id + ' needs a line in CLAUDE.md, see its PR.' }, agent);
-    let r = await post();
-    if (r.status === 429) { await sleep(3500); r = await post(); }
-    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
-    assert.strictEqual(r.body.post.by, 'session');
-    assert.strictEqual(r.body.room.name, grouped.id);
   });
   await t.test('only a page on this computer gets an answer', async () => {
     assert.strictEqual((await call('GET', '/chat', null, { Authorization: 'Bearer test-key', Origin: 'https://example.com' })).status, 403);
