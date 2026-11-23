@@ -13,18 +13,20 @@ ports), a state folder in a temporary place, and a throwaway `HOME`.
 
 ```bash
 set -a; . ./.env; set +a
+: "${PORT:?no PORT in .env}"; [ "$PORT" != 8787 ] || { echo 'PORT is 8787, the person'"'"'s room'; exit 1; }
 SCRATCH=/tmp/verify-$PORT; mkdir -p $SCRATCH
 HOME=$SCRATCH/home RELAY_STATE_DIR=$SCRATCH/state PORT=$PORT RELAY_KEY=stub \
   RELAY_TERMINAL=1 RELAY_WORLD=office node relay/server.js > $SCRATCH/room.log 2>&1 &
 echo $! > $SCRATCH/pid
-until curl -sf http://127.0.0.1:$PORT/health >/dev/null; do sleep 0.5; done
+for i in $(seq 60); do curl -sf http://127.0.0.1:$PORT/health >/dev/null && break; sleep 0.5; done
+curl -sf http://127.0.0.1:$PORT/health >/dev/null || { tail -20 $SCRATCH/room.log; echo 'the room did not start'; }
 ```
 
-This starts the same relay `npm run office` does, but you hold the supervisor's pid, so you can stop it in step 4. Each shell call starts fresh, so run the first two lines again in each later call.
+This starts the same relay `npm run office` does, but you hold the supervisor's pid, so you can stop it in step 4. Each shell call starts fresh, so run the first three lines again in each later call.
 - `PORT` comes from `.env` (the first of this checkout's two ports). Never use 8787 or `~/.office-world`: those are the person's room.
 - `HOME` and `RELAY_STATE_DIR` keep the room away from the person's hooks, sessions and tickets.
 - The room starts a Lead session in this folder. With the throwaway `HOME` it has no sign-in, so it does nothing.
-- If `/health` does not answer within about 30 seconds, read `$SCRATCH/room.log`.
+- If `.env` has no `PORT`, or it is 8787, the guard stops you: ask for ports of your own, never use the person's. The wait ends after about 30 seconds and shows the log's last lines.
 
 ## 2. See the page
 
