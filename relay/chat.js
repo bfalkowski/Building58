@@ -23,7 +23,7 @@
 // Like the terminal, this answers only while RELAY_TERMINAL=1.
 'use strict';
 const { oneLine } = require('./clean.js');
-const { execFile } = require('child_process');
+const gh = require('./gh.js');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -40,7 +40,6 @@ const KEEP = () => config.get('chatKeep');
 const MAX_TEXT = 500, MAX_FUN = 10, CLOSED_EVERY = 10;
 const GAP = { ticket: 5 * 1000, fun: 60 * 1000 };
 const MENTION_KEEP = 60 * 60 * 1000;
-const GH = process.env.GH_CMD || 'gh';
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/(\d+)$/;
 const FUN_NAME = /^[a-z][a-z0-9-]{0,23}$/;
 const CLI = path.join(__dirname, 'ticket.js');
@@ -278,18 +277,13 @@ function reviewNews(channel, task, count) {
   announce(channel, count + ' new review comment' + (count === 1 ? '' : 's') + ' on ' + prName(task.pr) + ' for ' + ticketWords(task) + '.', task.ticket);
 }
 
-function prState(task) {
-  return new Promise((resolve) => {
-    execFile(GH, ['pr', 'view', task.pr, '--json', 'state,statusCheckRollup,mergedAt'], { cwd: fs.existsSync(task.repo) ? task.repo : os.homedir(), timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout) => {
-      if (err) { resolve(null); return; }
-      try {
-        const p = JSON.parse(stdout), checks = Array.isArray(p.statusCheckRollup) ? p.statusCheckRollup : [];
-        const said = checks.map((c) => String(c.conclusion || c.state || c.status || '').toUpperCase());
-        const pipeline = said.some((s) => ['FAILURE', 'ERROR', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(s)) ? 'failing' : 'other';
-        resolve({ state: String(p.state || ''), pipeline, mergedAt: p.mergedAt || null });
-      } catch (e) { resolve(null); }
-    });
-  });
+async function prState(task) {
+  try {
+    const p = await gh.pr(task.pr, fs.existsSync(task.repo) ? task.repo : os.homedir()), checks = Array.isArray(p.statusCheckRollup) ? p.statusCheckRollup : [];
+    const said = checks.map((c) => String(c.conclusion || c.state || c.status || '').toUpperCase());
+    const pipeline = said.some((s) => ['FAILURE', 'ERROR', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(s)) ? 'failing' : 'other';
+    return { state: String(p.state || ''), pipeline, mergedAt: p.mergedAt || null };
+  } catch (e) { return null; }
 }
 async function checkPr(channel, task) {
   const now = await prState(task);
@@ -304,6 +298,7 @@ async function checkPr(channel, task) {
     if (task.ticket) archiveTicketRoom(channel, task.ticket, task.ticketAt, prName(task.pr) + ' merged');
   }
 }
+const prClosed = (channel, pr) => !!(pr && store[channel] && store[channel].prs && store[channel].prs[pr] && store[channel].prs[pr].state === 'CLOSED');
 const prMerged = (channel, pr) => !!(pr && store[channel] && store[channel].prs && store[channel].prs[pr] && store[channel].prs[pr].state === 'MERGED');
 let polling = false;
 async function poll() {
@@ -364,4 +359,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, noteHook, reviewNews, onTicketSummary, onFindTicket, openTicketRoom, archiveTicketRoom, started, poll, announce, announceAll, prMerged, nameOf };
+module.exports = { handle, noteHook, reviewNews, onTicketSummary, onFindTicket, openTicketRoom, archiveTicketRoom, started, poll, announce, announceAll, prMerged, prClosed, nameOf };

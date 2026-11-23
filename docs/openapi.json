@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -1132,7 +1132,7 @@
           "Needs you"
         ],
         "summary": "Get needs you",
-        "description": "Only with the relay key. count, and items: one for each thing that needs you, most urgent first, each with kind, who, terminal, task, ticket, pr, line and link (terminal, url, ticket or stop, and fix, a task id, on a hand-over whose Dev says a finding is a bug). Calls neither gh nor git. See Needs you.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key. count, and items: one for each thing that needs you, most urgent first, each with kind, who, terminal, task, ticket, pr, line and link (terminal, url, ticket or stop, fix, a task id, on a hand-over whose Dev says a finding is a bug, and done, a task id, on a merged line, whose PR merged on GitHub). A task's prMerged says the same for its card. Calls neither gh nor git. See Needs you.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getNeedsYou",
         "x-tokens": [],
         "responses": {
@@ -3249,7 +3249,7 @@
           "Tickets"
         ],
         "summary": "Move ticket",
-        "description": "{\"to\": ...}: move a ticket that has no task, as Approve, Reject, Back to Triage and Merged elsewhere do (with pr for done).\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "{\"to\": ...}: move a ticket that has no task, as Approve, Reject, Back to Triage and Merged elsewhere do (with pr for done). Only the person can send ready for a started ticket, as Back to Ready does. It is refused while the ticket has a task or is starting, and it keeps the ticket's approval, priority and order.\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "moveTicket",
         "x-tokens": [
           "a Lead you let move the board"

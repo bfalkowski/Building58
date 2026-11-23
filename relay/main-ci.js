@@ -15,14 +15,13 @@
 // Lead's Floor shows it (relay/floor.js), and Autopilot starts no new ticket on that base branch (relay/autopilot.js).
 // A run that is still going changes nothing, so main stays red until a run passes.
 'use strict';
-const { execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const config = require('./config.js');
 const { oneLine } = require('./clean.js');
 
-const GH = process.env.GH_CMD || 'gh';
+const door = require('./gh.js');
 const RED = ['FAILURE', 'TIMED_OUT', 'STARTUP_FAILURE'];
 const OK = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 const FIELDS = 'databaseId,workflowName,status,conclusion,url,headSha,event,createdAt';
@@ -45,13 +44,10 @@ const seen = new Map();
 const wanted = new Map();
 const on = () => config.get('mainCiPollSeconds') > 0;
 
-function list(repo, branch) {
-  return new Promise((resolve) => {
-    execFile(GH, ['run', 'list', '--branch', branch, '--event', 'push', '--limit', '20', '--json', FIELDS], { cwd: repo && fs.existsSync(repo) ? repo : os.homedir(), timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => {
-      if (err) { resolve({ state: 'unknown', error: err.code === 'ENOENT' ? 'gh is not installed' : String(stderr || err.message).trim().split('\n')[0].slice(0, 160) || 'gh failed' }); return; }
-      try { resolve(stateOf(JSON.parse(stdout))); } catch (e) { resolve({ state: 'unknown', error: 'gh sent something unreadable' }); }
-    });
-  });
+async function list(repo, branch) {
+  const r = await door.exec(['run', 'list', '--branch', branch, '--event', 'push', '--limit', '20', '--json', FIELDS], { cwd: repo && fs.existsSync(repo) ? repo : os.homedir(), timeout: 20000 });
+  if (r.err) return { state: 'unknown', error: door.said(r).slice(0, 160) };
+  try { return stateOf(JSON.parse(r.stdout)); } catch (e) { return { state: 'unknown', error: 'gh sent something unreadable' }; }
 }
 const asking = new Map();
 function ask(repo, branch) {

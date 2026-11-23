@@ -197,7 +197,7 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'merged', 'closed', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
 });
 
 // T-374: reviews waited for a desk, and every desk was held by a session the relay may not stop.
@@ -244,4 +244,15 @@ test('a GitHub write that failed: one line for the issue, with GitHub\'s message
   assert.strictEqual(writeLine({ what: 'move issue #3', message: 'Bad', inMs: 900 }), 'Fix what stops a GitHub write: the relay could not move issue #3. GitHub says: Bad. It tries again in 1 second.');
   assert.match(writeLine({ what: 'update issue #3', message: 'x', inMs: -5 }), /GitHub says: x\. Its wait is over, so the next write to it tries again\.$/, 'a wait that is over says so');
   assert.deepStrictEqual(listOf({ writes: [null, { id: 'x\n1' }] }), [], 'only a write with an issue gets a line');
+});
+
+test('a PR merged on GitHub gives a Done line, and one closed with no merge gives a line with no Done', () => {
+  const [m] = listOf({ seats: [], tasks: [task({ state: 'in_review', pr: PR, prOpen: false, prMerged: true, handedOver: 'x' })] });
+  assert.strictEqual(m.kind, 'merged');
+  assert.strictEqual(m.line, 'PR #12 (T-5) merged on GitHub. Move its task to Done.');
+  assert.deepStrictEqual(m.link, { url: PR, done: 'k1' });
+  const [c] = listOf({ seats: [], tasks: [task({ state: 'waiting_on_you', pr: PR, prOpen: false, prClosed: true })] });
+  assert.strictEqual(c.kind, 'closed');
+  assert.deepStrictEqual(c.link, { url: PR });
+  assert.deepStrictEqual(listOf({ seats: [], tasks: [task({ state: 'done', pr: PR, prMerged: true })] }), [], 'a Done task gives none');
 });

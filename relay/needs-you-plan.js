@@ -11,7 +11,7 @@
 // where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
 // spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
 // says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
-// A task is one started ticket: { id, ticket, title, state, pr, prOpen, owner, note, reviewRuns, pipelineWaits,
+// A task is one started ticket: { id, ticket, title, state, pr, prOpen, prMerged, prClosed, owner, note, reviewRuns, pipelineWaits,
 // handedOver, devSaysBug, reviewedSince, onlyYouMerge, reviewFailed }, where owner is the terminal of its Dev while
 // that session runs, pipelineWaits says its open PR's pipeline is running or failing, devSaysBug says Autopilot handed
 // it over because its Dev says a finding the merge review marked non-blocking is a bug, reviewedSince is the last
@@ -36,6 +36,8 @@
 //   main         the latest push run of CI on main failed, so Autopilot starts no new ticket on that branch
 //   ticket-write the last write to a ticket's GitHub issue failed, until a write goes through, GitHub shows what it
 //                wanted, or a read comes after the wait
+//   merged       a task's PR merged on GitHub, whoever merged it, and its task is not Done: the line has a Done button
+//   closed       a task's PR was closed on GitHub without a merge: the line has no Done button
 //   merge        an open PR that only the person may merge
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
 //                with the next step a review posted after it gives
@@ -49,11 +51,12 @@
 //   gone         a task in Building or Changes requested with no PR whose session has ended
 // link says what the page opens: { terminal } for a session, { url } for a PR, { ticket } for a Board card,
 // and { stop } for another relay, its pid, which the page's Stop button stops. A hand-over whose Dev says a finding
-// is a bug also has { fix }, its task's id, which the page's Fix it button sends to POST /autopilot/fix.
+// is a bug also has { fix }, its task's id, which the page's Fix it button sends to POST /autopilot/fix. A merged line has
+// { done }, its task's id, which the page's Done button sends to POST /tasks/<id>/move with { to: 'done' }.
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'merged', 'closed', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -89,6 +92,8 @@ function taskItem(t, dev) {
   const pr = t.pr || null;
   const item = (kind, line, link) => ({ kind, who, terminal: dev ? dev.terminal : null, task: t.id, ticket: t.ticket || null, pr, line, link });
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
+  if (pr && t.prMerged) return item('merged', 'PR ' + numberOf(pr) + onPr + ' merged on GitHub. Move its task to Done.', { url: pr, done: t.id });
+  if (pr && t.prClosed) return item('closed', 'PR ' + numberOf(pr) + onPr + ' was closed on GitHub without a merge. Look at it. This line stays until the PR is reopened, its task gets a new PR, or its task is Done.', { url: pr });
   if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });

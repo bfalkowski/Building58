@@ -8,6 +8,9 @@
 //     GitHub, you press Create there, and GitHub sends back the App's id and private key, which go into the
 //     .env file as GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY (the key as base64, on one line). Then it says
 //     where to install the App. --workflows also lets the App change files in .github/workflows.
+//     With --print in place of --env, it prints those two lines, and GITHUB_APP_INSTALL=<link>, for the
+//     caller to keep: setup.sh runs it this way inside the image, with --host 0.0.0.0 and a --port it
+//     publishes, when the computer has no Node.
 //
 //   signIn(env) -> { login, botId, expiresAt }, in the container (relay/container-setup.js and
 //     relay/container-forward.js): makes an installation token and gives it to gh, in its hosts.yml, which
@@ -106,7 +109,9 @@ const attr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').rep
 function create(args) {
   const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
   const envFile = opt('--env');
-  if (!envFile) { console.error('Say which .env gets the App: node relay/github-app.js create --env <file>'); process.exit(2); }
+  const print = args.includes('--print');
+  if (!envFile && !print) { console.error('Say which .env gets the App: node relay/github-app.js create --env <file>, or --print'); process.exit(2); }
+  const port = Number(opt('--port')) || 0, host = opt('--host') || '127.0.0.1';
   const org = opt('--org'), name = opt('--name') || 'building58-room-' + crypto.randomBytes(3).toString('hex');
   const state = crypto.randomBytes(16).toString('hex');
   const server = http.createServer(async (req, res) => {
@@ -122,8 +127,16 @@ function create(args) {
     if (url.searchParams.get('state') !== state || !url.searchParams.get('code')) { page(400, 'This answer is not from the GitHub page this command opened.'); return; }
     try {
       const app = await api('POST', '/app-manifests/' + encodeURIComponent(url.searchParams.get('code')) + '/conversions', null);
-      setEnv(envFile, { GITHUB_APP_ID: String(app.id), GITHUB_APP_PRIVATE_KEY: Buffer.from(app.pem).toString('base64') });
+      const values = { GITHUB_APP_ID: String(app.id), GITHUB_APP_PRIVATE_KEY: Buffer.from(app.pem).toString('base64') };
       const install = 'https://github.com/apps/' + app.slug + '/installations/new';
+      if (print) {
+        page(200, '<h2>Created ' + attr(app.slug) + '</h2><p>Go back to the terminal.</p>');
+        for (const [k, v] of Object.entries(values)) console.log(k + '=' + v);
+        console.log('GITHUB_APP_INSTALL=' + install);
+        setTimeout(() => process.exit(0), 500);
+        return;
+      }
+      setEnv(envFile, values);
       page(200, '<h2>Created ' + attr(app.slug) + '</h2><p>Its id and key are in ' + attr(envFile) + '.</p><p><a href="' + attr(install) + '">Install it on the repos the room works on</a>.</p>');
       console.log('Created the GitHub App ' + app.slug + ' (id ' + app.id + ').');
       console.log('GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY are in ' + envFile + '.');
@@ -131,10 +144,11 @@ function create(args) {
       setTimeout(() => process.exit(0), 500);
     } catch (e) { page(500, 'GitHub did not finish: ' + attr(e.message)); console.error(e.message); setTimeout(() => process.exit(1), 500); }
   });
-  server.listen(0, '127.0.0.1', () => {
+  server.listen(port, host, () => {
     const start = 'http://localhost:' + server.address().port + '/';
     console.log('Opening ' + start + ' to create the App "' + name + '" on GitHub' + (org ? ' for ' + org : '') + '.');
-    try { spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [start], { stdio: 'ignore', detached: true }).unref(); } catch (e) { console.log('Open it in your browser.'); }
+    const tell = () => console.log('Open it in your browser.');
+    try { const c = spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [start], { stdio: 'ignore', detached: true }); c.on('error', tell); c.unref(); } catch (e) { tell(); }
   });
 }
 

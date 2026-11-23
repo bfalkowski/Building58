@@ -10,7 +10,7 @@
 // sign-in from `claude auth status`, which sees that a token is there, not that it works.
 //
 // GitHub: with GITHUB_APP_ID, the room acts as that GitHub App (relay/github-app.js): this makes its first
-// token, and relay/container-forward.js makes a new one every 45 minutes. Commits are named after its bot.
+// token, and relay/container-forward.js makes a new one every 10 minutes. Commits are named after its bot.
 // Otherwise, with GH_TOKEN, gh is signed in already. This checks the token with `gh api user`, lets git
 // push with it (`gh auth setup-git`), and names the commits after that account unless git has a name.
 //
@@ -73,7 +73,7 @@ async function gitHubApp(env) {
   try { run('gh', ['auth', 'setup-git']); } catch (e) { return 'GitHub: signed in as ' + r.login + ', but git cannot push with it: ' + said(e); }
   run('git', ['config', '--global', 'user.name', r.login]);
   run('git', ['config', '--global', 'user.email', r.botId + '+' + r.login + '@users.noreply.github.com']);
-  return 'GitHub: signed in as the App ' + r.login + '. Its token is made again every 45 minutes. git pushes with it.';
+  return 'GitHub: signed in as the App ' + r.login + '. Its token is made again every 10 minutes. git pushes with it.';
 }
 
 function gitHub(env) {
