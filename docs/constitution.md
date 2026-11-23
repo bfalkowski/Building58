@@ -467,9 +467,11 @@ start. The relay, not a brief, holds it to these:
   or unpushed work or work git cannot check, or gone with review news it was never told. It names
   that commit to GitHub, which refuses the merge if the PR moved since. A branch behind main
   merges as it is, since main does not ask for branches to be up to date.
-- It works only on tasks it started. It never merges a change to this file, `CLAUDE.md` or the lint rules. Its loop is limited: after the number of review rounds
-  that the person sets in **Review rounds** in Settings (2 by default, 1 to 5) that still say fix, a failed check, a closed pull request or a failed merge, the task goes to
-  Waiting on you with the reason, and it leaves it alone. It merges at most 10 pull requests a day.
+- It works only on tasks it started. It never merges a change to this file, `CLAUDE.md` or the
+  lint rules. Its loop is limited: after the number of review rounds that the person sets in
+  **Review rounds** in Settings (2 by default, 1 to 5) that still say fix, a failed check, a
+  closed pull request or a failed merge, the task goes to Waiting on you with the reason, and it
+  leaves it alone. It merges at most 10 pull requests a day.
 - After a merge it pulls main into the relay's own folder, as **Update** does, and starts nothing
   while that runs.
 
