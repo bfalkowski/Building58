@@ -65,6 +65,18 @@
       });
       li.append(fix);
     }
+    if (typeof link.done === 'string' && link.done) {
+      const done = document.createElement('button');
+      done.type = 'button'; done.className = 'needs-stop'; done.textContent = 'Done';
+      done.title = 'Move its task to Done. Its ticket goes to done too.';
+      done.addEventListener('click', () => {
+        done.disabled = true; done.textContent = 'Moving';
+        fetch(base + '/tasks/' + encodeURIComponent(link.done) + '/move?key=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: 'done' }) })
+          .then((r) => r.json()).catch(() => null)
+          .then((r) => { done.textContent = r && r.ok ? 'Moved' : 'Not moved'; done.title = (r && r.message) || done.title; drawn = ''; read().then(draw); });
+      });
+      li.append(done);
+    }
     if (item.pr && PR.test(item.pr) && !link.url) {
       const a = document.createElement('a');
       a.href = item.pr; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'PR';

@@ -14,6 +14,8 @@ const terminal = require('./terminal.js');
 const delivery = require('./delivery.js');
 const { claim } = require('./lockfile.js');
 const pipeline = require('./pipeline.js');
+const gh = require('./gh.js');
+const config = require('./config.js');
 const { WORDING_TICKET } = require('./autopilot-plan.js');
 const history = require('./ticket-history.js');
 const stubEnv = require('./stub-env.js');
@@ -332,7 +334,7 @@ function view(channel, task) {
   const t = terminal.find(channel, task.owner && task.owner.terminal);
   const r = task.reviews;
   const reviews = r ? { pending: r.pending ? { pr: r.pending.pr, count: r.pending.count, since: r.pending.since, ended: !!r.pending.ended } : null, problem: r.problem || null, checkedAt: r.checkedAt || null } : null;
-  return Object.assign({}, task, { worker: t ? { terminal: t.id, running: true, state: t.state } : null, sessionId: undefined, reviews, pipeline: pipelineOf(task), waitsOn: require('./pr-watch.js').lineOf(channel, task) });
+  return Object.assign({}, task, { worker: t ? { terminal: t.id, running: true, state: t.state } : null, sessionId: undefined, reviews, pipeline: pipelineOf(task), prMerged: !!task.pr && prMerged(channel, task), waitsOn: require('./pr-watch.js').lineOf(channel, task) });
 }
 
 function ofHook(channel, ev) {
@@ -345,6 +347,32 @@ function noteHook(channel, ev) {
   if (!task || task.pr === ev.pr_url) return;
   task.pr = ev.pr_url; record(task, { type: 'pr', pr: ev.pr_url }); save();
   events.emit('pr', channel, task);
+}
+let log = () => {};
+const PR_LINK = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
+const ghList = (task) => gh.run(['pr', 'list', '--head', task.branch, '--state', 'open', '--json', 'url,headRefName,isCrossRepository'], { cwd: task.repo, timeout: 20000 });
+let finding = false;
+function begin(ctx) {
+  log = ctx.log;
+  config.every('reviewPollSeconds', findPrs, 5000);
+}
+async function findPrs() {
+  if (finding || gh.paused()) return;
+  finding = true;
+  try {
+    for (const channel of channels()) {
+      for (const task of tasksOf(channel).filter((t) => !t.pr && t.state !== 'done' && t.branch && t.repo && fs.existsSync(t.repo))) {
+        if (gh.paused()) return;
+        try {
+          const found = JSON.parse(await ghList(task)).find((p) => p.headRefName === task.branch && !p.isCrossRepository && PR_LINK.test(p.url));
+          if (!found || task.pr) continue;
+          task.pr = found.url; record(task, { type: 'pr', pr: found.url }); save();
+          log('Task ' + task.id + ' has the open PR ' + found.url + ' on its branch ' + task.branch + '.');
+          events.emit('pr', channel, task);
+        } catch (e) { log('Could not list the PRs of ' + task.branch + ': ' + e.message); }
+      }
+    }
+  } finally { finding = false; }
 }
 function followSessions(channel) {
   let changed = false;
@@ -439,4 +467,4 @@ const list = (channel) => tasksOf(channel);
 
 const channels = () => Object.keys(store);
 
-module.exports = { handle, checkRemote, noteHook, noteMerged, ofHook, setState, moveBack, record, save, channels, create, resume, pipelineOf, busy: () => [...creating.values()].reduce((a, b) => a + b, 0), building, leadRefusal, list, ofTicket, workOf, mainCheckout, branchOf, defaultBranch, hasBranch, baseProblem, git, excludeWorktrees, linkModules, statusOf, refuseNested, unagreedIgnored, events, onClean, wipLimit, WORKTREES, STATES };
+module.exports = { begin, findPrs, handle, checkRemote, noteHook, noteMerged, prMerged, ofHook, setState, moveBack, record, save, channels, create, resume, pipelineOf, busy: () => [...creating.values()].reduce((a, b) => a + b, 0), building, leadRefusal, list, ofTicket, workOf, mainCheckout, branchOf, defaultBranch, hasBranch, baseProblem, git, excludeWorktrees, linkModules, statusOf, refuseNested, unagreedIgnored, events, onClean, wipLimit, WORKTREES, STATES };

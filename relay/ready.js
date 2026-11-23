@@ -21,7 +21,6 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
 const state = require('./state.js');
 const config = require('./config.js');
 const chat = require('./chat.js');
@@ -31,8 +30,8 @@ const autopilot = require('./autopilot.js');
 const plan = require('./ready-plan.js');
 const { oneLine, keepLines } = require('./clean.js');
 const { claim } = require('./lockfile.js');
+const door = require('./gh.js');
 
-const GH = process.env.GH_CMD || 'gh';
 const PR_URL = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)$/;
 const SHA = /^[0-9a-f]{7,64}$/;
 const MAX_TEXT = 20000;
@@ -60,15 +59,9 @@ function save() {
   } catch (e) { console.error('Could not save ' + FILE + ': ' + e.message); }
 }
 
-function gh(args, input) {
-  return new Promise((resolve) => {
-    const child = execFile(GH, args, { timeout: 30000, maxBuffer: 16 * 1024 * 1024, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => {
-      if (!err) { resolve({ out: String(stdout) }); return; }
-      resolve({ failed: err.code === 'ENOENT' ? 'gh is not installed' : err.killed ? 'gh did not answer in time' : oneLine(stderr, 200) || 'gh failed' });
-    });
-    child.stdin.on('error', () => {});
-    child.stdin.end(input || '');
-  });
+async function gh(args, input) {
+  const r = await door.exec(args, { input });
+  return r.err ? { failed: r.err.code === 'ENOENT' ? 'gh is not installed' : r.err.killed ? 'gh did not answer in time' : oneLine(r.stderr, 200) || 'gh failed' } : { out: r.stdout };
 }
 async function json(args) {
   const r = await gh(args);

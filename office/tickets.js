@@ -59,6 +59,7 @@
     if (p.waits) return 'waiting on the pipeline: ' + (p.state === 'red' ? 'a check failed' : 'checks are running');
     return PIPELINE_WORDS[p.state] || '';
   }
+  const mergedNote = (t) => (t.task && t.task.prMerged && t.task.state !== 'done' ? 'PR merged on GitHub' : '');
   const waitsOnNote = (t) => (t.task && t.task.waitsOn ? 'PR ' + t.task.waitsOn.words : '');
   function button(text, primary, fn) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = text;
@@ -214,7 +215,7 @@
     const state = t.status === 'started' && t.task ? t.task.state : '';
     const after = finishedBlockers(t, byId);
     const others = M.alsoWith(people, t.assignee);
-    meta.textContent = [(t.priority || 'normal') + ' priority', t.kind ? 'kind ' + t.kind : 'no kind', M.labelsOf(t).length ? 'labels ' + M.labelsOf(t).join(', ') : '', orderedNote(t), t.createdBy, startedNote(t), state ? 'task ' + (STATE_WORDS[state] || state) : '', pipelineNote(t), waitsOnNote(t), window.officeTicketHistory ? window.officeTicketHistory.assigneeText(t) : '', others.length ? 'also with ' + others.join(', ') : '', (t.repo || 'no repo').split('/').pop(), t.base ? 'base ' + t.base : '', t.waitingFor.length ? 'waiting for ' + t.waitingFor.join(', ') : '', t.rejectedBlockers.length ? t.rejectedBlockers.join(', ') + ' was rejected' : '', after.length ? 'after ' + after.join(', ') : '', t.status === 'done' && !t.task && t.pr ? 'merged outside the room' : '', t.status === 'ready' && !t.approved ? 'not approved by you, so nothing starts it by itself' : '', (t.shapes || []).length ? 'shapes ' + t.shapes.join(', ') : '', (t.status === 'triage' || t.status === 'ready') && t.heldBack ? t.heldBack : ''].filter(Boolean).join(' · ');
+    meta.textContent = [(t.priority || 'normal') + ' priority', t.kind ? 'kind ' + t.kind : 'no kind', M.labelsOf(t).length ? 'labels ' + M.labelsOf(t).join(', ') : '', orderedNote(t), t.createdBy, startedNote(t), state ? 'task ' + (STATE_WORDS[state] || state) : '', pipelineNote(t), mergedNote(t), waitsOnNote(t), window.officeTicketHistory ? window.officeTicketHistory.assigneeText(t) : '', others.length ? 'also with ' + others.join(', ') : '', (t.repo || 'no repo').split('/').pop(), t.base ? 'base ' + t.base : '', t.waitingFor.length ? 'waiting for ' + t.waitingFor.join(', ') : '', t.rejectedBlockers.length ? t.rejectedBlockers.join(', ') + ' was rejected' : '', after.length ? 'after ' + after.join(', ') : '', t.status === 'done' && !t.task && t.pr ? 'merged outside the room' : '', t.status === 'ready' && !t.approved ? 'not approved by you, so nothing starts it by itself' : '', (t.shapes || []).length ? 'shapes ' + t.shapes.join(', ') : '', (t.status === 'triage' || t.status === 'ready') && t.heldBack ? t.heldBack : ''].filter(Boolean).join(' · ');
     li.append(meta);
     if (t.writeError) { const w = document.createElement('p'); w.className = 'write-error'; w.setAttribute('role', 'status'); w.textContent = t.writeError; li.append(w); }
     if (t.proposal) {
@@ -224,7 +225,7 @@
       li.append(p, decide);
     }
     const row = document.createElement('div'); row.className = 'card-actions';
-    if (t.status === 'started' && !t.task) row.append(button('Start again', true, () => act(t, 'start', {})));
+    if (t.status === 'started' && !t.task) row.append(button('Start again', true, () => act(t, 'start', {})), button('Back to Ready', false, () => act(t, 'move', { to: 'ready' })));
     if (t.status === 'triage') { row.append(button('Approve', true, () => act(t, 'move', { to: 'ready' })), button('Reject', false, () => act(t, 'move', { to: 'rejected' }))); }
     if (t.status === 'ready') { const go = button('Start', true, () => act(t, 'start', {})); go.disabled = t.waitingFor.length > 0; row.append(go, button('Reject', false, () => act(t, 'move', { to: 'rejected' }))); }
     if (t.status === 'triage' || t.status === 'ready') row.append(...orderControls(t, column || [t]));

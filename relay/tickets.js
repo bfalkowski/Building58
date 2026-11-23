@@ -47,7 +47,7 @@ function labelsFrom(value, all, agent) {
   if (agent && unknown.length) return { error: [400, { ok: false, error: 'bad_label', message: 'No ticket has the label ' + unknown.join(', ') + ' yet. ' + (known.length ? 'Labels are: ' + known.join(', ') + '. ' : '') + 'Only the person adds a new label.' }] };
   return { labels };
 }
-const MOVES = { triage: ['ready', 'rejected', 'done'], ready: ['rejected', 'done'], rejected: ['triage'] };
+const MOVES = { triage: ['ready', 'rejected', 'done'], ready: ['rejected', 'done'], started: ['ready'], rejected: ['triage'] };
 const PR_LINK = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/[1-9]\d{0,9}$/;
 const MAX_TITLE = 80, MAX_BODY = 8000, MAX_TRIAGE = 20;
 const PM_PARTS = ['What to build', 'Acceptance criteria', 'Blocked by', 'Out of scope'];
@@ -188,23 +188,24 @@ async function move(channel, ticket, body, agent) {
     const all = await store.list(channel);
     const now = all.find((t) => t.id === ticket.id) || ticket;
     if (starting.has(channel + '/' + now.id)) return [409, { ok: false, error: 'started', message: 'This ticket is starting. Once it has, move its task instead.' }];
-    if (to === 'done' && tasks.ofTicket(channel, now)) return [409, { ok: false, error: 'started', message: 'This ticket has a task. It is done when its task is.' }];
+    if ((to === 'done' || now.status === 'started') && tasks.ofTicket(channel, now)) return [409, { ok: false, error: 'started', message: now.status === 'started' ? 'This ticket has a task. Move its task instead.' : 'This ticket has a task. It is done when its task is.' }];
+    if (agent && now.status === 'started' && to === 'ready') return [403, { ok: false, error: 'forbidden', message: 'Only the person moves a started ticket back to Ready.' }];
     if (!(MOVES[now.status] || []).includes(to)) return [409, { ok: false, error: 'bad_move', message: 'A ' + now.status + ' ticket cannot move to ' + (to || 'nothing') + ' from here.' }];
     if (to === 'done' && !PR_LINK.test(pr)) return [400, { ok: false, error: 'bad_pr', message: 'To mark a ticket done without a task, give the link of the PR that merged it, such as https://github.com/owner/repo/pull/12.' }];
     if (agent && to === 'done' && !asked) return [409, { ok: false, error: 'changed', message: now.id + ' changed while this move waited, so the relay did not check ' + pr + ' with gh. Move it again.' }];
     const owner = to === 'done' && prOwner(channel, pr, now, all);
     if (owner) return [409, { ok: false, error: 'pr_taken', message: pr + ' is already the PR of ' + owner + ', so it cannot mark ' + now.id + ' done. Give the PR that delivered ' + now.id + '.' }];
-    const changes = Object.assign({ status: to }, now.proposal && (to === 'rejected' || to === 'done') ? { proposal: null } : {}, now.closedAs && to === 'triage' ? { closedAs: null, closedFor: null } : {}, to === 'done' ? { pr } : {}, to === 'ready' ? { approvedBy: agent ? 'Lead' : 'you' } : now.status === 'ready' ? { approvedBy: 'none' } : {});
+    const changes = Object.assign({ status: to }, now.proposal && (to === 'rejected' || to === 'done') ? { proposal: null } : {}, now.closedAs && to === 'triage' ? { closedAs: null, closedFor: null } : {}, to === 'done' ? { pr } : {}, to === 'ready' && now.status === 'started' ? {} : to === 'ready' ? { approvedBy: agent ? 'Lead' : 'you' } : now.status === 'ready' ? { approvedBy: 'none' } : {});
     const moved = await store.update(channel, now.id, changes);
     if (to === 'done' || to === 'rejected') chat.archiveTicketRoom(channel, now.id, now.createdAt, to === 'done' ? 'the ticket moved to Done' : 'the ticket was rejected');
     else if (now.status === 'rejected') chat.openTicketRoom(channel, chatOf(moved));
-    history.add(channel, now, to === 'ready' ? { stage: 'approved', by: agent ? 'Lead' : 'you' } : { stage: 'moved', from: now.status, to, by: agent ? 'Lead' : 'you' }, agent || null);
+    history.add(channel, now, to === 'ready' && now.status !== 'started' ? { stage: 'approved', by: agent ? 'Lead' : 'you' } : { stage: 'moved', from: now.status, to, by: agent ? 'Lead' : 'you' }, agent || null);
     return [200, { ok: true, ticket: await view(channel, moved, all) }];
   });
 }
 
 const GH = process.env.GH_CMD || 'gh';
-const run = (cmd, args, cwd) => new Promise((done) => execFile(cmd, args, { cwd, timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, out, errOut) => done(err ? { err: String(errOut || err.message).trim().split('\n')[0] } : { out })));
+const run = (cmd, args, cwd) => new Promise((done) => (cmd === GH && require('./gh.js').count(args), execFile(cmd, args, { cwd, timeout: 20000, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, out, errOut) => done(err ? { err: String(errOut || err.message).trim().split('\n')[0] } : { out }))));
 const ownerRepo = (link) => { const m = /github\.com[:/]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(link) || /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\//i.exec(link); return m ? (m[1] + '/' + m[2]).toLowerCase() : null; };
 async function prDoubt(ticket, pr) {
   if (!ticket.repo || !fs.existsSync(ticket.repo)) return ['pr_unchecked', ticket.id + ' names no repo on this computer, so the relay cannot check that ' + pr + ' merged there. Ask the person to mark it Done.'];
