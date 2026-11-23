@@ -456,7 +456,7 @@ async function askPm(channel, body, ctx) {
   try { repo = await tasks.mainCheckout(top); } catch (e) { return [500, { ok: false, error: 'git', message: 'Git could not find the main checkout of ' + top + ': ' + e.message }]; }
   const [status, started] = await checkouts.forPm(channel, { top, base, title: 'PM: ' + idea.slice(0, 70), cols: body.cols, rows: body.rows }, ctx);
   if (status >= 400) return [status, started];
-  delivery.promptOnce(channel, started.id, pmBrief({ idea, mayOrder: !!config.get('pmOrder'), notes: pmNotes.brief(repo), cli: CLI, skills: require('./skills.js').brief('pm') }), (problem) => { if (problem) ctx.log('The PM was not briefed: ' + problem); });
+  delivery.promptOnce(channel, started.id, pmBrief({ idea, mayOrder: !!config.get('pmOrder'), notes: pmNotes.brief(repo), cli: CLI, skills: require('./skills.js').brief('pm') + require('./rules.js').brief() }), (problem) => { if (problem) ctx.log('The PM was not briefed: ' + problem); });
   return [201, { ok: true, terminal: started.id }];
 }
 

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -78,6 +78,10 @@
     {
       "name": "Reviews",
       "description": "The automatic reviews of PRs."
+    },
+    {
+      "name": "Standing rules",
+      "description": "The rules the person sets for a while, which each new brief carries while they are in force."
     },
     {
       "name": "Settings",
@@ -2128,6 +2132,213 @@
             "in": "path",
             "required": true,
             "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/rules": {
+      "get": {
+        "tags": [
+          "Standing rules"
+        ],
+        "summary": "Get rules",
+        "description": "The standing rules, each with id, text, reason, until (a date, or null for until the person removes it), ended and addedAt. Any session's token can read it (ticket.js rules). See Standing rules.\n\nTokens: the relay key, and the token of any session, the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getRules",
+        "x-tokens": [
+          "any session",
+          "the COO",
+          "the security officer"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Standing rules"
+        ],
+        "summary": "Add rule",
+        "description": "Add a standing rule: {\"text\": \"Do not touch payments/\", \"reason\": \"A release is frozen\", \"until\": \"2026-12-04\"}. text and reason are 1 to 200 characters each, and until is a date or null. The room keeps 10 rules, and the 11th gets 409 too_many. A bad field gets 400 with bad_text, bad_reason or bad_until. Only the person: any session's token gets 403 person_only.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "addRule",
+        "x-tokens": [],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/rules/{id}": {
+      "post": {
+        "tags": [
+          "Standing rules"
+        ],
+        "summary": "Change rule",
+        "description": "Change text, reason or until of a rule. A field left out stays. An unknown id gets 404 no_rule. Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "changeRule",
+        "x-tokens": [],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The standing rule's id, such as R-1a2b3c.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/rules/{id}/remove": {
+      "post": {
+        "tags": [
+          "Standing rules"
+        ],
+        "summary": "Remove rule",
+        "description": "Remove a rule. An unknown id gets 404 no_rule. Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "removeRule",
+        "x-tokens": [],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The standing rule's id, such as R-1a2b3c.",
             "schema": {
               "type": "string",
               "pattern": "^[\\w-]{1,64}$"

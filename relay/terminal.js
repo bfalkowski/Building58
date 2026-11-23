@@ -207,7 +207,7 @@ const briefHeld = (t) => t.state !== 'idle' || (t.spoke && !t.hooked);
 const autopilotOn = (channel) => require('./autopilot.js').isOn(channel);
 function briefLead(channel, t) {
   t.owesBrief = true;
-  delivery().save(channel, { key: BRIEF_KEY, to: 'lead', terminal: t.id, sessionId: t.sessionId, first: true, text: (leadBrief(__dirname, { merge: !!t.merge, autopilot: autopilotOn(channel), order: !!config.get('leadOrder') }) + skills.brief('lead')).trim(), on: (what, why) => {
+  delivery().save(channel, { key: BRIEF_KEY, to: 'lead', terminal: t.id, sessionId: t.sessionId, first: true, text: (leadBrief(__dirname, { merge: !!t.merge, autopilot: autopilotOn(channel), order: !!config.get('leadOrder') }) + skills.brief('lead') + require('./rules.js').brief()).trim(), on: (what, why) => {
     t.owesBrief = false; saveSessions();
     if (what !== 'delivered') { console.error('The Lead was not briefed: ' + why); return; }
     if (t.lead && UUID.test(t.sessionId)) { try { saveLead(channel, t); } catch (e) { console.error('Could not save the Lead: ' + e.message); } }
