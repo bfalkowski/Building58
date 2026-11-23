@@ -44,6 +44,7 @@ does not touch another:
 ```
 RELAY_KEY=key-one npm run office               # the office, on 8787: starts its relay and opens the page
 RELAY_KEY=key-one npm run office:demo          # the same, with pretend Claude Code sessions
+RELAY_KEY=key-one RELAY_ROOM_NAME='Room C' npm run office   # the link carries the room's name
 RELAY_KEY=key-two npm run world -- <folder>    # another world, on the port in its world.json
 ```
 

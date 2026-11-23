@@ -13,6 +13,7 @@
 //    real hook (relay/office-hook.js) would, one event at a time.
 //
 // Optional: RELAY_URL (default http://localhost:8787), CHANNEL (default room),
+// RELAY_ROOM_NAME (the room's name on the page, up to 40 characters; default none),
 // DEMO_SPEED (default 1; 2 plays it twice as fast), OPEN_CMD (the command that opens a link).
 'use strict';
 const { spawn, execFile } = require('child_process');
@@ -20,6 +21,7 @@ const os = require('os');
 const path = require('path');
 const state = require('./state.js');
 const { hookHint } = require('./office-hint.js');
+const { oneLine } = require('./clean.js');
 
 const RELAY = (process.env.RELAY_URL || 'http://localhost:8787').replace(/\/+$/, '');
 const CHANNEL = process.env.CHANNEL || 'office';
@@ -27,9 +29,11 @@ const KEY = process.env.RELAY_KEY;
 const DEMO = process.argv.includes('--demo');
 const SPEED = Math.max(0.1, Number(process.env.DEMO_SPEED || 1));
 if (!KEY) { console.error('Set RELAY_KEY to a key, for example: RELAY_KEY=pick-a-key npm run office' + (DEMO ? ':demo' : '')); process.exit(1); }
+const ROOM_NAME = oneLine(process.env.RELAY_ROOM_NAME, 40);
+const NAME_PART = ROOM_NAME ? '&name=' + encodeURIComponent(ROOM_NAME) : '';
 const PAGE_BASE = RELAY + '/office/?channel=' + encodeURIComponent(CHANNEL) + '&key=';
-const PAGE = PAGE_BASE + encodeURIComponent(KEY);
-const SHOWN = PAGE_BASE + '<your relay key>';
+const PAGE = PAGE_BASE + encodeURIComponent(KEY) + NAME_PART;
+const SHOWN = PAGE_BASE + '<your relay key>' + NAME_PART;
 const AUTH = { Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
