@@ -8,6 +8,7 @@
 //   { "gateApi": { "repos/o/r/pulls/7/reviews": "/a/file" } }  `gh api` on that path waits until the file exists,
 //                                          then answers from answers.json as it was when the call began
 //   { "runs": [...] }                     what `gh run list` prints. Without it, `gh run list` prints [].
+//   { "lists": { "<branch>": [...] } }  what `gh pr list --head <branch>` prints. Anything else is [].
 // `gh pr comment <link> --body-file -` appends its link and body to posted.log, and prints a comment link.
 // `gh pr merge <link> --merge` appends `<link> --merge` to merged.log.
 // `gh pr edit <link> ...` appends its arguments to edited.log, and adds or removes the label on that PR in answers.json. With "labels": [...] in answers.json, adding a
@@ -34,6 +35,10 @@ if (verb === 'api') {
 }
 if (verb === 'run' && sub === 'list') {
   console.log(JSON.stringify(answers.runs || []));
+  process.exit(0);
+}
+if (verb === 'pr' && sub === 'list') {  // prints answers.lists[<--head branch>]
+  console.log(JSON.stringify((answers.lists || {})[process.argv[process.argv.indexOf('--head') + 1]] || []));
   process.exit(0);
 }
 if (verb === 'pr' && sub === 'merge') {  // appends its arguments to merged.log
