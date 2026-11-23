@@ -225,7 +225,7 @@
       li.append(p, decide);
     }
     const row = document.createElement('div'); row.className = 'card-actions';
-    if (t.status === 'started' && !t.task) row.append(button('Start again', true, () => act(t, 'start', {})));
+    if (t.status === 'started' && !t.task) row.append(button('Start again', true, () => act(t, 'start', {})), button('Back to Ready', false, () => act(t, 'move', { to: 'ready' })));
     if (t.status === 'triage') { row.append(button('Approve', true, () => act(t, 'move', { to: 'ready' })), button('Reject', false, () => act(t, 'move', { to: 'rejected' }))); }
     if (t.status === 'ready') { const go = button('Start', true, () => act(t, 'start', {})); go.disabled = t.waitingFor.length > 0; row.append(go, button('Reject', false, () => act(t, 'move', { to: 'rejected' }))); }
     if (t.status === 'triage' || t.status === 'ready') row.append(...orderControls(t, column || [t]));

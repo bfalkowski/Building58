@@ -3249,7 +3249,7 @@
           "Tickets"
         ],
         "summary": "Move ticket",
-        "description": "{\"to\": ...}: move a ticket that has no task, as Approve, Reject, Back to Triage and Merged elsewhere do (with pr for done).\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "{\"to\": ...}: move a ticket that has no task, as Approve, Reject, Back to Triage and Merged elsewhere do (with pr for done). Only the person can send ready for a started ticket, as Back to Ready does. It is refused while the ticket has a task or is starting, and it keeps the ticket's approval, priority and order.\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "moveTicket",
         "x-tokens": [
           "a Lead you let move the board"
