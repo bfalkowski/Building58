@@ -19,7 +19,6 @@ pageTest('Activity is its own panel, and the people fill the Floor', () => o, as
   const floor = await page.locator('.floor-in').boundingBox();
   const people = await page.locator('#people').boundingBox();
   assert.ok(people.height >= floor.height * 0.5, 'the people take at least half the Floor: ' + Math.round(people.height) + ' of ' + Math.round(floor.height));
-  if (process.env.FLOOR_SHOT) await page.screenshot({ path: process.env.FLOOR_SHOT, fullPage: true });
   await page.click('#activity h2 button');
   assert.strictEqual(await page.locator('#feed-scroll').isVisible(), true, 'pressing its title opens it');
   assert.deepStrictEqual(p.errors, []);
@@ -61,12 +60,14 @@ pageTest('a long Needs you list scrolls and the people stay in view', () => o, a
   await page.setViewportSize({ width: 1600, height: 1000 });
   await longList(page);
   await page.waitForFunction(() => document.querySelectorAll('#people li').length >= 3);
-  if (process.env.FLOOR_SHOT) await page.screenshot({ path: process.env.FLOOR_SHOT, fullPage: true });
   const list = await page.evaluate(() => { const l = document.getElementById('needs-you-list'); return l.scrollHeight > l.clientHeight; });
   assert.ok(list, 'Needs you scrolls inside itself');
   await peopleOk(page);
   await lined(page);
-  await page.evaluate(() => { const s = document.getElementById('huddle-report'); s.hidden = false; document.querySelector('.floor').dataset.huddle = '1'; });
+  await page.locator('#huddle-bar:not([hidden])').waitFor();
+  await page.click('#huddle-free');
+  await page.locator('#huddle-report:not([hidden])').waitFor();
+  assert.ok((await box(page, '#huddle-report')).height >= 90, 'the huddle report keeps room to show');
   await peopleOk(page);
   assert.ok(await page.evaluate(() => { const l = document.getElementById('needs-you-list'); return l.scrollHeight > l.clientHeight; }));
   assert.deepStrictEqual(p.errors, []);
