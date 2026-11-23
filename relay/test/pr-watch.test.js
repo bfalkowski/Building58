@@ -236,7 +236,7 @@ test('a task with no PR finds the open PR whose head is its branch, and no other
   assert.strictEqual((await R.call('POST', '/settings', { values: { reviewPollSeconds: 1 } })).status, 200);
   const resumed = asks();
   await until(async () => asks() > resumed, 'the second task to be looked up again');
-  fs.rmSync(o.repo, { recursive: true, force: true });
+  removeDir(o.repo);
   await sleep(1500);
   const gone = asks();
   await sleep(2500);
