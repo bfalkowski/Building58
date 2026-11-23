@@ -564,7 +564,7 @@ async function addNote(channel, ticket, body, agent) {
   return inTurn(channel, async () => {
     const now = await store.get(channel, ticket.id);
     if (!now) return [404, { ok: false, error: 'no_ticket', message: 'No such ticket on this channel.' }];
-    if ((now.notes || []).length >= notes.MAX_NOTES) return [409, { ok: false, error: 'too_many_notes', message: 'A ticket keeps ' + notes.MAX_NOTES + ' notes. Ask the person or the Lead to fold them into the body.' }];
+    if ((now.notes || []).length >= notes.MAX_NOTES) return [409, { ok: false, error: 'too_many_notes', message: 'A ticket keeps ' + notes.MAX_NOTES + ' notes. Nothing removes a note, so this ticket takes no more. Put what the next session needs in a post on the ticket chat, or tell the person or the Lead, who can fold it into the body.' }];
     const after = typeof store.addNote === 'function' ? await store.addNote(channel, now.id, made.note) : await store.update(channel, now.id, { notes: (now.notes || []).concat([made.note]) });
     if (!after) return [404, { ok: false, error: 'no_ticket', message: 'No such ticket on this channel.' }];
     return [200, { ok: true, note: made.note, ticket: await view(channel, after, await listAll(channel)) }];

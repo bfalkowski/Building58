@@ -31,7 +31,9 @@ function briefOf(ticket, max) {
   const out = body + head + (left ? '(' + left + ' older ' + (left === 1 ? 'note' : 'notes') + ' left out.)\n' : '') + kept.join('\n');
   if (kept.length || out.length <= max) return out;
   const short = body + head + '(' + left + ' ' + (left === 1 ? 'note' : 'notes') + ' left out.)';
-  return short.length <= max ? short : body;
+  if (short.length <= max) return short;
+  const bare = body + '\n\n(' + left + ' ' + (left === 1 ? 'note' : 'notes') + ' from sessions left out.)';
+  return bare.length <= max ? bare : body;
 }
 
 module.exports = { noteFrom, briefOf, MAX_NOTE, MAX_NOTES, HEADING };

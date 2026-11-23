@@ -72,6 +72,9 @@ test('the brief keeps the newest notes that fit, and says how many it left out',
   const long = notes.briefOf({ body: 'b'.repeat(7700), notes: list }, 8000);
   assert.ok(long.length <= 8000);
   assert.match(long, /\(5 older notes left out\.\)/, 'a long body does not hide that notes exist');
+  const full = notes.briefOf({ body: 'b'.repeat(7950), notes: list }, 8000);
+  assert.ok(full.length <= 8000);
+  assert.match(full, /\(5 notes from sessions left out\.\)$/, 'a body with no room for the heading still says notes were left out');
 });
 
 const fs = require('fs');
