@@ -67,7 +67,7 @@ const MARK = 'office-hook.js';
 const SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
 
 if (require.main === module) main();
-else module.exports = { hookSettings, hooksInstalled, hookCheckout, projectOf, summarize, pushedIn };
+else module.exports = { hookSettings, hooksInstalled, hookCheckout, projectOf, summarize, pushedIn, prMade };
 
 function main() {
   const arg = process.argv[2] || '';
@@ -106,6 +106,15 @@ async function send(text) {
 }
 
 const cut = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+const CREATES_PR = /(?:^|[;&|(\n]\s*)(?:[A-Za-z_]\w*=\S*\s+)*gh\s+pr\s+create\b/;
+const PR_LINE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/gm;
+function prMade(command, response) {
+  const bare = String(command).replace(/'[^']*'/g, "''").replace(/"(?:\\.|[^"\\])*"/g, '""');
+  if (!CREATES_PR.test(bare)) return null;
+  const out = typeof response === 'string' ? response : response && typeof response.stdout === 'string' ? response.stdout : '';
+  const lines = out.replace(/\r/g, '').match(PR_LINE);
+  return lines ? lines[lines.length - 1] : null;
+}
 function projectOf(cwd) {
   const m = String(cwd).match(/^(.*)[\\/]\.worktrees[\\/][^\\/]+(?:[\\/]|$)/);
   return path.basename(m ? m[1] : cwd);
@@ -134,10 +143,8 @@ function summarize(p) {
   if (p.hook_event_name === 'PostToolUse') {
     delete out.tool_input;
     const ran = p.tool_name === 'Bash' && p.tool_input && String(p.tool_input.command || '');
-    if (ran && /\bgh\s+pr\s+create\b/.test(ran)) {
-      const pr = JSON.stringify(p.tool_response || '').match(/https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/);
-      if (pr) { out.pr_url = pr[0]; if (p.cwd) out.cwd = p.cwd; }
-    }
+    const pr = ran && prMade(ran, p.tool_response);
+    if (pr) { out.pr_url = pr; if (p.cwd) out.cwd = p.cwd; }
     const posted = ran && postedTo(ran, p.tool_response);
     if (posted) out.posted = posted;
     if (ran && pushedIn(ran, p.tool_response)) out.pushed = true;
