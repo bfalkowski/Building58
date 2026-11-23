@@ -68,3 +68,20 @@ test('a free desk, a review that waits and a Ready ticket: the review starts, no
   await sleep(1200);
   assert.ok(!(await o.R.call('GET', '/tasks')).body.tasks.some((x) => x.ticket === next.id), 'the ticket did not start before the review');
 });
+
+test('a first review in retry back-off and a free desk: the ticket waits and the line says the review goes first', async (t) => {
+  const fs2 = require('fs'), os = require('os');
+  const dir = fs2.mkdtempSync(path.join(os.tmpdir(), 'office-seed-'));
+  t.after(() => fs2.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'reviews.json');
+  const pr = PR(1);
+  fs2.writeFileSync(file, JSON.stringify({ t: { prs: { [pr]: { count: 0, head: null, pending: null, waits: false, first: { from: dir, at: 1, desk: false, tries: 1, notBefore: Date.now() + 10 * 60 * 1000 } } } } }));
+  const R = await relay({ RELAY_REVIEWS_FILE: file, RELAY_AUTOPILOT_TICK_MS: '300' }, null, { autoReview: true });
+  t.after(R.stop);
+  const repo = makeRepo(R.home);
+  const next = (await R.call('POST', '/tickets', { title: 'Next one', repo })).body.ticket;
+  await R.call('POST', '/autopilot', { on: true, only: next.id });
+  await until(async () => (await R.call('GET', '/autopilot')).body.idle === 'Waiting for the review of PR #1 to start: it goes first.', 'the idle line');
+  await sleep(1000);
+  assert.ok(!(await R.call('GET', '/tasks')).body.tasks.some((x) => x.ticket === next.id), 'the ticket did not start');
+});
