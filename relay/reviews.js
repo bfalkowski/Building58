@@ -469,6 +469,19 @@ function begin(relayCtx) {
   ctx = relayCtx;
   pipeline.begin();
   setInterval(tick, TICK).unref();
+  tasks.events.on('pr', (channel, task) => oweLinked(channel, task));
+  config.every('reviewPollSeconds', sweepLinked, 5000);
+}
+function oweLinked(channel, task) {
+  if (!task.pr || task.state === 'done' || recOf(channel, task.pr)) return;
+  const dev = terminal.find(channel, task.owner && task.owner.terminal);
+  const from = (dev && dev.cwd) || task.worktree || task.repo;
+  if (!from || !fs.existsSync(from)) return;
+  const what = owe(channel, task.pr, { from, dev, head: null });
+  if (what === 'its first review') ctx.log('PR ' + task.pr + ' is linked to task ' + task.id + ' and had no review record: ' + what + '.');
+}
+function sweepLinked() {
+  for (const channel of tasks.channels()) for (const task of tasks.list(channel)) oweLinked(channel, task);
 }
 
 function stateOf(channel, pr) {

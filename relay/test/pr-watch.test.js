@@ -63,7 +63,7 @@ async function office(t, env, home) {
 const told = async (o, words) => ((await o.R.screen(o.dev.id)).match(new RegExp('GOT\\[[^\\]]*' + words, 'g')) || []).length;
 
 test('the PR watch moves an open task PR to its next step, once for each head and cause', async (t) => {
-  const o = await office(t);
+  const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '0' });
   let R = o.R;
   const seen = new Set();
   const reviewer = () => until(async () => (await o.terminals()).find((x) => x.role === 'reviewer' && x.pr === PR && !seen.has(x.id) && seen.add(x.id)), 'a reviewer');
@@ -254,4 +254,29 @@ test('a task with no PR is not looked up while the hourly GitHub budget is used 
   const paused = asks();
   await sleep(3000);
   assert.strictEqual(asks(), paused, 'nothing is looked up while paused');
+});
+
+const reviewerOf = async (o) => until(async () => (await o.terminals()).find((x) => x.role === 'reviewer' && x.pr === PR), 'a reviewer');
+
+test('a PR the relay finds by its branch gets its first review, like one the hook saw', async (t) => {
+  const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
+  const h1 = o.commit(true);
+  o.answer({ headRefOid: h1 });
+  fs.writeFileSync(path.join(o.ghDir, 'answers.json'), JSON.stringify({ lists: { [o.task.branch]: [{ url: PR, headRefName: o.task.branch, isCrossRepository: false }] }, prs: { [PR]: { state: 'OPEN', mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN', statusCheckRollup: GREEN, headRefOid: h1 } } }));
+  await until(async () => (await o.R.call('GET', '/tasks/' + o.task.id)).body.task.pr === PR, 'the task to find its PR by its branch');
+  assert.ok(await reviewerOf(o), 'a first review starts');
+  assert.match(o.R.output(), /is linked to task [0-9a-f]{6} and had no review record: its first review\./);
+});
+
+test('a linked PR with no review record gets a first review on the next pass', async (t) => {
+  const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: false })).body.auto, false);
+  o.answer({ headRefOid: o.commit(true) });
+  await o.say(o.dev, 'PostToolUse', { pr_url: PR, cwd: o.wt });
+  await until(async () => (await o.R.call('GET', '/tasks/' + o.task.id)).body.task.pr === PR, 'the task to have its PR');
+  await sleep(2500);
+  assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer'), 'no review while Review PRs automatically is off');
+  assert.deepStrictEqual((await o.R.call('GET', '/reviews')).body.prs, []);
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).body.auto, true);
+  assert.ok(await reviewerOf(o), 'the next pass starts the first review, with the PR watch off');
 });
