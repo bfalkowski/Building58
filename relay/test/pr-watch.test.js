@@ -241,7 +241,7 @@ test('a task with no PR finds the open PR whose head is its branch, and no other
   const gone = asks();
   await sleep(2500);
   assert.strictEqual(asks(), gone, 'a task whose repo folder is gone is not looked up in the relay\'s own folder');
-  assert.ok(second.id);
+  assert.strictEqual((await R.call('GET', '/tasks/' + second.id)).body.task.pr, null, 'the second task, with no PR on its branch, still has none');
 });
 
 test('a task with no PR is not looked up while the hourly GitHub budget is used up', async (t) => {

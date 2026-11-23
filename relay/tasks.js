@@ -362,6 +362,7 @@ async function findPrs() {
   try {
     for (const channel of channels()) {
       for (const task of tasksOf(channel).filter((t) => !t.pr && t.state !== 'done' && t.branch && t.repo && fs.existsSync(t.repo))) {
+        if (gh.paused()) return;
         try {
           const found = JSON.parse(await ghList(task)).find((p) => p.headRefName === task.branch && !p.isCrossRepository && PR_LINK.test(p.url));
           if (!found || task.pr) continue;
