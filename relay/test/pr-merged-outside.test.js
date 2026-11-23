@@ -69,7 +69,9 @@ test('a PR merged or closed on GitHub shows in Needs you and on the card', async
     const [line] = await lines('closed');
     assert.strictEqual(line.task, closed.task.id);
     assert.deepStrictEqual(line.link, { url: url(4) });
-    assert.match(line.line, /closed on GitHub without a merge/);
+    assert.match(line.line, /closed on GitHub without a merge\. Look at it\. This line stays until the PR is reopened, its task gets a new PR, or its task is Done\.$/);
+    await R.call('POST', '/tasks/' + closed.task.id + '/move', { to: 'building' });
+    assert.strictEqual((await lines('closed')).length, 1, 'moving the card does not clear it');
     assert.strictEqual((await taskOf(closed.task.id)).prMerged, false);
   });
 

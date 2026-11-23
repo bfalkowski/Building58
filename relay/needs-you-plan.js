@@ -93,7 +93,7 @@ function taskItem(t, dev) {
   const item = (kind, line, link) => ({ kind, who, terminal: dev ? dev.terminal : null, task: t.id, ticket: t.ticket || null, pr, line, link });
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
   if (pr && t.prMerged) return item('merged', 'PR ' + numberOf(pr) + onPr + ' merged on GitHub. Move its task to Done.', { url: pr, done: t.id });
-  if (pr && t.prClosed) return item('closed', 'PR ' + numberOf(pr) + onPr + ' was closed on GitHub without a merge. Look at it, then bring the work back or move its card.', { url: pr });
+  if (pr && t.prClosed) return item('closed', 'PR ' + numberOf(pr) + onPr + ' was closed on GitHub without a merge. Look at it. This line stays until the PR is reopened, its task gets a new PR, or its task is Done.', { url: pr });
   if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
