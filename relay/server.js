@@ -88,13 +88,38 @@ function cors() {
   };
 }
 function problem(res, status, error, message, extra) { send(res, status, Object.assign({ ok: false, error, message }, extra || {})); }
+const COOKIE = 'relay_key_' + PORT;
+function cookieKey(req) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === COOKIE) { try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return ''; } }
+  }
+  return '';
+}
 function givenKey(req, url) {
   const h = req.headers.authorization || '';
-  return h.startsWith('Bearer ') ? h.slice(7) : (url.searchParams.get('key') || '');
+  return h.startsWith('Bearer ') ? h.slice(7) : (url.searchParams.get('key') || cookieKey(req));
 }
-function authorized(req, url) {
-  const a = Buffer.from(givenKey(req, url)), b = Buffer.from(KEY);
+function sameKey(given) {
+  const a = Buffer.from(given), b = Buffer.from(KEY);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+function authorized(req, url) { return sameKey(givenKey(req, url)); }
+function cookieOnly(req, url) { return !(req.headers.authorization || '').startsWith('Bearer ') && !url.searchParams.get('key') && !!cookieKey(req); }
+function foreignOrigin(req, url) {
+  if (!cookieOnly(req, url) || !authorized(req, url)) return false;
+  const origin = req.headers.origin;
+  if (!origin) return false;
+  try { return new URL(origin).host !== req.headers.host; } catch { return true; }
+}
+function keyToCookie(req, res, url) {
+  const given = url.searchParams.get('key');
+  if (!given || !sameKey(given)) return false;
+  url.searchParams.delete('key');
+  const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  res.writeHead(302, { Location: url.pathname + url.search, 'Set-Cookie': COOKIE + '=' + encodeURIComponent(given) + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000' + secure, 'Cache-Control': 'no-store' });
+  res.end();
+  return true;
 }
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -120,6 +145,7 @@ function serveStatic(req, res, url) {
   let rel;
   try { rel = decodeURIComponent(url.pathname); } catch { send(res, 404, 'Not found'); return; }
   if (rel.endsWith('/')) rel += 'index.html';
+  if (rel.endsWith('.html') && keyToCookie(req, res, url)) return;
   const file = path.resolve(ROOT, '.' + rel);
   const parts = rel.split('/');
   const refused = (p) => p.startsWith('.') || /[^\x20-\x7e]/.test(p) || ['node_modules', 'relay'].includes(p.toLowerCase());
@@ -215,6 +241,7 @@ async function handle(req, res) {
     send(res, 200, Object.assign({ ok: true, world: ONE ? ONE.dir : null, channels: [...channels.values()].map((c) => ({ channel: c.name, pages: c.pages.length, pagesVisible: visibleCount(c) })) }, restore));
     return;
   }
+  if (foreignOrigin(req, url)) { problem(res, 403, 'forbidden', 'The cookie works only for the room page on this relay\'s own address. From a script, send the key as "Authorization: Bearer <key>".'); return; }
   const m = url.pathname.match(/^\/channels\/([^/]+)(\/[^?]*)?$/);
   if (!m) { if (req.method === 'GET') serveStatic(req, res, url); else nothingHere(req, res); return; }
   if (office && !hooksOpen && req.method === 'POST' && m[2] === '/commands') {
@@ -238,7 +265,7 @@ async function handle(req, res) {
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/propose$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the PM and the Lead propose to replace, merge or close a ticket, or to change its blockers. File a ticket instead.'); return; }
   if (!authorized(req, url) && agent && agent.role === 'pm' && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(move|start)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'The PM does not move or start a ticket, or change its base or kind. It edits the title and body of tickets in Triage or Ready, and with Let the PM set the order on, their priority and place.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && m[2] === '/floor') { problem(res, 401, 'unauthorized', 'Only the Lead can read the floor.'); return; }
-  if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : (givenKey(req, url) ? 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>.')); return; }
+  if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : (givenKey(req, url) ? 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>, or open the room page with the key once to get its cookie.')); return; }
   let name = '';
   try { name = decodeURIComponent(m[1]); } catch { name = ''; }
   const rest = m[2] || '';

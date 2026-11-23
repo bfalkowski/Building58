@@ -32,5 +32,5 @@ pageTest('with the right key there is no such note', () => o, async (p) => {
 test('the relay tells a wrong key from a missing one', async () => {
   const at = (q) => fetch('http://127.0.0.1:' + o.R.port + '/channels/t/tasks' + q).then(async (r) => [r.status, (await r.json()).message]);
   assert.deepStrictEqual(await at('?key=not-the-key'), [401, 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.']);
-  assert.deepStrictEqual(await at(''), [401, 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>.']);
+  assert.deepStrictEqual(await at(''), [401, 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>, or open the room page with the key once to get its cookie.']);
 });

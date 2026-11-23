@@ -14,7 +14,7 @@
     return { cwd: t.cwd, prompt: workBrief };
   }
 
-  const followBrief = (u, since) => prBrief(u) + ' New commits were pushed to it. If it has an earlier review comment (gh pr view ' + u + ' --comments), say for each finding in it whether the new commits fix it. A blocking or fix-now finding they do not fix keeps its kind.' +
+  const followBrief = (u, since) => prBrief(u) + ' New commits were pushed to it. If it has an earlier review comment (gh pr view ' + u + ' --comments), say for each finding in it whether the new commits fix it. A blocking or fix-now finding they do not fix keeps its kind. Do not reverse a finding from an earlier round unless you say why.' +
     (/^[0-9a-f]{40}$/.test(String(since || '')) ? ' The last review read ' + since + ', so review only what changed since: git log and git diff ' + since + '..HEAD. A new finding is blocking only if it is a bug in those commits, and fix now only if it is in those commits. For a merge of main among them, check only how its conflicts were resolved (git show --remerge-diff on it), and that no code from either side was dropped.' : '');
 
   const MAX_AUTO_REVIEWS = 3;

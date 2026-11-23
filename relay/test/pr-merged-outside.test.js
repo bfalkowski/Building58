@@ -66,6 +66,7 @@ test('a PR merged or closed on GitHub shows in Needs you and on the card', async
   });
 
   await t.test('a PR closed with no merge gets its own line and no Done button', async () => {
+    await until(async () => (await lines('closed')).length === 1, 'the closed line');
     const [line] = await lines('closed');
     assert.strictEqual(line.task, closed.task.id);
     assert.deepStrictEqual(line.link, { url: url(4) });

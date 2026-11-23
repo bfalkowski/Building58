@@ -56,6 +56,9 @@ const tasks = require('./tasks.js');
 const checkouts = require('./checkouts.js');
 const delivery = require('./delivery.js');
 const { claim } = require('./lockfile.js');
+const reviewHistory = require('./review-history.js');
+const prComments = require('./pr-comments.js');
+const door = require('./gh.js');
 const { PR_URL, prBrief, followBrief, followUps, followUpOwed } = require('../office/reviews.js');
 const config = require('./config.js');
 const pipeline = require('./pipeline.js');
@@ -156,11 +159,19 @@ function gaveUp(channel, pr, rec, which, out) {
   delivery.save(channel, { key: 'review-limit ' + pr, to: 'lead', expiresAt: Date.now() + LEAD_KEEP,
     text: 'The automatic review of PR ' + pr + ' could not start ' + MAX_TRIES + ' times (' + rec.failed + '), so its review waits on the person. Tell them it is theirs to review or to start a review with Get a review.' });
 }
+async function history(channel, pr, used) {
+  try {
+    const got = await prComments.itemsOf(pr);
+    if (got.failed) return '';
+    return reviewHistory.text(got.items, { earlier: await reviewHistory.earlierOf(tasks.list(channel).find((t) => t.pr === pr), pr, door.pr), budget: Math.min(5500, 7800 - used) });
+  } catch (e) { return ''; }
+}
 async function followUp(channel, pr, from) {
   const rec = recOf(channel, pr), p = rec.pending;
   rec.pending = null; rec.count += 1;
   save();
-  const out = await startReview(channel, { from, pr, prompt: followBrief(pr, autopilot.since(channel, pr)) + autopilot.ask(channel), unlessAt: rec.head });
+  const base = followBrief(pr, autopilot.since(channel, pr)) + autopilot.ask(channel);
+  const out = await startReview(channel, { from, pr, prompt: base + await history(channel, pr, base.length), unlessAt: rec.head });
   if (out.ok && !out.unchanged) { startedNews(channel, out, 'a follow-up review of PR ' + number(pr)); return; }
   rec.count = Math.max(0, rec.count - 1);
   if (out.ok) { save(); say(channel, 'PR ' + number(pr) + ' has no new commits since its last review, so no follow-up review started.'); return; }
