@@ -119,6 +119,7 @@
       <tr><td>Rejected</td><td data-label="Means">You turned it down. Anything waiting for it stops waiting, and the card says it was rejected. A worker or the PM filing the same title from the same branch gets this ticket back, not a new one, though from another branch it makes a new ticket. You can file it again.</td><td data-label="Moves on">You, with <span class="ui">Back to Triage</span>.</td><td data-label="You">No.</td></tr>
     </tbody>
   </table>
+  <p id="back-to-ready"><b>A started ticket with no task.</b> Sometimes a ticket says started but has no task. A start did not finish. Its card shows <span class="ui">Start again</span> and <span class="ui">Back to Ready</span>, for you only. <span class="ui">Back to Ready</span> moves the ticket to Ready and keeps its approval, priority and place. Its history says it moved from started to Ready. A started ticket that has a task shows neither button, and a session, the Lead included, cannot make this move. It works the same with the local and the GitHub ticket store.</p>
   <p id="board-tab"><b>The Board in its own tab.</b> <span class="ui">Open in its own tab</span>, at the top of the Board, opens <code>office/board.html</code> with the room's channel and key, so you can keep the whole Board beside the room. It works only on this computer, like the room page. It does everything the Board on the room page does, from the same code (<code>office/tickets.js</code>), and adds:</p>
   <ul>
     <li>The columns fill the tab, and each scrolls on its own. Each column's heading counts its cards.</li>
