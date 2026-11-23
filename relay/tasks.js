@@ -131,7 +131,7 @@ const BASE_NOTES = {
 
 function briefing(task) {
   const brief = task.brief ? ' ' + task.brief : '';
-  const note = (task.baseNote ? ' ' + task.baseNote : '') + require('./skills.js').brief('dev');
+  const note = (task.baseNote ? ' ' + task.baseNote : '') + require('./skills.js').brief('dev') + require('./rules.js').brief();
   const title = task.ticket ? ' Start the PR title with ' + task.ticket + ' and a colon, as in "' + task.ticket + ': ' + task.title + '".' : '';
   const lint = ' Run npm run lint before you push, and do what its messages say. Never change eslint.config.js, eslint-local.js or eslint-suppressions.json to pass it.';
   const checks = ' Then run gh pr checks --watch on it. If a check fails, fix it on this branch, push, and watch again. Say the work is ready only once every check passes, and do the same after each later push. If gh says no checks were reported, ask again in a minute; if there are still none, say so in the PR.';

@@ -377,7 +377,7 @@
   #settings .set-what { margin: 4px 0 0; color: var(--pane-dim); max-width: 64ch; }
   #settings .set-now { margin: 4px 0 0; color: var(--work); overflow-wrap: anywhere; }
   #settings label { color: var(--pane-strong); }
-  #settings input[type="text"], #settings input[type="number"] { flex: 1 1 220px; min-width: 0; font: 13px var(--mono); color: var(--pane-strong); background: var(--pane-tint); border: 1px solid var(--pane-line); border-radius: 4px; padding: 6px 8px; }
+  #settings input[type="text"], #settings input[type="number"], #settings input[type="date"] { flex: 1 1 220px; min-width: 0; font: 13px var(--mono); color: var(--pane-strong); background: var(--pane-tint); border: 1px solid var(--pane-line); border-radius: 4px; padding: 6px 8px; }
   #settings input:disabled, #settings select:disabled { color: var(--pane-dim); }
   #settings select { font: 13px var(--mono); color: var(--pane-strong); background: var(--pane-tint); border: 1px solid var(--pane-line); border-radius: 4px; padding: 5px 6px; }
   #settings .btn { font: 600 13px/1 var(--sans); padding: 8px 12px; border-color: var(--link); color: var(--link); }
@@ -791,6 +791,8 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
       <section aria-labelledby="set-ap-title"><h3 id="set-ap-title">Autopilot</h3><div id="set-autopilot"></div></section>
       <section aria-labelledby="set-lead-title"><h3 id="set-lead-title">The Lead</h3><p class="set-what" id="set-lead-who"></p><div id="set-lead" hidden></div><div id="set-lead-stops"></div></section>
       <section aria-labelledby="set-huddle-title"><h3 id="set-huddle-title">Huddle</h3><p class="set-what">A huddle is one short report on everyone in the room, which you start with the Huddle buttons at the top of the Floor. <a class="help-link" href="../docs/manual/roles.html#huddles" target="_blank" rel="noopener">Huddles in the manual</a></p><div class="set-row" id="huddle-lead-label"><div><label><input id="huddle-lead" type="checkbox" checked> Send each status report to the Lead (one Lead turn each)</label></div><p class="set-what">On: each Status report from the Floor is also typed into the Lead's session, so the Lead knows where everyone is. Each one spends one Lead turn. With no Lead running, nobody is told. Off: nothing is sent and nothing is spent. This browser keeps your choice.</p></div></section>
+      <section aria-labelledby="rules-title"><h3 id="rules-title">Standing rules</h3><p class="set-what">A rule that holds for a while, such as do not touch the payments folder until Friday. Each new Dev, reviewer, Lead and PM brief ends with the rules in force. A rule never overrides CLAUDE.md or the constitution. A rule past its date leaves new briefs by itself. Sessions already running do not get a new rule.</p><div id="rules-list"></div>
+        <form id="rules-form" class="set-row"><div><label>Rule <input type="text" id="rules-text" maxlength="200" required></label></div><div><label>Why <input type="text" id="rules-reason" maxlength="200" required></label></div><div><label>Ends <input type="date" id="rules-until"></label> <span class="set-what">Leave the date empty for until you remove it.</span> <button type="submit" class="btn">Add rule</button></div><p class="set-now" id="rules-said" aria-live="polite"></p></form></section>
       <section aria-labelledby="set-limits-title"><h3 id="set-limits-title">Limits and timings</h3><p class="set-what">The relay reads each value when it uses it, so a change applies immediately. No restart is necessary. A value that you set here replaces the environment variable for that setting. Reset removes your value: the relay then uses the variable, or the default. The relay keeps your values in settings.json in its state folder: ~/.office-world, unless the relay started with RELAY_STATE_DIR.</p><div id="set-limits"></div></section>
     </div>
   </dialog>
@@ -871,6 +873,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js" integrity="sha384-iF+jqbuti4XlB64clWgFWYEscb+UnSRv3VgVikGYZu+otNFnSHr7y7NcKfBnGizn" crossorigin="anonymous"></script>
 <script src="reviews.js"></script>
 <script src="terminal.js"></script>
+<script src="rules.js"></script>
 <script src="tasks.js"></script>
 <script src="games.js"></script>
 <script src="ticket-history.js"></script>
