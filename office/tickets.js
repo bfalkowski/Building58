@@ -35,7 +35,7 @@
   }
 
   const tab = $('board-tab');
-  if (tab) tab.href = 'board.html?channel=' + encodeURIComponent(channel) + '&key=' + encodeURIComponent(key);
+  if (tab) tab.href = 'board.html?channel=' + encodeURIComponent(channel) + (key ? '&key=' + encodeURIComponent(key) : '');
 
   const base = location.origin + '/channels/' + encodeURIComponent(channel);
   const url = (p) => base + '/tickets' + p + '?key=' + encodeURIComponent(key);

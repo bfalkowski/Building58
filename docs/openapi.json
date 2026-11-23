@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -21,6 +21,9 @@
     },
     {
       "relayKeyQuery": []
+    },
+    {
+      "relayKeyCookie": []
     },
     {
       "sessionToken": []
@@ -3976,6 +3979,12 @@
         "type": "http",
         "scheme": "bearer",
         "description": "The relay key, RELAY_KEY: Authorization: Bearer <key>."
+      },
+      "relayKeyCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "relay_key_<port>",
+        "description": "The cookie the room page gets from a first load with the right ?key=. HttpOnly and SameSite=Strict."
       },
       "relayKeyQuery": {
         "type": "apiKey",

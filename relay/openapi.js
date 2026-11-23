@@ -151,12 +151,13 @@ function build(html) {
       license: { name: 'PolyForm Noncommercial 1.0.0', identifier: 'PolyForm-Noncommercial-1.0.0' }
     },
     servers: [{ url: 'http://localhost:8787', description: 'The relay on this computer. npm run office starts it on 8787.' }],
-    security: [{ relayKey: [] }, { relayKeyQuery: [] }, { sessionToken: [] }],
+    security: [{ relayKey: [] }, { relayKeyQuery: [] }, { relayKeyCookie: [] }, { sessionToken: [] }],
     tags: Object.values(TAGS).filter(([name]) => Object.values(paths).some((o) => Object.values(o).some((x) => x.tags[0] === name))).map(([name, description]) => ({ name, description })),
     paths: Object.fromEntries(Object.entries(paths).sort(([a], [b]) => a.localeCompare(b))),
     components: {
       securitySchemes: {
         relayKey: { type: 'http', scheme: 'bearer', description: 'The relay key, RELAY_KEY: Authorization: Bearer <key>.' },
+        relayKeyCookie: { type: 'apiKey', in: 'cookie', name: 'relay_key_<port>', description: 'The cookie the room page gets from a first load with the right ?key=. HttpOnly and SameSite=Strict.' },
         relayKeyQuery: { type: 'apiKey', in: 'query', name: 'key', description: 'The relay key in the address, as the page sends it.' },
         sessionToken: { type: 'http', scheme: 'bearer', description: 'A session\'s own token, OFFICE_TICKET_TOKEN. It reaches only the routes its role needs: see ' + MANUAL + '#tokens.' }
       },

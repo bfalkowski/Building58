@@ -88,13 +88,31 @@ function cors() {
   };
 }
 function problem(res, status, error, message, extra) { send(res, status, Object.assign({ ok: false, error, message }, extra || {})); }
+const COOKIE = 'relay_key_' + PORT;
+function cookieKey(req) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === COOKIE) { try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return ''; } }
+  }
+  return '';
+}
 function givenKey(req, url) {
   const h = req.headers.authorization || '';
-  return h.startsWith('Bearer ') ? h.slice(7) : (url.searchParams.get('key') || '');
+  return h.startsWith('Bearer ') ? h.slice(7) : (url.searchParams.get('key') || cookieKey(req));
 }
-function authorized(req, url) {
-  const a = Buffer.from(givenKey(req, url)), b = Buffer.from(KEY);
+function sameKey(given) {
+  const a = Buffer.from(given), b = Buffer.from(KEY);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+function authorized(req, url) { return sameKey(givenKey(req, url)); }
+function keyToCookie(req, res, url) {
+  const given = url.searchParams.get('key');
+  if (!given || !sameKey(given)) return false;
+  url.searchParams.delete('key');
+  const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  res.writeHead(302, { Location: url.pathname + url.search, 'Set-Cookie': COOKIE + '=' + encodeURIComponent(given) + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000' + secure, 'Cache-Control': 'no-store' });
+  res.end();
+  return true;
 }
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -120,6 +138,7 @@ function serveStatic(req, res, url) {
   let rel;
   try { rel = decodeURIComponent(url.pathname); } catch { send(res, 404, 'Not found'); return; }
   if (rel.endsWith('/')) rel += 'index.html';
+  if (rel.endsWith('.html') && keyToCookie(req, res, url)) return;
   const file = path.resolve(ROOT, '.' + rel);
   const parts = rel.split('/');
   const refused = (p) => p.startsWith('.') || /[^\x20-\x7e]/.test(p) || ['node_modules', 'relay'].includes(p.toLowerCase());
