@@ -59,7 +59,6 @@ const { claim } = require('./lockfile.js');
 const reviewHistory = require('./review-history.js');
 const prComments = require('./pr-comments.js');
 const door = require('./gh.js');
-const { oneLine } = require('./clean.js');
 const { PR_URL, prBrief, followBrief, followUps, followUpOwed } = require('../office/reviews.js');
 const config = require('./config.js');
 const pipeline = require('./pipeline.js');
@@ -160,22 +159,11 @@ function gaveUp(channel, pr, rec, which, out) {
   delivery.save(channel, { key: 'review-limit ' + pr, to: 'lead', expiresAt: Date.now() + LEAD_KEEP,
     text: 'The automatic review of PR ' + pr + ' could not start ' + MAX_TRIES + ' times (' + rec.failed + '), so its review waits on the person. Tell them it is theirs to review or to start a review with Get a review.' });
 }
-async function earlierPr(channel, pr) {
-  const task = tasks.list(channel).find((t) => t.pr === pr);
-  const old = task && task.history.filter((h) => h.type === 'pr' && h.pr && h.pr !== pr).map((h) => h.pr).pop();
-  if (!old) return null;
-  try {
-    const seen = await door.pr(old);
-    if (seen.state !== 'CLOSED' || seen.mergedAt) return null;
-  } catch (e) { return null; }
-  const why = task.history.filter((h) => h.type === 'note' && /closed/i.test(h.note || '')).map((h) => h.note).pop();
-  return { pr: old, why: why ? oneLine(why, 200) : '' };
-}
 async function history(channel, pr, used) {
   try {
     const got = await prComments.itemsOf(pr);
     if (got.failed) return '';
-    return reviewHistory.text(got.items, { earlier: await earlierPr(channel, pr), budget: Math.min(5500, 7800 - used) });
+    return reviewHistory.text(got.items, { earlier: await reviewHistory.earlierOf(tasks.list(channel).find((t) => t.pr === pr), pr, door.pr), budget: Math.min(5500, 7800 - used) });
   } catch (e) { return ''; }
 }
 async function followUp(channel, pr, from) {

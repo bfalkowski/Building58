@@ -4,12 +4,12 @@
 // its findings, and the text says so. A closed earlier PR of the same ticket is named, with why it closed
 // when the room knows. See docs/manual/roles.html#auto-review.
 'use strict';
-const { keepLines } = require('./clean.js');
+const { keepLines, oneLine } = require('./clean.js');
+const { DEV_MARK } = require('./pr-comments.js');
 
 const HEADING = /^#{1,6}[ \t]+review of[ \t]+`?(?:[0-9a-f]{7,40}\.\.\.?)?([0-9a-f]{7,40})\b/i;
-const DEV_MARK = '<!-- office:dev -->';
 const FINDING = /^\s*(?:[-*]|\d+[.)])\s|blocking|fix now|follow-up/i;
-const BUDGET = 5500, FLOOR = 240, ANSWER = 300;
+const BUDGET = 5500, FLOOR = 240, ANSWER = 300, DROPPED = 60;
 
 function verdictOf(item) {
   const said = String(item.body).match(/verdict\W+(merge|fix)\b/i);
@@ -30,29 +30,45 @@ const findings = (body) => String(body).split('\n').filter((l) => FINDING.test(l
 const fit = (text, max) => (text.length > max ? text.slice(0, Math.max(0, max - 6)).trimEnd() + ' [cut]' : text);
 const one = (text, max) => fit(keepLines(text, 100000).trim(), max);
 
-function part(round, i, max) {
+function part(round, i, max, ans) {
   const head = 'Round ' + (i + 1) + ', commit ' + round.commit.slice(0, 12) + ', verdict ' + round.verdict + ':\n';
-  const answers = round.answers.map((a) => 'Dev answered: ' + one(a, ANSWER)).join('\n');
-  const cutBody = max !== null;
-  const body = cutBody ? one(findings(round.body), Math.max(FLOOR, max)) : keepLines(round.body, 100000).trim();
+  const answers = round.answers.map((a) => 'Dev answered: ' + one(a, ans)).join('\n');
+  const body = max !== null ? one(findings(round.body), max) : keepLines(round.body, 100000).trim();
   return head + body + (answers ? '\n' + answers : '');
 }
+const NOTICE = 'Long rounds are cut to their findings.\n';
 function text(items, o) {
   const rounds = roundsOf(items || []), earlier = (o && o.earlier) || null;
   const closed = earlier ? ' An earlier PR of this ticket, ' + earlier.pr + ', was closed without a merge' + (earlier.why ? ': ' + earlier.why : ', and the room does not know why') + '.' : '';
-  if (!rounds.length) return closed;
-  const limit = (o && o.budget) || BUDGET;
+  const limit = o && o.budget != null ? o.budget : BUDGET;
+  if (!rounds.length) return closed.length <= limit ? closed : '';
   const lead = ' Earlier reviews of this PR, oldest first. Check that no finding marked fixed in an earlier round has come back in the new commits, and that a finding the Dev disputed was settled.' + closed + '\n';
-  let parts = rounds.map((r, i) => part(r, i, null));
-  let cut = false;
-  if (lead.length + parts.join('\n\n').length > limit) {
-    cut = true;
-    const share = Math.floor((limit - lead.length - 80) / rounds.length) - 120 - ANSWER;
-    parts = rounds.map((r, i) => part(r, i, share));
+  const full = rounds.map((r, i) => part(r, i, null, ANSWER));
+  if (lead.length + full.join('\n\n').length <= limit) return lead + full.join('\n\n');
+  let room = limit - lead.length - NOTICE.length - DROPPED;
+  if (room < FLOOR) return '';
+  const kept = [];
+  for (let i = rounds.length - 1; i >= 0; i--) {
+    const tries = [part(rounds[i], i, 1200, ANSWER), part(rounds[i], i, FLOOR, 100)];
+    const fits = tries.find((p) => p.length + 2 <= room);
+    if (fits) { kept.unshift(fits); room -= fits.length + 2; continue; }
+    if (!kept.length) { kept.unshift(tries[1].slice(0, room - 8).trimEnd() + ' [cut]'); room = 0; i--; }
+    break;
   }
-  let out = lead + (cut ? 'Long rounds are cut to their findings.\n' : '') + parts.join('\n\n');
-  if (out.length > limit) out = out.slice(0, limit - 40).trimEnd() + '\n[the rest of the history is cut]';
-  return out;
+  const left = rounds.length - kept.length;
+  const dropped = left ? 'Rounds 1 to ' + left + ' are left out for size.\n' : '';
+  return lead + NOTICE + dropped + kept.join('\n\n');
 }
 
-module.exports = { text, roundsOf, HEADING };
+async function earlierOf(task, pr, look) {
+  const old = task && task.history.filter((h) => h.type === 'pr' && h.pr && h.pr !== pr).map((h) => h.pr).pop();
+  if (!old) return null;
+  try {
+    const seen = await look(old);
+    if (seen.state !== 'CLOSED' || seen.mergedAt) return null;
+  } catch (e) { return null; }
+  const why = task.history.filter((h) => h.type === 'note' && h.note && h.note.includes(old) && /closed/i.test(h.note)).map((h) => h.note).pop();
+  return { pr: old, why: why ? oneLine(why, 200) : '' };
+}
+
+module.exports = { text, roundsOf, earlierOf, HEADING };

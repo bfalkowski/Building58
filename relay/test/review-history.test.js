@@ -78,3 +78,23 @@ test('a closed earlier PR is named, with why when known', () => {
   const out = history.text([{ id: 1, kind: 'c', at: 1, body: '# Review of abcdef1\nVerdict: merge\n- ok\n' }], { earlier: { pr: 'https://github.com/acme/widgets/pull/9', why: 'wrong approach' } });
   assert.ok(out.includes('pull/9') && out.includes('closed without a merge: wrong approach'));
 });
+
+test('with more rounds than fit, the oldest go first, the newest is kept, and the prompt names what went', () => {
+  const rounds = [];
+  for (let k = 1; k <= 12; k++) {
+    rounds.push({ id: 'r' + k, kind: 'c', at: k * 10, body: '# Review of abcdef' + String(k).padStart(2, '0') + '0\nVerdict: fix\n- blocking: FINDING-' + k + ' is broken\n' });
+    rounds.push({ id: 'a' + k, kind: 'c', at: k * 10 + 1, body: '<!-- office:dev -->\n' + 'Answer words. '.repeat(30) });
+  }
+  const out = history.text(rounds, { budget: 3000 });
+  assert.ok(out.length <= 3000, 'fits: ' + out.length);
+  assert.ok(out.includes('FINDING-12'), 'the newest round is there');
+  assert.ok(!out.includes('FINDING-1 '), 'the oldest is gone');
+  assert.match(out, /Rounds 1 to \d+ are left out for size/);
+});
+
+test('a budget too small for the history gives none, and a zero budget is not the default', () => {
+  const items = [{ id: 1, kind: 'c', at: 1, body: '# Review of abcdef1\nVerdict: merge\n- ok\n' }];
+  assert.strictEqual(history.text(items, { budget: 0 }), '');
+  assert.strictEqual(history.text(items, { budget: -200 }), '');
+  assert.ok(history.text(items, { budget: 5500 }).includes('Round 1'));
+});
