@@ -9,6 +9,9 @@
 #      Node 18 or later on this computer, the helper runs in a container from the room's image, with this
 #      clone's relay/github-app.js copied in, so any image version works. It listens on 127.0.0.1 at
 #      SETUP_APP_PORT, 47123 unless you set it.
+#      With no display (no DISPLAY or WAYLAND_DISPLAY on Linux), each link is printed, not opened, and
+#      before the GitHub step it prints the ssh -L command to run on your laptop, and waits.
+#      SETUP_HEADLESS=1 or 0 overrides the guess.
 #   4. ROOM_REPOS: the repos the room works on, as owner/name.
 set -eu
 cd "$(dirname "$0")"
@@ -34,7 +37,14 @@ put() {
 }
 ask() { [ -t 0 ] || stop "$1 is not set in $ENV, and there is no terminal to ask in."; printf '%s ' "$2" >&2; read -r answer; printf '%s' "$answer"; }
 secret() { [ -t 0 ] || stop "$1 is not set in $ENV, and there is no terminal to ask in."; printf '%s ' "$2" >&2; stty -echo; read -r answer || true; stty echo; printf '\n' >&2; printf '%s' "$answer"; }
-open_link() { if command -v open >/dev/null 2>&1; then open "$1"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$1" >/dev/null 2>&1 || true; fi; }
+headless() { case "${SETUP_HEADLESS:-}" in 1) return 0 ;; 0) return 1 ;; esac; [ "$(uname)" != Darwin ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; }
+open_link() {
+  if headless; then say "Open this link in your browser: $1"
+  elif command -v open >/dev/null 2>&1; then open "$1"
+  elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$1" >/dev/null 2>&1 || true
+  else say "Open this link in your browser: $1"; fi
+}
+tunnel() { printf 'ssh -N -L %s:localhost:%s %s@%s' "$1" "$1" "$(id -un)" "$(hostname)"; }
 
 command -v docker >/dev/null 2>&1 || stop "Install Docker first: Docker Desktop, Colima, or Docker Engine on Linux."
 command -v curl >/dev/null 2>&1 || stop "This needs curl, to check that the room answers. Install curl, then run ./setup.sh again."
@@ -70,10 +80,16 @@ if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
   say ""
   say "The room acts on GitHub as an app of its own, which reaches only the repos you install it on."
   say "Your browser will open GitHub with the app's settings filled in. Press Create GitHub App there."
+  if headless; then
+    say ""
+    say "This computer has no screen. The GitHub step sends your browser to localhost:$APP_PORT, so on your laptop run, in another terminal:"
+    say "  $(tunnel "$APP_PORT")"
+    say "(use this server's address in place of $(hostname) if it differs), leave it running, then come back here."
+  fi
   ask GITHUB_APP_ID "Press Enter to start." >/dev/null
   node_major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
   if [ "$node_major" -ge 18 ] 2>/dev/null; then
-    node relay/github-app.js create --env "$ENV"
+    if headless; then node relay/github-app.js create --env "$ENV" --port "$APP_PORT"; else node relay/github-app.js create --env "$ENV"; fi
     install=""
   else
     image="ghcr.io/bfalkowski/building58:$(get BUILDING58_VERSION)"; [ "$image" = "ghcr.io/bfalkowski/building58:" ] && image="ghcr.io/bfalkowski/building58:latest"
@@ -89,7 +105,7 @@ if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
     for i in $(seq 60); do grep -q '^Opening' "$out" && break; kill -0 "$helper" 2>/dev/null || break; sleep 1; done
     grep -q '^Opening' "$out" || { cat "$out" >&2; rm -f "$out"; stop "The GitHub step did not start (is port $APP_PORT free?)."; }
     open_link "http://localhost:$APP_PORT/"
-    say "If no browser opened, open http://localhost:$APP_PORT/"
+    headless || say "If no browser opened, open http://localhost:$APP_PORT/"
     wait "$helper" || true
     grep -q '^GITHUB_APP_ID=' "$out" || { cat "$out" >&2; rm -f "$out"; stop "The GitHub App was not made. Run ./setup.sh again."; }
     put GITHUB_APP_ID "$(sed -n 's/^GITHUB_APP_ID=//p' "$out")"
@@ -120,5 +136,6 @@ say ""
 docker compose logs --no-log-prefix room 2>/dev/null | grep -E '^(Claude Code|GitHub|Repos):' || true
 link="http://localhost:$port/office/?channel=office&key=$(get RELAY_KEY)"
 say ""
+if headless; then say "To open the room on your laptop, run $(tunnel "$port") there, then open the link below."; fi
 say "The room is running. Open it: http://localhost:$port/office/?channel=office&key=<RELAY_KEY in $ENV>"
 open_link "$link"
