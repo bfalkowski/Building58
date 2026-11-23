@@ -47,6 +47,17 @@ test('the document is well formed: a version, every path parameter declared, uni
   }
 });
 
+test('each security entry maps a scheme name to a list, and each name is a declared scheme', () => {
+  const doc = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'openapi.json'), 'utf8'));
+  const schemes = Object.keys(doc.components.securitySchemes);
+  assert.ok(doc.security.length);
+  for (const entry of doc.security) for (const [name, scopes] of Object.entries(entry)) {
+    assert.ok(schemes.includes(name), name + ' is declared');
+    assert.ok(Array.isArray(scopes), name + ' maps to a list');
+  }
+  assert.strictEqual(new Set(doc.security.map((e) => Object.keys(e)[0])).size, doc.security.length, 'no scheme twice');
+});
+
 test('the build refuses a page with no version, or a route with a parameter it has no pattern for', () => {
   const html = fs.readFileSync(PAGE, 'utf8');
   assert.throws(() => build(html.replace(/<code id="api-version">[^<]+<\/code>/, '')), /api-version/);
