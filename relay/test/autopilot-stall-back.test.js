@@ -100,6 +100,22 @@ test('a task parked with a PR comes back once a review is posted with a verdict,
   assert.deepStrictEqual([back.to, back.by, back.note], ['building', 'Autopilot', 'Autopilot: a review of PR #7 was posted with the verdict merge, so the task is back.']);
 });
 
+// On 2026-11-23 Autopilot handed PRs #338 to #342 to the person as "Waiting for the review." while the reviews
+// waited for a desk. A review that starts takes such a PR back, before it posts.
+test('a task parked only for a review that did not start comes back once a review starts', async (t) => {
+  const { dev, taskOf, say, openPr, parked, lastMove, R } = await rig(t);
+  const { prBrief: brief } = require('../../office/reviews.js');
+  const wt = (await taskOf()).worktree;
+  await openPr();
+  await say(dev, 'Stop');
+  const p = await parked();
+  assert.match(lastMove(p).note, /\(Waiting for the review\.\)\.$/);
+  const r = await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: brief(PR) });
+  assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+  const back = await until(async () => { const x = await taskOf(); return x.state === 'building' && x; }, 'the task to come back when the review started');
+  assert.strictEqual(lastMove(back).note, 'Autopilot: a review of PR #7 started, so the task is back.');
+});
+
 // On 2026-11-19 Needs you said Waiting for the review for #113 to #115 for hours after their reviews were
 // posted. Autopilot had parked them, then was off, so nothing took them back, and the line kept the old reason.
 test('with Autopilot off, a fix verdict posted after the park makes Needs you say to bring back the stopped Dev', async (t) => {
