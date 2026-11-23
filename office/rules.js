@@ -16,6 +16,7 @@
   }
   const tell = (text, bad) => { said.textContent = text; said.dataset.state = bad ? 'off' : ''; };
 
+  const stop = (v) => v.replace(/[.\s]+$/, '') + '.';
   function draw(rules) {
     list.textContent = '';
     if (!rules.length) { const p = document.createElement('p'); p.className = 'set-what'; p.textContent = 'No standing rules.'; list.append(p); return; }
@@ -24,7 +25,7 @@
       row.className = 'set-row'; row.dataset.rule = r.id;
       head.textContent = r.text + ' ';
       what.className = 'set-what';
-      what.textContent = 'Why: ' + r.reason + '. ' + (r.ended ? 'Ended ' + r.until + ': it is no longer in briefs.' : r.until ? 'In force through ' + r.until + '.' : 'In force until you remove it.');
+      what.textContent = 'Why: ' + stop(r.reason) + ' ' + (r.ended ? 'Ended ' + r.until + ': it is no longer in briefs.' : r.until ? 'In force through ' + r.until + '.' : 'In force until you remove it.');
       drop.type = 'button'; drop.className = 'btn'; drop.textContent = 'Remove';
       drop.setAttribute('aria-label', 'Remove the rule: ' + r.text);
       drop.addEventListener('click', async () => {

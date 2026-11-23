@@ -33,6 +33,7 @@ const dateOk = (v) => {
   const d = new Date(v + 'T00:00:00Z');
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 };
+const stop = (v) => v.replace(/[.\s]+$/, '') + '.';
 const ended = (r, now) => !!r.until && r.until < today(now);
 const view = (r, now) => ({ id: r.id, text: r.text, reason: r.reason, until: r.until || null, ended: ended(r, now), addedAt: r.addedAt });
 const list = (now) => saved.map((r) => view(r, now));
@@ -41,7 +42,7 @@ const inForce = (now) => saved.filter((r) => !ended(r, now));
 function brief(now) {
   const rules = inForce(now);
   if (!rules.length) return '';
-  const each = rules.map((r, i) => (i + 1) + '. ' + r.text + ' Why: ' + r.reason + (r.until ? ' Holds through ' + r.until + '.' : ' Holds until the person removes it.')).join(' ');
+  const each = rules.map((r, i) => (i + 1) + '. ' + stop(r.text) + ' Why: ' + stop(r.reason) + (r.until ? ' Holds through ' + r.until + '.' : ' Holds until the person removes it.')).join(' ');
   return ' Standing rules from the person, in force now. A standing rule never overrides CLAUDE.md or the constitution: where they differ, those win. ' + each + ' ';
 }
 

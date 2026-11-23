@@ -101,3 +101,16 @@ test('ten rules of the longest size keep a brief small', async (t) => {
   assert.strictEqual(rules.add({ text: 'one more', reason: 'r' })[0], 409);
   assert.ok(rules.brief().length < 5000, 'the rules add ' + rules.brief().length + ' characters at most');
 });
+
+test('a rule holds through its last day, and the brief reads the same whether or not the text ends with a period', async (t) => {
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-rules-'));
+  process.env.RELAY_RULES_FILE = path.join(dir, 'rules.json');
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const rules = require('../rules.js');
+  for (const r of rules.list()) rules.remove(r.id);
+  const noon = (y, m, d) => new Date(y, m - 1, d, 12);
+  rules.add({ text: 'No period here', reason: 'Ends with one.', until: '2026-06-10' });
+  assert.deepStrictEqual([rules.list(noon(2026, 6, 10))[0].ended, rules.brief(noon(2026, 6, 10)).includes('No period here')], [false, true], 'in force on its last day');
+  assert.deepStrictEqual([rules.list(noon(2026, 6, 11))[0].ended, rules.brief(noon(2026, 6, 11))], [true, ''], 'ended the day after');
+  assert.match(rules.brief(noon(2026, 6, 10)), /1\. No period here\. Why: Ends with one\. Holds through 2026-06-10\./);
+});
