@@ -64,6 +64,7 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   // PR states for the chat board unless a test sets RELAY_CHAT_POLL_SECONDS (relay/test/chat.test.js), nor git
   // about origin's main unless a test sets RELAY_MAIN_POLL_SECONDS (relay/test/main-moves.test.js), nor about
   // PR checks, so reviews do not wait for a pipeline, unless a test sets RELAY_PIPELINE_POLL_SECONDS (relay/test/pipeline.test.js).
+  // The relay holds no keep-awake process unless a test sets RELAY_KEEP_AWAKE (relay/test/keep-awake.test.js).
   // Nothing types the Lead's regular check unless a test sets RELAY_LEAD_CHECK_MS (relay/test/lead-check.test.js).
   // The fake claude sends no hooks, so the check that a told session started waits an hour unless a test
   // sets RELAY_TOLD_CHECK_MS (relay/test/told-stuck-relay.test.js). For the same reason, a second note does not
@@ -72,7 +73,7 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   // (relay/test/rollback.test.js), as an office session's shell does.
   // HOST is set here, so a HOST of your own (0.0.0.0, say) cannot move it off the address the test checks.
   // Nor does the room of the shell that runs the test reach the relay: see withoutRoom.
-  const env = { ...withoutRoom(process.env), HOME: home, HOST: '127.0.0.1', PORT: String(port), RELAY_KEY: 'test-key', RELAY_TERMINAL: '1', RELAY_RESUME: '0', RELAY_LEAD: '0', RELAY_ROLLBACK: '0', RELAY_REVIEW_POLL_SECONDS: '0', RELAY_CHAT_POLL_SECONDS: '0', RELAY_MAIN_POLL_SECONDS: '0', RELAY_MAIN_CI_POLL_SECONDS: '0', RELAY_PIPELINE_POLL_SECONDS: '0', RELAY_LEAD_CHECK_MS: '0', RELAY_TOLD_CHECK_MS: '3600000', RELAY_TOLD_HOLD_MS: '1', CLAUDE_CMD: path.join(__dirname, 'fake-claude.sh'), ...(extraEnv || {}) };
+  const env = { ...withoutRoom(process.env), HOME: home, HOST: '127.0.0.1', PORT: String(port), RELAY_KEY: 'test-key', RELAY_TERMINAL: '1', RELAY_RESUME: '0', RELAY_LEAD: '0', RELAY_ROLLBACK: '0', RELAY_REVIEW_POLL_SECONDS: '0', RELAY_CHAT_POLL_SECONDS: '0', RELAY_MAIN_POLL_SECONDS: '0', RELAY_MAIN_CI_POLL_SECONDS: '0', RELAY_PIPELINE_POLL_SECONDS: '0', RELAY_LEAD_CHECK_MS: '0', RELAY_KEEP_AWAKE: '0', RELAY_TOLD_CHECK_MS: '3600000', RELAY_TOLD_HOLD_MS: '1', CLAUDE_CMD: path.join(__dirname, 'fake-claude.sh'), ...(extraEnv || {}) };
   let output = '', stopping = false;
   // options.root runs a copy of the relay from another folder (relay/test/rollback.test.js).
   const child = spawn('node', ['relay/server.js'], { cwd: (options && options.root) || ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });

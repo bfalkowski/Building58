@@ -41,7 +41,7 @@ const office = SESSIONS ? {
   terminal: require('./terminal.js'), tasks: require('./tasks.js'), checkouts: require('./checkouts.js'), tickets: require('./tickets.js'),
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
-  config: require('./config.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'),
+  config: require('./config.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), keepAwake: require('./keep-awake.js'),
   mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js')
 } : null;
 if (office) {
@@ -390,7 +390,7 @@ server.listen(PORT, HOST, async () => {
     for (const w of ONE ? [ONE] : worlds()) console.log('Open ' + w.name + ': http://localhost:' + PORT + '/' + w.dir + '/?channel=' + encodeURIComponent(w.channel) + '&key=' + KEY);
     if (WEBHOOK_URL) console.log('Webhook: ' + WEBHOOK_URL + ' for ' + WEBHOOK_TYPES.join(', '));
     if (!office) return;
-    const { terminal, chat, sessions, reviews, autopilot, checkouts, leadCheck } = office;
+    const { terminal, chat, sessions, reviews, autopilot, checkouts, leadCheck, keepAwake } = office;
     if (terminal.ENABLED) console.log('Claude Code panel: on, for the room page on this computer only.');
     // The sweep must run after restoreAll, and works only because terminal.start is synchronous: a restored
     // session is in runningIn at once, so its checkout is kept. If start ever becomes async, await
@@ -412,6 +412,7 @@ server.listen(PORT, HOST, async () => {
     replayHooks(hookQueue.take(stateDir()).concat(earlyHooks.splice(0)).sort((a, b) => a.event.at - b.event.at));
     setTimeout(() => replayHooks(hookQueue.take(stateDir())), 3000).unref();
     leadCheck.begin();
+    keepAwake.begin({ log });
     checkouts.sweep().catch((e) => log('Could not tidy the checkouts: ' + e.message));
   });
 
