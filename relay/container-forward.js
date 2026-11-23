@@ -5,8 +5,10 @@
 // (docs/manual/how-it-works.html#guards).
 //
 // It starts the relay as its child and ends with it, so the container stops when either one stops.
-// With GITHUB_APP_ID, it makes a new GitHub App token every 45 minutes (relay/github-app.js), since each
-// lasts one hour, and says when that fails.
+// With GITHUB_APP_ID, it makes a new GitHub App token every 10 minutes (relay/github-app.js). Each lasts one
+// hour, so a renewal that fails, or a timer held up, still leaves a token that works. A failed renewal is
+// tried again a minute later. Each renewal says in the log when its token runs out. GITHUB_APP_RENEW_MS
+// sets the time between renewals, for tests.
 'use strict';
 const net = require('net');
 const path = require('path');
@@ -21,8 +23,16 @@ relay.on('exit', (code, signal) => process.exit(failed ? 1 : code === null ? (si
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => relay.kill(sig));
 
 if (process.env.GITHUB_APP_ID) {
-  const renew = () => require('./github-app.js').signIn(process.env).then(() => {}, (e) => console.error('GitHub: the App could not make a new token: ' + e.message));
-  setInterval(renew, 45 * 60 * 1000).unref();
+  const EVERY = Number(process.env.GITHUB_APP_RENEW_MS) > 0 ? Number(process.env.GITHUB_APP_RENEW_MS) : 10 * 60 * 1000, AGAIN = Math.min(EVERY, 60 * 1000);
+  let next = null;
+  const renew = () => {
+    clearTimeout(next);
+    require('./github-app.js').signIn(process.env).then(
+      (r) => { console.log('GitHub: a new App token for ' + r.login + ', good until ' + r.expiresAt + '.'); next = setTimeout(renew, EVERY); next.unref(); },
+      (e) => { console.error('GitHub: the App could not make a new token, so it tries again in a minute: ' + e.message); next = setTimeout(renew, AGAIN); next.unref(); });
+  };
+  next = setTimeout(renew, EVERY);
+  next.unref();
 }
 
 const server = net.createServer((client) => {
