@@ -9,6 +9,7 @@ function tokenReaches(agent, method, rest, seat) {
   const proposer = agent.role === 'coo' || agent.role === 'security';
   const plays = method === 'POST' && rest === '/play';
   return !!((plays || (seat ? method === 'POST' && (rest === '/commands' || rest === '/terminals/context') : ((rest === '/tickets' && !(proposer && method !== 'GET')) || (!proposer && /^\/chat(\/[\w-]{1,64})?$/.test(rest)) || (agent.lead && method === 'GET' && rest === '/floor') ||
+    (method === 'POST' && /^\/tickets\/[\w-]{1,64}\/note$/.test(rest)) ||
     (agent.board && ((method === 'GET' && rest === '/tasks') || (method === 'POST' && (rest === '/floor/stop' || /^\/(tasks|tickets)\/[^/]+\/move$/.test(rest))))) ||
     (agent.lead && agent.starts > 0 && method === 'POST' && /^\/tickets\/[^/]+\/start$/.test(rest)) ||
     (agent.lead && method === 'POST' && rest === '/ready') ||

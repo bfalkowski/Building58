@@ -208,6 +208,7 @@
     const s = document.createElement('summary'); s.textContent = t.id + ' ' + t.title;
     const body = document.createElement('p'); body.textContent = t.body || 'No details.';
     d.append(s, body);
+    for (const n of t.notes || []) { const p = document.createElement('p'); p.className = 'ticket-note'; p.textContent = 'Note from ' + n.by + (n.role ? ' (' + n.role + ')' : '') + ', ' + new Date(n.at).toLocaleString() + ': ' + n.text; d.append(p); }
     if (t.chatSummary) { const c = document.createElement('p'); c.className = 'chat-summary'; c.textContent = t.chatSummary; d.append(c); }
     if (window.officeTicketHistory) d.append(window.officeTicketHistory.render(t));
     li.append(d);

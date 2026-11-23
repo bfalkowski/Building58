@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -3304,6 +3304,68 @@
         }
       }
     },
+    "/channels/{channel}/tickets/{id}/note": {
+      "post": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Note ticket",
+        "description": "{\"body\": ...}: adds a note to a ticket in any state, from the person or from any session's token, a Dev's or a reviewer's too. The text is cleaned as a ticket body is, and is 1 to 2000 characters. A ticket keeps 30 notes. A note never changes the title, body, status, priority or approval. It answers the note and the ticket, whose notes list each one's by, role, at and text, oldest first. See notes.\n\nTokens: the relay key, and the token of any session, the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "noteTicket",
+        "x-tokens": [
+          "any session",
+          "the COO",
+          "the security officer"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketNoted"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewNote"
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel}/tickets/{id}/order": {
       "post": {
         "tags": [
@@ -3961,6 +4023,12 @@
               "$ref": "#/components/schemas/TicketStep"
             }
           },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketNote"
+            }
+          },
           "createdAt": {
             "type": "string"
           },
@@ -4052,6 +4120,74 @@
           "ticket"
         ],
         "additionalProperties": true
+      },
+      "TicketNote": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "The session's name, or you for the person."
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "text"
+        ],
+        "additionalProperties": true
+      },
+      "TicketNoted": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "note": {
+            "$ref": "#/components/schemas/TicketNote"
+          },
+          "ticket": {
+            "$ref": "#/components/schemas/Ticket"
+          }
+        },
+        "required": [
+          "ok",
+          "note",
+          "ticket"
+        ],
+        "additionalProperties": true
+      },
+      "NewNote": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "The note. It is cleaned as a ticket body is."
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "additionalProperties": true,
+        "examples": [
+          {
+            "body": "The cause is in relay/x.js. Run the y test first."
+          }
+        ]
       },
       "NewTicket": {
         "type": "object",

@@ -46,11 +46,15 @@ const SCHEMAS = {
     mark: orNull(S({ enum: ['hold', 'replaced'] })),
     task: { type: ['object', 'null'], description: 'Its task once started.' },
     history: list(ref('TicketStep')),
+    notes: list(ref('TicketNote')),
     createdAt: S(),
     updatedAt: S()
   }, ['id', 'title', 'status', 'priority', 'createdAt', 'updatedAt']),
   TicketList: okWith({ store: S(), wipLimit: N(), leadStarts: N(), leadStartsLeft: N(), statuses: list(S({ enum: STATUSES })), kinds: list(S()), labels: list(S()), tickets: list(ref('Ticket')) }, ['tickets', 'statuses', 'kinds', 'labels']),
   TicketOne: okWith({ ticket: ref('Ticket') }, ['ticket']),
+  TicketNote: obj({ by: S({ description: 'The session\'s name, or you for the person.' }), role: orNull(S()), at: S(), text: S({ maxLength: 2000 }) }, ['by', 'at', 'text']),
+  TicketNoted: okWith({ note: ref('TicketNote'), ticket: ref('Ticket') }, ['note', 'ticket']),
+  NewNote: obj({ body: S({ minLength: 1, maxLength: 2000, description: 'The note. It is cleaned as a ticket body is.' }) }, ['body'], { examples: [{ body: 'The cause is in relay/x.js. Run the y test first.' }] }),
   NewTicket: obj({
     title: S({ minLength: 1, maxLength: 80 }),
     body: S({ maxLength: 8000 }),
@@ -137,6 +141,7 @@ const SCHEMAS = {
 const REQUESTS = {
   'POST /tickets': 'NewTicket',
   'POST /tickets/{id}/edit': 'TicketEdit',
+  'POST /tickets/{id}/note': 'NewNote',
   'POST /tasks': 'NewTask',
   'POST /tasks/{id}/move': 'TaskMove',
   'POST /commands': 'Command',
@@ -147,6 +152,7 @@ const RESPONSES = {
   'POST /tickets': 'TicketOne',
   'GET /tickets/{id}': 'TicketOne',
   'POST /tickets/{id}/edit': 'TicketOne',
+  'POST /tickets/{id}/note': 'TicketNoted',
   'GET /tasks': 'TaskList',
   'POST /tasks': 'TaskOne',
   'GET /tasks/{id}': 'TaskOne',

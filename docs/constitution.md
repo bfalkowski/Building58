@@ -111,6 +111,8 @@ priority under the same rule as above. No other session may. An edit is not a mo
 cannot change a status. When the PM or the Lead edits the words of a ticket the person approved,
 the approval goes, so the start rung never starts words the person did not approve.
 
+Any session may add a note to a ticket. A note is not an edit: it never changes the title, body, status, priority or approval. The ticket's brief includes its notes under a heading that says a session wrote them and the person did not approve them, and that the body wins. So the start rung and Autopilot still start only words the person approved.
+
 One move needs nobody. When a new review comment arrives on a task's pull request, the relay may
 move that task back to Changes requested, from any state but Done. This never moves a card
 forward past Building: on the Board, Changes requested is part of Building. The reason is PR 11.

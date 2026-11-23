@@ -28,6 +28,8 @@
 //              done is closed as completed, and rejected is closed as not planned.
 //   priority   the label office:priority-high, -normal or -low
 //   blockedBy  GitHub's issue dependencies. A blocker that is not an issue in the repo stays in the note.
+//   notes      the issue's comments that the relay wrote with addNote(), each signed like the hidden note, so a
+//              comment from anyone else is not a note. A comment costs one request when the issue has any.
 // The labels are made the first time they are needed. An issue is a ticket only if it has an office:
 // label, so someone who can label the repo's issues can file one on GitHub by adding office:triage.
 //
@@ -59,7 +61,9 @@ const PRIORITIES = ['high', 'normal', 'low'];
 const COLORS = { 'office:triage': 'fbca04', 'office:ready': '0e8a16', 'office:started': '1d76db', 'office:priority-high': 'd93f0b', 'office:priority-normal': 'c5def5', 'office:priority-low': 'ededed' };
 const MAX_TITLE = 80, MAX_BODY = 8000;
 const LABEL_EXISTS = 422;
-const NATIVE = ['id', 'title', 'body', 'status', 'priority', 'blockedBy', 'createdAt', 'updatedAt'];
+const NATIVE = ['id', 'title', 'body', 'status', 'priority', 'blockedBy', 'notes', 'createdAt', 'updatedAt'];
+const NOTE_MARK = /\n*<!-- office-note (\{(?:(?!-->).)*\}) -->\s*$/s;
+const NOTE_HEAD = /^\*\*Note from [^\n]*\*\*\n\n/;
 const NOTE = /\n*<!-- office (\{(?:(?!-->).)*\}) -->\s*$/s;
 const clean = (v) => keepLines(v);
 const isNumber = (id) => /^[1-9]\d{0,9}$/.test(String(id));
@@ -179,7 +183,7 @@ function open(options) {
   const foreignNote = (issue) => { const m = NOTE.exec(issue.body || ''); return m && !trusted(noteOf(issue.body), issue.number) ? m[0].replace(/^\n+/, '') : null; };
   const sameRepo = (issue, repo) => !issue.repository_url || issue.repository_url.toLowerCase().endsWith('/repos/' + repo.toLowerCase());
 
-  function ticketOf(issue, blockers) {
+  function ticketOf(issue, blockers, notes) {
     let mine = null;
     try { mine = trusted(noteOf(issue.body), issue.number); } catch (e) { /* a note that cannot be checked is not read */ }
     const note = mine || { repo: FOLDER, createdBy: issue.user && issue.user.login ? clean(issue.user.login).slice(0, 39) + ' on GitHub' : 'GitHub' };
@@ -196,9 +200,31 @@ function open(options) {
       body: clean(String(issue.body || '').replace(NOTE, '')).trim().slice(0, MAX_BODY),
       status, priority,
       blockedBy: [...new Set([...blockers.map(String), ...(Array.isArray(extra) ? extra.map(String) : [])])],
+      notes: notes || [],
       createdAt: issue.created_at,
       updatedAt: issue.updated_at
     });
+  }
+  const noteReads = new Map();
+  function noteIn(comment, number) {
+    const m = NOTE_MARK.exec(comment.body || '');
+    if (!m) return null;
+    let mark = null;
+    try { mark = JSON.parse(m[1]); } catch (e) { return null; }
+    const text = clean(String(comment.body).replace(NOTE_MARK, '').replace(NOTE_HEAD, '')).trim();
+    const note = mark && typeof mark === 'object' ? { by: mark.by, role: mark.role, at: mark.at, text } : null;
+    if (!note || typeof mark.by !== 'string' || typeof mark.at !== 'string') return null;
+    return trusted(Object.assign({}, note, { sig: mark.sig }), number);
+  }
+  async function notesOf(repo, issue) {
+    if (!issue.comments) return [];
+    const id = repo + ' #' + issue.number, stamp = issue.updated_at + ' ' + issue.comments, read = noteReads.get(id);
+    if (read && read.stamp === stamp) return read.notes.map((n) => ({ ...n }));
+    let pages;
+    try { pages = await api('GET', '/repos/' + repo + '/issues/' + issue.number + '/comments?per_page=100', null, true); } catch (e) { if (gone(e)) return []; throw e; }
+    const notes = (pages || []).flat().map((c) => noteIn(c, issue.number)).filter(Boolean);
+    noteReads.set(id, { stamp, notes });
+    return notes.map((n) => ({ ...n }));
   }
   const dbIds = new Map();
   const blockerReads = new Map();
@@ -228,7 +254,7 @@ function open(options) {
     try { issue = await api('GET', '/repos/' + repo + '/issues/' + n); } catch (e) { if (gone(e)) return null; throw e; }
     if (!issue || !isTicket(issue)) return null;
     dbIds.set(repo + ' #' + issue.number, issue.id);
-    return ticketOf(issue, await blockersOf(repo, issue));
+    return ticketOf(issue, await blockersOf(repo, issue), await notesOf(repo, issue));
   }
 
   const caches = new Map();
@@ -247,7 +273,7 @@ function open(options) {
       const fresh = new Map();
       for (const issue of issues) {
         dbIds.set(repo + ' #' + issue.number, issue.id);
-        fresh.set(String(issue.number), ticketOf(issue, await blockersOf(repo, issue)));
+        fresh.set(String(issue.number), ticketOf(issue, await blockersOf(repo, issue), await notesOf(repo, issue)));
       }
       for (const [id, n] of c.wrote) if (n > seen && c.tickets.has(id)) fresh.set(id, c.tickets.get(id));
       c.tickets = fresh; c.listedAt = began;
@@ -359,7 +385,7 @@ function open(options) {
       try {
         const extra = await setBlockers(repo, n, [], want);
         issue = await api('PATCH', '/repos/' + repo + '/issues/' + n, shape(ticket, labelNames(issue), extra, n));
-        return keep(project, ticketOf(issue, remember(repo, issue, want.filter((id) => !extra.includes(id)).map(Number))));
+        return keep(project, ticketOf(issue, remember(repo, issue, want.filter((id) => !extra.includes(id)).map(Number)), []));
       } catch (e) {
         await api('PATCH', '/repos/' + repo + '/issues/' + n, { state: 'closed', state_reason: 'not_planned' }).catch(() => {});
         throw e;
@@ -367,6 +393,19 @@ function open(options) {
     },
     writeErrors(project) {
       return [...failsOf(project).values()].filter((f) => f.shown).sort((a, b) => Number(a.id) - Number(b.id)).map(({ id, what, message, tries, at, nextAt }) => ({ id, what, message, tries, at, nextAt }));
+    },
+    async addNote(project, id, note) {
+      const repo = repoOf(project);
+      if (!repo || !isNumber(id)) return null;
+      let issue;
+      try { issue = await api('GET', '/repos/' + repo + '/issues/' + id); } catch (e) { if (gone(e)) return null; throw e; }
+      if (!isTicket(issue)) return null;
+      const mark = signed({ by: note.by, role: note.role, at: note.at, text: note.text }, issue.number);
+      const { text: _t, ...head } = mark;
+      await api('POST', '/repos/' + repo + '/issues/' + id + '/comments', { body: '**Note from ' + oneLine(note.by, 80).replace(/\*/g, '') + '**\n\n' + note.text + '\n\n<!-- office-note ' + JSON.stringify(head).replace(/>/g, '\\u003e') + ' -->' });
+      noteReads.delete(repo + ' #' + issue.number);
+      const t = await fetchOne(repo, id);
+      return t ? keep(project, t) : null;
     },
     async update(project, id, changes) {
       const repo = repoOf(project);
@@ -381,7 +420,7 @@ function open(options) {
     if (!isTicket(issue)) return null;
     const now = await blockersOf(repo, issue, true);
     const { id: _id, createdAt: _at, updatedAt: _up, ...rest } = changes;
-    const ticket = Object.assign(ticketOf(issue, now), rest);
+    const ticket = Object.assign(ticketOf(issue, now, []), rest);
     const want = (ticket.blockedBy || []).map(String);
     const foreign = foreignNote(issue);
     if (foreign) {
@@ -394,7 +433,7 @@ function open(options) {
     if (foreign) patch.body = (ticket.body ? ticket.body + '\n\n' : '') + foreign;
     await ensureLabels(repo, ourLabels(patch));
     const after = await api('PATCH', '/repos/' + repo + '/issues/' + issue.number, patch);
-    return keep(project, ticketOf(after, remember(repo, after, want.filter((b) => !extra.includes(b)).map(Number))));
+    return keep(project, ticketOf(after, remember(repo, after, want.filter((b) => !extra.includes(b)).map(Number)), await notesOf(repo, after)));
   }
 }
 module.exports = { open, repos };
