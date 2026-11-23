@@ -30,7 +30,7 @@ const json = (s) => { const v = JSON.parse(b64(s).toString('utf8')); if (!v || t
 function gate(cfg, opts) {
   const now = (opts && opts.now) || Date.now;
   const get = (opts && opts.fetch) || ((u) => fetch(u, { signal: AbortSignal.timeout(5000) }));
-  let keys = new Map(), loaded = 0, tried = 0;
+  let keys = new Map(), loaded = 0, tried = -KEYS_RETRY_MS;
 
   async function load() {
     tried = now();
@@ -44,7 +44,7 @@ function gate(cfg, opts) {
     keys = next; loaded = now();
   }
   async function keyFor(kid) {
-    if (!loaded || now() - loaded > KEYS_FRESH_MS) await load().catch(() => {});
+    if ((!loaded || now() - loaded > KEYS_FRESH_MS) && now() - tried > KEYS_RETRY_MS) await load().catch(() => {});
     if (!keys.has(kid) && now() - tried > KEYS_RETRY_MS) await load().catch(() => {});
     return keys.get(kid) || null;
   }
@@ -77,4 +77,4 @@ function gate(cfg, opts) {
   return { applies, allows };
 }
 
-module.exports = { fromEnv, gate };
+module.exports = { fromEnv, gate, CF_HEADERS };

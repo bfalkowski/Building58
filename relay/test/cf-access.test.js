@@ -68,6 +68,50 @@ for (const [name, headers] of Object.entries(bad)) {
   });
 }
 
+const forged = (head, over) => {
+  const data = enc(head) + '.' + enc(claims(over));
+  return data + '.' + crypto.sign('RSA-SHA256', Buffer.from(data), good.privateKey).toString('base64url');
+};
+const sample = {
+  'a future nbf': () => token({ nbf: Math.floor(Date.now() / 1000) + 600 }),
+  'alg none': () => forged({ alg: 'none', kid: 'k1' }),
+  'alg HS256': () => forged({ alg: 'HS256', kid: 'k1' })
+};
+for (const [name, make] of Object.entries(sample)) {
+  test('403 for ' + name, async (t) => {
+    const R = await remote(t);
+    assert.strictEqual((await raw(R, '/office/', { 'Cf-Access-Jwt-Assertion': make() })).status, 403);
+  });
+}
+test('a string audience and an email in other case are accepted', async (t) => {
+  const R = await remote(t);
+  assert.strictEqual((await raw(R, '/office/', { 'Cf-Access-Jwt-Assertion': token({ aud: AUD, email: 'Owner@Example.com' }) })).status, 200);
+});
+test('a valid token with Origin null gets 403', async (t) => {
+  const R = await remote(t);
+  assert.strictEqual((await raw(R, '/office/', { 'Cf-Access-Jwt-Assertion': token(), Origin: 'null' })).status, 403);
+});
+test('the room\'s terminal routes refuse a request with a Cf- header, even under a localhost Host', async (t) => {
+  const R = await remote(t);
+  const r = await raw(R, '/channels/t/terminals?key=test-key', { Host: 'localhost:' + R.port, 'Cf-Access-Jwt-Assertion': token() });
+  assert.strictEqual(r.status, 403);
+  assert.match(r.body, /local_only/);
+});
+
+test('the keys are fetched at most once a minute when the fetch fails, and again for a new key id after it', async () => {
+  let hits = 0, clock = 1e12, up = false;
+  const g = cf.gate({ host: HOST, origin: 'https://' + HOST, issuer: 'https://' + TEAM, aud: AUD, email: EMAIL, certsUrl: 'x' }, {
+    now: () => clock,
+    fetch: async () => { hits++; return up ? { ok: true, json: async () => ({ keys: [jwk(good, 'k2')] }) } : { ok: false, status: 500 }; }
+  });
+  const req = (kid) => ({ headers: { 'cf-access-jwt-assertion': token({ exp: Math.floor(clock / 1000) + 600 }, good, kid), host: HOST } });
+  for (let i = 0; i < 5; i++) assert.strictEqual(await g.allows(req('k2')), false);
+  assert.strictEqual(hits, 1, 'five requests, one fetch');
+  clock += 61000; up = true;
+  assert.strictEqual(await g.allows(req('k2')), true, 'the new key id after the wait');
+  assert.strictEqual(hits, 2);
+});
+
 test('a request through the tunnel under another Host is checked too', async (t) => {
   const R = await remote(t);
   const r = await raw(R, '/office/', { Host: 'localhost:' + R.port, 'Cf-Ray': 'abc' });
