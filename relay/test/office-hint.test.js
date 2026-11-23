@@ -120,3 +120,9 @@ test('with no RELAY_ROOM_NAME the link has no name', async () => {
   assert.ok(link && !link.includes('name='), link);
   assert.ok(!r.out.includes('name='), r.out);
 });
+
+test('RELAY_ROOM_NAME cut in the middle of an emoji does not break the link', async () => {
+  const { r, link } = await openedLink({ RELAY_ROOM_NAME: 'x'.repeat(39) + '😀' });
+  assert.strictEqual(r.code, 0, r.out);
+  assert.strictEqual(new URL(link).searchParams.get('name'), 'x'.repeat(39));
+});

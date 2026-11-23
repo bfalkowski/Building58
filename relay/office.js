@@ -29,7 +29,7 @@ const KEY = process.env.RELAY_KEY;
 const DEMO = process.argv.includes('--demo');
 const SPEED = Math.max(0.1, Number(process.env.DEMO_SPEED || 1));
 if (!KEY) { console.error('Set RELAY_KEY to a key, for example: RELAY_KEY=pick-a-key npm run office' + (DEMO ? ':demo' : '')); process.exit(1); }
-const ROOM_NAME = oneLine(process.env.RELAY_ROOM_NAME, 40);
+const ROOM_NAME = oneLine(process.env.RELAY_ROOM_NAME, 40).replace(/[\uD800-\uDBFF]$/, '');
 const NAME_PART = ROOM_NAME ? '&name=' + encodeURIComponent(ROOM_NAME) : '';
 const PAGE_BASE = RELAY + '/office/?channel=' + encodeURIComponent(CHANNEL) + '&key=';
 const PAGE = PAGE_BASE + encodeURIComponent(KEY) + NAME_PART;
