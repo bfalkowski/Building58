@@ -3,7 +3,7 @@
 // sleep mid-response" and sat idle. Claude Code holds the Mac awake only while it works.
 //
 // The hold is one `caffeinate -i -w <the relay's pid>` (macOS's own tool, no install). It is held while the
-// Keep the computer awake switch is on and a task is building or in review, or Autopilot is on. -w ends it
+// Keep the computer awake switch is on and a task is building, in review or has changes requested, or Autopilot is on. -w ends it
 // when the relay ends, also when the relay crashes. Elsewhere the switch does nothing.
 //
 // A timer ticks every few seconds. A tick that comes much later than it should means the computer slept.
@@ -19,7 +19,7 @@ const delivery = require('./delivery.js');
 const autopilot = require('./autopilot.js');
 const { livenessOf } = require('./liveness.js');
 
-const WORK = ['building', 'in_review'];
+const WORK = ['building', 'in_review', 'changes_requested'];
 const SLEPT = /wenttosleepmid-?response/i;
 const TEXT = 'The computer went to sleep while you were in a turn, so that turn was cut short. Go on with your task from where you stopped.';
 const num = (name, def) => (Number(process.env[name]) > 0 ? Number(process.env[name]) : def);

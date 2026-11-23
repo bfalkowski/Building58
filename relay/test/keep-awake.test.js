@@ -19,7 +19,7 @@ const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { 
 const workerOf = (R) => Number(execFileSync('pgrep', ['-P', String(R.child.pid), '-f', 'relay/server.js']).toString().trim().split('\n')[0]);
 const setSwitch = (R, on) => R.call('POST', '/settings', { values: { keepAwake: on } });
 
-test('the relay holds the keep-awake process while a task is building, and none with no work or the switch off', async (t) => {
+test('the relay holds the keep-awake process while a task is building, in review or has changes requested, and none with no work or the switch off', async (t) => {
   const R = await relay(ENV);
   t.after(() => R.stop());
   const repo = makeRepo(R.home);
@@ -38,6 +38,12 @@ test('the relay holds the keep-awake process while a task is building, and none 
 
   await setSwitch(R, true);
   await until(() => held(R), 'the hold again');
+
+  for (const to of ['in_review', 'changes_requested']) {
+    assert.strictEqual((await R.call('POST', '/tasks/' + task.id + '/move', { to })).status, 200);
+    await sleep(700);
+    assert.ok(held(R), 'still held in ' + to);
+  }
 
   assert.strictEqual((await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' })).status, 200);
   await until(() => held(R) === null, 'the hold to end with no work');
