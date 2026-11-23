@@ -17,9 +17,11 @@ function fromEnv(env) {
   if (url.protocol !== 'https:') throw new Error('RELAY_REMOTE_URL must start with https://.');
   const team = env.RELAY_ACCESS_TEAM.trim().toLowerCase().replace(/^https:\/\//, '').replace(/\/+$/, '');
   if (!/^[a-z0-9.-]+$/.test(team)) throw new Error('RELAY_ACCESS_TEAM is a domain such as myteam.cloudflareaccess.com.');
+  const mfa = String(env.RELAY_ACCESS_MFA || 'amr').trim().toLowerCase();
+  if (mfa !== 'amr' && mfa !== 'cloudflare') throw new Error('RELAY_ACCESS_MFA is amr or cloudflare, not ' + env.RELAY_ACCESS_MFA + '.');
   return {
     host: url.host.toLowerCase(), origin: url.origin, issuer: 'https://' + team,
-    aud: env.RELAY_ACCESS_AUD.trim(), email: env.RELAY_ACCESS_EMAIL.trim().toLowerCase(),
+    aud: env.RELAY_ACCESS_AUD.trim(), email: env.RELAY_ACCESS_EMAIL.trim().toLowerCase(), mfa,
     certsUrl: env.RELAY_ACCESS_CERTS_URL || 'https://' + team + '/cdn-cgi/access/certs'
   };
 }
@@ -68,7 +70,7 @@ function gate(cfg, opts) {
       if (typeof p.exp !== 'number' || p.exp <= t) return false;
       if (p.nbf !== undefined && (typeof p.nbf !== 'number' || p.nbf > t)) return false;
       if (typeof p.email !== 'string' || p.email.toLowerCase() !== cfg.email) return false;
-      if (!Array.isArray(p.amr) || !p.amr.includes('mfa')) return false;
+      if (cfg.mfa === 'amr' && (!Array.isArray(p.amr) || !p.amr.includes('mfa'))) return false;
       const origin = req.headers.origin;
       if (origin !== undefined && origin !== cfg.origin) return false;
       return true;

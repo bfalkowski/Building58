@@ -25,8 +25,8 @@ async function keyServer(t) {
   t.after(() => s.close());
   return 'http://127.0.0.1:' + s.address().port + '/certs';
 }
-async function remote(t) {
-  const R = await relay({ RELAY_REMOTE: '1', RELAY_REMOTE_URL: 'https://' + HOST, RELAY_ACCESS_TEAM: TEAM, RELAY_ACCESS_AUD: AUD, RELAY_ACCESS_EMAIL: EMAIL, RELAY_ACCESS_CERTS_URL: await keyServer(t) });
+async function remote(t, more) {
+  const R = await relay(Object.assign({ RELAY_REMOTE: '1', RELAY_REMOTE_URL: 'https://' + HOST, RELAY_ACCESS_TEAM: TEAM, RELAY_ACCESS_AUD: AUD, RELAY_ACCESS_EMAIL: EMAIL, RELAY_ACCESS_CERTS_URL: await keyServer(t) }, more));
   t.after(R.stop);
   return R;
 }
@@ -77,6 +77,13 @@ const sample = {
   'alg none': () => forged({ alg: 'none', kid: 'k1' }),
   'alg HS256': () => forged({ alg: 'HS256', kid: 'k1' })
 };
+test('with RELAY_ACCESS_MFA=cloudflare, a future nbf and a forged alg still get 403', async (t) => {
+  const R = await remote(t, { RELAY_ACCESS_MFA: 'cloudflare' });
+  for (const [name, make] of Object.entries(sample)) {
+    const r = await raw(R, '/office/', { 'Cf-Access-Jwt-Assertion': make() });
+    assert.strictEqual(r.status, 403, name);
+  }
+});
 for (const [name, make] of Object.entries(sample)) {
   test('403 for ' + name, async (t) => {
     const R = await remote(t);
@@ -123,6 +130,26 @@ test('local use does not change', async (t) => {
   const r = await raw(R, '/office/', { Host: 'localhost:' + R.port });
   assert.strictEqual(r.status, 200);
   assert.strictEqual((await R.call('GET', '/tickets')).status, 200);
+});
+
+test('with RELAY_ACCESS_MFA=cloudflare a token with no amr gets in, and every other check still holds', async (t) => {
+  const R = await remote(t, { RELAY_ACCESS_MFA: 'cloudflare' });
+  assert.strictEqual((await raw(R, '/office/', { 'Cf-Access-Jwt-Assertion': token({ amr: undefined }) })).status, 200);
+  assert.strictEqual((await raw(R, '/office/', { 'Cf-Access-Jwt-Assertion': token({ amr: ['pwd'] }) })).status, 200);
+  for (const [name, headers] of Object.entries(bad)) {
+    if (name === 'no MFA' || name === 'no authentication methods') continue;
+    const r = await raw(R, '/office/', headers());
+    assert.strictEqual(r.status, 403, name);
+    assert.strictEqual(r.body, 'Forbidden', name);
+  }
+  assert.strictEqual((await raw(R, '/office/', { 'Cf-Access-Jwt-Assertion': token({ amr: undefined, email: 'other@example.com' }) })).status, 403);
+});
+
+test('RELAY_ACCESS_MFA is amr unless set, and any other value stops the relay', () => {
+  const env = { RELAY_REMOTE: '1', RELAY_REMOTE_URL: 'https://a.example.com', RELAY_ACCESS_TEAM: 't.cloudflareaccess.com', RELAY_ACCESS_AUD: 'a', RELAY_ACCESS_EMAIL: 'e@x.com' };
+  assert.strictEqual(cf.fromEnv(env).mfa, 'amr');
+  assert.strictEqual(cf.fromEnv(Object.assign({ RELAY_ACCESS_MFA: 'Cloudflare' }, env)).mfa, 'cloudflare');
+  assert.throws(() => cf.fromEnv(Object.assign({ RELAY_ACCESS_MFA: 'off' }, env)), /RELAY_ACCESS_MFA/);
 });
 
 test('remote mode is off by default, and a half-set one stops the relay', async () => {
