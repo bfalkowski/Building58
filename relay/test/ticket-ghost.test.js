@@ -47,6 +47,7 @@ for (const [name, how] of Object.entries(makeGhost)) {
     assert.ok([401, 403].includes(refused.status), JSON.stringify(refused.body) + ' a session, the Lead included, cannot make this move');
     assert.strictEqual((await R.call('GET', '/tickets/' + a.id)).body.ticket.status, 'started');
 
+    for (const to of ['rejected', 'done']) assert.strictEqual((await R.call('POST', '/tickets/' + a.id + '/move', { to, pr: PR })).body.error, 'bad_move', 'a ghost cannot go to ' + to);
     const r = await R.call('POST', '/tickets/' + a.id + '/move', { to: 'ready' });
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     assert.strictEqual(r.body.ticket.status, 'ready');

@@ -189,7 +189,7 @@ async function move(channel, ticket, body, agent) {
     const now = all.find((t) => t.id === ticket.id) || ticket;
     if (starting.has(channel + '/' + now.id)) return [409, { ok: false, error: 'started', message: 'This ticket is starting. Once it has, move its task instead.' }];
     if ((to === 'done' || now.status === 'started') && tasks.ofTicket(channel, now)) return [409, { ok: false, error: 'started', message: now.status === 'started' ? 'This ticket has a task. Move its task instead.' : 'This ticket has a task. It is done when its task is.' }];
-    if (agent && now.status === 'started') return [403, { ok: false, error: 'forbidden', message: 'Only the person moves a started ticket back to Ready.' }];
+    if (agent && now.status === 'started' && to === 'ready') return [403, { ok: false, error: 'forbidden', message: 'Only the person moves a started ticket back to Ready.' }];
     if (!(MOVES[now.status] || []).includes(to)) return [409, { ok: false, error: 'bad_move', message: 'A ' + now.status + ' ticket cannot move to ' + (to || 'nothing') + ' from here.' }];
     if (to === 'done' && !PR_LINK.test(pr)) return [400, { ok: false, error: 'bad_pr', message: 'To mark a ticket done without a task, give the link of the PR that merged it, such as https://github.com/owner/repo/pull/12.' }];
     if (agent && to === 'done' && !asked) return [409, { ok: false, error: 'changed', message: now.id + ' changed while this move waited, so the relay did not check ' + pr + ' with gh. Move it again.' }];
