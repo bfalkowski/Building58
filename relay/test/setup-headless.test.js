@@ -1,5 +1,6 @@
 // setup.sh on a server with no screen: before the GitHub step it prints the ssh -L command for the
-// laptop, and it prints a link in place of opening it.
+// laptop, the helper is told the port and not to open a browser, links are printed in place of opened,
+// and the room's own tunnel is printed at the end.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
@@ -9,24 +10,45 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const root = path.join(__dirname, '..', '..');
+const STUBS = {
+  docker: '#!/bin/sh\n[ "$1 $2" = "compose logs" ] && echo "Repos: none"\nexit 0\n',
+  curl: '#!/bin/sh\nexit 0\n',
+  node: '#!/bin/sh\n[ "$1" = "-p" ] && { echo 20; exit 0; }\necho "NODE $*"\nexit 0\n',
+  open: '#!/bin/sh\necho OPENED "$@"\n',
+};
 
-function run(headless) {
+function run(headless, env) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'setup-'));
   const bin = path.join(dir, 'bin');
   fs.mkdirSync(bin);
-  for (const name of ['docker', 'curl']) fs.writeFileSync(path.join(bin, name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  for (const [name, body] of Object.entries(STUBS)) fs.writeFileSync(path.join(bin, name), body, { mode: 0o755 });
   fs.copyFileSync(path.join(root, 'setup.sh'), path.join(dir, 'setup.sh'));
-  fs.writeFileSync(path.join(dir, '.env'), 'RELAY_KEY=k\nCLAUDE_CODE_USE_BEDROCK=1\n', { mode: 0o600 });
-  const env = { PATH: bin + ':/usr/bin:/bin', HOME: dir, SETUP_HEADLESS: headless ? '1' : '0', SETUP_APP_PORT: '47123' };
-  const r = spawnSync('sh', ['setup.sh'], { cwd: dir, env, input: '', encoding: 'utf8' });
+  fs.writeFileSync(path.join(dir, '.env'), 'RELAY_KEY=k\nCLAUDE_CODE_USE_BEDROCK=1\n' + (env || ''), { mode: 0o600 });
+  const e = { PATH: bin + ':/usr/bin:/bin', HOME: dir, SETUP_HEADLESS: headless ? '1' : '0', SETUP_APP_PORT: '47123' };
+  const r = spawnSync('script', ['-qec', 'sh setup.sh', '/dev/null'], { cwd: dir, env: e, input: '\n\n\n\n', encoding: 'utf8' });
   fs.rmSync(dir, { recursive: true, force: true });
   return r.stdout + r.stderr;
 }
 
-test('with no display, it prints the ssh -L command before the GitHub step', () => {
-  assert.match(run(true), /ssh -N -L 47123:localhost:47123 \S+@\S+/);
+test('with no display, it prints the ssh -L command and does not say a browser will open', () => {
+  const out = run(true);
+  assert.match(out, /ssh -N -L 47123:localhost:47123 \S+@\S+/);
+  assert.doesNotMatch(out, /Your browser will open/);
 });
 
-test('with a display, it prints no ssh command', () => {
-  assert.doesNotMatch(run(false), /ssh -N -L/);
+test('with no display, the Node helper gets the port and --no-open', () => {
+  assert.match(run(true), /NODE relay\/github-app\.js create --env \.env --port 47123 --no-open/);
+});
+
+test('with no display, it prints the room tunnel and the links, and opens nothing', () => {
+  const out = run(true, 'GITHUB_APP_ID=1\nROOM_REPOS=a/b\n');
+  assert.match(out, /run ssh -N -L 8787:localhost:8787 \S+@\S+ there/);
+  assert.match(out, /Open this link in your browser: http:\/\/localhost:8787\/office\//);
+  assert.doesNotMatch(out, /OPENED/);
+});
+
+test('with a display, it prints no ssh command and opens the link', () => {
+  const out = run(false, 'GITHUB_APP_ID=1\nROOM_REPOS=a/b\n');
+  assert.doesNotMatch(out, /ssh -N -L/);
+  assert.match(out, /OPENED http:\/\/localhost:8787\/office\//);
 });

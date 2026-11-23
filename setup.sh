@@ -44,7 +44,8 @@ open_link() {
   elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$1" >/dev/null 2>&1 || true
   else say "Open this link in your browser: $1"; fi
 }
-tunnel() { printf 'ssh -N -L %s:localhost:%s %s@%s' "$1" "$1" "$(id -un)" "$(hostname)"; }
+hostname_() { hostname 2>/dev/null || uname -n; }
+tunnel() { printf 'ssh -N -L %s:localhost:%s %s@%s' "$1" "$1" "$(id -un)" "$(hostname_)"; }
 
 command -v docker >/dev/null 2>&1 || stop "Install Docker first: Docker Desktop, Colima, or Docker Engine on Linux."
 command -v curl >/dev/null 2>&1 || stop "This needs curl, to check that the room answers. Install curl, then run ./setup.sh again."
@@ -79,17 +80,18 @@ fi
 if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
   say ""
   say "The room acts on GitHub as an app of its own, which reaches only the repos you install it on."
-  say "Your browser will open GitHub with the app's settings filled in. Press Create GitHub App there."
+  if headless; then say "GitHub will show the app's settings filled in, in your laptop's browser. Press Create GitHub App there."
+  else say "Your browser will open GitHub with the app's settings filled in. Press Create GitHub App there."; fi
   if headless; then
     say ""
     say "This computer has no screen. The GitHub step sends your browser to localhost:$APP_PORT, so on your laptop run, in another terminal:"
     say "  $(tunnel "$APP_PORT")"
-    say "(use this server's address in place of $(hostname) if it differs), leave it running, then come back here."
+    say "(use this server's address in place of $(hostname_) if it differs), leave it running, then come back here."
   fi
   ask GITHUB_APP_ID "Press Enter to start." >/dev/null
   node_major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
   if [ "$node_major" -ge 18 ] 2>/dev/null; then
-    if headless; then node relay/github-app.js create --env "$ENV" --port "$APP_PORT"; else node relay/github-app.js create --env "$ENV"; fi
+    if headless; then node relay/github-app.js create --env "$ENV" --port "$APP_PORT" --no-open; else node relay/github-app.js create --env "$ENV"; fi
     install=""
   else
     image="ghcr.io/bfalkowski/building58:$(get BUILDING58_VERSION)"; [ "$image" = "ghcr.io/bfalkowski/building58:" ] && image="ghcr.io/bfalkowski/building58:latest"
@@ -97,7 +99,7 @@ if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
     say "No Node 18 or later here, so the GitHub step runs in a container. Getting $image..."
     docker pull -q "$image" >/dev/null || stop "Could not download $image."
     docker rm -f "$HELPER" >/dev/null 2>&1 || true
-    docker create --name "$HELPER" -p "127.0.0.1:$APP_PORT:$APP_PORT" --entrypoint node "$image" /tmp/github-app.js create --print --host 0.0.0.0 --port "$APP_PORT" >/dev/null || stop "Could not make the helper container."
+    docker create --name "$HELPER" -p "127.0.0.1:$APP_PORT:$APP_PORT" --entrypoint node "$image" /tmp/github-app.js create --print --host 0.0.0.0 --port "$APP_PORT" --no-open >/dev/null || stop "Could not make the helper container."
     docker cp -q relay/github-app.js "$HELPER:/tmp/github-app.js"
     out=$(mktemp)
     docker start -a "$HELPER" > "$out" 2>&1 &

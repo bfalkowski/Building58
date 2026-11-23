@@ -7,7 +7,8 @@
 //     Runs GitHub's App manifest flow from this computer: a page on 127.0.0.1 sends the App's settings to
 //     GitHub, you press Create there, and GitHub sends back the App's id and private key, which go into the
 //     .env file as GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY (the key as base64, on one line). Then it says
-//     where to install the App. --workflows also lets the App change files in .github/workflows.
+//     where to install the App. --no-open prints the link and does not try to open it. --workflows also
+//     lets the App change files in .github/workflows.
 //     With --print in place of --env, it prints those two lines, and GITHUB_APP_INSTALL=<link>, for the
 //     caller to keep: setup.sh runs it this way inside the image, with --host 0.0.0.0 and a --port it
 //     publishes, when the computer has no Node.
@@ -148,6 +149,7 @@ function create(args) {
     const start = 'http://localhost:' + server.address().port + '/';
     console.log('Opening ' + start + ' to create the App "' + name + '" on GitHub' + (org ? ' for ' + org : '') + '.');
     const tell = () => console.log('Open it in your browser.');
+    if (args.includes('--no-open')) return tell();
     try { const c = spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [start], { stdio: 'ignore', detached: true }); c.on('error', tell); c.unref(); } catch (e) { tell(); }
   });
 }
