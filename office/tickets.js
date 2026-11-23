@@ -26,9 +26,9 @@
     if (!status) return;
     status.textContent = text || ''; status.hidden = !text;
   }
-  if (!channel || (full && !key)) {
+  if (!channel) {
     if (!full) { section.hidden = true; return; }
-    problem('This tab needs the channel and key of your room in its address. Open it with "Open in its own tab" on the room page\'s Board.');
+    problem('This tab needs the channel of your room in its address. Open it with "Open in its own tab" on the room page\'s Board.');
     form.hidden = true; cols.hidden = true;
     const tools = section.querySelector('.board-tools'); if (tools) tools.hidden = true;
     return;
