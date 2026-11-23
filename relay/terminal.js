@@ -509,7 +509,12 @@ function notSafeToType(t, brief) {
 const { asTyped } = require('./typed.js');
 const CLEAR_PROMPT = '\x15';
 // Enter after a pause, since a TUI takes text and Enter that arrive together as a paste.
-const TYPE_SETTLE = Number(process.env.RELAY_TYPE_SETTLE_MS) >= 1 ? Number(process.env.RELAY_TYPE_SETTLE_MS) : 300;
+const TYPE_SETTLE_DEFAULT = 300, TYPE_SETTLE_MAX = 60000;
+function typeSettle(value) {
+  const n = Number(value);
+  return n >= 1 && n <= TYPE_SETTLE_MAX ? n : TYPE_SETTLE_DEFAULT;
+}
+const TYPE_SETTLE = typeSettle(process.env.RELAY_TYPE_SETTLE_MS);
 function typeIfSafe(t, text, wanted, done, brief) {
   const first = notSafeToType(t, brief);
   if (first) { done(first); return; }
@@ -874,4 +879,4 @@ function agentFor(req) {
 const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited);
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, reviewFound, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };
+module.exports = { DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, reviewFound, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeSettle, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };
