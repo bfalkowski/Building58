@@ -96,6 +96,9 @@ jobs:
         run: node relay/test/run.js relay/test/manual.test.js relay/test/openapi.test.js
       - name: npm test
         if: needs.changes.outputs.docs != 'true'
+        env:
+          TEST_SLOTS: '0'
+          TEST_JOBS: '8'
         run: npm test
 
   # The office page in a real browser (relay/test/browser/), on the current LTS only. The tests serve
