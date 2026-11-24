@@ -37,7 +37,7 @@
   document.addEventListener('visibilitychange', reportVisibility);
 
   status('Relay: connecting', 'wait');
-  const es = new EventSource(url('/stream') + (document.getElementById('board') ? '&board=1' : ''));
+  const es = new EventSource(url('/stream' + (document.getElementById('board') ? '?board=1' : '')));
   const board = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
   es.addEventListener('hello', (m) => {
     status('Relay: ' + channel, 'on');
