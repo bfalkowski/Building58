@@ -64,9 +64,13 @@ test('a free desk, a review that waits and a Ready ticket: the review starts, no
   await o.say(waits, 'UserPromptSubmit');
   await o.say(waits, 'PostToolUse', { pr_url: PR(1), cwd: o.repo });
   await o.say(waits, 'Stop');
-  await until(async () => (await o.terminals()).some((x) => x.role === 'reviewer' && x.pr === PR(1)), 'the review');
-  await sleep(1200);
-  assert.ok(!(await o.R.call('GET', '/tasks')).body.tasks.some((x) => x.ticket === next.id), 'the ticket did not start before the review');
+  const started = async () => (await o.terminals()).some((x) => x.role === 'reviewer' && x.pr === PR(1));
+  const ticketTask = async () => (await o.R.call('GET', '/tasks')).body.tasks.some((x) => x.ticket === next.id);
+  await until(async () => {
+    const review = await started();
+    assert.ok(review || !(await ticketTask()), 'the ticket started before the review');
+    return review;
+  }, 'the review');
 });
 
 test('a first review in retry back-off with a free desk: the ticket waits and the idle line says the review goes first', async (t) => {
