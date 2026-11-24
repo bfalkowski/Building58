@@ -23,7 +23,7 @@
   const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + p + '?key=' + encodeURIComponent(key);
   function api(p, body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
-    return fetch(url(p), opt).then((r) => r.json()).catch(() => ({ ok: false, message: 'The relay did not answer.' }));
+    return fetch(url(p), opt).then((r) => r.text().then((t) => { try { return JSON.parse(t); } catch (e) { return { ok: false, message: 'The relay answered with a page, not JSON (' + r.status + '). On the public page your sign-in may have run out: reload it.' }; } }), () => ({ ok: false, message: 'The relay did not answer.' }));
   }
   const say = (text, bad) => { note.textContent = text || ''; note.dataset.bad = bad ? '1' : ''; };
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
