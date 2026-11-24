@@ -317,7 +317,7 @@ function tellStarts(now) {
   }
 }
 
-const liveReviewer = (channel, pr) => starting.has(channel + ' ' + pr) || terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr);
+const reviewing = (channel, pr) => starting.has(channel + ' ' + pr) || terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr);
 function owedFollowUps(channel, c) {
   if (!pipeline.on()) return;
   const follows = followsPushes(channel), max = MAX_AUTO_REVIEWS();
