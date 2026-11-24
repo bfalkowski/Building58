@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.4.1",
+    "version": "2.4.2",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -3768,7 +3768,7 @@
           "Tickets"
         ],
         "summary": "Approve ready tickets",
-        "description": "Marks the Ready tickets that no person approved as approved by you, as Approve all Ready does: those in ids, or every one with no ids. It skips a ticket that is starting. Answers with the ids in approved. No session's token reaches it.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Marks the Ready tickets that no person approved as approved by you, as Approve all Ready does: those in ids, or every one with no ids. It skips a ticket that is starting. Answers with the ids in approved. No session's token reaches it. If the ticket store refuses a change, the answer is 409 and store_refused with the store's message.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "approveReadyTickets",
         "x-tokens": [],
         "responses": {

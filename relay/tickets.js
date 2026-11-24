@@ -365,7 +365,7 @@ async function writeRanks(channel, all, writes, markId, mark) {
     for (const id of done.reverse()) {
       try { await store.update(channel, id, { rank: all.find((t) => t.id === id).rank }); } catch (e2) { stuck.push(id); }
     }
-    throw new Error('Moving the ticket failed partway: ' + e.message + (stuck.length ? ' The ranks of ' + stuck.join(', ') + ' could not be put back, so the order may be mixed. Move a ticket again to set it.' : ' The order is as it was before the move.'));
+    throw Object.assign(new Error('Moving the ticket failed partway: ' + e.message + (stuck.length ? ' The ranks of ' + stuck.join(', ') + ' could not be put back, so the order may be mixed. Move a ticket again to set it.' : ' The order is as it was before the move.')), { refused: !!e.refused });
   }
 }
 
@@ -609,7 +609,8 @@ async function handle(req, res, channel, rest, ctx) {
     }
   } catch (e) {
     ctx.log('Ticket store (' + store.name + '): ' + (e && e.message));
-    ctx.problem(res, 502, 'store', 'The ticket store did not answer: ' + (e && e.message)); return true;
+    if (e && e.refused) ctx.problem(res, 409, 'store_refused', e.message); else ctx.problem(res, 502, 'store', 'The ticket store did not answer: ' + (e && e.message));
+    return true;
   }
   if (!out) { ctx.problem(res, 404, 'not_found', 'Unknown ticket route.'); return true; }
   if (req.method === 'POST' && out[1].ok) changed(channel);
