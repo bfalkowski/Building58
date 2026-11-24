@@ -372,6 +372,7 @@ async function findPrs() {
           task.pr = found.url; record(task, { type: 'pr', pr: found.url }); save();
           log('Task ' + task.id + ' has the open PR ' + found.url + ' on its branch ' + task.branch + '.');
           events.emit('pr', channel, task);
+          events.emit('found', channel, task);
         } catch (e) { log('Could not list the PRs of ' + task.branch + ': ' + e.message); }
       }
     }
