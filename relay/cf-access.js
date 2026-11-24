@@ -1,19 +1,17 @@
 // Remote mode: the relay checks a Cloudflare Access sign-in itself, so a wrong Access setting cannot
-// open the room. Off unless RELAY_REMOTE=1. Node's built-in crypto only. See docs/manual/relay.html#remote.
+// open the room. Off unless RELAY_REMOTE=1. With RELAY_REMOTE_FULL=1, a request that passed counts as
+// local for the local-only rule (ownerHere). Node's built-in crypto only. See docs/manual/relay.html#remote.
 'use strict';
 const crypto = require('crypto');
 
 const KEYS_FRESH_MS = 60 * 60 * 1000;
 const KEYS_RETRY_MS = 60 * 1000;
 const CF_HEADERS = ['cf-access-jwt-assertion', 'cf-ray', 'cf-connecting-ip', 'cf-visitor'];
+const owners = new WeakSet();
+const ownerHere = (req) => owners.has(req);
 
 function fromEnv(env) {
-  const full = String(env.RELAY_REMOTE_FULL || '').trim();
-  if (full !== '' && full !== '0' && full !== '1') throw new Error('RELAY_REMOTE_FULL is 1 or empty, not ' + env.RELAY_REMOTE_FULL + '.');
-  if (env.RELAY_REMOTE !== '1') {
-    if (full === '1') throw new Error('RELAY_REMOTE_FULL=1 needs RELAY_REMOTE=1.');
-    return null;
-  }
+  if (env.RELAY_REMOTE !== '1') return null;
   const need = ['RELAY_REMOTE_URL', 'RELAY_ACCESS_TEAM', 'RELAY_ACCESS_AUD', 'RELAY_ACCESS_EMAIL'];
   const missing = need.filter((k) => !String(env[k] || '').trim());
   if (missing.length) throw new Error('RELAY_REMOTE=1 needs ' + missing.join(', ') + '.');
@@ -24,9 +22,11 @@ function fromEnv(env) {
   if (!/^[a-z0-9.-]+$/.test(team)) throw new Error('RELAY_ACCESS_TEAM is a domain such as myteam.cloudflareaccess.com.');
   const mfa = String(env.RELAY_ACCESS_MFA || 'amr').trim().toLowerCase();
   if (mfa !== 'amr' && mfa !== 'cloudflare') throw new Error('RELAY_ACCESS_MFA is amr or cloudflare, not ' + env.RELAY_ACCESS_MFA + '.');
+  const full = String(env.RELAY_REMOTE_FULL || '0').trim();
+  if (full !== '0' && full !== '1') throw new Error('RELAY_REMOTE_FULL is 1 or 0, not ' + env.RELAY_REMOTE_FULL + '.');
   return {
     host: url.host.toLowerCase(), origin: url.origin, issuer: 'https://' + team,
-    full: full === '1', aud: env.RELAY_ACCESS_AUD.trim(), email: env.RELAY_ACCESS_EMAIL.trim().toLowerCase(), mfa,
+    aud: env.RELAY_ACCESS_AUD.trim(), email: env.RELAY_ACCESS_EMAIL.trim().toLowerCase(), mfa, full: full === '1',
     certsUrl: env.RELAY_ACCESS_CERTS_URL || 'https://' + team + '/cdn-cgi/access/certs'
   };
 }
@@ -78,10 +78,11 @@ function gate(cfg, opts) {
       if (cfg.mfa === 'amr' && (!Array.isArray(p.amr) || !p.amr.includes('mfa'))) return false;
       const origin = req.headers.origin;
       if (origin !== undefined && origin !== cfg.origin) return false;
+      if (cfg.full) owners.add(req);
       return true;
     } catch (e) { return false; }
   }
-  return { applies, allows, full: cfg.full };
+  return { applies, allows };
 }
 
-module.exports = { fromEnv, gate, CF_HEADERS };
+module.exports = { fromEnv, gate, CF_HEADERS, ownerHere };

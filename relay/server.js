@@ -239,10 +239,7 @@ function reply(entry, ch) {
 const nothingHere = (req, res) => { if (req.method === 'GET') send(res, 404, 'Not found'); else problem(res, 404, 'not_found', 'There is nothing here.'); };
 async function handle(req, res) {
   if (req.url.startsWith('//')) { nothingHere(req, res); return; }
-  if (REMOTE && REMOTE.applies(req)) {
-    if (!await REMOTE.allows(req)) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); res.end('Forbidden'); return; }
-    if (REMOTE.full) req.remoteOwner = true;
-  }
+  if (REMOTE && REMOTE.applies(req) && !await REMOTE.allows(req)) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); res.end('Forbidden'); return; }
   const url = new URL(req.url, 'http://relay');
   if (req.method === 'OPTIONS') { res.writeHead(204, cors()); res.end(); return; }
 
