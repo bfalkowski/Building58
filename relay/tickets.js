@@ -101,6 +101,7 @@ const clean = (v) => keepLines(v).trim();
 const blockersOf = (ticket, all, statuses) => (ticket.blockedBy || []).filter((id) => { const b = all.find((x) => x.id === id); return b && statuses.includes(b.status); });
 const waitingFor = (ticket, all) => blockersOf(ticket, all, ['triage', 'ready', 'started']);
 const startedBy = (task) => task.by || ((task.history || []).find((h) => h.type === 'created') || {}).by || 'you';
+const unreadNotes = (channel) => (typeof store.unreadNotes === 'function' ? store.unreadNotes(channel) : { count: 0, ids: [], line: null });
 const writeErrors = (channel, now) => (typeof store.writeErrors === 'function' ? store.writeErrors(channel) : []).map((w) => Object.assign({}, w, { inMs: w.nextAt - now }));
 const needsYouOf = (channel) => require('./needs-you.js').boardOf(channel, Date.now());
 async function view(channel, ticket, all, needs) {
@@ -197,7 +198,7 @@ async function move(channel, ticket, body, agent) {
     const owner = to === 'done' && prOwner(channel, pr, now, all);
     if (owner) return [409, { ok: false, error: 'pr_taken', message: pr + ' is already the PR of ' + owner + ', so it cannot mark ' + now.id + ' done. Give the PR that delivered ' + now.id + '.' }];
     const changes = Object.assign({ status: to }, now.proposal && (to === 'rejected' || to === 'done') ? { proposal: null } : {}, now.closedAs && to === 'triage' ? { closedAs: null, closedFor: null } : {}, to === 'done' ? { pr } : {}, to === 'ready' && now.status === 'started' ? {} : to === 'ready' ? { approvedBy: agent ? 'Lead' : 'you' } : now.status === 'ready' ? { approvedBy: 'none' } : {});
-    const moved = await store.update(channel, now.id, changes);
+    const moved = await store.update(channel, now.id, changes, { person: !agent });
     if (to === 'done' || to === 'rejected') chat.archiveTicketRoom(channel, now.id, now.createdAt, to === 'done' ? 'the ticket moved to Done' : 'the ticket was rejected');
     else if (now.status === 'rejected') chat.openTicketRoom(channel, chatOf(moved));
     history.add(channel, now, to === 'ready' && now.status !== 'started' ? { stage: 'approved', by: agent ? 'Lead' : 'you' } : { stage: 'moved', from: now.status, to, by: agent ? 'Lead' : 'you' }, agent || null);
@@ -367,16 +368,16 @@ function setPlace(channel, ticket, body, agent) {
     if (!movable(other)) return [409, { ok: false, error: 'not_ordered', message: other.id + ' is ' + stateOf(other) + '. Only Triage and Ready tickets are in the work order.' }];
     if ((other.priority || 'normal') !== (now.priority || 'normal')) return [409, { ok: false, error: 'other_priority', message: other.id + ' has ' + (other.priority || 'normal') + ' priority and ' + now.id + ' has ' + (now.priority || 'normal') + '. Change the priority first.' }];
     const writes = placeNear(all, now, other, after !== null, movable);
-    await writeRanks(channel, all, writes, now.id, setBy(agent, 'place'));
-    if (!writes.some(([id]) => id === now.id)) await store.update(channel, now.id, setBy(agent, 'place'));
+    await writeRanks(channel, all, writes, now.id, setBy(agent, 'place'), !agent);
+    if (!writes.some(([id]) => id === now.id)) await store.update(channel, now.id, setBy(agent, 'place'), { person: !agent });
     const fresh = await listAll(channel);
     return [200, { ok: true, ticket: await view(channel, fresh.find((t) => t.id === now.id), fresh) }];
   });
 }
-async function writeRanks(channel, all, writes, markId, mark) {
+async function writeRanks(channel, all, writes, markId, mark, person) {
   const done = [];
   try {
-    for (const [id, rank] of writes) { await store.update(channel, id, Object.assign({ rank }, id === markId ? mark : {})); done.push(id); }
+    for (const [id, rank] of writes) { await store.update(channel, id, Object.assign({ rank }, id === markId ? mark : {}), { person }); done.push(id); }
   } catch (e) {
     const stuck = [];
     for (const id of done.reverse()) {
@@ -484,7 +485,7 @@ function approveReady(channel, body) {
   return inTurn(channel, async () => {
     const all = await store.list(channel), approved = [];
     const wanted = (t) => t.status === 'ready' && !personApproved(t) && !starting.has(channel + '/' + t.id) && (!ids || ids.includes(t.id));
-    for (const t of all.filter(wanted)) { await store.update(channel, t.id, { approvedBy: 'you' }); history.add(channel, t, { stage: 'approved', by: 'you' }); approved.push(t.id); }
+    for (const t of all.filter(wanted)) { await store.update(channel, t.id, { approvedBy: 'you' }, { person: true }); history.add(channel, t, { stage: 'approved', by: 'you' }); approved.push(t.id); }
     return [200, { ok: true, approved }];
   });
 }
@@ -640,4 +641,4 @@ async function handle(req, res, channel, rest, ctx) {
 
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { handle, listAll, writeErrors, board, onChange, onFiled, startBy, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { handle, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };

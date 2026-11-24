@@ -56,7 +56,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'merged', 'closed', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -173,6 +173,8 @@ function listOf(input) {
     if (!w || !/^[\w.-]{1,20}$/.test(String(w.id))) continue;
     items.push({ kind: 'ticket-write', who: 'the relay', terminal: null, task: null, ticket: String(w.id), pr: null, line: writeLine(w), link: { ticket: String(w.id) } });
   }
+  const unread = input && input.unread;
+  if (unread && unread.count > 0) items.push({ kind: 'ticket-key', who: 'the relay', terminal: null, task: null, ticket: null, pr: null, line: oneLine(unread.line, 400) || 'Fix the ticket key: ' + unread.count + ' tickets have notes signed with another key: approvals and order are not read.', link: {} });
   return items.map((it, i) => [it, i]).sort((a, b) => KINDS.indexOf(a[0].kind) - KINDS.indexOf(b[0].kind) || a[1] - b[1]).map((x) => x[0]);
 }
 

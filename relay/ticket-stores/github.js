@@ -13,10 +13,13 @@
 //   body       the issue's body, with a hidden note at the end for what GitHub has no place for
 //              (repo, base, createdBy and anything else the relay gives it). The relay signs the note
 //              and the issue number with a key kept on this computer (RELAY_TICKET_KEY_FILE,
-//              github-store.key in the state folder), and reads a note only when the signature holds.
+//              github-store.key in the state folder, or RELAY_TICKET_KEY in the room's .env, which wins and
+//              is the same on every machine that runs the room), and reads a note only when the signature holds.
 //              Otherwise the ticket's repo is RELAY_TICKET_FOLDER (by default the folder that holds
 //              this code), it has no base, so it starts from that folder's branch, and createdBy is the
-//              issue's author on GitHub. A note that does not check is kept as it is on every write.
+//              issue's author on GitHub. A note that does not check is kept as it is on every write, except
+//              a write the person makes (update with { person: true }), which signs a new note. unreadNotes(project)
+//              says which tickets hold a signed note this key cannot check, and the relay logs that once.
 //   repo       the note keeps the repo by its GitHub name, owner/name, read from the folder's origin, so
 //              the tickets do not name a folder on one computer. Read back, the name becomes this
 //              computer's clone of it: RELAY_TICKET_FOLDER if that is a clone of it, or else the folder of
@@ -124,7 +127,8 @@ function open(options) {
     return [FOLDER].concat(DIRS.map((d) => path.join(d, base))).find((f) => path.basename(f) === base && fs.existsSync(f)) || repo;
   }
   const KEY_FILE = o.keyFile || state.file('github-store.key', 'RELAY_TICKET_KEY_FILE');
-  let key = null;
+  const ENV_KEY = String(o.key !== undefined ? o.key : process.env.RELAY_TICKET_KEY || '');
+  let key = ENV_KEY ? crypto.createHash('sha256').update('office-ticket-key\n' + ENV_KEY).digest() : null;
   function keyNow() {
     if (key) return key;
     try { key = fs.readFileSync(KEY_FILE); } catch (e) {
@@ -182,6 +186,8 @@ function open(options) {
   const labelNames = (issue) => (issue.labels || []).map((l) => String(l.name || l));
   const lower = (issue) => labelNames(issue).map((l) => l.toLowerCase());
   const isTicket = (issue) => !issue.pull_request && lower(issue).some((l) => l.startsWith('office:'));
+  const signedNote = (issue) => { try { const n = noteOf(issue.body); return !!n && typeof n === 'object' && typeof n.sig === 'string' && /^[0-9a-f]{32}$/.test(n.sig); } catch (e) { return false; } };
+  const unreadIssue = (issue) => issue.state !== 'closed' && signedNote(issue) && !trusted(noteOf(issue.body), issue.number);
   const foreignNote = (issue) => { const m = NOTE.exec(issue.body || ''); return m && !trusted(noteOf(issue.body), issue.number) ? m[0].replace(/^\n+/, '') : null; };
   const sameRepo = (issue, repo) => !issue.repository_url || issue.repository_url.toLowerCase().endsWith('/repos/' + repo.toLowerCase());
 
@@ -262,7 +268,7 @@ function open(options) {
   }
 
   const caches = new Map();
-  const cacheOf = (project) => { if (!caches.has(project)) caches.set(project, { tickets: new Map(), listedAt: 0, writes: 0, wrote: new Map(), wroteAt: new Map(), refreshing: null }); return caches.get(project); };
+  const cacheOf = (project) => { if (!caches.has(project)) caches.set(project, { tickets: new Map(), listedAt: 0, writes: 0, wrote: new Map(), wroteAt: new Map(), refreshing: null, unread: new Set(), told: false }); return caches.get(project); };
   const copy = (t) => (t ? JSON.parse(JSON.stringify(t)) : null);
   const keep = (project, t) => { const c = cacheOf(project); c.tickets.set(t.id, t); c.wrote.set(t.id, ++c.writes); c.wroteAt.set(t.id, Date.now()); return copy(t); };
   const sorted = (c) => [...c.tickets.values()].sort((a, b) => Number(a.id) - Number(b.id)).map(copy);
@@ -274,17 +280,24 @@ function open(options) {
     c.refreshing = (async () => {
       const pages = await api('GET', '/repos/' + repo + '/issues?state=all&sort=created&direction=asc&per_page=100', null, true);
       const issues = (pages || []).flat().filter(isTicket);
-      const fresh = new Map();
+      const fresh = new Map(), unread = new Set();
       for (const issue of issues) {
+        if (unreadIssue(issue)) unread.add(String(issue.number));
         dbIds.set(repo + ' #' + issue.number, issue.id);
         fresh.set(String(issue.number), ticketOf(issue, await blockersOf(repo, issue), await notesOf(repo, issue)));
       }
       for (const [id, n] of c.wrote) if (n > seen && c.tickets.has(id)) fresh.set(id, c.tickets.get(id));
-      c.tickets = fresh; c.listedAt = began;
+      c.tickets = fresh; c.listedAt = began; c.unread = unread;
+      if (unread.size && !c.told) {
+        c.told = true;
+        console.error('Ticket store (github): ' + unreadLine(unread.size));
+      }
       settleAll(project, fresh);
     })().finally(() => { c.refreshing = null; });
     return c.refreshing;
   }
+
+  const unreadLine = (n) => n + (n === 1 ? ' ticket has a note' : ' tickets have notes') + ' signed with another key: approvals and order are not read. Give this room the key the notes were signed with (copy github-store.key from the old state folder, or set RELAY_TICKET_KEY in .env to the same value on every machine), or approve each ticket again.';
 
   async function setBlockers(repo, n, now, want) {
     const nums = want.filter((id) => isNumber(id) && Number(id) !== Number(n));
@@ -395,6 +408,10 @@ function open(options) {
         throw e;
       }
     },
+    unreadNotes(project) {
+      const ids = [...cacheOf(project).unread].sort((a, b) => Number(a) - Number(b));
+      return { count: ids.length, ids, line: ids.length ? unreadLine(ids.length) : null };
+    },
     writeErrors(project) {
       return [...failsOf(project).values()].filter((f) => f.shown).sort((a, b) => Number(a.id) - Number(b.id)).map(({ id, what, message, tries, at, nextAt }) => ({ id, what, message, tries, at, nextAt }));
     },
@@ -410,14 +427,14 @@ function open(options) {
       issue = await api('GET', '/repos/' + repo + '/issues/' + issue.number);
       return keep(project, ticketOf(issue, await blockersOf(repo, issue), await notesOf(repo, issue)));
     },
-    async update(project, id, changes) {
+    async update(project, id, changes, options) {
       const repo = repoOf(project);
       if (!repo || !isNumber(id)) return null;
-      return written(project, id, changes, () => write(project, repo, id, changes));
+      return written(project, id, changes, () => write(project, repo, id, changes, !!(options && options.person)));
     }
   };
 
-  async function write(project, repo, id, changes) {
+  async function write(project, repo, id, changes, person) {
     let issue;
     try { issue = await api('GET', '/repos/' + repo + '/issues/' + id); } catch (e) { if (gone(e)) return null; throw e; }
     if (!isTicket(issue)) return null;
@@ -426,7 +443,7 @@ function open(options) {
     const { id: _id, createdAt: _at, updatedAt: _up, notes: _notes, ...rest } = changes;
     const ticket = Object.assign(ticketOf(issue, now, held), rest);
     const want = (ticket.blockedBy || []).map(String);
-    const foreign = foreignNote(issue);
+    const foreign = person ? null : foreignNote(issue);
     if (foreign) {
       const held = Object.keys(rest).filter((k) => !NATIVE.includes(k)).concat('blockedBy' in rest && want.some((b) => !isNumber(b)) ? ['blockedBy'] : []);
       if (held.length) throw Object.assign(new Error('Issue #' + issue.number + ' has a note this relay\'s key did not sign, so its ' + held.join(', ') + ' cannot change. Check RELAY_TICKET_KEY_FILE, or take the note out of the issue.'), { refused: true });
@@ -437,6 +454,7 @@ function open(options) {
     if (foreign) patch.body = (ticket.body ? ticket.body + '\n\n' : '') + foreign;
     await ensureLabels(repo, ourLabels(patch));
     const after = await api('PATCH', '/repos/' + repo + '/issues/' + issue.number, patch);
+    cacheOf(project).unread.delete(String(issue.number));
     return keep(project, ticketOf(after, remember(repo, after, want.filter((b) => !extra.includes(b)).map(Number)), held));
   }
 }
