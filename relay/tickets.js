@@ -44,8 +44,8 @@ function labelsFrom(value, all, agent) {
   const labels = [...new Set(list.map((l) => clean(l).toLowerCase()).filter(Boolean))];
   if (labels.some((l) => !KIND.test(l))) return { error: [400, { ok: false, error: 'bad_label', message: 'A label is one short word: a lowercase letter, then letters, digits or dashes, up to 24 in all, such as flaky or follow-up.' }] };
   if (labels.length > MAX_LABELS) return { error: [400, { ok: false, error: 'bad_label', message: 'A ticket has at most ' + MAX_LABELS + ' labels.' }] };
-  const known = labelsOf(all), unknown = labels.filter((l) => !known.includes(l));
-  if (agent && agent.role !== 'manager' && unknown.length) return { error: [400, { ok: false, error: 'bad_label', message: 'No ticket has the label ' + unknown.join(', ') + ' yet. ' + (known.length ? 'Labels are: ' + known.join(', ') + '. ' : '') + 'Only the person adds a new label.' }] };
+  const known = labelsOf(all), unknown = labels.filter((l) => !known.includes(l) && !(agent && agent.role === 'manager' && l === 'manager'));
+  if (agent && unknown.length) return { error: [400, { ok: false, error: 'bad_label', message: 'No ticket has the label ' + unknown.join(', ') + ' yet. ' + (known.length ? 'Labels are: ' + known.join(', ') + '. ' : '') + 'Only the person adds a new label.' }] };
   return { labels };
 }
 const MOVES = { triage: ['ready', 'rejected', 'done'], ready: ['rejected', 'done'], started: ['ready'], rejected: ['triage'] };

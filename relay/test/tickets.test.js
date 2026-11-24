@@ -831,6 +831,7 @@ for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..'
     assert.match(cli('list'), /Another flaky test {2}\(labels flaky\)/);
     assert.match(cli('labels'), /^flaky\ntests\n$/);
     assert.throws(() => cli('create', 'A chore', '--label', 'chore', '--body', 'Tidy'), /Only the person adds a new label/);
+    assert.throws(() => cli('create', 'A manager note', '--label', 'manager', '--body', 'Look'), /Only the person adds a new label/, 'the manager\'s own label is not open to a session');
 
     // Only the person changes them: a session's token cannot.
     assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/edit', { labels: ['tests'] }, agent)).status, 403, 'not a session');
