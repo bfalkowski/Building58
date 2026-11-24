@@ -115,6 +115,11 @@ async function lookAt(channel, task, now) {
   if (verdict && verdict.kind === 'merge' && verdict.posted && verdict.commit === head) {
     files = await gh.files(task.pr, head, task.repo);
   }
+  const first = reviews.stateOf(channel, task.pr);
+  if (!first || (first.head === null && !first.running && !first.held && !first.failed && !first.waits && !first.off && !first.red)) {
+    const what = reviews.owe(channel, task.pr, { from: (dev && dev.cwd) || task.worktree || task.repo, dev, head });
+    log('PR ' + number(task.pr) + ' had no review of ' + head.slice(0, 7) + ': ' + what + '.');
+  }
   const lead = terminal.leadOf(channel);
   const move = plan.nextMove({
     pr, task: { state: task.state, autopilot: autopilot.movesIt(channel, task) },

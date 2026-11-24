@@ -289,3 +289,43 @@ test('a PR found by its branch that already has a review record gets no second r
   await sleep(2500);
   assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer' && x.pr === PR), 'no second review starts');
 });
+
+// A PR linked with no review record, as after a restart onto code that did not queue one: the switch is off while the hook links it.
+async function linkedUnreviewed(o) {
+  const R = o.R;
+  assert.strictEqual((await R.call('POST', '/reviews', { auto: false })).status, 200);
+  const h = o.commit(true);
+  o.answer({ headRefOid: h });
+  await o.say(o.dev, 'PostToolUse', { pr_url: PR, cwd: o.wt });
+  await until(async () => (await R.call('GET', '/tasks/' + o.task.id)).body.task.pr === PR, 'the PR to be linked');
+  assert.strictEqual((await R.call('GET', '/reviews')).body.prs.length, 0, 'no review record');
+  assert.strictEqual((await R.call('POST', '/settings', { values: { prWatch: true } })).status, 200);
+}
+const reviewerOf = (o) => until(async () => (await o.terminals()).find((x) => x.role === 'reviewer' && x.pr === PR), 'a reviewer for the PR');
+
+test('a linked PR with no review record gets its first review within one PR watch pass', async (t) => {
+  const o = await office(t);
+  await linkedUnreviewed(o);
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
+  await reviewerOf(o);
+  assert.match(o.R.output(), /PR watch: PR #7 had no review of [0-9a-f]{7}: its first review\./);
+});
+
+test('a linked PR in Waiting on you with a protected file gets its first review', async (t) => {
+  const o = await office(t);
+  o.files = ['CLAUDE.md'];
+  await linkedUnreviewed(o);
+  const moved = await o.R.call('POST', '/tasks/' + o.task.id + '/move', { to: 'waiting_on_you' });
+  assert.strictEqual(moved.status, 200);
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
+  await reviewerOf(o);
+});
+
+test('a linked PR with no review record and all desks full waits in the desk queue', async (t) => {
+  const o = await office(t);
+  await linkedUnreviewed(o);
+  while ((await o.terminals()).length < 9) assert.ok((await o.R.call('POST', '/terminals', { cwd: o.repo })).status < 300);
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
+  await until(async () => ((await o.R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR) || {}).desk === true, 'the review to wait for a desk');
+  assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer'), 'no reviewer yet');
+});
