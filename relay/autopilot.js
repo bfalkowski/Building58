@@ -88,6 +88,7 @@ function save() {
 }
 const chOf = (channel) => store[channel] || (store[channel] = { on: false, only: null, day: null, merged: 0, prs: {}, notes: [] });
 const isOn = (channel) => !!(store[channel] && store[channel].on);
+const anyOn = () => Object.keys(store).some(isOn);
 const recOf = (channel, pr) => { const c = chOf(channel); return c.prs[pr] || (c.prs[pr] = { verdicts: [], conflictAt: null, handedOver: null }); };
 const today = () => new Date().toISOString().slice(0, 10);
 const runsOf = (channel) => { const c = chOf(channel); return c.runs || (c.runs = {}); };
@@ -697,4 +698,4 @@ function verdictOf(channel, pr) {
 }
 const movesIt = (channel, task) => isOn(channel) && mineTask(task);
 
-module.exports = { handle, begin, isOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };
+module.exports = { handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };

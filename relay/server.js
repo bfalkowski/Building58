@@ -43,7 +43,7 @@ const office = SESSIONS ? {
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
   config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'),
-  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js')
+  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js'), awake: require('./awake.js')
 } : null;
 if (office) {
   const w = (ONE ? [ONE] : worlds()).find((x) => x.sessions && x.roster);
@@ -443,6 +443,7 @@ server.listen(PORT, HOST, async () => {
     office.prWatch.begin({ log });
     office.tasks.begin({ log });
     office.ready.begin({ log });
+    office.awake.begin({ log });
     // Replayed after reviews.begin, or reviews would ignore a queued PR or push.
     hooksOpen = true;
     replayHooks(hookQueue.take(stateDir()).concat(earlyHooks.splice(0)).sort((a, b) => a.event.at - b.event.at));
@@ -451,7 +452,7 @@ server.listen(PORT, HOST, async () => {
     checkouts.sweep().catch((e) => log('Could not tidy the checkouts: ' + e.message));
   });
 
-const stopAll = () => { if (office) office.terminal.close(); };
+const stopAll = () => { if (office) { office.awake.release(); office.terminal.close(); } };
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { stopAll(); process.exit(0); });
 process.on('exit', stopAll);
 const supervisor = process.ppid;
