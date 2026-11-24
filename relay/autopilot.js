@@ -35,6 +35,7 @@
 // relay/autopilot-runs.js) is in RELAY_AUTOPILOT_FILE, so a restart keeps it.
 'use strict';
 const { execFile } = require('child_process');
+const { mergedMain } = require('./merged-main.js');
 const fs = require('fs');
 const path = require('path');
 const state = require('./state.js');
@@ -241,7 +242,7 @@ function answeredByReview(channel, rec) {
   if (!v || v.kind !== 'merge' || !v.commit || !head || v.commit === head || Date.parse(v.at) <= Date.parse(rec.handedOverAt)) return null;
   return reason === 'dev-says-bug' && !v.newWork ? null : v;
 }
-const dropHandOver = (rec) => { rec.handedOver = null; rec.handedOverAt = null; rec.handedOverHead = null; rec.handedReason = null; };
+const dropHandOver = (rec) => { rec.mainMerges = 0; rec.conflictAsks = 1; rec.handedOver = null; rec.handedOverAt = null; rec.handedOverHead = null; rec.handedReason = null; };
 function held(channel, task) {
   const rec = task.pr && chOf(channel).prs[task.pr];
   if (!rec || !rec.handedOver) return task.state === 'waiting_on_you';
@@ -373,18 +374,6 @@ function droppedAsk(rec, dev) {
   if (!dev || dev.exited) return true;
   return dev.state === 'idle' && (dev.turnAt || 0) >= rec.conflictTypedAt;
 }
-async function mergedMain(task, from, head) {
-  if (!task.worktree || !from) return false;
-  try {
-    const lines = (await git(task.worktree, ['rev-list', '--merges', '--parents', from + '..' + head])).split('\n').filter(Boolean);
-    for (const line of lines) {
-      for (const parent of line.split(' ').slice(2)) {
-        if (await git(task.worktree, ['merge-base', '--is-ancestor', parent, 'origin/main']).then(() => true, () => false)) return true;
-      }
-    }
-  } catch (e) { return false; }
-  return false;
-}
 async function askToMergeMain(channel, task, rec, pr, dev) {
   const pending = delivery.pending(channel).some((d) => d.key === CONFLICT_KEY(task));
   const same = rec.conflictAt === pr.headRefOid;
@@ -392,9 +381,9 @@ async function askToMergeMain(channel, task, rec, pr, dev) {
   const dropped = same && droppedAsk(rec, dev);
   if (same && dropped) {
     const fresh = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch(() => null);
-    if (!fresh || fresh.headRefOid !== pr.headRefOid) return false;
+    if (!fresh || fresh.headRefOid !== pr.headRefOid || fresh.mergeStateStatus !== 'DIRTY') return false;
   }
-  const merged = !same && !!rec.conflictAt && await mergedMain(task, rec.conflictAt, pr.headRefOid);
+  const merged = !same && !!rec.conflictAt && await mergedMain((args) => git(task.worktree, args), rec.conflictAt, pr.headRefOid);
   const step = plan.conflictStep({ known: !!rec.conflictAt, sameHead: same, dropped, mergedMain: merged, mainMerges: rec.mainMerges || 0, asks: rec.conflictAsks || 1, cap: MAIN_MERGES() });
   if (step.act === 'wait') return false;
   const at = pr.headRefOid.slice(0, 7);
