@@ -3584,7 +3584,7 @@
           "Tickets"
         ],
         "summary": "Order ticket",
-        "description": "{\"before\": id} or {\"after\": id}: a Triage or Ready ticket goes next to another Triage or Ready ticket with the same priority. Usually only the moved ticket is written. When there is no room between two ranks, the Triage and Ready tickets of that priority are numbered again. If the store fails partway, the ranks already written are put back and the answer is 502. Those tickets keep a new updatedAt. The person's key, or the token of a PM or Lead you let set the order. Any other session's token gets 403.\n\nTokens: the relay key, and the token of a PM, the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "{\"before\": id} or {\"after\": id}: a Triage or Ready ticket goes next to another Triage or Ready ticket with the same priority. Usually only the moved ticket is written. When there is no room between two ranks, the Triage and Ready tickets of that priority are numbered again. If the store fails partway, the ranks already written are put back and the answer is 502, or 409 and store_refused when the store refused the change. Those tickets keep a new updatedAt. The person's key, or the token of a PM or Lead you let set the order. Any other session's token gets 403.\n\nTokens: the relay key, and the token of a PM, the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "orderTicket",
         "x-tokens": [
           "a PM",
