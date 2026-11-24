@@ -57,6 +57,7 @@ const nudge = require('./nudge.js');
 const { holdOf } = require('./merge-hold.js');
 const runs = require('./autopilot-runs.js');
 const pushHold = require('./push-hold.js');
+const jams = require('./jams.js');
 const pipeline = require('./pipeline.js');
 const { oneLine } = require('./clean.js');
 
@@ -262,6 +263,7 @@ async function tick() {
   if (ticking || !ctx) return;
   ticking = true;
   try {
+    logRefusals();
     for (const channel of Object.keys(store)) if (isOn(channel)) await look(channel);
   } catch (e) { if (ctx) ctx.log('Autopilot: ' + e.message); } finally { ticking = false; }
 }
@@ -704,6 +706,18 @@ function holdPushes(channel, only) {
     try { pushHold.sync(task, verdictOf(channel, task.pr), pipeline.of(task.pr)); } catch (e) { if (ctx) ctx.log('Could not mark the push hold of ' + task.worktree + ': ' + e.message); }
   }
 }
+function logRefusals() {
+  for (const channel of tasks.channels()) {
+    for (const task of tasks.list(channel)) {
+      if (!task.pr || !task.worktree || task.state === 'done') continue;
+      let got;
+      try { got = pushHold.refusalsOf(task); } catch (e) { continue; }
+      if (got.list.length <= got.seen) continue;
+      for (const r of got.list.slice(got.seen).filter((x) => !x.allowed)) jams.record(channel, { kind: 'push-refused', ticket: task.ticket || undefined, pr: task.pr, since: r.at, fix: 'Push refused: ' + r.why, by: 'the relay' });
+      try { pushHold.markSeen(task, got.list.length); } catch (e) { if (ctx) ctx.log('Could not note the refused pushes of ' + task.worktree + ': ' + e.message); }
+    }
+  }
+}
 tasks.events.on('state', (channel, task) => holdPushes(channel, task));
 tasks.events.on('pr', (channel, task) => holdPushes(channel, task));
 
@@ -719,7 +733,15 @@ function deskOf(channel, task) {
   const handed = r && r.handedOver && !handedBack(task, r) ? r.handedOver : null;
   const since = handed && handedReasonOf(r) === 'stalled' && r.verdicts.filter((x) => Date.parse(x.at) > Date.parse(r.handedOverAt) && postOf(channel, x)).pop();
   const reviewedSince = since ? { kind: since.kind, commit: since.commit, url: postOf(channel, since) } : null;
-  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', reviewedSince };
+  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', reviewedSince, pushRefused: refusedOf(task, v) };
+}
+
+function refusedOf(task, v) {
+  if (!task || !task.pr || !v || !v.posted || v.kind !== 'merge') return null;
+  let got;
+  try { got = pushHold.refusalsOf(task); } catch (e) { return null; }
+  const last = got.list[got.list.length - 1];
+  return last && !last.allowed ? { at: last.at, why: last.why } : null;
 }
 
 const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';
