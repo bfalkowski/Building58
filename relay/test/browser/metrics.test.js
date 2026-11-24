@@ -129,3 +129,14 @@ pageTest('on a narrow screen the page does not scroll sideways, in Light and in 
     assert.ok(wide <= 0, theme + ': the page is ' + wide + 'px too wide');
   }
 });
+
+pageTest('a download the relay refuses shows its message and saves no file', () => full, async (p) => {
+  await metrics(full, p);
+  await p.page.waitForSelector('body[data-drawn="7d"]');
+  await p.page.route('**/metrics?*format=csv*', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'unauthorized', message: 'That key is not this relay\'s key.' }) }));
+  let saved = false;
+  p.page.on('download', () => { saved = true; });
+  await p.page.click('#download-csv');
+  await p.page.locator('#status', { hasText: 'That key is not this relay' }).waitFor();
+  assert.strictEqual(saved, false);
+});

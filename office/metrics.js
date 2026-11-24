@@ -336,7 +336,11 @@
     });
   }
   function download(format) {
-    fetch(url(format)).then(function (r) { return r.blob(); }).then(function (blob) {
+    problem('');
+    fetch(url(format)).then(function (r) {
+      if (!r.ok) return r.json().catch(function () { return {}; }).then(function (e) { throw new Error(e.message || 'The relay refused the download (' + r.status + ').'); });
+      return r.blob();
+    }).then(function (blob) {
       var a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = 'building58-metrics-' + range + '.' + format;
@@ -344,7 +348,7 @@
       a.click();
       a.remove();
       URL.revokeObjectURL(a.href);
-    });
+    }).catch(function (e) { problem(e.message === 'Failed to fetch' ? 'The relay did not answer.' : e.message); });
   }
 
   document.querySelectorAll('[data-range]').forEach(function (b) { b.addEventListener('click', function () { range = b.dataset.range; load(); }); });
