@@ -161,6 +161,7 @@ test('real answers fit their schemas: tickets, tasks, sessions, the Floor, event
   fit('GET /tickets', await R.call('GET', '/tickets'));
   fit('GET /tickets/{id}', await R.call('GET', '/tickets/' + made.ticket.id));
   fit('POST /tickets/{id}/edit', await R.call('POST', '/tickets/' + made.ticket.id + '/edit', { title: 'A ticket, edited', mark: 'hold' }));
+  fit('POST /tickets/{id}/note', await R.call('POST', '/tickets/' + made.ticket.id + '/note', { text: 'A note.' }));
   const task = fit('POST /tasks', await R.call('POST', '/tasks', { title: 'Some work', repo })).task;
   await until(async () => (await R.screen(task.owner.terminal)).includes('GOT['), 'the task brief');
   fit('GET /tasks', await R.call('GET', '/tasks'));
@@ -187,6 +188,7 @@ test('the relay refuses each request that breaks its schema: a wrong type with b
   const reviewerT = agentHeaders(await until(() => { try { return sessionToken(reviewer.sessionId); } catch (e) { return null; } }, 'the reviewer\'s token'));
   const who = { 'POST /autopilot/verdict': reviewerT };
   const routes = { 'POST /tickets': ['/tickets', { title: 'Fine', repo }], 'POST /tickets/{id}/edit': ['/tickets/' + id + '/edit', { title: 'Fine' }],
+    'POST /tickets/{id}/note': ['/tickets/' + id + '/note', { text: 'Fine' }],
     'POST /tasks': ['/tasks', { title: 'Fine', repo }], 'POST /tasks/{id}/move': ['/tasks/' + task.id + '/move', { to: 'building' }],
     'POST /commands': ['/commands', { action: 'state', wait: false }], 'POST /autopilot/verdict': ['/autopilot/verdict', { kind: 'merge' }] };
   assert.deepStrictEqual(Object.keys(routes).sort(), Object.keys(api.REQUESTS).sort(), 'each request schema is checked here');

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.4.1",
+    "version": "2.5.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -3518,6 +3518,66 @@
         }
       }
     },
+    "/channels/{channel}/tickets/{id}/note": {
+      "post": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Add ticket note",
+        "description": "{\"text\"}: adds a note to a ticket at any status, 1 to 2000 characters after the relay cleans the text, up to 30 notes on a ticket (409 notes_full after that). A note never changes the ticket's title, body, status, priority or approval, so a Ready ticket you approved stays approved. The answer's ticket has notes, each with by (who wrote it), role (dev, reviewer, pm, lead or null), at and text. Any session's token can send it, except the COO's and the security officer's. Nothing edits or deletes a note. With the GitHub store a note is an issue comment. See Notes on a ticket.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "addTicketNote",
+        "x-tokens": [
+          "any session"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOne"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTicketNote"
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel}/tickets/{id}/order": {
       "post": {
         "tags": [
@@ -4054,6 +4114,36 @@
         "additionalProperties": true,
         "description": "One step in a ticket's history."
       },
+      "TicketNote": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Who wrote it, as the relay named them."
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "dev, reviewer, pm, lead or null for the person."
+          },
+          "at": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "text"
+        ],
+        "additionalProperties": true,
+        "description": "A note a session added to a ticket. It is not part of the ticket's body."
+      },
       "Ticket": {
         "type": "object",
         "properties": {
@@ -4179,6 +4269,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TicketStep"
+            }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketNote"
             }
           },
           "createdAt": {
@@ -4344,6 +4440,25 @@
             "labels": [
               "flaky"
             ]
+          }
+        ]
+      },
+      "NewTicketNote": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": true,
+        "examples": [
+          {
+            "text": "The cause is in relay/tickets.js, not relay/tasks.js. Run npm test first."
           }
         ]
       },
