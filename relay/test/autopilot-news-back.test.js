@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, removeDir, until, sleep, sessionToken } = require('./helpers.js');
+const { relay, makeRepo, removeDir, until, sessionToken } = require('./helpers.js');
 
 const sh = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t'].concat(args), { cwd, encoding: 'utf8' }).trim();
 const PR = 'https://github.com/acme/widgets/pull/7';
@@ -82,10 +82,10 @@ test('review news its Dev was never told, and no free desk: the PR waits for a d
   await o.R.call('POST', '/autopilot', { on: false });
   await mergeVerdict(o);
   await until(async () => !(await o.terminals()).some((y) => y.id === o.r.id), 'the reviewer to end');
-  for (;;) if ((await o.R.call('POST', '/terminals', { cwd: o.repo })).status >= 400) break;
+  for (let i = 0; i < 12 && (await o.R.call('POST', '/terminals', { cwd: o.repo })).status < 400; i++);
+  assert.ok((await o.R.call('POST', '/terminals', { cwd: o.repo })).status >= 400, 'every desk is taken');
   await o.R.call('POST', '/autopilot', { on: true, only: o.ticket });
   await until(async () => (await o.ap()).prs.some((p) => /All \d+ desks are taken/.test(p.why || '')), 'the wait for a desk');
-  await sleep(1000);
   const waiting = await o.task();
   assert.notStrictEqual(waiting.state, 'waiting_on_you', 'not handed over');
   assert.ok(!waiting.history.some((h) => h.type === 'resumed'), 'no Dev yet');
