@@ -34,7 +34,6 @@ test('an approve the store refuses answers 409 with the store\'s message', async
 test('an order the store refuses keeps the refusal through the rollback wrapper', async (t) => {
   const { R, file1 } = await refusing(t, 'rank');
   const a = await file1('First');
-  await H.sleep(5);
   const b = await file1('Second');
   const r = await R.call('POST', '/tickets/' + b + '/order', { before: a });
   assert.strictEqual(r.status, 409, JSON.stringify(r.body));
