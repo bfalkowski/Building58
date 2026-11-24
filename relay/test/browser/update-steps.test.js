@@ -40,8 +40,8 @@ pageTest('the bar shows the loop\'s progress, stops it between merges, and reloa
   await note.filter({ hasText: 'Update: 2 of 5, PR 41. The new relay is in. Waiting for its check before the next merge. 3 more wait for the next Update.' }).waitFor();
 
   await off.click();
-  assert.deepStrictEqual(posts[posts.length - 1], { cancel: true });
   await note.filter({ hasText: "Update: 2 of 5, PR 41. The new relay is in. Waiting for its check before the next merge. It stops after this merge. 3 more wait for the next Update." }).waitFor();
+  assert.deepStrictEqual(posts[posts.length - 1], { cancel: true });
   await off.waitFor({ state: 'hidden' });
 
   // A page-only merge went in: the page reloads, and follows the loop again.

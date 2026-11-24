@@ -94,7 +94,7 @@ test('the PR watch moves an open task PR to its next step, once for each head an
     assert.strictEqual((await o.watch()).on, false);
     assert.strictEqual((await R.call('GET', '/floor')).body.sessions.find((x) => x.terminal === o.dev.id).waitsOn, null);
     const dev = { 'X-Office-Token': sessionToken(o.dev.sessionId) };
-    assert.strictEqual((await R.call('POST', '/settings', { values: { prWatch: true } }, dev)).status, 401, 'a session cannot turn it on');
+    assert.strictEqual((await R.call('POST', '/settings', { values: { prWatch: true } }, dev)).status, 403, 'a session cannot turn it on');
   });
 
   await t.test('row 1: a PR with no review of its head, and no record of one, gets one', async () => {
@@ -288,4 +288,51 @@ test('a PR found by its branch that already has a review record gets no second r
   await until(async () => /found by its branch already has a review record/.test(R.output()), 'the log to say the PR has a record');
   await sleep(2500);
   assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer' && x.pr === PR), 'no second review starts');
+});
+
+async function linkedUnreviewed(o) {
+  const R = o.R;
+  assert.strictEqual((await R.call('POST', '/reviews', { auto: false })).status, 200);
+  const h = o.commit(true);
+  o.answer({ headRefOid: h });
+  await o.say(o.dev, 'PostToolUse', { pr_url: PR, cwd: o.wt });
+  await until(async () => (await R.call('GET', '/tasks/' + o.task.id)).body.task.pr === PR, 'the PR to be linked');
+  assert.strictEqual((await R.call('GET', '/reviews')).body.prs.length, 0, 'no review record');
+  assert.strictEqual((await R.call('POST', '/settings', { values: { prWatch: true } })).status, 200);
+}
+const reviewerOf = (o) => until(async () => (await o.terminals()).find((x) => x.role === 'reviewer' && x.pr === PR), 'a reviewer for the PR');
+
+test('a linked PR with no review record gets its first review within one PR watch pass', async (t) => {
+  const o = await office(t);
+  await linkedUnreviewed(o);
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
+  await reviewerOf(o);
+  assert.match(o.R.output(), /PR watch: PR #7 had no review of [0-9a-f]{7}: its first review\./);
+});
+
+test('a linked PR in Waiting on you with a protected file gets its first review', async (t) => {
+  const o = await office(t);
+  o.files = ['CLAUDE.md'];
+  await linkedUnreviewed(o);
+  const moved = await o.R.call('POST', '/tasks/' + o.task.id + '/move', { to: 'waiting_on_you' });
+  assert.strictEqual(moved.status, 200);
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
+  await reviewerOf(o);
+});
+
+test('a linked PR with no review record and all desks full waits in the desk queue', async (t) => {
+  const o = await office(t);
+  await linkedUnreviewed(o);
+  while ((await o.terminals()).length < 9) assert.ok((await o.R.call('POST', '/terminals', { cwd: o.repo })).status < 300);
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
+  await until(async () => ((await o.R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR) || {}).desk === true, 'the review to wait for a desk');
+  assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer'), 'no reviewer yet');
+});
+
+test('a linked PR with no review record gets its first review while a check runs', async (t) => {
+  const o = await office(t);
+  await linkedUnreviewed(o);
+  o.answer({ headRefOid: sh(o.wt, 'rev-parse', 'HEAD'), statusCheckRollup: RUNNING });
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
+  await reviewerOf(o);
 });

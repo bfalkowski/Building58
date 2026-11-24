@@ -62,6 +62,7 @@ const { oneLine } = require('./clean.js');
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const ghDoor = require('./gh.js');
 const config = require('./config.js');
+const pmCheck = require('./pm-check.js');
 const AT_ONCE = () => config.get('autopilotAtOnce');
 const MAX_ROUNDS = () => config.get('autopilotRounds'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges');
 const NOTES_KEPT = 30;
@@ -437,6 +438,7 @@ function pullMain(channel) {
 }
 async function maybeStart(channel) {
   const c = chOf(channel);
+  for (const said of pmCheck.takeHeld(channel)) note(channel, said);
   if (starting || tasks.busy() || update.restarting()) return;
   const limit = MAX_MERGES_A_DAY();
   if (c.merged >= limit) {
@@ -451,7 +453,9 @@ async function maybeStart(channel) {
   starting = true;
   try {
     const all = await tickets.listAll(channel);
-    const next = plan.nextTicket(all, (t) => !!tasks.ofTicket(channel, t), c.only);
+    const asked = pmCheck.prefer(channel);
+    const next = plan.nextTicket(all, (t) => !!tasks.ofTicket(channel, t), c.only, asked);
+    if (asked && (!next || next.id !== asked)) pmCheck.clearPrefer(channel);
     if (!next) { c.idle = c.only ? plan.whyNoneAllowed(all, (t) => !!tasks.ofTicket(channel, t), c.only) : 'Nothing in Ready that a person approved and that is not blocked, on hold, replaced or waiting on a design ticket.'; return; }
     const main = await mainCi.check(channel, next.repo, next.base || await tasks.git(next.repo, ['symbolic-ref', '--short', 'HEAD']).catch(() => 'main'));
     if (main && main.state === 'red') { c.idle = 'Main is red, so ' + next.id + ' waits: ' + redMain({ name: path.basename(next.repo), branch: main.branch, run: main.run }); return; }
@@ -460,6 +464,10 @@ async function maybeStart(channel) {
     if (building >= tasks.wipLimit()) { waitWip(building + (building === 1 ? ' task is' : ' tasks are') + ' being built, and the limit is ' + tasks.wipLimit() + '.'); return; }
     const queued = reviews.waiting(channel);
     if (queued.length) { c.idle = 'Waiting for the review of PR ' + number(queued[0]) + ' to start: it goes first.'; return; }
+    const check = pmCheck.consult(channel, next, all);
+    if (check.wait) { c.idle = check.wait; return; }
+    if (check.first) { c.idle = null; note(channel, check.said); return; }
+    if (check.said) note(channel, check.said);
     const wasWaiting = /^Waiting for a free desk/.test(c.idle || '');
     c.idle = null;
     let [status, out] = await tickets.startBy(channel, next, BY, ctx);
@@ -703,4 +711,4 @@ const movesIt = (channel, task) => isOn(channel) && mineTask(task);
 
 const runsKept = (channel) => (store[channel] && store[channel].runs) || {};
 
-module.exports = { runsKept, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };
+module.exports = { runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };

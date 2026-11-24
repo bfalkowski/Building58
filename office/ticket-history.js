@@ -37,6 +37,7 @@
       case 'dev': return 'Dev: ' + (x.name || 'no name recorded');
       case 'reviewer': return 'Reviewer: ' + (x.name || 'no name recorded') + (x.by === 'you' ? ', started by you' : x.by ? ', ' + (BY[x.by] || x.by) : '');
       case 'edited': return 'Edited' + (x.what && x.what.length ? ' (' + x.what.join(', ') + ')' : '') + ' by ' + byText(x);
+      case 'pm-advice': return 'PM check: ' + ({ start: 'start', first: 'another first', 'not-needed': 'not needed', duplicate: 'a duplicate', 'part-of': 'part of another ticket' }[x.answer] || x.answer) + (x.of ? ' (' + x.of + ')' : '') + '. ' + x.why;
       case 'proposal': return 'Proposed to ' + proposalWords(x) + ' by ' + byText(x) + (x.why ? '. Why: ' + x.why : '');
       case 'proposal-approved': return 'Proposal to ' + proposalWords(x) + ' approved by ' + byText(x);
       case 'proposal-dropped': return 'Proposal to ' + proposalWords(x) + ' dropped when ' + byText(x) + ' started it';

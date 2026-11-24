@@ -56,6 +56,10 @@ pageTest('the trailer\'s ping pong cue clears a game already going, and Kai play
   // The trailer moves the room by its own clock, so the film is played forward here one frame at a time,
   // as npm run trailer does. The room takes at most 0.1 s of film a frame, so each step stays under that,
   // and a slow computer only takes longer.
+  // A slow computer lets the film run on the browser's time before the clock is taken, past the cues that start
+  // June's walk and slow the room down. Taking the clock starts the film over, so none of them is lost.
+  await until(p, () => window.trailer.t >= 3.3);
+  await p.page.evaluate(() => window.run.idle({ who: 'june', do: 'window' }));
   await p.page.evaluate(() => {
     window.trailer.clock = 0; window.__to = 0;
     const step = () => { if (window.trailer.clock < window.__to) window.trailer.clock = Math.min(window.__to, window.trailer.clock + 1 / 12); requestAnimationFrame(step); };

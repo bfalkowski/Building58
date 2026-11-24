@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.7.0",
+    "version": "2.8.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -2533,7 +2533,7 @@
           "Settings"
         ],
         "summary": "Set settings",
-        "description": "Change the settings on the page, or set them back to their defaults: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinutes\"]}. An unknown name gets 400 with unknown_setting, and a value out of range 400 with bad_value. Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Change the settings on the page, or set them back to their defaults: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinutes\"]}. An unknown name gets 400 with unknown_setting, and a value out of range 400 with bad_value. Only the person: a session's token gets 403, so no session changes PM trust.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "setSettings",
         "x-tokens": [],
         "responses": {
@@ -3524,6 +3524,67 @@
             }
           }
         ]
+      }
+    },
+    "/channels/{channel}/tickets/{id}/advice": {
+      "post": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Advise ticket",
+        "description": "{\"answer\", \"of\", \"why\"}: the PM's answer to the check before Autopilot starts a ticket in Triage or Ready. answer is start, first, not-needed, duplicate or part-of. first, duplicate and part-of need of, another ticket's id, and the other two take none. why is 1 to 500 characters. It adds a note and a history step to the ticket. From PM trust Hold and propose, not-needed files a close proposal and duplicate and part-of a merge proposal, and at Close and merge the relay approves it as the PM and notes it. The answer is did: advised, proposed or carried out. Only the newest PM's token reaches it, and only while PM trust is above Off: any other token, an older PM's included, and the person's key, gets 403, and so does a ticket that is starting, started, done or rejected. Refused with 400 for an answer or an of that does not fit. See The check before a start.\n\nTokens: the relay key, and the token of a PM. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "adviseTicket",
+        "x-tokens": [
+          "a PM"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
       }
     },
     "/channels/{channel}/tickets/{id}/edit": {
