@@ -125,6 +125,31 @@ const SCHEMAS = {
     desk: { type: 'object' }
   }, ['terminal', 'name', 'role', 'state', 'safe', 'canStop', 'why']),
   Floor: okWith({ sessions: list(ref('FloorRow')), leadEnded: { type: ['object', 'null'] }, mainRed: list(obj({ branch: S(), repo: S(), says: S() })) }, ['sessions']),
+  NewJam: obj({
+    kind: S({ enum: Object.keys(require('./metrics-plan.js').JAM_KINDS) }),
+    ticket: S({ maxLength: 300, description: 'Optional: the ticket, such as T-5.' }),
+    pr: S({ maxLength: 300, description: 'Optional: the PR\'s address.' }),
+    since: S({ maxLength: 40, description: 'Optional: when it got stuck, an ISO time.' }),
+    fix: S({ minLength: 1, maxLength: 200, description: 'One line: what fixed it.' }),
+    by: S({ maxLength: 40, description: 'Optional: who fixed it. you by default.' })
+  }, ['kind', 'fix'], { examples: [{ kind: 'no-first-review', ticket: 'T-5', since: '2026-11-24T10:00:00.000Z', fix: 'Pressed Get a review.', by: 'you' }] }),
+  Jam: obj({ at: S(), kind: S(), ticket: orNull(S()), pr: orNull(S()), since: orNull(S()), fix: S(), by: S() }, ['at', 'kind', 'fix', 'by']),
+  JamOne: okWith({ jam: ref('Jam') }, ['jam']),
+  JamList: okWith({ range: S({ enum: ['1d', '7d', '30d'] }), keptDays: N(), kinds: { type: 'object' }, jams: list(ref('Jam')) }, ['range', 'jams']),
+  Metrics: okWith({
+    at: S(), range: S({ enum: ['1d', '7d', '30d'] }), days: N(), since: S(), keptDays: N(), bucketMinutes: N(),
+    numbers: obj({ merged: N(), medianMinutes: orNull(N()), waitingOnYouHours: N(), stalledHours: N(), noHelpShare: orNull(N()), jamsFixedByHand: N() }, ['merged', 'waitingOnYouHours', 'stalledHours', 'jamsFixedByHand']),
+    merged: obj({ days: list(obj({ day: S(), autopilot: N(), person: N() }, ['day', 'autopilot', 'person'])) }, ['days']),
+    perTicket: obj({ parts: { type: 'object' }, medianMinutes: orNull(N()), tickets: list(obj({ ticket: orNull(S()), mergedAt: S(), minutes: N(), parts: { type: 'object' } }, ['mergedAt', 'minutes', 'parts'])) }, ['tickets']),
+    where: obj({ parts: { type: 'object' }, minutes: { type: 'object' } }, ['minutes']),
+    outcomes: obj({ counts: { type: 'object' }, reasons: { type: 'object' } }, ['counts', 'reasons']),
+    stalls: obj({ kinds: list(obj({ kind: S(), label: S(), count: N(), hours: N(), detected: obj({ count: N(), hours: N() }, ['count', 'hours']), hand: obj({ count: N(), hours: N() }, ['count', 'hours']) }, ['kind', 'count', 'hours', 'detected', 'hand'])) }, ['kinds']),
+    waits: obj({ reasons: { type: 'object' }, days: list({ type: 'object' }), items: list(obj({ at: S(), minutes: N(), reason: S() }, ['at', 'minutes', 'reason'])) }, ['days', 'items']),
+    rounds: obj({ prs: list(obj({ rounds: S(), count: N() }, ['rounds', 'count'])) }, ['prs']),
+    desks: obj({ points: list(obj({ at: S(), working: N(), idle: N(), waiting: N(), stuck: N(), free: N() }, ['at'])) }, ['points']),
+    load: obj({ points: list(obj({ at: S(), cpu: N(), memoryMb: N(), limitMb: N() }, ['at'])) }, ['points']),
+    pm: obj({ available: B, days: list({ type: 'object' }) }, ['available', 'days'])
+  }, ['range', 'numbers', 'merged', 'perTicket', 'where', 'outcomes', 'stalls', 'waits', 'rounds', 'desks', 'load', 'pm']),
   Command: obj({
     action: S({ minLength: 1, description: 'A command of the world, such as say or idle. GET /channels/{channel} lists them as unknown_action does.' }),
     wait: { type: ['boolean', 'string'], description: 'false sends it and answers at once with its id.' },
@@ -144,7 +169,8 @@ const REQUESTS = {
   'POST /tasks': 'NewTask',
   'POST /tasks/{id}/move': 'TaskMove',
   'POST /commands': 'Command',
-  'POST /autopilot/verdict': 'Verdict'
+  'POST /autopilot/verdict': 'Verdict',
+  'POST /jams': 'NewJam'
 };
 const RESPONSES = {
   'GET /tickets': 'TicketList',
@@ -158,6 +184,9 @@ const RESPONSES = {
   'POST /tasks/{id}/move': 'TaskOne',
   'GET /terminals': 'SessionList',
   'GET /floor': 'Floor',
+  'GET /metrics': 'Metrics',
+  'POST /jams': 'JamOne',
+  'GET /jams': 'JamList',
   'GET /events': 'EventList',
   'GET /commands/{id}': 'CommandResult'
 };

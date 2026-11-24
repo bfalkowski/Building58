@@ -37,6 +37,9 @@
   const tab = $('board-tab');
   if (tab) tab.href = 'board.html?channel=' + encodeURIComponent(channel);
 
+  const metricsLink = $('metrics-link');
+  if (metricsLink) metricsLink.href = 'metrics.html?channel=' + encodeURIComponent(channel);
+
   const base = location.origin + '/channels/' + encodeURIComponent(channel);
   const url = (p) => base + '/tickets' + p;
   function api(p, body) {

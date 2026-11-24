@@ -383,4 +383,6 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, noteHook, noteEvent, measure, kindOf, cooBrief };
+const storeOf = (channel) => { const s = store[channel]; return { hands: (s && s.hands) || [], events: (s && s.events) || [] }; };
+
+module.exports = { storeOf, handle, noteHook, noteEvent, measure, kindOf, cooBrief };
