@@ -148,6 +148,7 @@ function create(args) {
     const start = 'http://localhost:' + server.address().port + '/';
     console.log('Opening ' + start + ' to create the App "' + name + '" on GitHub' + (org ? ' for ' + org : '') + '.');
     const tell = () => console.log('Open it in your browser.');
+    if (args.includes('--no-open')) { tell(); return; }
     try { const c = spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [start], { stdio: 'ignore', detached: true }); c.on('error', tell); c.unref(); } catch (e) { tell(); }
   });
 }
@@ -155,6 +156,6 @@ function create(args) {
 if (require.main === module) {
   if (process.argv[2] === 'create') create(process.argv.slice(3));
   else if (process.argv[2] === 'sign-in') signIn(process.env).then((r) => console.log(JSON.stringify(r)), (e) => { console.error(e.message); process.exit(1); });
-  else { console.error('Usage: node relay/github-app.js create --env <file> [--org <org>] [--name <name>] [--workflows]'); process.exit(2); }
+  else { console.error('Usage: node relay/github-app.js create --env <file> [--org <org>] [--name <name>] [--workflows] [--no-open]'); process.exit(2); }
 }
 module.exports = { jwt, keyOf, hostsYml, manifest, setEnv, signIn, ownerOf };

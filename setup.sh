@@ -74,12 +74,12 @@ fi
 if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
   say ""
   say "The room acts on GitHub as an app of its own, which reaches only the repos you install it on."
-  say "Your browser will open GitHub with the app's settings filled in. Press Create GitHub App there."
+  if headless; then say "Open the link below in your browser: it shows GitHub with the app's settings filled in. Press Create GitHub App there."; else say "Your browser will open GitHub with the app's settings filled in. Press Create GitHub App there."; fi
   if headless; then
     say ""
     say "This computer has no screen. The GitHub step answers on port $APP_PORT here, which your laptop cannot reach yet."
     say "On your laptop, in another terminal, run this and leave it open:"
-    say "  ssh -L $APP_PORT:localhost:$APP_PORT $(id -un)@$(hostname -f 2>/dev/null || hostname)"
+    say "  ssh -L $APP_PORT:localhost:$APP_PORT $(id -un)@$(hostname -f 2>/dev/null || hostname 2>/dev/null || uname -n)"
     say "Use the name or address you log in to this server with, if it differs. Then open the links below on the laptop."
     ask GITHUB_APP_ID "Press Enter when the tunnel is open." >/dev/null
   else
@@ -87,7 +87,7 @@ if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
   fi
   node_major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
   if [ "$node_major" -ge 18 ] 2>/dev/null; then
-    node relay/github-app.js create --env "$ENV" --port "$APP_PORT"
+    node relay/github-app.js create --env "$ENV" --port "$APP_PORT" $(headless && echo --no-open)
     install=""
   else
     image="ghcr.io/bfalkowski/building58:$(get BUILDING58_VERSION)"; [ "$image" = "ghcr.io/bfalkowski/building58:" ] && image="ghcr.io/bfalkowski/building58:latest"
@@ -95,7 +95,7 @@ if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
     say "No Node 18 or later here, so the GitHub step runs in a container. Getting $image..."
     docker pull -q "$image" >/dev/null || stop "Could not download $image."
     docker rm -f "$HELPER" >/dev/null 2>&1 || true
-    docker create --name "$HELPER" -p "127.0.0.1:$APP_PORT:$APP_PORT" --entrypoint node "$image" /tmp/github-app.js create --print --host 0.0.0.0 --port "$APP_PORT" >/dev/null || stop "Could not make the helper container."
+    docker create --name "$HELPER" -p "127.0.0.1:$APP_PORT:$APP_PORT" --entrypoint node "$image" /tmp/github-app.js create --print --host 0.0.0.0 --port "$APP_PORT" $(headless && echo --no-open) >/dev/null || stop "Could not make the helper container."
     docker cp -q relay/github-app.js "$HELPER:/tmp/github-app.js"
     out=$(mktemp)
     docker start -a "$HELPER" > "$out" 2>&1 &
@@ -136,4 +136,4 @@ link="http://localhost:$port/office/?channel=office&key=$(get RELAY_KEY)"
 say ""
 say "The room is running. Open it: http://localhost:$port/office/?channel=office&key=<RELAY_KEY in $ENV>"
 open_link "$link"
-if headless; then say "On a server, reach port $port from your laptop with: ssh -L $port:localhost:$port $(id -un)@$(hostname -f 2>/dev/null || hostname)"; fi
+if headless; then say "On a server, reach port $port from your laptop with: ssh -L $port:localhost:$port $(id -un)@$(hostname -f 2>/dev/null || hostname 2>/dev/null || uname -n)"; fi
