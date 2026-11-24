@@ -18,6 +18,7 @@
 // and only while RELAY_TERMINAL=1.
 'use strict';
 const { execFileSync } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
@@ -29,6 +30,7 @@ const hostLink = require('./host-link.js');
 const rollback = require('./rollback.js');
 const steps = require('./update-steps.js');
 const config = require('./config.js');
+const state = require('./state.js');
 const { livenessOf, jobsOf } = require('./liveness.js');
 const noteForCoo = (channel, kind, detail) => { if (channel) coo.noteEvent(channel, kind, detail); };
 
@@ -42,6 +44,15 @@ const RUN = require('crypto').randomBytes(6).toString('hex');
 let LOADED = null;
 try { LOADED = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: DIR, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch (e) { /* not a git folder: Update says so when pressed */ }
 function rolledBack() { const r = rollback.read().rollback; return r && LOADED && (r.running === LOADED || r.running === rollback.head()) && !rollback.onBranch() ? r : null; }
+const FORCED_FILE = state.file('update-forced.json');
+const GAP_MS = 60000;
+const TOOL_STALE_MS = 10 * 60 * 1000;
+const lastForced = () => { try { return Date.parse(JSON.parse(fs.readFileSync(FORCED_FILE, 'utf8')).at) || 0; } catch (e) { return 0; } };
+const WAIT_LIMIT = () => config.get('updateWaitMinutes') * 60 * 1000;
+const FORCED_EVERY = () => config.get('updateForcedMinutes') * 60 * 1000;
+const forceAt = (waitSince) => { const last = lastForced(); return Math.max(waitSince + WAIT_LIMIT(), last ? last + FORCED_EVERY() : 0); };
+const toolOpen = () => terminal.everyone().some((t) => t.toolAt && Date.now() - t.toolAt < TOOL_STALE_MS);
+const minutesOf = (ms) => Math.max(0, Math.round(ms / 60000));
 let job = null;
 let pulling = false;
 let lastNote = null, noteAt = null;
@@ -80,6 +91,7 @@ function view() {
   if (!job) return null;
   const waiting = job.state === 'waiting';
   const v = { state: job.state, from: job.from, to: job.to, files: job.files, startedAt: job.startedAt, waitingOn: waiting ? whoIsBusy() : [] };
+  if (waiting && job.waitSince) Object.assign(v, { waitedMinutes: minutesOf(Date.now() - job.waitSince), restartsAnywayAt: new Date(forceAt(job.waitSince)).toISOString() });
   if (job.steps) {
     const s = job.steps[Math.min(job.at, job.steps.length - 1)];
     v.step = { at: Math.min(job.at + 1, job.steps.length), of: job.steps.length, sha: s.sha, pr: s.pr, name: steps.name(s), later: job.later, reloads: job.reloads, stopping: !!job.stop };
@@ -122,29 +134,44 @@ async function fastForward(to) {
 
 function restartWhenQuiet(ctx, channel) {
   clearInterval(job.timer);
+  job.waitSince = Date.now(); job.forcing = 0; job.fetching = false;
   job.timer = setInterval(() => {
-    if (!job || job.state !== 'waiting' || pulling || whoIsBusy().length) return;
-    clearInterval(job.timer);
-    job.state = 'restarting';
-    const to = job.next || job.to;
-    ctx.log('Restarting the relay to run ' + to.slice(0, 7) + (job.steps ? ', ' + stepWords() : '') + '. Every session keeps running, and the new relay takes it back.');
-    setTimeout(async () => {
-      const busy = whoIsBusy();
-      if (busy.length) {
-        const who = busy.map((w) => w.title + ' (' + w.why + ')').join(', ');
-        if (job.steps) return endLoop(ctx, stoppedBefore('the restart was called off, since ' + who + ' started just before it.'), 'update_called_off');
-        note(ctx, 'The restart was called off, since ' + who + ' started just before it. The relay\'s folder is as it was. Press Update again to wait for the next quiet moment.', channel, 'update_called_off');
-        job = null; return;
-      }
-      try { await fastForward(to); } catch (e) {
-        if (job.steps) return endLoop(ctx, stoppedBefore('the relay\'s folder could not fast-forward to ' + to.slice(0, 7) + ': ' + e.message), 'update_failed');
-        note(ctx, 'The restart was called off, since the relay\'s folder could not fast-forward to ' + to.slice(0, 7) + ': ' + e.message + ' The folder is as it was.', channel, 'update_failed');
-        job = null; return;
-      }
-      if (job.steps) saveLoop(ctx);
-      terminal.close(); process.exit(RESTART);
-    }, 300);
+    if (!job || job.state !== 'waiting' || pulling || job.fetching) return;
+    if (!whoIsBusy().length) return restartNow(ctx, channel, false);
+    if (Date.now() < forceAt(job.waitSince)) return;
+    job.forcing = job.forcing || Date.now();
+    if (toolOpen() && Date.now() - job.forcing < GAP_MS) return;
+    job.fetching = true;
+    run(ctx).catch(() => {}).then(() => { if (job) { job.fetching = false; if (job.state === 'waiting') restartNow(ctx, channel, true); } });
   }, 500);
+}
+function restartNow(ctx, channel, forced) {
+  clearInterval(job.timer);
+  job.state = 'restarting';
+  const to = job.next || job.to;
+  const waited = Date.now() - job.waitSince;
+  ctx.log((forced ? 'The update has waited ' + minutesOf(waited) + ' minutes, so it restarts the relay anyway to run ' : 'Restarting the relay to run ') + to.slice(0, 7) + (job.steps ? ', ' + stepWords() : '') + '. Every session keeps running, and the new relay takes it back.');
+  setTimeout(async () => {
+    const busy = forced ? [] : whoIsBusy();
+    if (busy.length) {
+      const who = busy.map((w) => w.title + ' (' + w.why + ')').join(', ');
+      if (job.steps) return endLoop(ctx, stoppedBefore('the restart was called off, since ' + who + ' started just before it.'), 'update_called_off');
+      note(ctx, 'The restart was called off, since ' + who + ' started just before it. The relay\'s folder is as it was. Press Update again to wait for the next quiet moment.', channel, 'update_called_off');
+      job = null; return;
+    }
+    try { await fastForward(to); } catch (e) {
+      if (job.steps) return endLoop(ctx, stoppedBefore('the relay\'s folder could not fast-forward to ' + to.slice(0, 7) + ': ' + e.message), 'update_failed');
+      note(ctx, 'The restart was called off, since the relay\'s folder could not fast-forward to ' + to.slice(0, 7) + ': ' + e.message + ' The folder is as it was.', channel, 'update_failed');
+      job = null; return;
+    }
+    if (forced) {
+      const text = 'Forced restart after ' + minutesOf(waited) + ' minutes of waiting, to run ' + to.slice(0, 7) + '. Sessions in a turn: ' + terminal.everyone().filter((t) => t.state === 'working').length + '.';
+      noteForCoo(job.channel || channel, 'update_forced', text);
+      try { fs.mkdirSync(path.dirname(FORCED_FILE), { recursive: true }); fs.writeFileSync(FORCED_FILE, JSON.stringify({ at: new Date().toISOString(), to, waitedMs: waited }) + '\n'); } catch (e) { ctx.log('Could not save the time of the forced restart: ' + e.message); }
+    }
+    if (job.steps) saveLoop(ctx);
+    terminal.close(); process.exit(RESTART);
+  }, 300);
 }
 
 async function update(body, ctx, channel) {
