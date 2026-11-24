@@ -47,9 +47,9 @@ const LOCAL_ADDRS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 function localOnly(req, port) {
   const cf = require('./cf-access.js');
   const site = req.headers['sec-fetch-site'];
+  if (!LOCAL_ADDRS.has(req.socket.remoteAddress)) return 'The terminal only answers this computer.';
   if (cf.ownerHere(req)) return site && site !== 'same-origin' && site !== 'none' ? 'The terminal only answers the room page served by this relay.' : null;
   if (cf.CF_HEADERS.some((h) => req.headers[h] !== undefined)) return 'The terminal does not answer through a tunnel.';
-  if (!LOCAL_ADDRS.has(req.socket.remoteAddress)) return 'The terminal only answers this computer.';
   const host = String(req.headers.host || '').replace(/:\d+$/, '').toLowerCase();
   if (!LOCAL_HOSTS.has(host)) return 'The terminal only answers http://localhost:' + port + ', not ' + host + '.';
   const origin = req.headers.origin;
