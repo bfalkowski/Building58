@@ -456,8 +456,8 @@ async function maybeStart(channel) {
     const waitWip = (message) => { c.idle = 'Waiting for room under the WIP limit: ' + message; };
     const building = tasks.building(channel);
     if (building >= tasks.wipLimit()) { waitWip(building + (building === 1 ? ' task is' : ' tasks are') + ' being built, and the limit is ' + tasks.wipLimit() + '.'); return; }
-    const queued = reviews.deskQueue(channel);
-    if (queued.length) { c.idle = 'Waiting for a free desk: the review of PR ' + number(queued[0]) + ' goes first.'; return; }
+    const queued = reviews.waiting(channel);
+    if (queued.length) { c.idle = 'Waiting for the review of PR ' + number(queued[0]) + ' to start: it goes first.'; return; }
     const wasWaiting = /^Waiting for a free desk/.test(c.idle || '');
     c.idle = null;
     let [status, out] = await tickets.startBy(channel, next, BY, ctx);
@@ -527,7 +527,7 @@ function stalled(channel) {
     const devBusy = dev && ['working', 'quiet', 'waiting', 'job'].includes(livenessOf(dev, Date.now()).state);
     const reviewing = task.pr && terminal.all(channel).some((t) => t.reviewOf === task.pr && livenessOf(t, Date.now()).state !== 'gone');
     const waitsOnCi = rec && /CI|GitHub says|PRs today/.test(rec.why || '');
-    const waitsForDesk = !!task.pr && reviews.deskQueue(channel).includes(task.pr);
+    const waitsForDesk = !!task.pr && reviews.owes(channel, task.pr);
     const stuck = !devBusy && !reviewing && !waitsOnCi && !waitsForDesk;
     const key = channel + ' ' + task.id;
     if (!stuck) { stuckSince.delete(key); continue; }
@@ -537,7 +537,7 @@ function stalled(channel) {
     stuckSince.delete(key);
     const why = 'Nothing moved it for ' + Math.round(STALL_MS() / 60000) + ' minutes' + (rec && rec.why ? ' (' + rec.why + ')' : task.pr ? '' : ': ' + nudge.noPrWhy(channel, chOf(channel), task, dev, Date.now())) + '.';
     const c = chOf(channel);
-    (c.stuck || (c.stuck = {}))[task.id] = { stall: true, sessionId: dev ? dev.sessionId : null, from: task.state, pr: task.pr || null, at: new Date().toISOString() };
+    (c.stuck || (c.stuck = {}))[task.id] = { stall: true, forReview: !!task.pr && why.includes('(' + plan.WAITS_FOR_REVIEW + ')'), sessionId: dev ? dev.sessionId : null, from: task.state, pr: task.pr || null, at: new Date().toISOString() };
     if (rec) handOver(channel, task, rec, why, 'stalled');
     else { handRun(channel, task, 'stalled'); tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why); save(); note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why); }
   }
@@ -577,6 +577,7 @@ function stuckMoved(channel, s) {
 }
 function movedSinceStall(channel, task, s) {
   if (task.pr && !s.pr) return 'its Dev opened PR ' + number(task.pr);
+  if (s.forReview && task.pr && reviews.owes(channel, task.pr)) return 'a review of PR ' + number(task.pr) + ' started';
   const dev = terminal.find(channel, task.owner && task.owner.terminal);
   if (hookedSince(dev, s.at)) return 'its Dev ' + chat.nameOf(dev) + ' moved again';
   const rec = task.pr && chOf(channel).prs[task.pr];
