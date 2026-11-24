@@ -439,6 +439,7 @@ test('an ignored file that turns up while the ticket store answers Clean up is a
   await R.call('POST', '/terminals/' + task.worker.terminal + '/stop', {});
   await until(async () => !(await R.call('GET', '/tasks/' + task.id)).body.task.worker, 'the worker to go');
   await R.call('POST', '/tasks/' + task.id + '/move', { to: 'done' });
+  await until(async () => (await R.call('GET', '/tickets/' + a.id)).body.ticket.status === 'done', 'the ticket to hear the move, so no other read takes the hold');
   fs.writeFileSync(path.join(held, 'armed'), '');
   const cleaning = R.call('POST', '/tasks/' + task.id + '/clean', { ignored: ['.env'] });
   await until(() => fs.existsSync(path.join(held, 'reading')), 'the store to read the ticket');
