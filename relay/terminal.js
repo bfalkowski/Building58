@@ -28,6 +28,10 @@ const ENABLED = process.env.RELAY_TERMINAL === '1';
 const CLAUDE = process.env.CLAUDE_CMD || 'claude';
 const KEEP = 256 * 1024;
 const MAX_TERMINALS = 9;
+const SEAT_DESKS = 2;
+const WORKER_DESKS = MAX_TERMINALS - SEAT_DESKS;
+const seated = (t) => !!(t.lead || t.standing || t.role === 'pm');
+const workersOf = (channel) => all(channel).filter((t) => !t.exited && !seated(t)).length;
 const OUT_BATCH = Number(process.env.RELAY_OUT_BATCH_MS) >= 1 ? Number(process.env.RELAY_OUT_BATCH_MS) : 16;
 const config = require('./config.js');
 const wipLimit = () => config.get('wipLimit');
@@ -136,7 +140,7 @@ const onWork = (fn) => { describeWork = fn; };
 const workOfTerm = (t) => (describeWork ? describeWork(t.channel, t) : null);
 const customTitleOf = (v) => (typeof v === 'string' && v.replace(/\s+/g, ' ').trim().slice(0, 60)) || null;
 function info(t) {
-  return { id: t.id, who: t.who || null, seat: t.seat || null, cwd: t.cwd, from: t.from, project: hook.projectOf(t.cwd), sessionId: t.sessionId, title: t.title, customTitle: t.customTitle || null, task: t.task, role: t.role, pr: t.pr, work: describeWork ? describeWork(t.channel, t) : null, talked: t.talked, lead: !!t.lead, owesBrief: !!t.owesBrief, briefHeld: !!(t.owesBrief && briefHeld(t)), hooksSilent: !!(t.spoke && !t.hooked), board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, lastStart: t.lastStart || null, startedAt: t.startedAt, running: !t.exited, exitCode: t.exitCode, hooks: t.hooks, state: t.state, message: t.message, lastActAt: t.lastActAt, replay: t.outSize, refresh: t.refresh ? t.refresh.phase : null, refreshNote: t.refreshNote || null, tired: leadTired.tiredOf(t), round: t.round || null };
+  return { id: t.id, who: t.who || null, seat: t.seat || null, cwd: t.cwd, from: t.from, project: hook.projectOf(t.cwd), sessionId: t.sessionId, title: t.title, customTitle: t.customTitle || null, task: t.task, role: t.role, pr: t.pr, work: describeWork ? describeWork(t.channel, t) : null, talked: t.talked, lead: !!t.lead, standing: !!t.standing, owesBrief: !!t.owesBrief, briefHeld: !!(t.owesBrief && briefHeld(t)), hooksSilent: !!(t.spoke && !t.hooked), board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, lastStart: t.lastStart || null, startedAt: t.startedAt, running: !t.exited, exitCode: t.exitCode, hooks: t.hooks, state: t.state, message: t.message, lastActAt: t.lastActAt, replay: t.outSize, refresh: t.refresh ? t.refresh.phase : null, refreshNote: t.refreshNote || null, tired: leadTired.tiredOf(t), round: t.round || null };
 }
 
 const LEAD_FILE = state.file('lead.json', 'RELAY_LEAD_FILE');
@@ -228,7 +232,7 @@ const ownsSessionsFile = claim(SESSIONS_FILE);
 let closing = false, savedText = null;
 function keepOf(t) {
   return { sessionId: t.sessionId, seat: t.seat || undefined, who: t.who || undefined, talked: !!t.talked, cwd: t.cwd, from: t.from, title: t.title, customTitle: t.customTitle || undefined, task: t.task, role: t.role, pr: t.pr,
-    lead: !!t.lead, board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, owesBrief: !!t.owesBrief, owesPrompt: t.owesPrompt || undefined, reviewOf: t.reviewOf || undefined, round: t.round || undefined, posted: t.posted || undefined, cols: t.cols, rows: t.rows,
+    lead: !!t.lead, standing: t.standing || undefined, board: !!t.board, merge: !!t.merge, starts: t.starts || 0, startsLeft: t.startsLeft || 0, owesBrief: !!t.owesBrief, owesPrompt: t.owesPrompt || undefined, reviewOf: t.reviewOf || undefined, round: t.round || undefined, posted: t.posted || undefined, cols: t.cols, rows: t.rows,
     terminal: t.id, state: t.state, message: t.message || undefined, waitingAt: t.state === 'waiting' ? t.waitingAt : undefined, hooked: !!t.hooked, heard: !!t.heard, spoke: !!t.spoke, hookAt: t.hookAt || undefined, actAt: t.lastActAt || undefined };
 }
 const FAIL_WITHIN = 10 * 1000, MAX_TRIES = 3;
@@ -353,7 +357,9 @@ function sse(res, event, data) { res.write('event: ' + event + '\ndata: ' + JSON
 function start(channel, body, ctx, onExit, own) {
   const kept = own && own.kept;
   const terms = termsOf(channel), running = [...terms.values()].filter((t) => !t.exited);
+  const seat = !!(own && (own.standing || own.newLead || (kept && (kept.lead || kept.standing)))) || (body.lead === true && !!body.resume) || body.role === 'pm';
   if (running.length >= MAX_TERMINALS) return { status: 409, body: { ok: false, error: 'full', message: 'All ' + MAX_TERMINALS + ' desks are taken. Stop a session first.' } };
+  if (!seat && running.filter((t) => !seated(t)).length >= WORKER_DESKS) return { status: 409, body: { ok: false, error: 'full', message: 'All ' + WORKER_DESKS + ' worker desks are taken. The other ' + SEAT_DESKS + ' are kept for the Lead and the PM. Stop a session first.' } };
   const resume = body.resume ? String(body.resume).trim() : '';
   if (resume && !UUID.test(resume)) return { status: 400, body: { ok: false, error: 'bad_session', message: 'A session id looks like b299ee24-0c4c-4507-afb7-bb2625eeb192.' } };
   if (resume && running.some((t) => t.sessionId === resume)) return { status: 409, body: { ok: false, error: 'running', message: 'That session is already running here.' } };
@@ -379,7 +385,7 @@ function start(channel, body, ctx, onExit, own) {
   if (fresh) clearSavedGrants(channel);
   if (resume) forgetFailed(channel, resume);
   const talked = adopted ? !!adopted.talked : !!resume;
-  const t = { id, channel, cwd, from: body.from || null, title: body.title ? String(body.title).slice(0, 80) : null, task: body.task || null, role: body.role || null, pr: body.pr || null, token, lead, board, merge, starts, startsLeft, talked, spoke: adopted ? !!(adopted.spoke || adopted.talked) : talked, state: 'idle', message: null, drafting: false, sinceKey: null, lastEnterAt: 0, lastActAt: Date.now(), lastOutAt: 0, tail: '', sessionId, startedAt: new Date().toISOString(), hooks: global ? 'global' : 'session', cols, rows,
+  const t = { id, channel, cwd, from: body.from || null, title: body.title ? String(body.title).slice(0, 80) : null, task: body.task || null, role: body.role || null, pr: body.pr || null, token, lead, standing: !!(own && own.standing) || !!(kept && kept.standing), board, merge, starts, startsLeft, talked, spoke: adopted ? !!(adopted.spoke || adopted.talked) : talked, state: 'idle', message: null, drafting: false, sinceKey: null, lastEnterAt: 0, lastActAt: Date.now(), lastOutAt: 0, tail: '', sessionId, startedAt: new Date().toISOString(), hooks: global ? 'global' : 'session', cols, rows,
     io: null, out: [], outSize: 0, viewers: new Set(), exited: false, exitCode: null, pendingOut: [], flush: null, reviewOf: (own && own.reviewOf) || null, round: (own && own.round) || null, posted: null, ending: null };
   if (restoring && resume && !adopted) { t.restoredAt = Date.now(); t.tries = restoring.tries || 0; }
   if (restoring) {
@@ -883,4 +889,4 @@ function agentFor(req) {
 const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited);
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { screenOf, DESKS: MAX_TERMINALS, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, reviewFound, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeSettle, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };
+module.exports = { screenOf, isClosing: () => closing, isUpdating: () => updating(), DESKS: MAX_TERMINALS, WORKER_DESKS, workersOf, seated, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, reviewFound, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeSettle, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };

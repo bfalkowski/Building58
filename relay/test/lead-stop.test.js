@@ -47,7 +47,9 @@ async function office(env) {
   };
   // A task's Dev, briefed and idle, with its task in the state named.
   const dev = async (state) => {
-    const task = (await R.call('POST', '/tasks', { title: 'A task', repo })).body.task;
+    const made = await R.call('POST', '/tasks', { title: 'A task', repo });
+    assert.strictEqual(made.status, 201, JSON.stringify(made.body));
+    const task = made.body.task;
     const s = { id: task.owner.terminal, sessionId: task.owner.sessionId };
     await until(async () => (await R.screen(s.id)).includes('GOT['), 'the task brief');
     await finish(s);
