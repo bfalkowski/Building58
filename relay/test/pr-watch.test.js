@@ -255,3 +255,14 @@ test('a task with no PR is not looked up while the hourly GitHub budget is used 
   await sleep(3000);
   assert.strictEqual(asks(), paused, 'nothing is looked up while paused');
 });
+
+test('a PR found by its branch gets its first review, with the PR watch off', async (t) => {
+  const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
+  const R = o.R, branch = o.task.branch;
+  o.commit(true);
+  fs.writeFileSync(path.join(o.ghDir, 'answers.json'), JSON.stringify({ lists: { [branch]: [{ url: PR, headRefName: branch, isCrossRepository: false }] } }));
+  await until(async () => (await R.call('GET', '/tasks/' + o.task.id)).body.task.pr === PR, 'the task to find its PR by its branch');
+  assert.strictEqual((await o.watch()).on, false);
+  await until(async () => (await o.terminals()).find((x) => x.role === 'reviewer' && x.pr === PR), 'a reviewer for the PR found by its branch');
+  assert.match(R.output(), /found by its branch: its first review\./);
+});

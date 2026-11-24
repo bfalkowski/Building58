@@ -495,6 +495,12 @@ function owe(channel, pr, { from, dev, head }) {
   return 'a follow-up review';
 }
 
+tasks.events.on('found', (channel, task) => {
+  const dev = terminal.find(channel, task.owner && task.owner.terminal);
+  const what = owe(channel, task.pr, { from: (dev && dev.cwd) || task.worktree || task.repo, dev, head: null });
+  if (ctx) ctx.log('PR ' + task.pr + ' found by its branch: ' + what + '.');
+});
+
 function deskOf(channel, pr) {
   const r = pr && recOf(channel, pr);
   const desk = !!(r && deskWaitOf(r)), retry = !desk && !!(r && r.first && r.first.tries);
