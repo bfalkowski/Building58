@@ -699,4 +699,6 @@ function verdictOf(channel, pr) {
 }
 const movesIt = (channel, task) => isOn(channel) && mineTask(task);
 
-module.exports = { handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };
+const runsKept = (channel) => (store[channel] && store[channel].runs) || {};
+
+module.exports = { runsKept, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };

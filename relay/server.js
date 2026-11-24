@@ -42,7 +42,7 @@ const office = SESSIONS ? {
   terminal: require('./terminal.js'), tasks: require('./tasks.js'), checkouts: require('./checkouts.js'), tickets: require('./tickets.js'),
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
-  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'),
+  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), metrics: require('./metrics.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'),
   mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js'), awake: require('./awake.js')
 } : null;
 if (office) {
@@ -52,7 +52,7 @@ if (office) {
   }
 }
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
-const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
+const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'metrics', 'security', 'prWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -437,6 +437,7 @@ server.listen(PORT, HOST, async () => {
     await office.oldRelays.begin({ port: PORT, defaultPort: (ONE && ONE.port) || 8787, host: HOST, world: WORLD, log });
     sessions.restoreAll({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     sessions.startLead(LEAD_CHANNEL, { port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
+    office.metrics.start(LEAD_CHANNEL);
     reviews.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     autopilot.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.update.begin({ port: PORT, key: KEY, log });

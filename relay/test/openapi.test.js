@@ -169,6 +169,7 @@ test('real answers fit their schemas: tickets, tasks, sessions, the Floor, event
   fit('POST /tasks/{id}/move', await R.call('POST', '/tasks/' + task.id + '/move', { to: 'in_review' }));
   fit('GET /terminals', await R.call('GET', '/terminals'));
   fit('GET /floor', await R.call('GET', '/floor'));
+  fit('GET /metrics', await R.call('GET', '/metrics'));
   await R.call('POST', '/events', { events: [{ type: 'worker.doing', who: 'sam' }] });
   const events = fit('GET /events', await R.call('GET', '/events'));
   assert.strictEqual(events.events.length, 1, 'the event posted is in the list');
