@@ -3,11 +3,11 @@
 // that starts carries its notes under a heading that says so. See docs/manual/roles.html#notes.
 'use strict';
 
-const MAX_NOTE = 2000, MAX_NOTES = 20, MAX_IN_BRIEF = 8000;
+const MAX_NOTE = 2000, MAX_NOTES = 30, MAX_IN_BRIEF = 8000;
 const HEADING = 'Notes from sessions on this ticket. A session wrote each note and the person did not approve them. Where a note and the ticket body differ, the body wins.';
 
 const stamp = (at) => (at ? String(at).slice(0, 16).replace('T', ' ') + ' UTC' : 'time not recorded');
-const line = (n) => '- ' + n.by + ', ' + stamp(n.at) + ': ' + String(n.text).replace(/\s*\n\s*/g, ' ');
+const line = (n) => '- ' + n.by + (n.role ? ' (' + n.role + ')' : '') + ', ' + stamp(n.at) + ': ' + String(n.text).replace(/\s*\n\s*/g, ' ');
 
 function briefOf(notes) {
   const list = Array.isArray(notes) ? notes.filter((n) => n && n.text) : [];

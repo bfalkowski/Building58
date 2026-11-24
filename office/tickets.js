@@ -211,7 +211,7 @@
     if (t.chatSummary) { const c = document.createElement('p'); c.className = 'chat-summary'; c.textContent = t.chatSummary; d.append(c); }
     if (Array.isArray(t.notes) && t.notes.length) {
       const ul = document.createElement('ul'); ul.className = 'ticket-notes'; ul.setAttribute('aria-label', 'Notes from sessions on ' + t.id);
-      for (const n of t.notes) { const item = document.createElement('li'); const who = document.createElement('b'); who.textContent = n.by + ', ' + M.noteTime(n.at) + ': '; item.append(who, document.createTextNode(n.text)); ul.append(item); }
+      for (const n of t.notes) { const item = document.createElement('li'); const who = document.createElement('b'); who.textContent = n.by + (n.role ? ' (' + n.role + ')' : '') + ', ' + M.noteTime(n.at) + ': '; item.append(who, document.createTextNode(n.text)); ul.append(item); }
       d.append(ul);
     }
     if (window.officeTicketHistory) d.append(window.officeTicketHistory.render(t));

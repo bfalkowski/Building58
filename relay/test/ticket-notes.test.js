@@ -49,6 +49,7 @@ test('any session adds a note, and the ticket and its approval do not change', a
     const got = (await ticket(a.id)).notes;
     assert.deepStrictEqual(got.map((n) => [n.by, n.text]), [['Worker on Fix it', 'The cause is in x.js.\nRun npm test first.'], ['Reviewer', 'Looks fine to me.']]);
     assert.ok(got.every((n) => !isNaN(Date.parse(n.at))));
+    assert.deepStrictEqual(got.map((n) => n.role), [null, 'reviewer']);
     assert.deepStrictEqual(same(await ticket(a.id)), before, 'title, body, status, priority and approval are as they were');
     assert.strictEqual((await ticket(a.id)).history.filter((h) => h.stage === 'edited').length, 0);
   });
@@ -79,7 +80,9 @@ test('any session adds a note, and the ticket and its approval do not change', a
     const task = (await R.call('GET', '/tasks/' + withNotes.body.task.id)).body.task;
     assert.match(task.brief, /^The first words\.\n\nNotes from sessions on this ticket\. A session wrote each note and the person did not approve them\. Where a note and the ticket body differ, the body wins\. - Worker on Fix it, /);
     assert.match(task.brief, /The cause is in x\.js\. Run npm test first\./);
-    assert.match(task.brief, /- Reviewer, [\d -]+ [\d:]+ UTC: Looks fine to me\./);
+    assert.match(task.brief, /- Reviewer \(reviewer\), [\d -]+ [\d:]+ UTC: Looks fine to me\./);
+    const screen = await H.until(async () => { const t = await R.screen(withNotes.body.task.owner.terminal); return /GOT\[[^\]]*\]/.test(t) && t; }, 'the brief');
+    assert.match(screen.replace(/\s+/g, ''), new RegExp('add it as a note: node'.replace(/\s+/g, '') + '[^\\s]*ticket\\.jsnote' + a.id + '--body-'), 'the Dev is told how to leave a note');
     const none = await filed('Plain');
     const plain = await R.call('POST', '/tickets/' + none.id + '/start', {});
     assert.strictEqual((await R.call('GET', '/tasks/' + plain.body.task.id)).body.task.brief, 'The first words.');

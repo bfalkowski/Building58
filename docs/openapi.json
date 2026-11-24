@@ -3524,7 +3524,7 @@
           "Tickets"
         ],
         "summary": "Add ticket note",
-        "description": "{\"text\"}: adds a note to a ticket at any status, 1 to 2000 characters after the relay cleans the text, up to 20 notes on a ticket (409 notes_full after that). A note never changes the ticket's title, body, status, priority or approval, so a Ready ticket you approved stays approved. The answer's ticket has notes, each with by (who wrote it), at and text. Any session's token can send it, except the COO's and the security officer's. Nothing edits or deletes a note. With the GitHub store a note is an issue comment. See Notes on a ticket.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "{\"text\"}: adds a note to a ticket at any status, 1 to 2000 characters after the relay cleans the text, up to 30 notes on a ticket (409 notes_full after that). A note never changes the ticket's title, body, status, priority or approval, so a Ready ticket you approved stays approved. The answer's ticket has notes, each with by (who wrote it), role (dev, reviewer, pm, lead or null), at and text. Any session's token can send it, except the COO's and the security officer's. Nothing edits or deletes a note. With the GitHub store a note is an issue comment. See Notes on a ticket.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "addTicketNote",
         "x-tokens": [
           "any session"
@@ -4120,6 +4120,13 @@
           "by": {
             "type": "string",
             "description": "Who wrote it, as the relay named them."
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "dev, reviewer, pm, lead or null for the person."
           },
           "at": {
             "type": "string"
