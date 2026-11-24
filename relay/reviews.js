@@ -258,6 +258,13 @@ function deskQueue(channel) {
   return Object.entries(c.prs).filter(([pr, r]) => deskWaitOf(r) && !starting.has(channel + ' ' + pr))
     .sort(([, a], [, b]) => (deskWaitOf(a).at || 0) - (deskWaitOf(b).at || 0)).map(([pr]) => pr);
 }
+function waiting(channel) {
+  const c = store[channel];
+  if (!c || !c.prs) return [];
+  const at = (r) => ((r.first || r.pending).at || 0);
+  return Object.entries(c.prs).filter(([pr, r]) => (r.first || r.pending) && !r.why && !r.failed && !r.waits && !starting.has(channel + ' ' + pr))
+    .sort(([, a], [, b]) => at(a) - at(b)).map(([pr]) => pr);
+}
 const unposted = (channel, pr) => terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr && !t.posted);
 const owesReview = (channel, pr) => { const r = recOf(channel, pr); return !!(r && (r.first || r.pending)) || starting.has(channel + ' ' + pr) || unposted(channel, pr); };
 const deadlocks = new Map(), endingSince = new WeakMap();
@@ -503,4 +510,4 @@ function deskOf(channel, pr) {
 
 const failedOf = (channel, pr) => { const r = pr && recOf(channel, pr); return (r && r.failed) || null; };
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, deskQueue, deskLine, deadlockOf, failedOf };
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owes: (channel, pr) => starting.has(channel + ' ' + pr) || unposted(channel, pr) || waiting(channel).includes(pr), waiting, deskQueue, deskLine, deadlockOf, failedOf };
