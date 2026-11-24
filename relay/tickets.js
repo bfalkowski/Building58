@@ -198,7 +198,7 @@ async function move(channel, ticket, body, agent) {
     const owner = to === 'done' && prOwner(channel, pr, now, all);
     if (owner) return [409, { ok: false, error: 'pr_taken', message: pr + ' is already the PR of ' + owner + ', so it cannot mark ' + now.id + ' done. Give the PR that delivered ' + now.id + '.' }];
     const changes = Object.assign({ status: to }, now.proposal && (to === 'rejected' || to === 'done') ? { proposal: null } : {}, now.closedAs && to === 'triage' ? { closedAs: null, closedFor: null } : {}, to === 'done' ? { pr } : {}, to === 'ready' && now.status === 'started' ? {} : to === 'ready' ? { approvedBy: agent ? 'Lead' : 'you' } : now.status === 'ready' ? { approvedBy: 'none' } : {});
-    const moved = await store.update(channel, now.id, changes, { person: !agent && to === 'ready' && now.status !== 'started' });
+    const moved = await store.update(channel, now.id, changes, { person: !agent });
     if (to === 'done' || to === 'rejected') chat.archiveTicketRoom(channel, now.id, now.createdAt, to === 'done' ? 'the ticket moved to Done' : 'the ticket was rejected');
     else if (now.status === 'rejected') chat.openTicketRoom(channel, chatOf(moved));
     history.add(channel, now, to === 'ready' && now.status !== 'started' ? { stage: 'approved', by: agent ? 'Lead' : 'you' } : { stage: 'moved', from: now.status, to, by: agent ? 'Lead' : 'you' }, agent || null);

@@ -17,6 +17,7 @@ test('a ticket written with key A is read by a relay with key B: Needs you names
   const repo = H.makeRepo(A.home);
   const ready = (await A.call('POST', '/tickets', { title: 'Ready one', repo })).body.ticket;
   const triage = (await A.call('POST', '/tickets', { title: 'Triage one', repo })).body.ticket;
+  const third = (await A.call('POST', '/tickets', { title: 'Third one', repo })).body.ticket;
   assert.strictEqual(ready.approved, true);
   await A.kill();
   const file = path.join(dir, 'state.json'), state = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -31,18 +32,27 @@ test('a ticket written with key A is read by a relay with key B: Needs you names
   const needs = (await B.call('GET', '/needs-you')).body;
   const item = needs.items.find((i) => i.kind === 'ticket-key');
   assert.ok(item, JSON.stringify(needs));
-  assert.match(item.line, /^2 tickets have notes signed with another key: approvals and order are not read\./);
+  assert.match(item.line, /^3 tickets have notes signed with another key: approvals and order are not read\./);
   assert.match(item.line, /RELAY_TICKET_KEY/, 'and it names the fix');
 
-  const order = await B.call('POST', '/tickets/' + ready.id + '/order', { after: triage.id });
+  const bodies = () => JSON.parse(fs.readFileSync(file, 'utf8'))['o/r'].issues.map((i) => i.body);
+  const before = bodies();
+  const order = await B.call('POST', '/tickets/' + ready.id + '/order', { after: third.id });
   assert.notStrictEqual(order.status, 200, 'a new place cannot rewrite a note that does not check');
+  assert.deepStrictEqual(bodies(), before, 'the notes are as they were');
   assert.strictEqual((await B.call('GET', '/needs-you')).body.items.filter((i) => i.kind === 'ticket-key').length, 1, 'and the line stays');
-  const moved = await B.call('POST', '/tickets/' + triage.id + '/move', { to: 'ready' });
-  assert.strictEqual(moved.status, 200, JSON.stringify(moved.body));
-  assert.strictEqual(moved.body.ticket.approved, true, 'the person\'s move approves under key B');
-  const approved = await B.call('POST', '/tickets/approve-ready', { ids: [ready.id] });
-  assert.deepStrictEqual(approved.body.approved, [ready.id]);
-  assert.strictEqual((await B.call('GET', '/tickets/' + ready.id)).body.ticket.approved, true);
+
+  const closed = await B.call('POST', '/tickets/' + third.id + '/move', { to: 'done', pr: 'https://github.com/o/r/pull/3' });
+  assert.strictEqual(closed.status, 200, JSON.stringify(closed.body) + ' a ticket whose note does not check can still be closed');
+  const dropped = await B.call('POST', '/tickets/' + ready.id + '/move', { to: 'rejected' });
+  assert.strictEqual(dropped.status, 200, JSON.stringify(dropped.body));
+  const back = await B.call('POST', '/tickets/' + ready.id + '/move', { to: 'triage' });
+  assert.strictEqual(back.status, 200, JSON.stringify(back.body));
+  for (const id of [ready.id, triage.id]) {
+    const moved = await B.call('POST', '/tickets/' + id + '/move', { to: 'ready' });
+    assert.strictEqual(moved.status, 200, JSON.stringify(moved.body));
+    assert.strictEqual(moved.body.ticket.approved, true, 'the person\'s move approves under key B');
+  }
   const after = (await B.call('GET', '/needs-you')).body;
   assert.strictEqual(after.items.some((i) => i.kind === 'ticket-key'), false, 'Needs you has no line once every note reads');
 });
