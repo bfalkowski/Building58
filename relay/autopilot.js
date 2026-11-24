@@ -242,7 +242,7 @@ function answeredByReview(channel, rec) {
   if (!v || v.kind !== 'merge' || !v.commit || !head || v.commit === head || Date.parse(v.at) <= Date.parse(rec.handedOverAt)) return null;
   return reason === 'dev-says-bug' && !v.newWork ? null : v;
 }
-const dropHandOver = (rec) => { rec.mainMerges = 0; rec.conflictAsks = 1; rec.handedOver = null; rec.handedOverAt = null; rec.handedOverHead = null; rec.handedReason = null; };
+const dropHandOver = (rec) => { plan.clearConflictCount(rec); rec.handedOver = null; rec.handedOverAt = null; rec.handedOverHead = null; rec.handedReason = null; };
 function held(channel, task) {
   const rec = task.pr && chOf(channel).prs[task.pr];
   if (!rec || !rec.handedOver) return task.state === 'waiting_on_you';
@@ -383,7 +383,7 @@ async function askToMergeMain(channel, task, rec, pr, dev) {
     const fresh = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch(() => null);
     if (!fresh || fresh.headRefOid !== pr.headRefOid || fresh.mergeStateStatus !== 'DIRTY') return false;
   }
-  const merged = !same && !!rec.conflictAt && await mergedMain((args) => git(task.worktree, args), rec.conflictAt, pr.headRefOid);
+  const merged = !same && !!rec.conflictAt && !!task.worktree && await mergedMain((args) => git(task.worktree, args), rec.conflictAt, pr.headRefOid);
   const step = plan.conflictStep({ known: !!rec.conflictAt, sameHead: same, dropped, mergedMain: merged, mainMerges: rec.mainMerges || 0, asks: rec.conflictAsks || 1, cap: MAIN_MERGES() });
   if (step.act === 'wait') return false;
   const at = pr.headRefOid.slice(0, 7);

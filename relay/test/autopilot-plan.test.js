@@ -213,3 +213,8 @@ test('two ready PRs that touch docs/openapi.json merge one at a time, each after
   assert.deepStrictEqual(planOf.apiTurn({ ...after, asked: { seq: 1, head: 'h1' }, head: 'h2' }), { act: 'merge', caught: true });
   assert.deepStrictEqual(planOf.apiTurn({ ...after, touches: false }), { act: 'merge' }, 'a PR with no API file is not held');
 });
+test('a card moved back after main kept moving starts the count of merges of main over (T-419)', () => {
+  const rec = planOf.clearConflictCount({ mainMerges: 4, conflictAsks: 2 });
+  assert.deepStrictEqual(rec, { mainMerges: 0, conflictAsks: 1 });
+  assert.strictEqual(planOf.conflictStep({ ...asked, mainMerges: rec.mainMerges }).act, 'ask', 'the next merge of main is the first, not a hand-over');
+});

@@ -68,6 +68,7 @@ function conflictStep({ known, sameHead, dropped, mergedMain, mainMerges, asks, 
   if (mainMerges + 1 >= cap) return { act: 'person', reason: 'main-kept-moving', merges: mainMerges + 1 };
   return { act: 'ask', merges: mainMerges + 1, asks: 1, moved: true };
 }
+function clearConflictCount(rec) { rec.mainMerges = 0; rec.conflictAsks = 1; return rec; }
 function apiTurn({ touches, seen, seq, asked, head, turn, me }) {
   if (!touches || seen === seq) return { act: 'merge' };
   if (asked && asked.seq === seq && asked.head !== head) return { act: 'merge', caught: true };
@@ -134,4 +135,4 @@ function reviewPostFor(comments, { login, since, commit }) {
   return found;
 }
 
-module.exports = { API_FILES, touchesApi, conflictStep, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
