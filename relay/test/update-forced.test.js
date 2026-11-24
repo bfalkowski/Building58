@@ -61,8 +61,7 @@ test('with a session always in a turn, the update restarts after the limit and t
   assert.strictEqual(u.status, 202, JSON.stringify(u.body));
 
   await t.test('it says how long it has waited and when it restarts anyway', async () => {
-    await sleep(1200);
-    const v = (await R.call('GET', '/update')).body.update;
+    const v = await waitFor(async () => { const u = (await R.call('GET', '/update')).body.update; return u && u.restartsAnywayAt && u; }, 'the view to say when it restarts anyway');
     assert.strictEqual(v.state, 'waiting');
     assert.strictEqual(typeof v.waitedMinutes, 'number');
     const at = Date.parse(v.restartsAnywayAt);
@@ -98,7 +97,8 @@ test('merges every few seconds with sessions always busy: forced restarts keep t
   const second = await run();
   const v = (await R.call('GET', '/update')).body.update;
   assert.ok(Date.parse(v.restartsAnywayAt) >= firstAt + 14000, 'the second waits for the batch gap');
-  await sleep(6000);
+  await waitFor(() => Date.now() > Date.parse(v.startedAt) + 2500, 'the limit to pass');
+  assert.strictEqual((await R.call('GET', '/update')).body.update.state, 'waiting');
   assert.strictEqual(await run(), second, 'no restart inside the gap, though the limit has passed');
   const newest = push('4\n');
   assert.ok(newest !== b);

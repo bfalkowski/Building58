@@ -5,7 +5,7 @@
 // folder stays as it was, so the old relay never serves new pages, the global hooks never run new code
 // against the old relay, and calling the restart off leaves nothing behind. The sessions keep running
 // in the session host, and the new relay takes each one back (relay/sessions.js).
-// While it waits, it holds saved messages only for RELAY_UPDATE_HOLD_MS, and it never gives up waiting.
+// While it waits, it holds saved messages only for RELAY_UPDATE_HOLD_MS. After Update waits at most, it restarts anyway.
 // See docs/manual/running.html#update and #update-hold.
 //
 // While RELAY_ROLLBACK=1, it takes main forward one merge at a time instead. A merge that changes no
@@ -45,7 +45,7 @@ let LOADED = null;
 try { LOADED = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: DIR, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch (e) { /* not a git folder: Update says so when pressed */ }
 function rolledBack() { const r = rollback.read().rollback; return r && LOADED && (r.running === LOADED || r.running === rollback.head()) && !rollback.onBranch() ? r : null; }
 const FORCED_FILE = state.file('update-forced.json');
-const GAP_MS = 60000;
+const TOOL_WAIT_MS = 60000;
 const TOOL_STALE_MS = 10 * 60 * 1000;
 const lastForced = () => { try { return Date.parse(JSON.parse(fs.readFileSync(FORCED_FILE, 'utf8')).at) || 0; } catch (e) { return 0; } };
 const WAIT_LIMIT = () => config.get('updateWaitMinutes') * 60 * 1000;
@@ -140,7 +140,7 @@ function restartWhenQuiet(ctx, channel) {
     if (!whoIsBusy().length) return restartNow(ctx, channel, false);
     if (Date.now() < forceAt(job.waitSince)) return;
     job.forcing = job.forcing || Date.now();
-    if (toolOpen() && Date.now() - job.forcing < GAP_MS) return;
+    if (toolOpen() && Date.now() - job.forcing < TOOL_WAIT_MS) return;
     job.fetching = true;
     run(ctx).catch(() => {}).then(() => { if (job) { job.fetching = false; if (job.state === 'waiting') restartNow(ctx, channel, true); } });
   }, 500);
