@@ -43,10 +43,10 @@ test.after(async () => { if (full) await full.stop(); if (bare) await bare.stop(
 
 const metrics = (o, p, query) => p.page.goto('http://127.0.0.1:' + o.R.port + '/office/metrics.html?channel=t&key=test-key' + (query || ''));
 
-pageTest('the room page links to Metrics with its channel and key', () => bare, async (p) => {
+pageTest('the room page links to Metrics with its channel, and the page reads the room with the cookie', () => bare, async (p) => {
   await p.open();
   const href = await p.page.getAttribute('#metrics-link', 'href');
-  assert.strictEqual(href, 'metrics.html?channel=t&key=test-key');
+  assert.strictEqual(href, 'metrics.html?channel=t');
   await p.page.click('#metrics-link');
   await p.page.waitForURL(/metrics\.html/);
   await p.page.waitForSelector('body[data-drawn="7d"]');
@@ -63,7 +63,7 @@ pageTest('with data, each of the 11 charts draws, with a legend where it has mor
     assert.ok((await card.locator('h2').innerText()).length > 0 && (await card.locator('.q').innerText()).length > 0, id + ' has a title and a line that says what it answers');
   }
   for (const id of ['merged', 'per-ticket', 'waits', 'desks', 'pm']) assert.ok(await p.page.locator('#chart-' + id + ' .legend span').count() >= 2, id + ' has a legend');
-  const tiles = await p.page.locator('#tiles .tile .k').allInnerTexts();
+  const tiles = await p.page.locator('#tiles .tile .k').allTextContents();
   assert.deepStrictEqual(tiles, ['Merged', 'Median time per ticket', 'Waiting on you', 'Stalled', 'Merged with no help']);
   assert.strictEqual(await p.page.locator('#tiles .tile .v').first().innerText(), '2');
   assert.deepStrictEqual(p.errors, []);
