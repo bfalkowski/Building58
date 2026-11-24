@@ -290,7 +290,6 @@ test('a PR found by its branch that already has a review record gets no second r
   assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer' && x.pr === PR), 'no second review starts');
 });
 
-// A PR linked with no review record, as after a restart onto code that did not queue one: the switch is off while the hook links it.
 async function linkedUnreviewed(o) {
   const R = o.R;
   assert.strictEqual((await R.call('POST', '/reviews', { auto: false })).status, 200);
@@ -328,4 +327,12 @@ test('a linked PR with no review record and all desks full waits in the desk que
   assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
   await until(async () => ((await o.R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR) || {}).desk === true, 'the review to wait for a desk');
   assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer'), 'no reviewer yet');
+});
+
+test('a linked PR with no review record gets its first review while a check runs', async (t) => {
+  const o = await office(t);
+  await linkedUnreviewed(o);
+  o.answer({ headRefOid: sh(o.wt, 'rev-parse', 'HEAD'), statusCheckRollup: RUNNING });
+  assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
+  await reviewerOf(o);
 });

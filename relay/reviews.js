@@ -486,6 +486,9 @@ function stateOf(channel, pr) {
   if (!r) return switchesOf(channel).auto ? (running ? { head: null, running } : null) : { head: null, running, off: true };
   return { head: r.head || null, running, waits: !!r.waits, failed: !!r.failed, held: !!(r.first || r.pending), off: !switchesOf(channel).auto, red: r.red || null };
 }
+function owesFirst(channel, pr) {
+  return !!ctx && terminal.ENABLED && PR_URL.test(pr) && switchesOf(channel).auto && !reviewing(channel, pr) && !recOf(channel, pr);
+}
 function owe(channel, pr, { from, dev, head }) {
   if (!terminal.ENABLED || !ctx || !PR_URL.test(pr) || !from) return 'no review: nothing to make its checkout from';
   if (reviewing(channel, pr)) return 'a review runs';
@@ -520,4 +523,4 @@ function deskOf(channel, pr) {
 
 const failedOf = (channel, pr) => { const r = pr && recOf(channel, pr); return (r && r.failed) || null; };
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf };
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf };
