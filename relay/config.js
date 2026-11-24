@@ -49,6 +49,8 @@ const SETTINGS = [
     what: 'If this many reviews in a row still ask for fixes, Autopilot stops and puts the task in Waiting on you.' },
   { name: 'autopilotMerges', group: 'Autopilot', label: 'Merges a day', unit: 'merges', def: 10, min: 1, max: 50,
     what: 'The most PRs that Autopilot merges in one day. After that, a PR that is ready waits for you or for the next day.' },
+  { name: 'autopilotMainMerges', group: 'Autopilot', label: 'Merges of main in a row', unit: 'merges', def: 4, min: 1, max: 20,
+    what: 'A Dev that merges main as asked is not failing when main moves again and the PR conflicts again. Autopilot asks again. If this many merges of main in a row each conflicted again, it puts the task in Waiting on you and says main kept moving.' },
   { name: 'autopilotAtOnce', group: 'Autopilot', label: 'Tickets at once', unit: 'tickets', env: 'RELAY_AUTOPILOT_AT_ONCE', def: 1, min: 1, max: 5,
     what: 'How many tasks Autopilot works on at the same time. The WIP limit also applies.' },
   { name: 'autopilotStallMinutes', group: 'Autopilot', label: 'Give you a stuck task after', unit: 'minutes', env: 'RELAY_AUTOPILOT_STALL_MS', scale: 1 / 60000, def: 30, min: 5, max: 1440,
