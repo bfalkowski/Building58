@@ -44,6 +44,15 @@ test('The relay key cookie', async (t) => {
       assert.strictEqual((await at('/channels/t', h)).status, 401);
     }
   });
+  await t.test('a page load with a wrong cookie clears it, and one with the right cookie or none does not', async () => {
+    const wrong = await at('/office/index.html', { Cookie: name + '=old' });
+    assert.strictEqual(wrong.status, 200);
+    const clear = wrong.headers.get('set-cookie') || '';
+    assert.ok(clear.startsWith(name + '=;') && /;\s*Max-Age=0/.test(clear) && /;\s*HttpOnly/.test(clear));
+    assert.strictEqual((await at('/office/index.html', { Cookie: cookie })).headers.get('set-cookie'), null);
+    assert.strictEqual((await at('/office/index.html')).headers.get('set-cookie'), null);
+    assert.strictEqual((await at('/office/index.html', { Cookie: 'relay_key_1=old' })).headers.get('set-cookie'), null);
+  });
   await t.test('the redirect keeps the other parameters, and only a page gets one', async () => {
     const r = await at('/office/index.html?a=1&key=test-key&b=2');
     assert.strictEqual(r.headers.get('location'), '/office/index.html?a=1&b=2');
