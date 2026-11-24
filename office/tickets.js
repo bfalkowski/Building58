@@ -44,7 +44,7 @@
   const url = (p) => base + '/tickets' + p + '?key=' + encodeURIComponent(key);
   function api(p, body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
-    return fetch(url(p), opt).then((r) => r.json()).catch(() => ({ ok: false, error: 'no_answer', message: 'The relay did not answer.' }));
+    return fetch(url(p), opt).then((r) => r.text().then((t) => { try { return JSON.parse(t); } catch (e) { return { ok: false, error: 'not_json', message: 'The relay answered with a page, not JSON (' + r.status + '). On the public page your sign-in may have run out: reload it.' }; } }), () => ({ ok: false, error: 'no_answer', message: 'The relay did not answer.' }));
   }
   function floor() {
     return fetch(base + '/floor?key=' + encodeURIComponent(key)).then((r) => r.json()).catch(() => null).then((r) => (r && r.ok ? r.sessions : []));
