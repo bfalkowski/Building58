@@ -27,7 +27,7 @@ pageTest('Activity is its own panel, and the people fill the Floor', () => o, as
 const box = (page, sel) => page.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { top: r.top + scrollY, bottom: r.bottom + scrollY, height: r.height }; }, sel);
 const lined = async (page) => { const f = await box(page, '.floor'), c = await box(page, '.cc'); assert.ok(Math.abs(f.bottom - c.bottom) <= 2, 'Floor bottom ' + f.bottom + ' and Claude Code bottom ' + c.bottom); };
 const needs = (n) => ({ ok: true, at: new Date().toISOString(), count: n, items: Array.from({ length: n }, (_, i) => ({ kind: 'permission', who: 'w' + i, terminal: null, task: null, ticket: null, pr: null, line: 'Approve or deny the request number ' + i + ' from a worker', link: null })) });
-const longList = async (page) => { await page.route(/\/needs-you\?/, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(needs(15)) })); await page.locator('#needs-you-list li:nth-child(15)').waitFor(); };
+const longList = async (page) => { await page.route(/\/needs-you(\?|$)/, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(needs(15)) })); await page.locator('#needs-you-list li:nth-child(15)').waitFor(); };
 const peopleOk = async (page) => {
   const rows = await page.evaluate(() => { const list = document.getElementById('people'), r = list.getBoundingClientRect(); return [...list.children].filter((li) => { const b = li.getBoundingClientRect(); return b.top >= r.top - 1 && b.bottom <= r.bottom + 1; }).length; });
   const total = await page.locator('#people li').count();

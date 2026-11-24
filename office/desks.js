@@ -7,10 +7,10 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   const allBtn = $('stop-safe'), note = $('stop-note');
   if (!channel || !allBtn) return;
-  const at = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + p + '?key=' + encodeURIComponent(key);
+  const at = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + p;
   let desks = {}, busy = false;
   const gone = document.createElement('p'), goneText = document.createElement('span'), goneBtn = document.createElement('button');
   gone.className = 'cc-ask'; gone.id = 'lead-gone'; gone.setAttribute('role', 'status'); gone.hidden = true;

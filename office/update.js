@@ -13,10 +13,10 @@
   const $ = (id) => document.getElementById(id);
   const btn = $('cc-update'), offBtn = $('cc-update-off'), note = $('cc-update-note');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!channel || !btn) return;
 
-  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/update?key=' + encodeURIComponent(key);
+  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/update';
   function api(body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url, opt).then((r) => r.json().then((j) => Object.assign({ status: r.status }, j)), () => null).catch(() => null);
