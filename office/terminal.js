@@ -8,7 +8,7 @@
   const box = $('cc-term'), form = $('cc-form'), cwdIn = $('cc-cwd'), resumeIn = $('cc-resume'), startBtn = $('cc-start'), stopBtn = $('cc-stop');
   const status = $('cc-status'), note = $('cc-note'), title = $('cc-title');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
 
   function say(text, state) { status.textContent = text; status.dataset.state = state || ''; }
   let heldUntil = 0;
@@ -17,7 +17,7 @@
   if (!channel) { off('Needs a relay. To run Claude Code here, start the room with the relay on your own computer: RELAY_KEY=pick-a-key npm run office, then open the link it prints.'); return; }
   if (!window.Terminal || !window.FitAddon) { off('The terminal library did not load, so the panel is off. Check the network and reload.'); return; }
 
-  const url = (p, area) => location.origin + '/channels/' + encodeURIComponent(channel) + (area || '/terminals') + p + '?key=' + encodeURIComponent(key);
+  const url = (p, area) => location.origin + '/channels/' + encodeURIComponent(channel) + (area || '/terminals') + p;
   function api(p, body, area) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url(p, area), opt).then((r) => r.json().then((j) => Object.assign({ status: r.status }, j)), () => ({ ok: false, message: 'The relay did not answer.' }))

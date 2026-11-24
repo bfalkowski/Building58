@@ -9,7 +9,7 @@
   const section = $('games');
   if (!section) return;
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!channel) { section.hidden = true; return; }
 
   const list = $('game-list'), form = $('game-form'), pick = $('game-pick'), seatsIn = $('game-seats-n'), seedIn = $('game-seed');
@@ -20,10 +20,10 @@
   const aboutBox = $('game-about'), doneNote = $('game-done');
   const stepsBox = $('game-steps'), stepRows = $('game-step-rows');
 
-  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + p + '?key=' + encodeURIComponent(key);
+  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + p;
   function api(p, body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
-    return fetch(url(p), opt).then((r) => r.json()).catch(() => ({ ok: false, message: 'The relay did not answer.' }));
+    return fetch(url(p), opt).then((r) => r.text().then((t) => { try { return JSON.parse(t); } catch (e) { return { ok: false, message: 'The relay answered with a page, not JSON (' + r.status + '). On the public page your sign-in may have run out: reload it.' }; } }), () => ({ ok: false, message: 'The relay did not answer.' }));
   }
   const say = (text, bad) => { note.textContent = text || ''; note.dataset.bad = bad ? '1' : ''; };
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };

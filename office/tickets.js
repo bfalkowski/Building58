@@ -21,7 +21,7 @@
   const filterText = $('board-filter-text'), filterRepo = $('board-filter-repo'), filterPriority = $('board-filter-priority'), filterLabel = $('board-filter-label');
   const groupPick = $('board-group-by');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   function problem(text) {
     if (!status) return;
     status.textContent = text || ''; status.hidden = !text;
@@ -35,16 +35,16 @@
   }
 
   const tab = $('board-tab');
-  if (tab) tab.href = 'board.html?channel=' + encodeURIComponent(channel) + (key ? '&key=' + encodeURIComponent(key) : '');
+  if (tab) tab.href = 'board.html?channel=' + encodeURIComponent(channel);
 
   const base = location.origin + '/channels/' + encodeURIComponent(channel);
-  const url = (p) => base + '/tickets' + p + '?key=' + encodeURIComponent(key);
+  const url = (p) => base + '/tickets' + p;
   function api(p, body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
-    return fetch(url(p), opt).then((r) => r.json()).catch(() => ({ ok: false, error: 'no_answer', message: 'The relay did not answer.' }));
+    return fetch(url(p), opt).then((r) => r.text().then((t) => { try { return JSON.parse(t); } catch (e) { return { ok: false, error: 'not_json', message: 'The relay answered with a page, not JSON (' + r.status + '). On the public page your sign-in may have run out: reload it.' }; } }), () => ({ ok: false, error: 'no_answer', message: 'The relay did not answer.' }));
   }
   function floor() {
-    return fetch(base + '/floor?key=' + encodeURIComponent(key)).then((r) => r.json()).catch(() => null).then((r) => (r && r.ok ? r.sessions : []));
+    return fetch(base + '/floor').then((r) => r.json()).catch(() => null).then((r) => (r && r.ok ? r.sessions : []));
   }
   const POLL_MS = full ? 2000 : 10000;
   const say = (text, bad) => { note.textContent = text || ''; note.dataset.bad = bad ? '1' : ''; };
@@ -411,7 +411,7 @@
   }
   const redraw = () => { if (lastR) draw(lastR); };
   function why(r) {
-    if (r.error === 'unauthorized') return 'The relay did not accept the key in this tab\'s address. Open the tab again from the room page\'s Board.';
+    if (r.error === 'unauthorized') return 'The relay did not accept this tab. Open the tab again from the room page\'s Board.';
     if (r.error === 'no_answer') return 'The relay is not answering. Start it with npm run office. This tab tries again every ' + POLL_MS / 1000 + ' seconds.';
     return r.message || 'The relay could not list the tickets.';
   }

@@ -7,7 +7,7 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!channel) return;
 
   function officer(base, name, writing) {
@@ -17,10 +17,10 @@
     const leave = () => { if (dlg && dlg.open) dlg.close(); };
     const when = (at) => new Date(at).toDateString() === new Date().toDateString() ? new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : new Date(at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const url = (verb) => location.origin + '/channels/' + encodeURIComponent(channel) + '/officers/' + base + (verb ? '/' + verb : '') + '?key=' + encodeURIComponent(key);
+    const url = (verb) => location.origin + '/channels/' + encodeURIComponent(channel) + '/officers/' + base + (verb ? '/' + verb : '');
     function api(verb, body) {
       const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
-      return fetch(url(verb), opt).then((r) => r.json()).catch(() => ({ ok: false, message: 'The relay did not answer.' }));
+      return fetch(url(verb), opt).then((r) => r.text().then((t) => { try { return JSON.parse(t); } catch (e) { return { ok: false, message: 'The relay answered with a page, not JSON (' + r.status + '). On the public page your sign-in may have run out: reload it.' }; } }), () => ({ ok: false, message: 'The relay did not answer.' }));
     }
     let last = null, shownId = null, pressing = false;
     function open(on) {

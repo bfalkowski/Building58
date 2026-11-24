@@ -6,7 +6,8 @@
 //   node relay/move-tickets.js --to owner/repo [--state <folder>] [--channel office] [--folder <repo folder>] [--dry-run]
 //
 // --state is the room's state folder (default ~/.office-world). The issues are signed with the key in that
-// folder (github-store.key), so the room that reads them must use the same folder or a copy of that key.
+// folder (github-store.key), so the room that reads them must use the same folder or a copy of that key. RELAY_TICKET_KEY in the environment wins over the key file, and is the same on
+// every machine that runs the room.
 // --folder is the repo folder the moved tickets are worked in, for each one, in place of what it had.
 //
 // What it does, in order, and it stops before writing anything if the first step finds a problem:
