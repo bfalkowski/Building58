@@ -93,16 +93,36 @@ test('outcomes count each result, with the top reasons', () => {
 
 test('stalls by kind, with the hours each cost', () => {
   const d = plan.build(INPUT), by = Object.fromEntries(d.stalls.kinds.map((k) => [k.kind, k]));
-  assert.deepStrictEqual([by.silent.count, by.silent.hours], [1, 2], 'a quiet spell is not a stall');
-  assert.deepStrictEqual([by.no_first_review.count, by.no_first_review.hours], [2, 2.5], 'a reviewer that did not start for 2 hours, and a first review that waited 30 minutes');
-  assert.strictEqual(by.desks_full.count, 1);
-  assert.strictEqual(by.desks_full.hours, round(10 / 60), 'two samples in a row with no free desk are one spell of 10 minutes');
-  assert.strictEqual(by.main_red.count, 1);
-  assert.strictEqual(by.main_red.hours, round(10 / 60));
-  assert.strictEqual(d.numbers.stalledHours, round(d.stalls.kinds.reduce((a, k) => a + k.hours, 0)));
-  assert.deepStrictEqual(d.stalls.kinds.map((k) => k.hours), [...d.stalls.kinds.map((k) => k.hours)].sort((a, b) => b - a), 'the biggest cost first');
+  assert.deepStrictEqual([by.silent.detected.count, by.silent.detected.hours], [1, 2], 'a quiet spell is not a stall');
+  assert.deepStrictEqual([by['no-first-review'].detected.count, by['no-first-review'].detected.hours], [2, 2.5], 'a reviewer that did not start for 2 hours, and a first review that waited 30 minutes');
+  assert.strictEqual(by['desks-full'].detected.count, 1);
+  assert.strictEqual(by['desks-full'].detected.hours, round(10 / 60), 'two samples in a row with no free desk are one spell of 10 minutes');
+  assert.strictEqual(by['main-red'].detected.count, 1);
+  assert.strictEqual(by['main-red'].detected.hours, round(10 / 60));
+  assert.strictEqual(d.numbers.stalledHours, round(d.stalls.kinds.reduce((a, k) => a + k.detected.hours, 0)));
+  const cost = d.stalls.kinds.map((k) => k.detected.hours + k.hand.hours);
+  assert.deepStrictEqual(cost, [...cost].sort((a, b) => b - a), 'the biggest cost first');
 });
 const round = (n) => Math.round(n * 10) / 10;
+
+test('Stalls by kind counts the jams fixed by hand next to the detected ones, per kind, with hours from since to when it was logged', () => {
+  const jams = [
+    { at: iso(ago(1)), kind: 'no-first-review', since: iso(ago(3)), fix: 'x', by: 'you' },
+    { at: iso(ago(2)), kind: 'no-first-review', since: null, fix: 'x', by: 'you' },
+    { at: iso(ago(4)), kind: 'tunnel-down', since: iso(ago(5)), fix: 'x', by: 'you' },
+    { at: iso(ago(200)), kind: 'tunnel-down', since: iso(ago(201)), fix: 'x', by: 'you' },
+    { at: iso(ago(1)), kind: 'not-a-kind', since: null, fix: 'x', by: 'you' }
+  ];
+  const by = (range) => Object.fromEntries(plan.build({ ...INPUT, jams, range }).stalls.kinds.map((k) => [k.kind, k]));
+  const week = by('7d');
+  assert.deepStrictEqual(week['no-first-review'].hand, { count: 2, hours: 2 });
+  assert.deepStrictEqual(week['no-first-review'].detected, { count: 2, hours: 2.5 });
+  assert.deepStrictEqual(week['tunnel-down'].hand, { count: 1, hours: 1 }, 'the jam from 200 hours ago is outside 7 days');
+  assert.strictEqual(week['not-a-kind'], undefined);
+  assert.strictEqual(plan.build({ ...INPUT, jams }).numbers.jamsFixedByHand, 3, 'the number counts the kinds the log knows, the old one excluded');
+  assert.deepStrictEqual(by('30d')['tunnel-down'].hand, { count: 2, hours: 2 });
+  assert.deepStrictEqual(by('1d')['no-first-review'].hand, { count: 2, hours: 2 });
+});
 
 test('waits on you: how many each day, how long, and why', () => {
   const d = plan.build(INPUT);
@@ -186,7 +206,7 @@ test('the CSV has one row for each number, with a header, and quotes what needs 
   assert.ok(lines.includes('numbers,,,merged,2'));
   assert.ok(lines.some((l) => l.startsWith('time_per_ticket,') && l.includes(',T-1,')));
   assert.ok(lines.includes('review_rounds,,2,prs,1'));
-  assert.ok(lines.includes('stalls,,silent,hours,2'));
+  assert.ok(lines.includes('stalls,,silent,detected_hours,2'));
 });
 
 test('a range that is not 1d, 7d or 30d is not one', () => {

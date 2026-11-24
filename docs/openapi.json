@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.6.0",
+    "version": "2.7.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -57,6 +57,10 @@
     {
       "name": "Huddle",
       "description": "A question to the idle sessions, and the report of their answers."
+    },
+    {
+      "name": "Jams",
+      "description": "The jam log: stalls the person fixed by hand, which the Metrics page counts."
     },
     {
       "name": "Metrics",
@@ -1135,6 +1139,90 @@
             }
           }
         }
+      }
+    },
+    "/channels/{channel}/jams": {
+      "post": {
+        "tags": [
+          "Jams"
+        ],
+        "summary": "Log jam",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. Writes one jam you fixed by hand, {\"kind\", \"fix\", \"ticket\", \"pr\", \"since\", \"by\"}. kind is one of no-first-review, desks-full, news-untold, handed-over, waits-on-state, person-merge, merged-not-done, no-new-commit, main-red, signing-key, workflows-push, dev-idle, tunnel-down or other, and fix is one line of up to 200 characters. ticket and pr are ids with no spaces, since is when it got stuck (an ISO time, not in the future), and by is you unless given. Anything else is 400 bad_param. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "logJam",
+        "x-tokens": [],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JamOne"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewJam"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Jams"
+        ],
+        "summary": "List jams",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. ?range=1d|7d|30d (7d by default, anything else is 400 bad_param) lists the jams logged in the range, oldest first, each with at (when it was logged), kind, ticket, pr, since, fix and by, and kinds gives each kind's name. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "listJams",
+        "x-tokens": [],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JamList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
       }
     },
     "/channels/{channel}/metrics": {
@@ -5004,6 +5092,162 @@
         ],
         "additionalProperties": true
       },
+      "NewJam": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "no-first-review",
+              "desks-full",
+              "news-untold",
+              "handed-over",
+              "waits-on-state",
+              "person-merge",
+              "merged-not-done",
+              "no-new-commit",
+              "main-red",
+              "signing-key",
+              "workflows-push",
+              "dev-idle",
+              "tunnel-down",
+              "other"
+            ]
+          },
+          "ticket": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Optional: the ticket, such as T-5."
+          },
+          "pr": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Optional: the PR's address."
+          },
+          "since": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Optional: when it got stuck, an ISO time."
+          },
+          "fix": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "One line: what fixed it."
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Optional: who fixed it. you by default."
+          }
+        },
+        "required": [
+          "kind",
+          "fix"
+        ],
+        "additionalProperties": true,
+        "examples": [
+          {
+            "kind": "no-first-review",
+            "ticket": "T-5",
+            "since": "2026-11-24T10:00:00.000Z",
+            "fix": "Pressed Get a review.",
+            "by": "you"
+          }
+        ]
+      },
+      "Jam": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "ticket": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pr": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "since": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fix": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "kind",
+          "fix",
+          "by"
+        ],
+        "additionalProperties": true
+      },
+      "JamOne": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "jam": {
+            "$ref": "#/components/schemas/Jam"
+          }
+        },
+        "required": [
+          "ok",
+          "jam"
+        ],
+        "additionalProperties": true
+      },
+      "JamList": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "range": {
+            "type": "string",
+            "enum": [
+              "1d",
+              "7d",
+              "30d"
+            ]
+          },
+          "keptDays": {
+            "type": "number"
+          },
+          "kinds": {
+            "type": "object"
+          },
+          "jams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Jam"
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "range",
+          "jams"
+        ],
+        "additionalProperties": true
+      },
       "Metrics": {
         "type": "object",
         "properties": {
@@ -5056,12 +5300,16 @@
                   "number",
                   "null"
                 ]
+              },
+              "jamsFixedByHand": {
+                "type": "number"
               }
             },
             "required": [
               "merged",
               "waitingOnYouHours",
-              "stalledHours"
+              "stalledHours",
+              "jamsFixedByHand"
             ],
             "additionalProperties": true
           },
@@ -5194,12 +5442,46 @@
                     },
                     "hours": {
                       "type": "number"
+                    },
+                    "detected": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "number"
+                        },
+                        "hours": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "hours"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "hand": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "number"
+                        },
+                        "hours": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "hours"
+                      ],
+                      "additionalProperties": true
                     }
                   },
                   "required": [
                     "kind",
                     "count",
-                    "hours"
+                    "hours",
+                    "detected",
+                    "hand"
                   ],
                   "additionalProperties": true
                 }

@@ -17,11 +17,13 @@ const TOP_REASONS = 5;
 
 const PARTS = { building: 'Building', waiting_review: 'Waiting for a review', in_review: 'In review', fixing: 'Fixing', waiting_you: 'Waiting on you' };
 const WAIT_REASONS = { merge: 'Merge', rounds: 'Review rounds', protected: 'Protected file', question: 'Question', other: 'Other' };
-const STALLS = {
-  no_first_review: 'No first review', desks_full: 'Desks full', news_untold: 'Review news untold', dev_stopped: 'Dev stopped with no PR',
-  main_red: 'Main red', silent: 'Session silent', not_started: 'Session did not start on its brief', brief: 'Brief not delivered', other: 'Other'
+const JAM_KINDS = {
+  'no-first-review': 'No first review', 'desks-full': 'Desks full', 'news-untold': 'Review news untold', 'handed-over': 'Handed over',
+  'waits-on-state': 'Waits on state', 'person-merge': 'Waits on a person merge', 'merged-not-done': 'Merged, not done', 'no-new-commit': 'No new commit',
+  'main-red': 'Main red', 'signing-key': 'Signing key', 'workflows-push': 'Workflows push', 'dev-idle': 'Dev idle', 'tunnel-down': 'Tunnel down', other: 'Other'
 };
-const BLOCKED_KIND = { 'reviewer-not-started': 'no_first_review', 'dev-gone': 'dev_stopped', 'brief-not-delivered': 'brief', 'conflict-dropped': 'other' };
+const STALLS = Object.assign({}, JAM_KINDS, { 'dev-stopped': 'Dev stopped with no PR', silent: 'Session silent', 'not-started': 'Not started on its brief', 'brief-lost': 'Brief not delivered' });
+const BLOCKED_KIND = { 'reviewer-not-started': 'no-first-review', 'dev-gone': 'dev-stopped', 'brief-not-delivered': 'brief-lost', 'conflict-dropped': 'other' };
 
 const idOf = (x) => (typeof x === 'string' && /^[\w.:/#-]{1,200}$/.test(x) ? x : null);
 const ms = (iso) => Date.parse(iso);
@@ -172,7 +174,7 @@ function stallsOf(input, from, now) {
   for (const e of input.events || []) {
     const at = ms(e.at), end = e.endedAt ? ms(e.endedAt) : now;
     if (e.kind === 'stall') add('silent', at, end - at);
-    else if (e.kind === 'not_started') add('not_started', at, end - at);
+    else if (e.kind === 'not_started') add('not-started', at, end - at);
     else if (e.kind === 'crash') add('other', at, 0);
   }
   for (const run of runs) {
@@ -181,7 +183,7 @@ function stallsOf(input, from, now) {
     else if (run.blocked && ['stalled'].includes(run.blocked.reason)) add('other', ms(run.blocked.at), end - ms(run.blocked.at));
     if (run.handed && run.handed.reason === 'news-untold') {
       const last = (run.verdicts || []).map((v) => ms(v.at)).sort((a, b) => b - a)[0] || ms(run.handed.at);
-      add('news_untold', ms(run.handed.at), ms(run.handed.at) - last);
+      add('news-untold', ms(run.handed.at), ms(run.handed.at) - last);
     }
   }
   const lost = new Set(runs.filter((r) => r.blocked && r.blocked.reason === 'reviewer-not-started').map((r) => r.task));
@@ -190,13 +192,22 @@ function stallsOf(input, from, now) {
     const entry = (task.history || []).find((x) => x.type === 'moved' && x.to === 'in_review');
     if (!entry) continue;
     const first = startsOf(reviews, task.pr).find((x) => x >= ms(entry.at));
-    if (first && first - ms(entry.at) > WAIT_MINUTES * 60000) add('no_first_review', ms(entry.at), first - ms(entry.at));
+    if (first && first - ms(entry.at) > WAIT_MINUTES * 60000) add('no-first-review', ms(entry.at), first - ms(entry.at));
   }
-  for (const s of spells(input.desks || [], from, (r) => r[5] === 0)) add('desks_full', s.at, s.millis);
-  for (const s of spells(input.desks || [], from, (r) => r[6] > 0)) add('main_red', s.at, s.millis);
+  for (const s of spells(input.desks || [], from, (r) => r[5] === 0)) add('desks-full', s.at, s.millis);
+  for (const s of spells(input.desks || [], from, (r) => r[6] > 0)) add('main-red', s.at, s.millis);
   const kinds = {};
-  for (const s of out) { const k = kinds[s.kind] || (kinds[s.kind] = { kind: s.kind, label: STALLS[s.kind], count: 0, millis: 0 }); k.count++; k.millis += s.millis; }
-  return Object.values(kinds).map((k) => ({ kind: k.kind, label: k.label, count: k.count, hours: hours(k.millis) })).sort((a, b) => b.hours - a.hours || b.count - a.count || (a.kind < b.kind ? -1 : 1));
+  const row = (kind) => kinds[kind] || (kinds[kind] = { kind, label: STALLS[kind], detected: { count: 0, millis: 0 }, hand: { count: 0, millis: 0 } });
+  for (const s of out) { const r = row(s.kind).detected; r.count++; r.millis += s.millis; }
+  for (const j of input.jams || []) {
+    const at = ms(j.at);
+    if (at < from || !Object.hasOwn(JAM_KINDS, j.kind)) continue;
+    const r = row(j.kind).hand;
+    r.count++; r.millis += j.since ? Math.max(0, at - ms(j.since)) : 0;
+  }
+  const side = (x) => ({ count: x.count, hours: hours(x.millis) });
+  return Object.values(kinds).map((k) => ({ kind: k.kind, label: k.label, detected: side(k.detected), hand: side(k.hand), count: k.detected.count, hours: hours(k.detected.millis) }))
+    .sort((a, b) => (b.detected.hours + b.hand.hours) - (a.detected.hours + a.hand.hours) || (b.detected.count + b.hand.count) - (a.detected.count + a.hand.count) || (a.kind < b.kind ? -1 : 1));
 }
 
 function outcomesOf(runs, from) {
@@ -241,6 +252,7 @@ function build(input) {
     numbers: {
       merged: items.length, medianMinutes: median(items.map((x) => x.minutes)), waitingOnYouHours: hours(waits.reduce((a, w) => a + w.millis, 0)),
       stalledHours: round1(stalls.reduce((a, s) => a + s.hours, 0)),
+      jamsFixedByHand: (input.jams || []).filter((j) => ms(j.at) >= from && Object.hasOwn(JAM_KINDS, j.kind)).length,
       noHelpShare: withRun.length ? round1((withRun.filter((x) => runsOf.outcomeOf(x.run) === 'success').length / withRun.length) * 100) : null
     },
     merged: { days: mergedDays },
@@ -266,7 +278,7 @@ function csv(data) {
   for (const p of Object.keys(data.where.parts)) add('where_the_time_went', '', '', p, data.where.minutes[p]);
   for (const [o, n] of Object.entries(data.outcomes.counts)) add('outcomes', '', '', o, n);
   for (const [o, list] of Object.entries(data.outcomes.reasons)) for (const r of list) add('outcome_reasons', '', r.reason, o, r.count);
-  for (const s of data.stalls.kinds) { add('stalls', '', s.kind, 'count', s.count); add('stalls', '', s.kind, 'hours', s.hours); }
+  for (const s of data.stalls.kinds) for (const side of ['detected', 'hand']) { add('stalls', '', s.kind, side + '_count', s[side].count); add('stalls', '', s.kind, side + '_hours', s[side].hours); }
   for (const d of data.waits.days) for (const r of Object.keys(data.waits.reasons)) add('waits_on_you', d.day, '', r, d[r]);
   for (const w of data.waits.items) add('wait_minutes', w.at, w.reason, 'minutes', w.minutes);
   for (const r of data.rounds.prs) add('review_rounds', '', r.rounds, 'prs', r.count);
@@ -276,4 +288,4 @@ function csv(data) {
   return rows.map((r) => r.map(cell).join(',')).join('\n') + '\n';
 }
 
-module.exports = { build, csv, take, prune, noteReview, shape, blank, rangeOf, KEEP_DAYS, EVERY_MS, RANGES, PARTS, STALLS, WAIT_REASONS, WAIT_MINUTES };
+module.exports = { JAM_KINDS, build, csv, take, prune, noteReview, shape, blank, rangeOf, KEEP_DAYS, EVERY_MS, RANGES, PARTS, STALLS, WAIT_REASONS, WAIT_MINUTES };

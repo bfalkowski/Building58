@@ -119,18 +119,23 @@
   }
 
   function hBars(c, rows, fmt, color) {
-    var W = c.W, narrow = W < 460, rowH = narrow ? 42 : 26, L = narrow ? 0 : Math.min(190, Math.round(W * 0.36)), H = rows.length * rowH + 6;
-    var max = Math.max.apply(null, rows.map(function (r) { return r.v; }).concat([0])) * 1.15 || 1;
+    var W = c.W, narrow = W < 460, pair = rows.some(function (r) { return r.v2 !== undefined; });
+    var barH = narrow ? 14 : 12, rowH = (narrow ? 42 : 26) + (pair ? barH + 2 : 0), L = narrow ? 0 : Math.min(190, Math.round(W * 0.36)), H = rows.length * rowH + 6;
+    var max = Math.max.apply(null, rows.map(function (r) { return Math.max(r.v, r.v2 || 0); }).concat([0])) * 1.15 || 1;
     var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': c.querySelector('h2').textContent }, c);
     rows.forEach(function (r, i) {
-      var y = i * rowH + 4, room = W - L - 56, w = (r.v / max) * room, by = narrow ? y + 18 : y + 4;
+      var y = i * rowH + 4, room = W - L - 56, by = narrow ? y + 18 : y + 4;
       var hl = el('rect', { x: 0, y: y, width: W, height: rowH - 2, class: 'hl' }, svg);
       if (narrow) el('text', { x: 2, y: y + 12, class: 'lbl' }, svg).textContent = r.k;
-      else el('text', { x: L - 8, y: y + 16, 'text-anchor': 'end', class: 'lbl' }, svg).textContent = r.k;
-      el('rect', { x: L, y: by, width: Math.max(2, w), height: narrow ? 14 : rowH - 10, rx: 3, fill: r.c || color || SERIES[0], class: 'mark', 'data-series': r.k }, svg);
-      el('text', { x: L + Math.max(2, w) + 6, y: by + (narrow ? 11 : 12) }, svg).textContent = fmt(r.v);
+      else el('text', { x: L - 8, y: y + (pair ? 14 : 16), 'text-anchor': 'end', class: 'lbl' }, svg).textContent = r.k;
+      [[r.v, r.c || color || SERIES[0], by, r.k], [r.v2, r.c2, by + barH + 2, r.k + ' by hand']].forEach(function (b) {
+        if (b[0] === undefined) return;
+        var w = Math.max(2, (b[0] / max) * room), h = pair ? barH : (narrow ? 14 : rowH - 10);
+        el('rect', { x: L, y: b[2], width: w, height: h, rx: 3, fill: b[1], class: 'mark', 'data-series': b[3] }, svg);
+        el('text', { x: L + w + 6, y: b[2] + Math.min(h, 12) - (pair ? 1 : 0) }, svg).textContent = fmt(b[0]);
+      });
       var hit = el('rect', { x: 0, y: y, width: W, height: rowH - 2, class: 'hit' }, svg);
-      hit.addEventListener('pointermove', function (ev) { hl.classList.add('on'); showTip(ev, r.k, [{ k: r.unit || 'Total', v: fmt(r.v) }].concat(r.extra || [])); });
+      hit.addEventListener('pointermove', function (ev) { hl.classList.add('on'); showTip(ev, r.k, (r.tip || [{ k: r.unit || 'Total', v: fmt(r.v) }]).concat(r.extra || [])); });
       hit.addEventListener('pointerleave', function () { hl.classList.remove('on'); hideTip(); });
     });
   }
@@ -190,6 +195,7 @@
       ['Median time per ticket', minutesText(n.medianMinutes), 'start to merge'],
       ['Waiting on you', hoursText(n.waitingOnYouHours), 'all waits in the range'],
       ['Stalled', hoursText(n.stalledHours), 'all kinds of stall'],
+      ['Jams fixed by hand', String(n.jamsFixedByHand), 'in the jam log'],
       ['Merged with no help', n.noHelpShare === null ? 'none yet' : Math.round(n.noHelpShare) + '%', 'of tickets Autopilot started']
     ];
     tiles.innerHTML = list.map(function (t) { return '<div class="tile"><div class="k">' + esc(t[0]) + '</div><div class="v">' + esc(t[1]) + '</div><div class="d">' + esc(t[2]) + '</div></div>'; }).join('');
@@ -241,12 +247,16 @@
     table(c, ['Outcome', 'Tickets', 'Top reasons'], rows.map(function (r) { return [r.k, r.v, r.extra.map(function (x) { return x.k + ' (' + x.v + ')'; }).join(', ')]; }));
   }
   function drawStalls(d) {
-    var c = card('stalls', 'Stalls by kind', 'Hours lost to each kind of stall. The top bar is the bug to fix next.');
+    var c = card('stalls', 'Stalls by kind', 'Hours lost to each kind of stall: those the room detected, and the jams you fixed by hand. The top bar is the bug to fix next.');
     var kinds = d.stalls.kinds;
     if (!kinds.length) return empty(c);
-    var rows = kinds.map(function (k) { return { k: k.label, v: k.hours, c: SERIES[1], unit: 'Time', extra: [{ k: 'Times', v: String(k.count) }] }; });
+    legend(c, ['Detected by the room', 'Fixed by hand'], [SERIES[1], SERIES[3]]);
+    var both = function (k, side) { return side.count + ' (' + hoursText(side.hours) + ')'; };
+    var rows = kinds.map(function (k) {
+      return { k: k.label, v: k.detected.hours, c: SERIES[1], v2: k.hand.hours, c2: SERIES[3], tip: [{ k: 'Detected', v: both(k, k.detected), c: SERIES[1] }, { k: 'Fixed by hand', v: both(k, k.hand), c: SERIES[3] }] };
+    });
     hBars(c, rows, hoursText);
-    table(c, ['Stall', 'Times', 'Hours'], kinds.map(function (k) { return [k.label, k.count, hoursText(k.hours)]; }));
+    table(c, ['Stall', 'Detected', 'Detected hours', 'By hand', 'By hand hours'], kinds.map(function (k) { return [k.label, k.detected.count, hoursText(k.detected.hours), k.hand.count, hoursText(k.hand.hours)]; }));
   }
   function drawWaits(d) {
     var c = card('waits', 'Waits on you', 'How often the room waited for you, and why. The tooltip adds how long.');

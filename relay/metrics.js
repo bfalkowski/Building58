@@ -21,6 +21,7 @@ const mainCi = require('./main-ci.js');
 const { livenessOf } = require('./liveness.js');
 const { claim } = require('./lockfile.js');
 const plan = require('./metrics-plan.js');
+const jams = require('./jams.js');
 
 const FILE = state.file('metrics.json', 'RELAY_METRICS_FILE');
 const WATCH_MS = 10 * 1000;
@@ -107,7 +108,7 @@ function notePm(channel, verdict) {
 function inputOf(channel, range, now) {
   const runs = Object.values(autopilot.runsKept(channel));
   const cooStore = coo.storeOf(channel);
-  return { now, range, runs, tasks: tasks.list(channel), hands: cooStore.hands, events: cooStore.events, desks: store.desks[channel] || [], room: store.room, reviews: store.reviews, pm: store.pm };
+  return { now, range, runs, tasks: tasks.list(channel), hands: cooStore.hands, events: cooStore.events, desks: store.desks[channel] || [], room: store.room, reviews: store.reviews, pm: store.pm, jams: jams.listOf(channel) };
 }
 
 async function handle(req, res, channel, rest, ctx) {

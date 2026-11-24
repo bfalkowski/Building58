@@ -170,6 +170,8 @@ test('real answers fit their schemas: tickets, tasks, sessions, the Floor, event
   fit('GET /terminals', await R.call('GET', '/terminals'));
   fit('GET /floor', await R.call('GET', '/floor'));
   fit('GET /metrics', await R.call('GET', '/metrics'));
+  fit('POST /jams', await R.call('POST', '/jams', { kind: 'other', fix: 'Fixed by hand.' }));
+  fit('GET /jams', await R.call('GET', '/jams'));
   await R.call('POST', '/events', { events: [{ type: 'worker.doing', who: 'sam' }] });
   const events = fit('GET /events', await R.call('GET', '/events'));
   assert.strictEqual(events.events.length, 1, 'the event posted is in the list');
@@ -191,7 +193,7 @@ test('the relay refuses each request that breaks its schema: a wrong type with b
   const routes = { 'POST /tickets': ['/tickets', { title: 'Fine', repo }], 'POST /tickets/{id}/edit': ['/tickets/' + id + '/edit', { title: 'Fine' }],
     'POST /tickets/{id}/note': ['/tickets/' + id + '/note', { text: 'Fine' }],
     'POST /tasks': ['/tasks', { title: 'Fine', repo }], 'POST /tasks/{id}/move': ['/tasks/' + task.id + '/move', { to: 'building' }],
-    'POST /commands': ['/commands', { action: 'state', wait: false }], 'POST /autopilot/verdict': ['/autopilot/verdict', { kind: 'merge' }] };
+    'POST /commands': ['/commands', { action: 'state', wait: false }], 'POST /autopilot/verdict': ['/autopilot/verdict', { kind: 'merge' }], 'POST /jams': ['/jams', { kind: 'other', fix: 'Fine' }] };
   assert.deepStrictEqual(Object.keys(routes).sort(), Object.keys(api.REQUESTS).sort(), 'each request schema is checked here');
   const refused = [];
   for (const [key, [p, good]] of Object.entries(routes)) {

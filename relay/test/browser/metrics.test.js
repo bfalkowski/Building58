@@ -33,6 +33,7 @@ function seeded() {
   const at = Math.floor(NOW / 300000) * 300000, mb = 1048576;
   const desks = [], room = [];
   for (let i = 0; i < 24; i++) { desks.push([at - i * 300000, 3 + (i % 3), 1, i % 2, 0, 4 - (i % 3), 0]); room.push([at - i * 300000, 20 + i, mb * (200 + i), mb * 2000]); }
+  fs.writeFileSync(path.join(dir, 'jams.json'), JSON.stringify({ t: [{ at: iso(ago(1)), kind: 'no-first-review', ticket: null, pr: null, since: iso(ago(3)), fix: 'Pressed Get a review.', by: 'you' }] }));
   fs.writeFileSync(path.join(dir, 'metrics.json'), JSON.stringify({ desks: { t: desks }, room, reviews: [], pm: [{ at: ago(2), checked: 4, held: 1, closed: 1, merged: 1, moved: 1, hoursSaved: 5 }], at: 0 }));
   return home;
 }
@@ -64,7 +65,7 @@ pageTest('with data, each of the 11 charts draws, with a legend where it has mor
   }
   for (const id of ['merged', 'per-ticket', 'waits', 'desks', 'pm']) assert.ok(await p.page.locator('#chart-' + id + ' .legend span').count() >= 2, id + ' has a legend');
   const tiles = await p.page.locator('#tiles .tile .k').allTextContents();
-  assert.deepStrictEqual(tiles, ['Merged', 'Median time per ticket', 'Waiting on you', 'Stalled', 'Merged with no help']);
+  assert.deepStrictEqual(tiles, ['Merged', 'Median time per ticket', 'Waiting on you', 'Stalled', 'Jams fixed by hand', 'Merged with no help']);
   assert.strictEqual(await p.page.locator('#tiles .tile .v').first().innerText(), '2');
   assert.deepStrictEqual(p.errors, []);
 });
