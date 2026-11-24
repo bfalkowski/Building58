@@ -5,7 +5,7 @@
 //   1. Each task's PR is read with gh pr view, and relay/autopilot-plan.js says what to do with it:
 //      merge it, mark its task done, tell its Dev to merge main for a conflict (once more if a turn ends at
 //      the same head, then the person decides: askToMergeMain), bring back its Dev when
-//      a fix or a conflict needs one and none runs (bringBack), hand it to the person (Waiting on you,
+//      a fix, a conflict or untold review news needs one and none runs (bringBack), hand it to the person (Waiting on you,
 //      with the reason), or wait. Before a merge, relay/merge-hold.js asks whether
 //      the PR holds all its Dev's work: a Dev still at work waits, and one idle or gone with work in its
 //      checkout that is not pushed goes to the person. A PR handed over only because it changes a file
@@ -289,7 +289,9 @@ async function readPr(task, rec) {
 function mergeTest(channel, task, rec, decide) {
   const dev = terminal.find(channel, task.owner && task.owner.terminal);
   const d = decide(latest(rec), !dev || dev.exited);
-  return (d.act === 'merge' && holdOf(task, dev, Date.now())) || d;
+  const hold = d.act === 'merge' && holdOf(task, dev, Date.now());
+  if (hold && hold.reason === 'news-untold') return { act: 'bring-back', for: 'news', why: 'There is review news its Dev was never told, and its session has ended, so Autopilot brings it back to tell it.' };
+  return hold || d;
 }
 function forPersonMerge(channel, task, rec, pr, locked) {
   const v = latest(rec);
@@ -388,7 +390,7 @@ function askToMergeMain(channel, task, rec, pr, dev) {
 }
 const WAITS_FOR_ROOM = ['wip_limit', 'full', 'running'];
 function bringBack(channel, task, rec, d, commit, pr) {
-  const name = task.ticket || 'Task ' + task.id, what = d.for === 'fix' ? 'the fixes the last review asks for' : 'a merge of main';
+  const name = task.ticket || 'Task ' + task.id, what = { fix: 'the fixes the last review asks for', news: 'review news it was never told' }[d.for] || 'a merge of main';
   const step = ' Press Bring back on its task, then move its card back to Autopilot.';
   const key = d.for + ' ' + commit;
   if (rec.broughtBack === key) { handOver(channel, task, rec, 'Its Dev was brought back once for ' + what + ' at ' + commit.slice(0, 7) + ', and is not running again.' + step, 'dev-gone', commit); return; }
