@@ -13,8 +13,9 @@
 // RELAY_WAKE_GAP_MS (30 seconds) when the computer slept. For WAKE_WATCH after that, each look finds the
 // sessions whose last output is the sleep message and whose hooks do not say they wait on the person, and
 // saves one carry-on note for each (relay/delivery.js). The message can come seconds after the wake, so the
-// relay looks again and again for a while. Only a message printed after the sleep began counts, so one
-// from an earlier sleep does not. A session is noted once for each wake, and not while it is in a turn.
+// relay looks again and again for a while. Each look before a wake counts the sleep messages on each
+// session's screen, and only a message beyond that count is new, so one from an earlier sleep does not
+// count, whatever else the session prints. A session is noted once for each wake, and not while it is in a turn.
 'use strict';
 const { spawn } = require('child_process');
 const config = require('./config.js');
@@ -35,8 +36,8 @@ const KEY = (sessionId) => 'carry on after sleep ' + sessionId;
 const tool = () => process.env.RELAY_CAFFEINATE || (process.platform === 'darwin' ? 'caffeinate' : null);
 const hasWork = () => autopilot.anyOn() || tasks.channels().some((c) => tasks.list(c).some((t) => WORKING.includes(t.state)));
 
-let log = () => {}, hold = null, broken = false, lastLook = Date.now(), watchUntil = 0, sleptAt = 0;
-const noted = new Set();
+let log = () => {}, hold = null, broken = false, lastLook = Date.now(), watchUntil = 0;
+const noted = new Set(), before = new Map();
 
 function release() {
   if (!hold) return;
@@ -58,9 +59,11 @@ function settle() {
   else if (hold) { release(); log('The room no longer keeps the computer awake.'); }
 }
 
+const countOf = (screen) => screen.split(SLEPT).length - 1;
 function cutBySleep(t) {
-  if (!t || t.exited || t.stopped || t.state === 'waiting' || t.state === 'working' || t.round || (t.lastOutAt || 0) < sleptAt) return false;
-  return terminal.screenOf(t).slice(-LAST).includes(SLEPT);
+  if (!t || t.exited || t.stopped || t.state === 'waiting' || t.state === 'working' || t.round) return false;
+  const screen = terminal.screenOf(t);
+  return countOf(screen) > (before.get(t.sessionId) || 0) && screen.slice(-LAST).includes(SLEPT);
 }
 function carryOn() {
   for (const t of terminal.everyone()) {
@@ -76,10 +79,11 @@ function carryOn() {
 
 function look() {
   const now = Date.now();
-  if (now - lastLook > WAKE_GAP) { watchUntil = now + WAKE_WATCH; sleptAt = lastLook; noted.clear(); log('The computer woke after ' + Math.round((now - lastLook) / 1000) + ' seconds, so the relay looks for sessions its sleep cut off.'); }
+  if (now - lastLook > WAKE_GAP) { watchUntil = now + WAKE_WATCH; noted.clear(); log('The computer woke after ' + Math.round((now - lastLook) / 1000) + ' seconds, so the relay looks for sessions its sleep cut off.'); }
   lastLook = now;
   settle();
   if (now < watchUntil) carryOn();
+  else for (const t of terminal.everyone()) before.set(t.sessionId, countOf(terminal.screenOf(t)));
 }
 
 function begin(ctx) {

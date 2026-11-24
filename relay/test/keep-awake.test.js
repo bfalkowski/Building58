@@ -117,6 +117,7 @@ test('after a wake, a session cut off by the sleep gets one carry-on note, and o
   process.kill(pid, 'SIGCONT');
   await say(waiting.sessionId, 'Notification');
   await slept(cut); await slept(waiting);
+  await R.call('POST', '/terminals/' + old.id + '/input', { data: 'hello\r' });
   await until(async () => CARRY.test(await R.screen(cut.id)), 'the carry-on note');
   await say(cut.sessionId, 'UserPromptSubmit');
   await say(cut.sessionId, 'Stop');
