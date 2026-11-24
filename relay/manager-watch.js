@@ -76,7 +76,7 @@ async function failedChecks(channel, task) {
   const head = String((view && view.headRefOid) || '');
   const mine = c[task.pr] || (c[task.pr] = {});
   const present = new Set(((view && view.statusCheckRollup) || []).map(checkName));
-  for (const name of Object.keys(mine)) if (head && !present.has(name)) delete mine[name];
+  if (present.size) for (const name of Object.keys(mine)) if (head && !present.has(name)) delete mine[name];
   for (const check of (view && view.statusCheckRollup) || []) {
     const name = checkName(check), result = String(check.conclusion || check.state || '').toUpperCase();
     if (!name || !head) continue;
