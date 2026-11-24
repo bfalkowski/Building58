@@ -3968,7 +3968,7 @@
           "Update"
         ],
         "summary": "Get update",
-        "description": "The relay's folder, and the update under way, if any, with who it waits for. rollback says which commit failed its check, why, and which commit runs, while the relay runs the commit it went back to, or while the folder is on it after a page-only step went back. While Update goes through merges one at a time, update.step has at, of, name, pr, sha, later, reloads and stopping. note and noteAt say how the last update ended, reloads how many page steps it made, and steps whether Update goes one merge at a time.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "The relay's folder, and the update under way, if any, with who it waits for. While it waits, update.waitedMinutes says how long it has waited and update.restartsAnywayAt when it restarts the relay even if a session is in a turn (Update waits at most). rollback says which commit failed its check, why, and which commit runs, while the relay runs the commit it went back to, or while the folder is on it after a page-only step went back. While Update goes through merges one at a time, update.step has at, of, name, pr, sha, later, reloads and stopping. note and noteAt say how the last update ended, reloads how many page steps it made, and steps whether Update goes one merge at a time.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getUpdate",
         "x-tokens": [],
         "responses": {
