@@ -144,6 +144,7 @@ function create(args) {
       setTimeout(() => process.exit(0), 500);
     } catch (e) { page(500, 'GitHub did not finish: ' + attr(e.message)); console.error(e.message); setTimeout(() => process.exit(1), 500); }
   });
+  server.on('error', (e) => { console.error(e.code === 'EADDRINUSE' ? 'Port ' + port + ' is in use. Free it, or pick another with --port (setup.sh: SETUP_APP_PORT=<port> ./setup.sh).' : e.message); process.exit(1); });
   server.listen(port, host, () => {
     const start = 'http://localhost:' + server.address().port + '/';
     console.log('Opening ' + start + ' to create the App "' + name + '" on GitHub' + (org ? ' for ' + org : '') + '.');

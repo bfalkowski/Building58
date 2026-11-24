@@ -95,3 +95,21 @@ test('with a display, it prints no ssh command and opens the link', { skip }, ()
   assert.doesNotMatch(out, /ssh -L/);
   assert.match(out, /OPENED http:\/\/localhost:8787\/office\//);
 });
+
+test('github-app.js create on a taken port says so plainly and exits 1', () => {
+  const net = require('net');
+  const busy = net.createServer();
+  return new Promise((resolve) => busy.listen(0, '127.0.0.1', () => {
+    const port = busy.address().port;
+    const child = spawn(process.execPath, [path.join(root, 'relay', 'github-app.js'), 'create', '--print', '--port', String(port), '--no-open']);
+    let err = '';
+    child.stderr.on('data', (d) => { err += d; });
+    child.on('close', (code) => {
+      busy.close();
+      assert.strictEqual(code, 1);
+      assert.match(err, new RegExp('Port ' + port + ' is in use'));
+      assert.doesNotMatch(err, /at .*\.js:\d+/);
+      resolve();
+    });
+  }));
+});
