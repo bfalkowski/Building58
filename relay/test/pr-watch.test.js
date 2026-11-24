@@ -94,7 +94,7 @@ test('the PR watch moves an open task PR to its next step, once for each head an
     assert.strictEqual((await o.watch()).on, false);
     assert.strictEqual((await R.call('GET', '/floor')).body.sessions.find((x) => x.terminal === o.dev.id).waitsOn, null);
     const dev = { 'X-Office-Token': sessionToken(o.dev.sessionId) };
-    assert.strictEqual((await R.call('POST', '/settings', { values: { prWatch: true } }, dev)).status, 401, 'a session cannot turn it on');
+    assert.strictEqual((await R.call('POST', '/settings', { values: { prWatch: true } }, dev)).status, 403, 'a session cannot turn it on');
   });
 
   await t.test('row 1: a PR with no review of its head, and no record of one, gets one', async () => {

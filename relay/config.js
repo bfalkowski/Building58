@@ -75,8 +75,12 @@ const SETTINGS = [
     what: 'After the COO saves its report and its turn ends, the relay waits this long, then ends the COO\'s session.' },
   { name: 'securityGraceSeconds', group: 'COO and PM', label: 'The security officer leaves after', unit: 'seconds', env: 'RELAY_SECURITY_GRACE_MS', scale: 1 / 1000, def: 10, min: 1, max: 600,
     what: 'After the security officer saves its report and its turn ends, the relay waits this long, then ends its session.' },
-  { name: 'pmOrder', group: 'COO and PM', label: 'Let the PM set the order', kind: 'bool', def: false,
-    what: 'The PM can set the priority and the place in the work order of tickets in Triage or Ready, with ticket.js priority and ticket.js order. It cannot move, start or change any other ticket. If more than one PM is running, only the newest can. The Board shows who last set each ticket\'s priority or place, and your change wins.' },
+  { name: 'pmTrust', group: 'COO and PM', label: 'PM trust', unit: 'rung', env: 'RELAY_PM_TRUST', def: 1, min: 0, max: 4, zero: true,
+    what: 'How much the PM may do about the ticket Autopilot is about to start. Each rung does everything the rungs below it do. 0 Off: no check. 1 Advise: the PM checks each ticket and writes its view on the ticket, and Autopilot starts it anyway. 2 Hold and propose: when the PM says not needed, duplicate or part of another ticket, the ticket does not start and the PM files a proposal for you to approve; when it says another first, Autopilot checks that ticket next. 3 Order: the PM may also set the priority and place of tickets in Triage or Ready, with ticket.js priority and ticket.js order. 4 Close and merge: the PM carries out its own close, replace and merge, and writes on the ticket what it did and why. Only you change the rung, and your change to a ticket wins. If more than one PM is running, only the newest counts.' },
+  { name: 'pmCheckMinutes', group: 'COO and PM', label: 'Wait for the PM\'s check for', unit: 'minutes', env: 'RELAY_PM_CHECK_MS', scale: 1 / 60000, def: 10, min: 1, max: 120,
+    what: 'How long Autopilot waits for the PM to answer its check of a ticket. If the PM does not answer in time, or no PM is running, Autopilot starts the ticket and says so in its notes.' },
+  { name: 'pmSortHours', group: 'COO and PM', label: 'PM sorts the Board every', unit: 'hours', env: 'RELAY_PM_SORT_HOURS', def: 0, min: 0, max: 168, zero: true,
+    what: 'How often the relay asks the PM to look at every Triage and Ready ticket, do what its PM trust rung allows, and post a short summary in the chat. It asks only while no ticket is starting, and only of a PM that is running. At rung 1 the PM only writes advice, and at rung 0 (Off) nothing is asked. 0 stops it.' },
   { name: 'pmTalkMinutes', group: 'COO and PM', label: 'Keep the PM after you type for', unit: 'minutes', env: 'RELAY_PM_TALK_MINUTES', def: 30, min: 1, max: 600,
     what: 'After you type to the PM, nobody can stop the PM as idle for this long.' },
   ...[['lead', 'The Lead', 'pstack:recall'],
@@ -94,6 +98,11 @@ const BY_NAME = new Map(SETTINGS.map((s) => [s.name, s]));
 
 let saved = {};
 try { saved = JSON.parse(fs.readFileSync(FILE, 'utf8')) || {}; } catch { saved = {}; }
+const switchedOn = saved.pmOrder === true && !Object.prototype.hasOwnProperty.call(saved, 'pmTrust');
+if (Object.prototype.hasOwnProperty.call(saved, 'pmOrder')) {
+  if (switchedOn) saved.pmTrust = 3;
+  delete saved.pmOrder;
+}
 function save() {
   try {
     fs.mkdirSync(path.dirname(FILE), { recursive: true });

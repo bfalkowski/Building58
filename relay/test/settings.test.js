@@ -61,8 +61,8 @@ test('a bad value changes nothing, and no session can read or change the setting
   await R.hook({ session_id: s.sessionId.slice(0, 12), hook_event_name: 'UserPromptSubmit' });
   await R.call('POST', '/terminals/lead', { terminal: s.id, board: true });
   const token = await until(() => { try { return { 'X-Office-Token': sessionToken(s.sessionId) }; } catch (e) { return null; } }, 'the token');
-  assert.strictEqual((await R.call('GET', '/settings', undefined, token)).status, 401);
-  assert.strictEqual((await R.call('POST', '/settings', { values: { leadStopLimit: 60 } }, token)).status, 401);
+  assert.strictEqual((await R.call('GET', '/settings', undefined, token)).status, 403);
+  assert.strictEqual((await R.call('POST', '/settings', { values: { leadStopLimit: 60 } }, token)).status, 403);
   // From another site, refused.
   assert.strictEqual((await R.call('GET', '/settings', undefined, { Authorization: 'Bearer test-key', Origin: 'https://example.com' })).status, 403);
 });
