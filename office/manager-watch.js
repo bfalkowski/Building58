@@ -5,9 +5,9 @@
 (function () {
   'use strict';
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!channel) return;
-  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/manager?key=' + encodeURIComponent(key);
+  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/manager';
   const RECENT_MS = 5 * 60 * 1000;
   let seen = null;
 

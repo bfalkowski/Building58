@@ -50,11 +50,11 @@ pageTest('the page reads the relay\'s notes, once each, and not the old ones', g
   await p.context.addInitScript(() => {
     const real = window.fetch;
     const notes = [{ seq: 4, at: new Date().toISOString(), reason: 'T-9 holds a building slot with no Dev, for 12 minutes.', say: 'T-9 holds a slot and has no Dev.', terminal: null, ticket: 'T-9', filed: 'T-20' }, { seq: 3, at: new Date(Date.now() - 3600000).toISOString(), reason: 'Old news.', say: 'Old.', terminal: null, ticket: null, filed: null }];
-    window.fetch = (url, opts) => (String(url).includes('/manager?') ? Promise.resolve(new Response(JSON.stringify({ ok: true, notes }), { status: 200 })) : real(url, opts));
+    window.fetch = (url, opts) => (String(url).includes('/manager') ? Promise.resolve(new Response(JSON.stringify({ ok: true, notes }), { status: 200 })) : real(url, opts));
   });
   await p.open();
   await until(p, () => [...document.querySelectorAll('#feed li')].some((li) => li.textContent.includes('The manager: T-9 holds a building slot with no Dev, for 12 minutes. Filed as T-20.')));
-  const polls = await p.page.evaluate(() => new Promise((done) => { let n = 0; const real = window.fetch; window.fetch = (url, opts) => { if (String(url).includes('/manager?') && ++n === 2) done(n); return real(url, opts); }; }));
+  const polls = await p.page.evaluate(() => new Promise((done) => { let n = 0; const real = window.fetch; window.fetch = (url, opts) => { if (String(url).includes('/manager') && ++n === 2) done(n); return real(url, opts); }; }));
   assert.strictEqual(polls, 2);
   const lines = await p.page.evaluate(() => [...document.querySelectorAll('#feed li')].map((li) => li.textContent).filter((t) => t.includes('The manager: ')));
   assert.strictEqual(lines.length, 1, 'once, and not the old one: ' + lines);
