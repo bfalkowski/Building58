@@ -71,6 +71,6 @@ pageTest('a reviewer sits in the card of the Dev whose PR it reviews, and the ca
   await lonely.waitFor();
   assert.match(await lonely.locator('.pair-cap').innerText(), /Reviewer/);
   assert.match(await lonely.innerText(), /PR #77/);
-  assert.strictEqual(await p.page.locator('#cards .pair:not(.single) .desk').count(), 2, 'one card holds the Dev and its reviewer');
+  assert.strictEqual(await card.locator('.desk').count(), 2, 'one card holds the Dev and its reviewer');
   assert.deepStrictEqual(p.errors, []);
 });
