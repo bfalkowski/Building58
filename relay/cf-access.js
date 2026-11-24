@@ -8,7 +8,12 @@ const KEYS_RETRY_MS = 60 * 1000;
 const CF_HEADERS = ['cf-access-jwt-assertion', 'cf-ray', 'cf-connecting-ip', 'cf-visitor'];
 
 function fromEnv(env) {
-  if (env.RELAY_REMOTE !== '1') return null;
+  const full = String(env.RELAY_REMOTE_FULL || '').trim();
+  if (full !== '' && full !== '0' && full !== '1') throw new Error('RELAY_REMOTE_FULL is 1 or empty, not ' + env.RELAY_REMOTE_FULL + '.');
+  if (env.RELAY_REMOTE !== '1') {
+    if (full === '1') throw new Error('RELAY_REMOTE_FULL=1 needs RELAY_REMOTE=1.');
+    return null;
+  }
   const need = ['RELAY_REMOTE_URL', 'RELAY_ACCESS_TEAM', 'RELAY_ACCESS_AUD', 'RELAY_ACCESS_EMAIL'];
   const missing = need.filter((k) => !String(env[k] || '').trim());
   if (missing.length) throw new Error('RELAY_REMOTE=1 needs ' + missing.join(', ') + '.');
@@ -21,7 +26,7 @@ function fromEnv(env) {
   if (mfa !== 'amr' && mfa !== 'cloudflare') throw new Error('RELAY_ACCESS_MFA is amr or cloudflare, not ' + env.RELAY_ACCESS_MFA + '.');
   return {
     host: url.host.toLowerCase(), origin: url.origin, issuer: 'https://' + team,
-    aud: env.RELAY_ACCESS_AUD.trim(), email: env.RELAY_ACCESS_EMAIL.trim().toLowerCase(), mfa,
+    full: full === '1', aud: env.RELAY_ACCESS_AUD.trim(), email: env.RELAY_ACCESS_EMAIL.trim().toLowerCase(), mfa,
     certsUrl: env.RELAY_ACCESS_CERTS_URL || 'https://' + team + '/cdn-cgi/access/certs'
   };
 }
@@ -76,7 +81,7 @@ function gate(cfg, opts) {
       return true;
     } catch (e) { return false; }
   }
-  return { applies, allows };
+  return { applies, allows, full: cfg.full };
 }
 
 module.exports = { fromEnv, gate, CF_HEADERS };

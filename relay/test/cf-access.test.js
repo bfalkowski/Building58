@@ -160,3 +160,41 @@ test('remote mode is off by default, and a half-set one stops the relay', async 
   if (!(R instanceof Error)) { await R.stop(); assert.fail('the relay started with half the settings'); }
   assert.match(R.message, /RELAY_REMOTE=1 needs/);
 });
+
+test('RELAY_REMOTE_FULL opens the local-only routes to a request that passed the check, and nothing else', async (t) => {
+  const R = await remote(t, { RELAY_REMOTE_FULL: '1' });
+  const path = '/channels/t/terminals';
+  const ok = { Host: HOST, 'Cf-Access-Jwt-Assertion': token(), Authorization: 'Bearer test-key' };
+  assert.strictEqual((await raw(R, path, ok)).status, 200, 'a valid token and the key');
+  assert.strictEqual((await raw(R, path, Object.assign({}, ok, { Origin: 'https://' + HOST, 'Sec-Fetch-Site': 'same-origin' }))).status, 200);
+  const noToken = await raw(R, path, { Host: HOST, Authorization: 'Bearer test-key' });
+  assert.strictEqual(noToken.status, 403);
+  assert.strictEqual(noToken.body, 'Forbidden');
+  const forged = await raw(R, path, { Host: 'localhost:' + R.port, 'Cf-Ray': 'x', Authorization: 'Bearer test-key' });
+  assert.strictEqual(forged.status, 403, 'a Cf- header with no token');
+  assert.strictEqual((await raw(R, path, Object.assign({}, ok, { 'Sec-Fetch-Site': 'cross-site' }))).status, 403, 'from another site');
+  assert.strictEqual((await raw(R, path, Object.assign({}, ok, { Origin: 'https://evil.example.com' }))).status, 403);
+  const noKey = await raw(R, path, { Host: HOST, 'Cf-Access-Jwt-Assertion': token() });
+  assert.ok(noKey.status === 401 || noKey.status === 403, 'without the key: ' + noKey.status);
+});
+
+test('without RELAY_REMOTE_FULL a valid token still gets local_only', async (t) => {
+  const R = await remote(t);
+  const r = await raw(R, '/channels/t/terminals', { Host: HOST, 'Cf-Access-Jwt-Assertion': token(), Authorization: 'Bearer test-key' });
+  assert.strictEqual(r.status, 403);
+  assert.match(r.body, /local_only/);
+});
+
+test('RELAY_REMOTE_FULL is 1 or empty, and needs remote mode', () => {
+  const env = { RELAY_REMOTE: '1', RELAY_REMOTE_URL: 'https://a.example.com', RELAY_ACCESS_TEAM: 't.cloudflareaccess.com', RELAY_ACCESS_AUD: 'a', RELAY_ACCESS_EMAIL: 'e@x.com' };
+  assert.strictEqual(cf.fromEnv(env).full, false);
+  assert.strictEqual(cf.fromEnv(Object.assign({ RELAY_REMOTE_FULL: '1' }, env)).full, true);
+  assert.throws(() => cf.fromEnv(Object.assign({ RELAY_REMOTE_FULL: 'yes' }, env)), /RELAY_REMOTE_FULL/);
+  assert.throws(() => cf.fromEnv({ RELAY_REMOTE_FULL: '1' }), /needs RELAY_REMOTE=1/);
+});
+
+test('a bad RELAY_REMOTE_FULL stops the relay', async () => {
+  const R = await relay({ RELAY_REMOTE_FULL: '1' }).catch((e) => e);
+  if (!(R instanceof Error)) { await R.stop(); assert.fail('the relay started'); }
+  assert.match(R.message, /RELAY_REMOTE_FULL/);
+});
