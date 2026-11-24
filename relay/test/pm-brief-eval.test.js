@@ -18,6 +18,16 @@ test('the PM brief is the one the eval last judged', () => {
     + 'and commit relay/pm-brief-eval.json if the eval did not get worse (docs/manual/roles.html#pm-brief-eval).');
 });
 
+test('the PM brief asks the PM to mark tickets that change the same code as blocked', () => {
+  const brief = forEval();
+  assert.match(brief, /same behavior or the same part of the relay or room/);
+  assert.ok(brief.includes('node relay/ticket.js blockers ID --blocked-by ID --why'), 'names the command');
+  assert.match(brief, /Mark only a clear overlap/);
+  assert.match(brief, /keep the blockers it has/);
+  assert.ok(brief.includes('node relay/ticket.js show ID'), 'says how to read the blockers');
+  assert.match(brief, /later one as blocked by the earlier/);
+});
+
 test('the judged brief holds nothing from this computer', () => {
   const brief = forEval();
   assert.ok(!brief.includes(os.homedir()) && !brief.includes(__dirname), 'no path of this checkout');
