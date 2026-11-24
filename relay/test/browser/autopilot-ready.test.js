@@ -18,7 +18,7 @@ const readyWhy = (head) => 'Ready for your merge: the review of ' + head.slice(0
 pageTest('a PR ready for your merge is announced once for each head', get, async (p) => {
   const page = p.page;
   let head = 'a'.repeat(40);
-  await page.route(/\/channels\/t\/autopilot\?/, async (route) => {
+  await page.route(/\/channels\/t\/autopilot(\?|$)/, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     const real = await (await route.fetch()).json();
     real.prs = [{ pr: PR, ticket: 'T-5', task: 'k1', state: 'waiting_on_you', rounds: 1, verdict: 'merge', act: 'person', why: readyWhy(head), ready: head }];

@@ -18,7 +18,7 @@ pageTest('the bar shows the loop\'s progress, stops it between merges, and reloa
   const posts = [];
   const answer = () => ({ ok: true, dir: '/x', branch: 'main', run, update, note: null, noteAt: null, reloads: 0, steps: true, rollback: null });
   page.on('load', () => { loads++; });
-  await page.route(/\/channels\/[^/]+\/update\?/, async (route) => {
+  await page.route(/\/channels\/[^/]+\/update(\?|$)/, async (route) => {
     const r = route.request();
     if (r.method() === 'POST') {
       posts.push(JSON.parse(r.postData() || '{}'));

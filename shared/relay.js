@@ -1,5 +1,5 @@
 // Connects the world to a relay so outside callers can send commands. Uses only window.run.
-// Off unless the page is opened with ?channel=<name>&key=<key> (and ?relay=<url> if the
+// Off unless the page is opened with ?channel=<name> (and ?relay=<url> if the
 // relay is somewhere other than this page's own server). See docs/manual/relay.html.
 (function () {
   'use strict';
@@ -8,8 +8,7 @@
   if (!channel || !window.run || !window.EventSource) return;
   const run = window.run;
   const base = (params.get('relay') || location.origin).replace(/\/+$/, '');
-  const key = params.get('key') || '';
-  const url = (p) => base + '/channels/' + encodeURIComponent(channel) + p + '?key=' + encodeURIComponent(key);
+  const url = (p) => base + '/channels/' + encodeURIComponent(channel) + p;
   const badge = document.getElementById('relay-status');
 
   function status(text, state) {
@@ -38,7 +37,7 @@
   document.addEventListener('visibilitychange', reportVisibility);
 
   status('Relay: connecting', 'wait');
-  const es = new EventSource(url('/stream') + (document.getElementById('board') ? '&board=1' : ''));
+  const es = new EventSource(url('/stream' + (document.getElementById('board') ? '?board=1' : '')));
   const board = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
   es.addEventListener('hello', (m) => {
     status('Relay: ' + channel, 'on');
