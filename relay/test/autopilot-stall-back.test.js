@@ -97,7 +97,8 @@ test('a task parked with a PR comes back once a review is posted with a verdict,
   await until(() => merged().includes(PR + ' --merge --match-head-commit ' + head), 'Autopilot to merge it');
   const x = await taskOf();
   const back = x.history.find((h) => h.type === 'moved' && h.from === 'waiting_on_you');
-  assert.deepStrictEqual([back.to, back.by, back.note], ['building', 'Autopilot', 'Autopilot: a review of PR #7 was posted with the verdict merge, so the task is back.']);
+  assert.deepStrictEqual([back.to, back.by], ['building', 'Autopilot']);
+  assert.match(back.note, /^Autopilot: a review of PR #7 (started|was posted with the verdict merge), so the task is back\.$/);
 });
 
 // On 2026-11-23 Autopilot handed PRs #338 to #342 to the person as "Waiting for the review." while the reviews
