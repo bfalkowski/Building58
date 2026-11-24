@@ -63,7 +63,7 @@ pageTest('a reviewer sits in the card of the Dev whose PR it reviews, and the ca
   const who = async (id) => (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === id).who;
   const [devName, reviewerName, loneName] = [await who(built.id), await who(reviewer.id), await who(lone.id)];
   await p.open();
-  const named = (name) => p.page.locator('#cards .desk', { has: p.page.locator('b', { hasText: new RegExp('^' + name + '$') }) });
+  const named = (name) => p.page.locator('.desk', { has: p.page.locator('b', { hasText: new RegExp('^' + name + '$') }) });
   const card = p.page.locator('#cards .pair:not(.single)', { has: named(devName) });
   await card.locator('b', { hasText: new RegExp('^' + reviewerName + '$') }).waitFor();
   assert.strictEqual(await card.locator('.pair-cap a', { hasText: '#31' }).getAttribute('href'), PR, 'the card names the PR, linked');

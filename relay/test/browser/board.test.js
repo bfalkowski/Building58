@@ -233,18 +233,18 @@ pageTest('Board, Chat and Tasks start folded, a title opens one and it stays ope
   assert.deepStrictEqual(p.errors, []);
 });
 
-pageTest('a raised hand shows on its worker card and in the title', get, async (p) => {
+pageTest('a raised hand shows in Needs you and in the title', get, async (p) => {
   await p.open();
   const S = 'hand-' + Date.now();
   await o.R.hook({ hook_event_name: 'SessionStart', session_id: S, project: 'hands' });
   await o.R.hook({ hook_event_name: 'Notification', session_id: S, message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' });
-  await p.page.locator('#cards .pair[data-state="wait"]', { hasText: 'Waits on you: a permission' }).waitFor();
+  await p.page.locator('#needs-you-list li', { hasText: 'Claude needs your permission to use Bash' }).waitFor();
   await until(p, () => /^\(1\) /.test(document.title));
   assert.match(await p.page.innerText('#busy'), /1 waiting on you/);
   // The tool runs: the hand comes down, and the title loses its count.
   await o.R.hook({ hook_event_name: 'PostToolUse', session_id: S, tool_name: 'Bash' });
   await until(p, () => !/^\(\d+\) /.test(document.title));
-  await p.page.locator('#cards .pair[data-state="wait"]').waitFor({ state: 'detached' });
+  await p.page.locator('#needs-you-list li').waitFor({ state: 'detached' });
   assert.deepStrictEqual(p.errors, []);
 });
 

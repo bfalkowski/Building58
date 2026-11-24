@@ -34,7 +34,9 @@ pageTest('the room bar holds Settings, its chips, Update and the office-wide not
   assert.strictEqual(await page.locator('#cc-settings-sum').count(), 0, 'the summary line is now the chips');
   assert.strictEqual(await bar.getByRole('link', { name: 'How work moves' }).getAttribute('href'), '../docs/manual/roles.html');
   // The session panel keeps the session's own buttons.
-  for (const id of ['#cc-review', '#cc-stop', '#cc-start']) assert.ok(await page.locator('.cc header ' + id).isVisible(), id + ' stays in the panel');
+  for (const id of ['#cc-review', '#cc-stop']) assert.ok(await page.locator('.cc header ' + id).isVisible(), id + ' stays in the panel');
+
+  assert.ok(await page.locator('#workers #cc-start').isVisible(), 'Add worker is in the workers row');
 
   // One chip per area, saying what is on.
   const chip = (k) => bar.locator('.ob-chip[data-chip="' + k + '"]');

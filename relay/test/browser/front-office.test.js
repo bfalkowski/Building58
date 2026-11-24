@@ -22,7 +22,7 @@ const PM = row({ terminal: 'bbbbbbbbbbbb', name: 'Priya', role: 'PM', seat: 'pm'
 const dev = (over, d) => row(Object.assign({ terminal: 'cccccccccccc', name: 'Bea', role: 'Dev', ticket: '293', title: 'Workers add notes' }, over), Object.assign({ ticket: '293', column: { id: 'building', label: 'Building' } }, d));
 const reviewer = () => row({ terminal: 'dddddddddddd', name: 'Farah', role: 'reviewer', pr: PR }, { pr: PR, prNumber: '#378', review: 'review running', reviewing: { pr: PR, prNumber: '#378', dev: { terminal: 'cccccccccccc', name: 'Bea' } } });
 
-const ready = (id, title, priority, extra) => Object.assign({ id, title, status: 'ready', repo: '/r', approved: true, waitingFor: [], heldBack: null, task: null, priority, history: [] }, extra);
+const ready = (id, title, priority, extra) => Object.assign({ id, title, body: '', status: 'ready', repo: '/r', approved: true, waitingFor: [], rejectedBlockers: [], blockedBy: [], labels: [], notes: [], heldBack: null, task: null, priority, history: [], createdAt: '2026-11-24T10:00:00.000Z' }, extra);
 const advice = (answer, why, of) => [{ stage: 'pm-advice', answer, why, of: of || null }];
 const BOARD = {
   ok: true, store: 'local',

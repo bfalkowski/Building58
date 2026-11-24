@@ -92,12 +92,12 @@
   /* The front office (office/front-view.js): the Lead and the PM in two fixed seats, then Needs you, Today and Up next. A third seat is one more child of #seats. */
   .seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; padding: 10px; }
   .seat { position: relative; border: 1px solid var(--pane-line); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .seat > :not(.pick) { pointer-events: none; }
+  .seat > :not(.hit) { pointer-events: none; }
   .seat a { pointer-events: auto; position: relative; z-index: 1; }
-  .pick { all: unset; position: absolute; inset: 0; cursor: pointer; border-radius: 6px; }
-  .pick:hover, .pick:focus-visible { background: var(--pane-hover); }
-  .pick[aria-pressed="true"] { background: var(--pane-press); box-shadow: inset 0 0 0 1px var(--accent); }
-  .pick:focus-visible { outline: 2px solid var(--pane-dim); outline-offset: -2px; }
+  .hit { all: unset; position: absolute; inset: 0; cursor: pointer; border-radius: 6px; }
+  .hit:hover, .hit:focus-visible { background: var(--pane-hover); }
+  .hit[aria-pressed="true"] { background: var(--pane-press); box-shadow: inset 0 0 0 1px var(--accent); }
+  .hit:focus-visible { outline: 2px solid var(--pane-dim); outline-offset: -2px; }
   .seat-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .seat .role { font: 700 14px var(--sans); color: var(--pane-strong); }
   .seat .who, .seat .next { color: var(--pane-dim); overflow-wrap: anywhere; }
@@ -150,7 +150,7 @@
   .pair-cap { grid-column: 1 / -1; color: var(--pane-dim); font-size: 11.5px; padding: 0 4px 4px; overflow-wrap: anywhere; }
   .pair-cap a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
   .desk { position: relative; border: 1px solid transparent; border-radius: 6px; padding: 8px 10px; color: inherit; text-align: left; display: grid; gap: 3px; min-width: 0; align-content: start; }
-  .desk > :not(.pick) { pointer-events: none; }
+  .desk > :not(.hit) { pointer-events: none; }
   .desk .desk-stop { pointer-events: auto; }
   .desk .name { color: var(--pane-strong); font-weight: 700; }
   .desk .kind { color: var(--pane-dim); font-weight: 400; }

@@ -54,7 +54,7 @@
     if (w) window.dispatchEvent(new CustomEvent('office:pick', { detail: { who: w.id } }));
   }
   function pickButton(terminal, label, cls) {
-    const b = el('button', cls || 'pick');
+    const b = el('button', cls || 'hit');
     b.type = 'button'; b.dataset.terminal = terminal || ''; b.setAttribute('aria-label', label);
     b.setAttribute('aria-pressed', String(!!terminal && terminal === selected));
     b.addEventListener('click', () => pick(terminal));
@@ -84,7 +84,7 @@
       t.dataset.level = tired.key;
       node.append(t);
     }
-    if (seat.terminal) node.prepend(pickButton(seat.terminal, seat.role + ' ' + seat.name + ': ' + seat.doing, 'pick'));
+    if (seat.terminal) node.prepend(pickButton(seat.terminal, seat.role + ' ' + seat.name + ': ' + seat.doing, 'hit'));
     return node;
   }
   function namedOf(terminal) {
@@ -101,7 +101,7 @@
     if (named.text) { const em = el('em', 'named', named.text); em.title = named.full; name.append(em); }
     const what = el('span', 'ticket', row.role === 'reviewer' ? (d.prNumber ? 'PR ' + d.prNumber + ' · ' : '') + (d.review || '') : (row.title || ''));
     const state = el('span', 'state', [doing.words, d.column && d.column.label].filter(Boolean).join(' · '));
-    b.append(pickButton(row.terminal, row.name + ', ' + kind + ': ' + (doing.words || ''), 'pick'), name, what, state);
+    b.append(pickButton(row.terminal, row.name + ', ' + kind + ': ' + (doing.words || ''), 'hit'), name, what, state);
     if (d.status) b.append(el('span', 'status', d.status.icon + ' ' + d.status.label));
     if (d.next) b.append(el('span', 'next', 'Next: ' + d.next.text));
     if (d.stop && d.stop.safe) {

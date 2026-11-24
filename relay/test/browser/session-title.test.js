@@ -35,7 +35,7 @@ pageTest('a /rename title shows after the name on the tag, the row and the panel
   await R.hook({ session_id: s.sessionId.slice(0, 12), hook_event_name: 'Stop', title: FULL, customTitle: FULL });
 
   await row(who).locator('.name > em', { hasText: SHOWN.trim() }).waitFor();
-  const r = await row(who).evaluate((li) => ({ name: li.querySelector('b').textContent, named: li.querySelector('.name > em').textContent, tip: li.querySelector('.name > em').title, tags: li.querySelector('.name > em').children.length, label: li.querySelector('.pick').getAttribute('aria-label') }));
+  const r = await row(who).evaluate((li) => ({ name: li.querySelector('b').textContent, named: li.querySelector('.name > em').textContent, tip: li.querySelector('.name > em').title, tags: li.querySelector('.name > em').children.length, label: li.querySelector('.hit').getAttribute('aria-label') }));
   assert.deepStrictEqual([r.name, r.named, r.tip, r.tags], [who, SHOWN, FULL, 0]);
   assert.ok(r.label.startsWith(who + ', '), r.label);
 
@@ -48,7 +48,7 @@ pageTest('a /rename title shows after the name on the tag, the row and the panel
   assert.strictEqual(await row(plain).locator('.name > em').count(), 0);
 
   // The panel's header, once you pick them.
-  await row(who).locator('.pick').click();
+  await row(who).locator('.hit').click();
   await page.locator('#cc-title', { hasText: 'Claude Code · ' + who + SHOWN }).waitFor();
   assert.strictEqual(await page.getAttribute('#cc-title', 'title'), who + ' · ' + FULL);
 
@@ -62,6 +62,6 @@ pageTest('a /rename title shows after the name on the tag, the row and the panel
   await R.hook({ session_id: s.sessionId.slice(0, 12), hook_event_name: 'Stop', customTitle: '' });
   await page.locator('#cc-title', { hasText: new RegExp('^Claude Code · ' + who + '$') }).waitFor();
   await page.waitForFunction((name) => [...document.querySelectorAll('#tags .tag')].some((el) => el.querySelector('b').textContent === name && el.querySelector('em').textContent === ''), who);
-  await page.waitForFunction((name) => [...document.querySelectorAll('#cards .desk')].some((li) => li.querySelector('b').textContent === name && !li.querySelector('.name > em')), who);
+  await page.waitForFunction((name) => [...document.querySelectorAll('#cards .desk')].some((li) => li.querySelector('b') && li.querySelector('b').textContent === name && !li.querySelector('.name > em')), who);
   assert.deepStrictEqual(p.errors, []);
 }, SOFTWARE);
