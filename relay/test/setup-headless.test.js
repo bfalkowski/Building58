@@ -69,7 +69,7 @@ test('with no display, it prints the room tunnel and the links, and opens nothin
   assert.doesNotMatch(out, /OPENED/);
 });
 
-test('github-app.js create --no-open prints the link and starts no opener', , () => {
+test('github-app.js create --no-open prints the link and starts no opener', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'setup-'));
   const bin = path.join(dir, 'bin');
   fs.mkdirSync(bin);
