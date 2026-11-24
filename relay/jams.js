@@ -49,7 +49,7 @@ function make(body, now) {
   let since = null;
   if (b.since !== undefined) {
     const at = typeof b.since === 'string' && b.since.length <= 40 ? Date.parse(b.since) : NaN;
-    if (!Number.isFinite(at) || at > now) return bad('since is an ISO time, not in the future.');
+    if (!Number.isFinite(at) || at > now || at < now - KEEP_DAYS * DAY) return bad('since is an ISO time, not in the future and not over ' + KEEP_DAYS + ' days ago.');
     since = new Date(at).toISOString();
   }
   return { jam: { at: new Date(now).toISOString(), kind: b.kind, ticket: b.ticket || null, pr: b.pr || null, since, fix, by } };

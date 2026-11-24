@@ -17,7 +17,7 @@ test('make keeps a jam, refuses a bad one, and keeps nothing older than 90 days'
   const ok = jams.make({ kind: 'dev-idle', ticket: 'T-5', pr: 'https://github.com/o/r/pull/5', since: '2026-11-24T10:00:00Z', fix: ' Nudged\nthe Dev. ', by: 'Sam' }, now);
   assert.deepStrictEqual(ok.jam, { at: iso(now), kind: 'dev-idle', ticket: 'T-5', pr: 'https://github.com/o/r/pull/5', since: '2026-11-24T10:00:00.000Z', fix: 'Nudged the Dev.', by: 'Sam' });
   assert.strictEqual(jams.make({ kind: 'other', fix: 'x' }, now).jam.by, 'you');
-  for (const body of [{ kind: 'nope', fix: 'x' }, { kind: 'other' }, { kind: 'other', fix: '   ' }, { kind: 'other', fix: 'x'.repeat(201) }, { kind: 'other', fix: 'x', ticket: 'has space' }, { kind: 'other', fix: 'x', since: 'yesterday' }, { kind: 'other', fix: 'x', since: '2026-11-25T00:00:00Z' }, null]) {
+  for (const body of [{ kind: 'nope', fix: 'x' }, { kind: 'other' }, { kind: 'other', fix: '   ' }, { kind: 'other', fix: 'x'.repeat(201) }, { kind: 'other', fix: 'x', ticket: 'has space' }, { kind: 'other', fix: 'x', since: 'yesterday' }, { kind: 'other', fix: 'x', since: '2026-11-25T00:00:00Z' }, { kind: 'other', fix: 'x', since: '2020-01-01T00:00:00Z' }, null]) {
     assert.ok(jams.make(body, now).error, JSON.stringify(body) + ' is refused');
   }
   const old = [{ at: iso(now - 91 * 24 * HOUR) }, { at: iso(now - 89 * 24 * HOUR) }];

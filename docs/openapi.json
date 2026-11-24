@@ -1147,7 +1147,7 @@
           "Jams"
         ],
         "summary": "Log jam",
-        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. Writes one jam you fixed by hand, {\"kind\", \"fix\", \"ticket\", \"pr\", \"since\", \"by\"}. kind is one of no-first-review, desks-full, news-untold, handed-over, waits-on-state, person-merge, merged-not-done, no-new-commit, main-red, signing-key, workflows-push, dev-idle, tunnel-down or other, and fix is one line of up to 200 characters. ticket and pr are ids with no spaces, since is when it got stuck (an ISO time, not in the future), and by is you unless given. Anything else is 400 bad_param. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. Writes one jam you fixed by hand, {\"kind\", \"fix\", \"ticket\", \"pr\", \"since\", \"by\"}. kind is one of no-first-review, desks-full, news-untold, handed-over, waits-on-state, person-merge, merged-not-done, no-new-commit, main-red, signing-key, workflows-push, dev-idle, tunnel-down or other, and fix is one line of up to 200 characters. ticket and pr are ids with no spaces, since is when it got stuck (an ISO time, not in the future and not over 90 days ago), and by is you unless given. Anything else is 400 bad_param. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "logJam",
         "x-tokens": [],
         "responses": {

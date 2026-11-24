@@ -194,7 +194,7 @@
       ['Merged', String(n.merged), 'in ' + d.days + (d.days === 1 ? ' day' : ' days')],
       ['Median time per ticket', minutesText(n.medianMinutes), 'start to merge'],
       ['Waiting on you', hoursText(n.waitingOnYouHours), 'all waits in the range'],
-      ['Stalled', hoursText(n.stalledHours), 'all kinds of stall'],
+      ['Stalled', hoursText(n.stalledHours), 'detected by the room'],
       ['Jams fixed by hand', String(n.jamsFixedByHand), 'in the jam log'],
       ['Merged with no help', n.noHelpShare === null ? 'none yet' : Math.round(n.noHelpShare) + '%', 'of tickets Autopilot started']
     ];
