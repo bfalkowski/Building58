@@ -76,7 +76,7 @@ const SETTINGS = [
   { name: 'pmCheckMinutes', group: 'COO and PM', label: 'Wait for the PM\'s check for', unit: 'minutes', env: 'RELAY_PM_CHECK_MS', scale: 1 / 60000, def: 10, min: 1, max: 120,
     what: 'How long Autopilot waits for the PM to answer its check of a ticket. If the PM does not answer in time, or no PM is running, Autopilot starts the ticket and says so in its notes.' },
   { name: 'pmSortHours', group: 'COO and PM', label: 'PM sorts the Board every', unit: 'hours', env: 'RELAY_PM_SORT_HOURS', def: 0, min: 0, max: 168, zero: true,
-    what: 'How often the relay asks the PM to look at every Triage and Ready ticket, do what its PM trust rung allows, and post a short summary in the chat. It asks only while no ticket is starting, and only of a PM that is running. At rungs 0 and 1 the PM only writes advice. 0 stops it.' },
+    what: 'How often the relay asks the PM to look at every Triage and Ready ticket, do what its PM trust rung allows, and post a short summary in the chat. It asks only while no ticket is starting, and only of a PM that is running. At rung 1 the PM only writes advice, and at rung 0 (Off) nothing is asked. 0 stops it.' },
   { name: 'pmTalkMinutes', group: 'COO and PM', label: 'Keep the PM after you type for', unit: 'minutes', env: 'RELAY_PM_TALK_MINUTES', def: 30, min: 1, max: 600,
     what: 'After you type to the PM, nobody can stop the PM as idle for this long.' },
   ...[['lead', 'The Lead', 'pstack:recall'],

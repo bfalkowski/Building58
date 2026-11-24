@@ -370,6 +370,7 @@ function adviceFrom(body) {
 function advise(channel, ticket, body, agent) {
   if (!agent || agent.role !== 'pm') return [403, { ok: false, error: 'forbidden', message: 'Only the PM answers the check of a ticket.' }];
   if (!trust.may(trust.ADVISE)) return [403, { ok: false, error: 'forbidden', message: 'PM trust is Off, so the PM does not check tickets.' }];
+  if (pmCheck.seat(channel) !== agent) return [403, { ok: false, error: 'forbidden', message: 'Another PM started after this one, and only the newest PM may answer the check.' }];
   const { advice, error } = adviceFrom(body);
   if (error) return error;
   return inTurn(channel, async () => {

@@ -305,3 +305,44 @@ test('the scheduled sort runs at its interval, writes its summary brief, and nev
   const first = await sorts(seat);
   await H.until(async () => (await sorts(seat)) > first, 'a second sort an interval later', 40);
 });
+
+test('a check for a ticket that is no longer next is dropped, so it does not block the sort or start the ticket unchecked', async (t) => {
+  const { R, ready, triage, pmSeat, taskOf } = await room({ RELAY_PM_SORT_UNIT_MS: '1000', RELAY_PM_SORT_RETRY_MS: '300', RELAY_PM_CHECK_MS: '60000' });
+  t.after(R.stop);
+  const low = await ready('Low and next', { priority: 'low' });
+  const seat = await pmSeat();
+  assert.strictEqual((await R.call('POST', '/autopilot', { on: true })).status, 200);
+  await H.until(() => seat.asked(low), 'the check of the low ticket');
+  const high = await ready('High and now next', { priority: 'high' });
+  await H.until(() => seat.asked(high), 'the check of the ticket that went ahead');
+  assert.strictEqual((await seat.advise(high, { answer: 'start', why: 'Go.' })).status, 200);
+  await H.until(() => taskOf(high), 'the high ticket to start');
+  await seat.idle();
+  const briefs = async () => (await R.screen(seat.pm.id)).split(CHECK + low + '.').length - 1;
+  await H.until(async () => (await briefs()) >= 2, 'the low ticket to be asked again, not started unchecked');
+  assert.strictEqual(await taskOf(low), undefined);
+  assert.strictEqual((await seat.advise(low, { answer: 'start', why: 'Go.' })).status, 200);
+  await H.until(() => taskOf(low), 'the low ticket to start once checked');
+  await triage('Left in Triage');
+  await seat.idle();
+  assert.strictEqual((await R.call('POST', '/settings', { values: { pmSortHours: 1 } })).status, 200);
+  await H.until(async () => (await R.screen(seat.pm.id)).includes(SORT), 'the sort, since no stale check blocks it', 40);
+});
+
+test('the sort does nothing at Off, and an older PM cannot answer the check', async (t) => {
+  const { R, ready, pmSeat } = await room({ RELAY_PM_SORT_UNIT_MS: '500', RELAY_PM_SORT_RETRY_MS: '300' });
+  t.after(R.stop);
+  const id = await ready('Waiting');
+  const older = await pmSeat();
+  await H.sleep(20);
+  const newer = await pmSeat();
+  assert.strictEqual((await older.advise(id, { answer: 'start', why: 'Go.' })).status, 403, 'only the newest PM');
+  assert.strictEqual((await newer.advise(id, { answer: 'start', why: 'Go.' })).status, 200);
+  assert.strictEqual((await rung(R, 0)).status, 200);
+  assert.strictEqual((await R.call('POST', '/settings', { values: { pmSortHours: 1 } })).status, 200);
+  await H.sleep(2500);
+  assert.ok(!(await R.screen(newer.pm.id)).includes(SORT), 'no sort at Off');
+  assert.ok(!(await R.screen(older.pm.id)).includes(SORT));
+  assert.strictEqual((await rung(R, 1)).status, 200);
+  await H.until(async () => (await R.screen(newer.pm.id)).includes(SORT), 'the sort once the rung is Advise', 40);
+});

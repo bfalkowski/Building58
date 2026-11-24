@@ -34,8 +34,12 @@ const GO = (said) => ({ go: true, said: said || null });
 
 function consult(channel, ticket, all) {
   const rung = trust.level();
-  if (rung < trust.ADVISE) return GO();
+  if (rung < trust.ADVISE) {
+    for (const other of [...asked.keys()]) if (other.startsWith(channel + '/')) give(channel, other.slice(channel.length + 1));
+    return GO();
+  }
   const id = ticket.id, key = keyOf(channel, id);
+  for (const other of [...asked.keys()]) if (other.startsWith(channel + '/') && other !== key) give(channel, other.slice(channel.length + 1));
   let p = asked.get(key);
   const pm = seat(channel);
   if (p && p.answer) {
@@ -87,7 +91,7 @@ function answered(channel, id, answer, did) {
 const takeHeld = (channel) => { const said = held.get(channel) || []; held.delete(channel); return said; };
 const prefer = (channel) => preferred.get(channel) || null;
 const clearPrefer = (channel) => { preferred.delete(channel); };
-const waiting = (channel) => [...asked.keys()].some((k) => k.startsWith(channel + '/'));
+const waiting = (channel) => [...asked].some(([k, p]) => k.startsWith(channel + '/') && Date.now() - p.askedAt < limitMs());
 const forget = () => { asked.clear(); chains.clear(); preferred.clear(); held.clear(); };
 
 module.exports = { consult, answered, takeHeld, prefer, clearPrefer, waiting, seat, forget };

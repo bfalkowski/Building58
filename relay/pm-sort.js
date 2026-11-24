@@ -2,7 +2,7 @@
 // off) the relay saves the sort brief for the newest running PM through relay/delivery.js, so it is typed only
 // when the PM is idle. It never runs while a start is in progress: a ticket starting, Autopilot starting one,
 // or a PM check that Autopilot waits on. A sort that is due then waits, and is tried again every
-// RETRY_MS. What the PM may do is the PM trust rung, which the brief names: at Off and Advise it only writes advice.
+// RETRY_MS. What the PM may do is the PM trust rung, which the brief names: at Advise it only writes advice, and at Off nothing is asked.
 'use strict';
 const config = require('./config.js');
 const terminal = require('./terminal.js');
@@ -21,6 +21,7 @@ let timer = null;
 const startInProgress = (channel) => require('./tickets.js').startingNow(channel) || require('./autopilot.js').starting() || pmCheck.waiting(channel);
 
 async function ask(channel) {
+  if (trust.level() < trust.ADVISE) return { done: true, why: 'PM trust is Off.' };
   const pm = pmCheck.seat(channel);
   if (!pm) return { done: true, why: 'No PM is running.' };
   if (startInProgress(channel)) return { done: false, why: 'A start is in progress.' };

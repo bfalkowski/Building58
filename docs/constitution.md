@@ -563,7 +563,7 @@ running, no answer in time, or PM trust at Off, Autopilot starts the ticket as i
 says so in its notes. The Lead's own starts are not checked. A second setting, **PM sorts the
 Board every**, has the PM look at all Triage and Ready tickets on a schedule, do what its rung
 allows, and post a short summary in the chat. It runs only while no start is in progress, and at
-rungs 0 and 1 it only writes advice.
+rung 1 it only writes advice, and at rung 0 it does not run.
 
 *Today (2026-11-24):* the ladder is built (ticket 386): **PM trust**, **Wait for the PM's check for**
 and **PM sorts the Board every** in Settings, under COO and PM. The relay keeps the rung in the
