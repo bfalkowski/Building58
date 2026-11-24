@@ -55,6 +55,12 @@
 //   Findings: ...
 //   Hand checks still open: ...
 //   EOF
+// Any session can add a note to a ticket at any status. A note never changes the ticket's title, body, status,
+// priority or approval. The card shows it with who wrote it and when, and the brief of the next session on the
+// ticket carries it under a heading that says a session wrote it and the person did not approve it:
+//   node relay/ticket.js note T-1 --body - <<'EOF'
+//   The cause is in relay/tickets.js, not relay/tasks.js. Run npm test first.
+//   EOF
 // Only the person, the PM and the Lead can edit a ticket in Triage or Ready: its title, its body and its
 // priority, each optional. A new priority needs the switch below. A session's edit to the title or body of
 // a ticket the person approved takes the approval back:
@@ -162,6 +168,7 @@ async function main() {
     console.log('Status: ' + t.status + '. Priority: ' + t.priority + '. Filed by: ' + by + '.');
     console.log('Blocked by: ' + ((t.blockedBy || []).length ? t.blockedBy.map(blocker).join(', ') : 'nothing') + '.');
     console.log('\n' + (t.body && t.body.trim() ? t.body : '(no body)'));
+    for (const n of t.notes || []) console.log('\nNote from ' + n.by + ' at ' + n.at + ' (a session wrote it and the person did not approve it):\n' + n.text);
     return 0;
   }
   if (cmd === 'kinds') {
@@ -209,6 +216,16 @@ async function main() {
     const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/edit', { method: 'POST', headers, body: JSON.stringify({ title: f.title, body: f.body, priority: f.priority }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log((r.unchanged ? 'Nothing new, nothing changed: ' : 'Edited: ') + r.ticket.id + '  ' + r.ticket.priority + '  ' + r.ticket.title + (r.approvalTaken ? '  (the person approves it again before it starts)' : ''));
+    return 0;
+  }
+  if (cmd === 'note' && args[0]) {
+    const f = flags(args.slice(1));
+    if (f.rest.length) { console.error('Unknown words: ' + f.rest.join(' ') + '. Put the note in --body - with a heredoc, or --body-file path.'); return 1; }
+    if (!f.bodyFrom) { console.error('Use: ticket.js note T-1 --body - <<\'EOF\' then the note and a last line of only EOF.'); return 1; }
+    if (!(await readBody(f))) return 1;
+    const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/note', { method: 'POST', headers, body: JSON.stringify({ text: f.body }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log('Noted: ' + r.ticket.id + '  ' + r.ticket.title + '  (' + r.ticket.notes.length + (r.ticket.notes.length === 1 ? ' note' : ' notes') + ')');
     return 0;
   }
   if (PROPOSE[cmd] && args[0]) {
@@ -352,7 +369,7 @@ async function main() {
     console.log('Moved: ' + moved.id + '  ' + (r.ticket ? moved.status : moved.state) + (r.ticket && r.ticket.pr ? '  ' + r.ticket.pr : ''));
     return 0;
   }
-  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js show T-1, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js ready (run it bare to see how), ticket.js review <PR link>, ticket.js fix T-1 (with Let the Lead merge on), or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
+  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js show T-1, ticket.js note T-1 --body -, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js ready (run it bare to see how), ticket.js review <PR link>, ticket.js fix T-1 (with Let the Lead merge on), or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
   return 1;
 }
 main().then((code) => { process.exitCode = code; }, (e) => { console.error('The relay did not answer: ' + e.message); process.exitCode = 1; });

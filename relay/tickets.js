@@ -21,6 +21,7 @@ const { boardOrder, lastRank, placeNear } = require('./ticket-order.js');
 const { heldBack, MARKS, proposalWords } = require('./autopilot-plan.js');
 const { likelyTwins } = require('./ticket-twins.js');
 const { writeLine } = require('./needs-you-plan.js');
+const notes = require('./ticket-notes.js');
 
 const STATUSES = ['triage', 'ready', 'started', 'done', 'rejected'];
 const PRIORITIES = ['high', 'normal', 'low'];
@@ -108,7 +109,7 @@ async function view(channel, ticket, all, needs) {
   const board = task && task.state !== 'done' && (needs === undefined ? needsYouOf(channel) : needs);
   const look = board ? board.get(task.id) || { needsYou: null, reviewRuns: false } : null;
   const failed = writeErrors(channel, Date.now()).find((w) => w.id === ticket.id);
-  return Object.assign({}, ticket, { writeError: failed ? writeLine(failed) : null, assignee, history: steps, approved: personApproved(ticket), proposal: ticket.proposal || undefined, heldBack: heldBack(ticket, all), waitingFor: waitingFor(ticket, all), rejectedBlockers: blockersOf(ticket, all, ['rejected']), task: task ? Object.assign({ id: task.id, state: task.state, branch: task.branch, pr: task.pr, by: startedBy(task), startedAt: task.createdAt, pipeline: task.pipeline, waitsOn: task.waitsOn || null }, look) : null });
+  return Object.assign({}, ticket, { writeError: failed ? writeLine(failed) : null, assignee, history: steps, approved: personApproved(ticket), notes: Array.isArray(ticket.notes) ? ticket.notes : [], proposal: ticket.proposal || undefined, heldBack: heldBack(ticket, all), waitingFor: waitingFor(ticket, all), rejectedBlockers: blockersOf(ticket, all, ['rejected']), task: task ? Object.assign({ id: task.id, state: task.state, branch: task.branch, pr: task.pr, by: startedBy(task), startedAt: task.createdAt, pipeline: task.pipeline, waitsOn: task.waitsOn || null }, look) : null });
 }
 async function followTasks(channel, list) {
   for (const t of list) {
@@ -253,6 +254,22 @@ function sessionMayOrder(channel, agent) {
 function orderOff(channel, agent) {
   const no = agent && sessionMayOrder(channel, agent);
   return no ? [403, { ok: false, error: 'forbidden', message: no }] : null;
+}
+const noteBy = (agent) => (!agent ? 'you' : agent.role === 'reviewer' || agent.reviewOf ? 'Reviewer' : oneLine(agentName(agent), 60));
+function addNote(channel, ticket, body, agent) {
+  const text = clean(body.text);
+  if (!text) return [400, { ok: false, error: 'bad_note', message: 'A note needs words.' }];
+  if (text.length > notes.MAX_NOTE) return [400, { ok: false, error: 'bad_note', message: 'Keep the note to ' + notes.MAX_NOTE + ' characters.' }];
+  return inTurn(channel, async () => {
+    const now = await store.get(channel, ticket.id);
+    if (!now) return [404, { ok: false, error: 'no_ticket', message: 'No such ticket on this channel.' }];
+    if ((now.notes || []).length >= notes.MAX_NOTES) return [409, { ok: false, error: 'notes_full', message: now.id + ' already has ' + notes.MAX_NOTES + ' notes. Ask the person or the Lead to fold them into its body.' }];
+    const note = { by: noteBy(agent), at: new Date().toISOString(), text };
+    const noted = typeof store.addNote === 'function' ? await store.addNote(channel, now.id, note) : await store.update(channel, now.id, { notes: (now.notes || []).concat(note) });
+    if (!noted) return [404, { ok: false, error: 'no_ticket', message: 'No such ticket on this channel.' }];
+    const all = await listAll(channel);
+    return [200, { ok: true, ticket: await view(channel, noted, all.map((t) => (t.id === noted.id ? noted : t))) }];
+  });
 }
 const PROPOSALS = ['replace', 'merge', 'close', 'blockers'];
 const CLOSED_AS = { replace: 'replaced', merge: 'merged', close: 'closed' };
@@ -430,7 +447,7 @@ async function startTicket(channel, ticket, body, ctx, agent, by) {
       return [list, now, null];
     });
     if (refused) return refused;
-    const [status, out] = await tasks.create(channel, { title: ticket.title, brief: ticket.body, repo: ticket.repo, base: ticket.base, ticket: ticket.id, ticketAt: ticket.createdAt, by: by || (agent ? 'Lead' : 'you'), lead: agent || undefined, cols: body.cols, rows: body.rows }, ctx);
+    const [status, out] = await tasks.create(channel, { title: ticket.title, brief: notes.withNotes(ticket.body, ticket.notes), repo: ticket.repo, base: ticket.base, ticket: ticket.id, ticketAt: ticket.createdAt, by: by || (agent ? 'Lead' : 'you'), lead: agent || undefined, cols: body.cols, rows: body.rows }, ctx);
     if (status >= 400) {
       const baseGone = out.error === 'no_base' && ticket.base;
       await store.update(channel, ticket.id, { status: baseGone ? 'ready' : ticket.status });
@@ -557,7 +574,7 @@ async function edit(channel, ticket, body, agent) {
 }
 
 async function handle(req, res, channel, rest, ctx) {
-  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|order|edit|propose|proposal)|\/([\w-]{1,64}))?$/);
+  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|order|edit|propose|proposal|note)|\/([\w-]{1,64}))?$/);
   if (!route) { if (!/^\/tickets(\/|$)/.test(rest)) return false; ctx.problem(res, 404, 'not_found', 'Unknown ticket route.'); return true; }
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
@@ -591,6 +608,10 @@ async function handle(req, res, channel, rest, ctx) {
       else if (req.method === 'POST' && verb === 'edit') {
         out = await edit(channel, ticket, body || {}, ctx.agent);
         if (ctx.agent && out[1].ok && !out[1].unchanged) ctx.log('The ' + (ctx.agent.lead ? 'Lead' : 'PM') + ' edited ' + ticket.id + ': ' + out[1].edited.join(', ') + (out[1].approvalTaken ? '. It needs your approval again.' : ''));
+      }
+      else if (req.method === 'POST' && verb === 'note') {
+        out = await addNote(channel, ticket, body || {}, ctx.agent);
+        if (ctx.agent && out[1].ok) ctx.log(noteBy(ctx.agent) + ' added a note to ' + ticket.id);
       }
       else if (req.method === 'POST' && verb === 'propose') {
         out = await propose(channel, ticket, body || {}, ctx.agent);

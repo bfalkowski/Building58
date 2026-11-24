@@ -38,12 +38,12 @@ if (status >= 400) stop(status, out);
 console.log(JSON.stringify(args.includes('--slurp') ? [out] : out));
 
 function handle() {
-  const m = /^\/repos\/([\w.-]+\/[\w.-]+)\/(labels|issues)(?:\/(\d+))?(?:\/dependencies\/blocked_by(?:\/(\d+))?)?$/.exec(where);
+  const m = /^\/repos\/([\w.-]+\/[\w.-]+)\/(labels|issues)(?:\/(\d+))?(?:\/(comments)|\/dependencies\/blocked_by(?:\/(\d+))?)?$/.exec(where);
   if (!m) { status = 404; return 'Not Found'; }
-  const [, name, kind, num, blockerId] = m;
+  const [, name, kind, num, comments, blockerId] = m;
   const repo = state[name] || (state[name] = { next: 1, issues: [], labels: [] });
   const now = () => new Date(Date.now() + (state.tick = (state.tick || 0) + 1) * 1000).toISOString().replace(/\.\d+Z$/, 'Z');  // each change a second later, as on GitHub
-  const view = (i) => ({ ...i, labels: i.labels.map((n) => ({ name: n })), repository_url: 'https://api.github.com/repos/' + name, issue_dependencies_summary: { blocked_by: i.blockedBy.length, total_blocked_by: i.blockedBy.length, blocking: 0, total_blocking: 0 }, blockedBy: undefined });
+  const view = (i) => ({ ...i, labels: i.labels.map((n) => ({ name: n })), repository_url: 'https://api.github.com/repos/' + name, issue_dependencies_summary: { blocked_by: i.blockedBy.length, total_blocked_by: i.blockedBy.length, blocking: 0, total_blocking: 0 }, blockedBy: undefined, comments: (i.comments || []).length });
   if (kind === 'labels') {
     if (repo.labels.includes(input.name)) { status = 422; return 'Validation Failed'; }
     repo.labels.push(input.name); status = 201; return { name: input.name };
@@ -60,6 +60,11 @@ function handle() {
   }
   const issue = repo.issues.find((i) => i.number === Number(num));
   if (!issue) { status = 404; return 'Not Found'; }
+  if (comments) {
+    if (method === 'GET') return (issue.comments || []).map((c) => ({ ...c }));
+    const at = now(), c = { id: 5000 + (issue.comments || []).length, body: input.body, created_at: at, user: { login: 'someone' } };
+    issue.comments = (issue.comments || []).concat(c); issue.updated_at = at; status = 201; return c;
+  }
   if (where.includes('/dependencies/')) {
     if (method === 'GET') return issue.blockedBy.map((id) => view(repo.issues.find((i) => i.id === id)));
     if (method === 'POST') {

@@ -35,6 +35,8 @@
 #board-cols .th-session .btn { padding: 2px 6px; font-size: 11px; }
 #board-cols li[data-found], #board-rejected li[data-found] { outline: 2px solid var(--wait); outline-offset: 1px; }
 .proposal { margin: 6px 0 4px; font-size: 12px; }
+.ticket-notes { margin: 6px 0 4px; padding-left: 16px; font-size: 12px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ticket-notes b { color: var(--pane-dim); font-weight: 600; }
 .write-error { margin: 6px 0 4px; font-size: 12px; color: var(--err); }
 .card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .card-actions .btn { padding: 5px 8px; font-size: 12px; }

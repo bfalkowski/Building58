@@ -28,7 +28,7 @@ const events = new EventEmitter();
 let beforeClean = null;
 const onClean = (fn) => { beforeClean = fn; };
 const VERIFY_SKILL = '.claude/skills/verify/SKILL.md';
-const MAX_TITLE = 80, MAX_BRIEF = 8000, MAX_HISTORY = 200;
+const MAX_TITLE = 80, MAX_BRIEF = 16000, MAX_HISTORY = 200;
 
 let store = {};
 try { store = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch (e) {
