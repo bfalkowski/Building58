@@ -96,6 +96,7 @@ function taskItem(t, dev) {
   if (pr && t.prClosed) return item('closed', 'PR ' + numberOf(pr) + onPr + ' was closed on GitHub without a merge. Look at it. This line stays until the PR is reopened, its task gets a new PR, or its task is Done.', { url: pr });
   if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
+  if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns && /came back empty/.test(t.reviewFailed)) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': the review came back empty, twice, with no verdict or no words on what was checked.', dev ? { terminal: dev.terminal } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
   if (t.state === 'waiting_on_you') {
     if (t.reviewRuns || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;

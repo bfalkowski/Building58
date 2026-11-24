@@ -115,22 +115,23 @@ test('a posted review stays linked to its verdict, whatever comes after it', asy
     await say(r, 'Stop');
     await sleep(1500);
     assert.strictEqual(merged(), '', 'another account, a comment from before the review, or another commit is not its review');
-    answers({ 'repos/acme/widgets/issues/7/comments': comments.concat({ id: 4, html_url: PR + '#issuecomment-604', user: { login: 'office-bot' }, created_at: at, body: '## Review of 99296df..' + head.slice(0, 7) + '\n\n**Verdict: merge.**' }), user: { login: 'office-bot' } });
+    answers({ 'repos/acme/widgets/issues/7/comments': comments.concat({ id: 4, html_url: PR + '#issuecomment-604', user: { login: 'office-bot' }, created_at: at, body: '## Review of 99296df..' + head.slice(0, 7) + '\n\nI read the diff and ran the tests.\n**Verdict: merge.**' }), user: { login: 'office-bot' } });
     await say(r, 'Stop');
     await mergedHead();
     await stop(r);
   });
 });
 
+const WORDS = '\n\nI read the diff and ran the tests.\n**Verdict: merge.**';
 test('a review heading names the commit it reviewed, or a range ending in it', () => {
   const head = '04fe778091e19b67dc60a782f083d704434a7c31';
   const since = Date.parse('2026-11-08T22:09:05Z');
   const c = (body, extra) => Object.assign({ html_url: 'https://github.com/bfalkowski/3d/pull/162#issuecomment-1', user: { login: 'bfalkowski' }, created_at: '2026-11-08T22:51:50Z', body }, extra);
   const found = (comments) => reviewPostFor(comments, { login: 'bfalkowski', since, commit: head });
-  assert.strictEqual(found([c('## Review of 99296df..04fe778\n\n**Verdict: merge.**')]), 'https://github.com/bfalkowski/3d/pull/162#issuecomment-1');
-  assert.ok(found([c('## Review of 04fe778\n')]), 'the head alone');
-  assert.ok(found([c('# Review of `99296df...04fe778091e1`\n')]), 'three dots, a longer hash, in code');
-  assert.ok(found([c('\n\n### review of 99296DF..04FE778\n')]), 'case and blank lines first');
+  assert.strictEqual(found([c('## Review of 99296df..04fe778'+WORDS)]), 'https://github.com/bfalkowski/3d/pull/162#issuecomment-1');
+  assert.ok(found([c('## Review of 04fe778'+WORDS)]), 'the head alone');
+  assert.ok(found([c('# Review of `99296df...04fe778091e1`'+WORDS)]), 'three dots, a longer hash, in code');
+  assert.ok(found([c('\n\n### review of 99296DF..04FE778'+WORDS)]), 'case and blank lines first');
   for (const [why, x] of [
     ['a range that starts at the head', c('## Review of 04fe778..99296df\n')],
     ['another commit', c('## Review of 99296df\n')],
@@ -141,7 +142,7 @@ test('a review heading names the commit it reviewed, or a range ending in it', (
     ['a link that is not a PR comment', c('## Review of 04fe778\n', { html_url: 'https://example.com/x' })]
   ]) assert.strictEqual(found([x]), null, why);
   // The newest that matches, as a reviewer that posts twice means the second.
-  assert.strictEqual(found([c('## Review of 04fe778\n'), c('## Review of 04fe778\n', { html_url: 'https://github.com/bfalkowski/3d/pull/162#issuecomment-2', created_at: '2026-11-08T22:55:00Z' })]), 'https://github.com/bfalkowski/3d/pull/162#issuecomment-2');
+  assert.strictEqual(found([c('## Review of 04fe778'+WORDS), c('## Review of 04fe778'+WORDS, { html_url: 'https://github.com/bfalkowski/3d/pull/162#issuecomment-2', created_at: '2026-11-08T22:55:00Z' })]), 'https://github.com/bfalkowski/3d/pull/162#issuecomment-2');
 });
 
 test('the hook says a prompt is a task notice, and sends none of its words', () => {
