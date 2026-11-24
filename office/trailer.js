@@ -155,13 +155,14 @@
     [72.1, speed(1)]
   ];
 
-  let start = null, fired = 0, last = null;
+  let start = null, fired = 0, last = null, taken = false;
   function fade(t, a, d, edge) { return Math.min(smooth((t - a) / edge), smooth((a + d - t) / edge)); }
   function fire(cue) { try { cue(); return true; } catch (e) { return false; } }
   function tick(now) {
     requestAnimationFrame(tick);
     if (start === null) start = now;
     const t = window.trailer.clock != null ? window.trailer.clock : (now - start) / 1000;
+    if (window.trailer.clock != null && !taken) { taken = true; fired = 0; }
     if (window.trailer.clock != null) run.clock(t);
     while (fired < CUES.length && CUES[fired][0] <= t) { fire(CUES[fired][1]); fired++; }
     const s = SHOTS.find((x) => t >= x.at && t < x.at + x.dur) || SHOTS[SHOTS.length - 1];
