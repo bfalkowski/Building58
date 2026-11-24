@@ -68,6 +68,9 @@ function skipped(board) {
   });
 }
 
-const findings = (board) => [].concat(quiet(board), checks(board), unbriefed(board), slots(board), handoffs(board), skipped(board));
+function findings(board) {
+  const held = slots(board), heldTasks = new Set(held.map((f) => f.task));
+  return [].concat(quiet(board).filter((f) => !heldTasks.has(f.task)), checks(board), unbriefed(board), held, handoffs(board), skipped(board));
+}
 
 module.exports = { findings };

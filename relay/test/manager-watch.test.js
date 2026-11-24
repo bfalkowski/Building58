@@ -64,7 +64,7 @@ test('a check that fails on three commits in a row is a note, and a pass starts 
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_GH_FRESH_MS: '0', RELAY_MANAGER_WATCH_SECONDS: '1', RELAY_MANAGER_BUILDING_MS: '3600000000', RELAY_MANAGER_SLOT_MS: '3600000000', RELAY_MANAGER_CHECK_FAILS: '3' }), { call } = R;
   t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), PR = 'https://github.com/acme/widgets/pull/7';
-  const answer = (head, conclusion) => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: head, mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN', statusCheckRollup: [{ name: 'pipeline', status: 'COMPLETED', conclusion }] } } }));
+  const answer = (head, conclusion) => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: head, mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN', statusCheckRollup: conclusion === 'ABSENT' ? [] : [{ name: 'pipeline', status: 'COMPLETED', conclusion }] } } }));
   const notes = async () => (await call('GET', '/manager')).body.notes.filter((n) => n.kind === 'check');
   const ticket = (await call('POST', '/tickets', { title: 'Make a.txt say hello', body: 'Change a.txt.', repo })).body.ticket;
   const task = (await call('POST', '/tickets/' + ticket.id + '/start', {})).body.task;
@@ -88,4 +88,7 @@ test('a check that fails on three commits in a row is a note, and a pass starts 
   await seen('1'.repeat(40), 1);
   await seen('2'.repeat(40), 2);
   assert.strictEqual((await notes()).length, 1, 'two failures after a pass are not three');
+  await seen('3'.repeat(40), 0, 'ABSENT');
+  await seen('4'.repeat(40), 1);
+  assert.strictEqual((await notes()).length, 1, 'a check absent from a commit starts the count again');
 });

@@ -31,6 +31,7 @@ const plan = require('./manager-watch-plan.js');
 
 const FILE = state.file('manager-watch.json', 'RELAY_MANAGER_WATCH_FILE');
 const NOTES_KEPT = 30;
+const FILE_PER_LOOK = 3;
 const MAX_FAILED_HEADS = 20;
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 const BUILDING = ['building', 'changes_requested'];
@@ -74,6 +75,8 @@ async function failedChecks(channel, task) {
   try { view = await gh.pr(task.pr, task.repo); } catch (e) { return []; }
   const head = String((view && view.headRefOid) || '');
   const mine = c[task.pr] || (c[task.pr] = {});
+  const present = new Set(((view && view.statusCheckRollup) || []).map(checkName));
+  for (const name of Object.keys(mine)) if (head && !present.has(name)) delete mine[name];
   for (const check of (view && view.statusCheckRollup) || []) {
     const name = checkName(check), result = String(check.conclusion || check.state || '').toUpperCase();
     if (!name || !head) continue;
@@ -148,14 +151,16 @@ async function look(channel, now) {
   const c = chOf(channel);
   const found = plan.findings(await boardOf(channel, now));
   const keys = new Set(found.map((f) => f.key));
+  let filedNow = 0;
   for (const key of Object.keys(c.open)) if (!keys.has(key)) delete c.open[key];
   for (const f of found) {
     let rec = c.open[f.key];
     const isNew = !rec;
     if (isNew) rec = c.open[f.key] = { at: now, ticket: null, tries: 0 };
-    if (!rec.ticket && rec.tries < 3) {
-      rec.tries++;
+    if (!rec.ticket && rec.tries < 3 && filedNow < FILE_PER_LOOK) {
+      rec.tries++; filedNow++;
       try { rec.ticket = (await file(channel, f)) || null; } catch (e) { log('Could not file a ticket for ' + f.key + ': ' + e.message); }
+      if (rec.ticket) c.notes.filter((n) => n.key === f.key).forEach((n) => { n.filed = rec.ticket; });
     }
     if (isNew) {
       c.notes.push({ seq: ++c.seq, at: new Date(now).toISOString(), key: f.key, kind: f.kind, ticket: f.ticket, task: f.task, terminal: f.terminal, reason: f.reason, say: f.say, filed: rec.ticket });

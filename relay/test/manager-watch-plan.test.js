@@ -51,6 +51,12 @@ test('a building slot with no Dev, whether its session is gone or was never ther
   assert.deepStrictEqual(kinds(board({ tasks: [task({ dev: 'gone', terminal: null, since: NOW - 11 * MIN, slot: false })] })), [], 'a task that holds no slot');
 });
 
+test('a task that is quiet and holds a slot with no Dev is one finding, the slot', () => {
+  const both = task({ dev: 'gone', terminal: null, movedAt: NOW - 90 * MIN, since: NOW - 90 * MIN });
+  assert.deepStrictEqual(kinds(board({ tasks: [both] })), ['slot']);
+  assert.deepStrictEqual(kinds(board({ tasks: [both, task({ id: 't2', movedAt: NOW - 90 * MIN })] })), ['quiet', 'slot'], 'another task is still its own finding');
+});
+
 test('Autopilot handing several tasks in a row to you is one finding, and a merge between them ends the row', () => {
   const run = (n, outcome) => ({ task: 't' + n, ticket: 'T-' + n, repo: '/r', outcome });
   const [f] = findings(board({ runs: [run(1, 'handed'), run(2, 'handed'), run(3, 'handed')] }));
