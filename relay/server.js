@@ -171,16 +171,17 @@ function serveStatic(req, res, url) {
 }
 
 let pageSeq = 0;
+const throughTunnel = (req) => cfAccess.CF_HEADERS.some((h) => req.headers[h] !== undefined) || !!(REMOTE && REMOTE.applies(req));
 const visibleCount = (ch) => ch.pages.filter((p) => p.visible).length;
 function openStream(req, res, ch, url) {
   res.writeHead(200, Object.assign({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' }, cors()));
   res.write('retry: 2000\n\n');
-  const page = { id: ++pageSeq, res, since: new Date().toISOString(), visible: true };
+  const page = { id: ++pageSeq, res, since: new Date().toISOString(), visible: true, tunnel: throughTunnel(req) };
   ch.pages.push(page); ch.lastSeen = page.since;
   const board = !!office && url.searchParams.get('board') === '1' && office.boardPush.sends(req, PORT);
   res.write('event: hello\ndata: ' + JSON.stringify({ channel: ch.name, page: page.id, tickets: board }) + '\n\n');
   if (board) office.boardPush.watch(req, res, ch.name, log);
-  log('page connected to', ch.name, '(' + ch.pages.length + ' open)');
+  log('page connected to', ch.name, (page.tunnel ? 'through a tunnel ' : '') + '(' + ch.pages.length + ' open)');
   const ping = setInterval(() => res.write(': ping\n\n'), 15000);
   req.on('close', () => {
     clearInterval(ping);
@@ -216,8 +217,10 @@ function addEvents(ch, list) {
 }
 
 function pickPage(ch) {
-  const shown = ch.pages.filter((p) => p.visible);
-  return shown.length ? shown[shown.length - 1] : ch.pages[ch.pages.length - 1];
+  const local = ch.pages.filter((p) => !p.tunnel);
+  const pool = local.length ? local : ch.pages;
+  const shown = pool.filter((p) => p.visible);
+  return shown.length ? shown[shown.length - 1] : pool[pool.length - 1];
 }
 function sendCommand(ch, command) {
   const page = pickPage(ch);
