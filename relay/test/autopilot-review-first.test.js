@@ -60,10 +60,10 @@ test('a free desk, a review that waits and a Ready ticket: the review starts, no
   const waits = await o.dev();
   while ((await o.terminals()).length < DESKS - 1) await o.R.call('POST', '/terminals', { cwd: o.repo });
   const next = await o.ticket();
-  await o.R.call('POST', '/autopilot', { on: true, only: next.id });
   await o.say(waits, 'UserPromptSubmit');
   await o.say(waits, 'PostToolUse', { pr_url: PR(1), cwd: o.repo });
   await o.say(waits, 'Stop');
+  await o.R.call('POST', '/autopilot', { on: true, only: next.id });
   const started = async () => (await o.terminals()).some((x) => x.role === 'reviewer' && x.pr === PR(1));
   const ticketTask = async () => (await o.R.call('GET', '/tasks')).body.tasks.some((x) => x.ticket === next.id);
   await until(async () => {
