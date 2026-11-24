@@ -42,6 +42,15 @@ test('a ticket written with key A is read by a relay with key B: Needs you names
   assert.deepStrictEqual(bodies(), before, 'the notes are as they were');
   assert.strictEqual((await B.call('GET', '/needs-you')).body.items.filter((i) => i.kind === 'ticket-key').length, 1, 'and the line stays');
 
+  const lead = (await B.call('POST', '/terminals', { cwd: repo })).body;
+  await B.hook({ hook_event_name: 'UserPromptSubmit', session_id: lead.sessionId.slice(0, 12), title: '' });
+  assert.strictEqual((await B.call('POST', '/terminals/lead', { terminal: lead.id, board: true })).status, 200);
+  const token = await H.until(() => { try { return { 'X-Office-Token': H.sessionToken(lead.sessionId) }; } catch (e) { return null; } }, 'the token');
+  const byLead = await B.call('POST', '/tickets/' + ready.id + '/move', { to: 'rejected' }, token);
+  assert.notStrictEqual(byLead.status, 200, 'a session\'s move cannot write over a note that does not check');
+  assert.match(JSON.stringify(byLead.body), /key did not sign/);
+  assert.deepStrictEqual(bodies(), before, 'and the notes are as they were');
+
   const closed = await B.call('POST', '/tickets/' + third.id + '/move', { to: 'done', pr: 'https://github.com/o/r/pull/3' });
   assert.strictEqual(closed.status, 200, JSON.stringify(closed.body) + ' a ticket whose note does not check can still be closed');
   const dropped = await B.call('POST', '/tickets/' + ready.id + '/move', { to: 'rejected' });
