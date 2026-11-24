@@ -51,7 +51,7 @@ test('every desk holds an idle Dev and a review waits, with a Ready ticket: the 
   const now = await o.terminals();
   assert.ok(!now.some((x) => x.id === waits.id), 'the idle Dev whose PR waited on the review was stopped');
   assert.ok(now.some((x) => x.id === reviewer.id));
-  await sleep(1200);
+  await until(async () => /^Waiting for a free desk/.test((await o.ap()).idle || ''), 'an Autopilot look to find no free desk');
   assert.ok(!(await o.R.call('GET', '/tasks')).body.tasks.some((x) => x.ticket === next.id), 'the ticket did not take the desk');
 });
 

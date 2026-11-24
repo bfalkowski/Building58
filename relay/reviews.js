@@ -52,6 +52,7 @@ const fs = require('fs');
 const path = require('path');
 const state = require('./state.js');
 const terminal = require('./terminal.js');
+const { livenessOf } = require('./liveness.js');
 const tasks = require('./tasks.js');
 const checkouts = require('./checkouts.js');
 const delivery = require('./delivery.js');
@@ -267,6 +268,8 @@ function waiting(channel) {
 }
 const unposted = (channel, pr) => terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr && !t.posted);
 const owesReview = (channel, pr) => { const r = recOf(channel, pr); return !!(r && (r.first || r.pending)) || starting.has(channel + ' ' + pr) || unposted(channel, pr); };
+const unpostedLive = (channel, pr) => terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr && !t.posted && livenessOf(t, Date.now()).state !== 'gone');
+function owes(channel, pr) { return starting.has(channel + ' ' + pr) || unpostedLive(channel, pr) || waiting(channel).includes(pr); }
 const deadlocks = new Map(), endingSince = new WeakMap();
 function makeRoom(channel, now) {
   const queue = deskQueue(channel);
@@ -314,7 +317,7 @@ function tellStarts(now) {
   }
 }
 
-const reviewing = (channel, pr) => starting.has(channel + ' ' + pr) || terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr);
+const liveReviewer = (channel, pr) => starting.has(channel + ' ' + pr) || terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr);
 function owedFollowUps(channel, c) {
   if (!pipeline.on()) return;
   const follows = followsPushes(channel), max = MAX_AUTO_REVIEWS();
@@ -510,4 +513,4 @@ function deskOf(channel, pr) {
 
 const failedOf = (channel, pr) => { const r = pr && recOf(channel, pr); return (r && r.failed) || null; };
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owes: (channel, pr) => starting.has(channel + ' ' + pr) || unposted(channel, pr) || waiting(channel).includes(pr), waiting, deskQueue, deskLine, deadlockOf, failedOf };
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf };
