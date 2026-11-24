@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.7.0",
+    "version": "2.9.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -61,6 +61,14 @@
     {
       "name": "Manager watch",
       "description": "What the manager notices about stuck work, and the limits he uses."
+    },
+    {
+      "name": "Jams",
+      "description": "The jam log: stalls the person fixed by hand, which the Metrics page counts."
+    },
+    {
+      "name": "Metrics",
+      "description": "The numbers behind the Metrics page: how the room works over time."
     },
     {
       "name": "Needs you",
@@ -1137,6 +1145,90 @@
         }
       }
     },
+    "/channels/{channel}/jams": {
+      "post": {
+        "tags": [
+          "Jams"
+        ],
+        "summary": "Log jam",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. Writes one jam you fixed by hand, {\"kind\", \"fix\", \"ticket\", \"pr\", \"since\", \"by\"}. kind is one of no-first-review, desks-full, news-untold, handed-over, waits-on-state, person-merge, merged-not-done, no-new-commit, main-red, signing-key, workflows-push, dev-idle, tunnel-down or other, and fix is one line of up to 200 characters. ticket and pr are ids with no spaces, since is when it got stuck (an ISO time, not in the future and not over 90 days ago), and by is you unless given. Anything else is 400 bad_param. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "logJam",
+        "x-tokens": [],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JamOne"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewJam"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Jams"
+        ],
+        "summary": "List jams",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. ?range=1d|7d|30d (7d by default, anything else is 400 bad_param) lists the jams logged in the range, oldest first, each with at (when it was logged), kind, ticket, pr, since, fix and by, and kinds gives each kind's name. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "listJams",
+        "x-tokens": [],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JamList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
     "/channels/{channel}/manager": {
       "get": {
         "tags": [
@@ -1153,6 +1245,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/metrics": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get metrics",
+        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getMetrics",
+        "x-tokens": [],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Metrics"
                 }
               }
             }
@@ -2445,7 +2575,7 @@
           "Settings"
         ],
         "summary": "Set settings",
-        "description": "Change the settings on the page, or set them back to their defaults: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinutes\"]}. An unknown name gets 400 with unknown_setting, and a value out of range 400 with bad_value. Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Change the settings on the page, or set them back to their defaults: {\"values\": {\"wipLimit\": 4}, \"reset\": [\"leadCheckMinutes\"]}. An unknown name gets 400 with unknown_setting, and a value out of range 400 with bad_value. Only the person: a session's token gets 403, so no session changes PM trust.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "setSettings",
         "x-tokens": [],
         "responses": {
@@ -3436,6 +3566,67 @@
             }
           }
         ]
+      }
+    },
+    "/channels/{channel}/tickets/{id}/advice": {
+      "post": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Advise ticket",
+        "description": "{\"answer\", \"of\", \"why\"}: the PM's answer to the check before Autopilot starts a ticket in Triage or Ready. answer is start, first, not-needed, duplicate or part-of. first, duplicate and part-of need of, another ticket's id, and the other two take none. why is 1 to 500 characters. It adds a note and a history step to the ticket. From PM trust Hold and propose, not-needed files a close proposal and duplicate and part-of a merge proposal, and at Close and merge the relay approves it as the PM and notes it. The answer is did: advised, proposed or carried out. Only the newest PM's token reaches it, and only while PM trust is above Off: any other token, an older PM's included, and the person's key, gets 403, and so does a ticket that is starting, started, done or rejected. Refused with 400 for an answer or an of that does not fit. See The check before a start.\n\nTokens: the relay key, and the token of a PM. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "adviseTicket",
+        "x-tokens": [
+          "a PM"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
       }
     },
     "/channels/{channel}/tickets/{id}/edit": {
@@ -5001,6 +5192,585 @@
         "required": [
           "ok",
           "sessions"
+        ],
+        "additionalProperties": true
+      },
+      "NewJam": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "no-first-review",
+              "desks-full",
+              "news-untold",
+              "handed-over",
+              "waits-on-state",
+              "person-merge",
+              "merged-not-done",
+              "no-new-commit",
+              "main-red",
+              "signing-key",
+              "workflows-push",
+              "dev-idle",
+              "tunnel-down",
+              "other"
+            ]
+          },
+          "ticket": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Optional: the ticket, such as T-5."
+          },
+          "pr": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Optional: the PR's address."
+          },
+          "since": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Optional: when it got stuck, an ISO time."
+          },
+          "fix": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "One line: what fixed it."
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Optional: who fixed it. you by default."
+          }
+        },
+        "required": [
+          "kind",
+          "fix"
+        ],
+        "additionalProperties": true,
+        "examples": [
+          {
+            "kind": "no-first-review",
+            "ticket": "T-5",
+            "since": "2026-11-24T10:00:00.000Z",
+            "fix": "Pressed Get a review.",
+            "by": "you"
+          }
+        ]
+      },
+      "Jam": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "ticket": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pr": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "since": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fix": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "kind",
+          "fix",
+          "by"
+        ],
+        "additionalProperties": true
+      },
+      "JamOne": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "jam": {
+            "$ref": "#/components/schemas/Jam"
+          }
+        },
+        "required": [
+          "ok",
+          "jam"
+        ],
+        "additionalProperties": true
+      },
+      "JamList": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "range": {
+            "type": "string",
+            "enum": [
+              "1d",
+              "7d",
+              "30d"
+            ]
+          },
+          "keptDays": {
+            "type": "number"
+          },
+          "kinds": {
+            "type": "object"
+          },
+          "jams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Jam"
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "range",
+          "jams"
+        ],
+        "additionalProperties": true
+      },
+      "Metrics": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "at": {
+            "type": "string"
+          },
+          "range": {
+            "type": "string",
+            "enum": [
+              "1d",
+              "7d",
+              "30d"
+            ]
+          },
+          "days": {
+            "type": "number"
+          },
+          "since": {
+            "type": "string"
+          },
+          "keptDays": {
+            "type": "number"
+          },
+          "bucketMinutes": {
+            "type": "number"
+          },
+          "numbers": {
+            "type": "object",
+            "properties": {
+              "merged": {
+                "type": "number"
+              },
+              "medianMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "waitingOnYouHours": {
+                "type": "number"
+              },
+              "stalledHours": {
+                "type": "number"
+              },
+              "noHelpShare": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "jamsFixedByHand": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "merged",
+              "waitingOnYouHours",
+              "stalledHours",
+              "jamsFixedByHand"
+            ],
+            "additionalProperties": true
+          },
+          "merged": {
+            "type": "object",
+            "properties": {
+              "days": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "day": {
+                      "type": "string"
+                    },
+                    "autopilot": {
+                      "type": "number"
+                    },
+                    "person": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "day",
+                    "autopilot",
+                    "person"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "days"
+            ],
+            "additionalProperties": true
+          },
+          "perTicket": {
+            "type": "object",
+            "properties": {
+              "parts": {
+                "type": "object"
+              },
+              "medianMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "tickets": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "ticket": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "mergedAt": {
+                      "type": "string"
+                    },
+                    "minutes": {
+                      "type": "number"
+                    },
+                    "parts": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "mergedAt",
+                    "minutes",
+                    "parts"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "tickets"
+            ],
+            "additionalProperties": true
+          },
+          "where": {
+            "type": "object",
+            "properties": {
+              "parts": {
+                "type": "object"
+              },
+              "minutes": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "minutes"
+            ],
+            "additionalProperties": true
+          },
+          "outcomes": {
+            "type": "object",
+            "properties": {
+              "counts": {
+                "type": "object"
+              },
+              "reasons": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "counts",
+              "reasons"
+            ],
+            "additionalProperties": true
+          },
+          "stalls": {
+            "type": "object",
+            "properties": {
+              "kinds": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "number"
+                    },
+                    "hours": {
+                      "type": "number"
+                    },
+                    "detected": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "number"
+                        },
+                        "hours": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "hours"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "hand": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "number"
+                        },
+                        "hours": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "hours"
+                      ],
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "count",
+                    "hours",
+                    "detected",
+                    "hand"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "kinds"
+            ],
+            "additionalProperties": true
+          },
+          "waits": {
+            "type": "object",
+            "properties": {
+              "reasons": {
+                "type": "object"
+              },
+              "days": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": "string"
+                    },
+                    "minutes": {
+                      "type": "number"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "at",
+                    "minutes",
+                    "reason"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "days",
+              "items"
+            ],
+            "additionalProperties": true
+          },
+          "rounds": {
+            "type": "object",
+            "properties": {
+              "prs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "rounds": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "rounds",
+                    "count"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "prs"
+            ],
+            "additionalProperties": true
+          },
+          "desks": {
+            "type": "object",
+            "properties": {
+              "points": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": "string"
+                    },
+                    "working": {
+                      "type": "number"
+                    },
+                    "idle": {
+                      "type": "number"
+                    },
+                    "waiting": {
+                      "type": "number"
+                    },
+                    "stuck": {
+                      "type": "number"
+                    },
+                    "free": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "at"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "points"
+            ],
+            "additionalProperties": true
+          },
+          "load": {
+            "type": "object",
+            "properties": {
+              "points": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": "string"
+                    },
+                    "cpu": {
+                      "type": "number"
+                    },
+                    "memoryMb": {
+                      "type": "number"
+                    },
+                    "limitMb": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "at"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "points"
+            ],
+            "additionalProperties": true
+          },
+          "pm": {
+            "type": "object",
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "days": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            },
+            "required": [
+              "available",
+              "days"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "ok",
+          "range",
+          "numbers",
+          "merged",
+          "perTicket",
+          "where",
+          "outcomes",
+          "stalls",
+          "waits",
+          "rounds",
+          "desks",
+          "load",
+          "pm"
         ],
         "additionalProperties": true
       },

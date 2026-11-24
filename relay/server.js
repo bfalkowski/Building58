@@ -42,7 +42,7 @@ const office = SESSIONS ? {
   terminal: require('./terminal.js'), tasks: require('./tasks.js'), checkouts: require('./checkouts.js'), tickets: require('./tickets.js'),
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
-  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'),
+  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), metrics: require('./metrics.js'), jams: require('./jams.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), pmSort: require('./pm-sort.js'),
   mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), managerWatch: require('./manager-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js'), awake: require('./awake.js')
 } : null;
 if (office) {
@@ -52,7 +52,7 @@ if (office) {
   }
 }
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
-const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'security', 'prWatch', 'managerWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
+const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'metrics', 'jams', 'security', 'prWatch', 'managerWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -165,7 +165,10 @@ function serveStatic(req, res, url) {
       res.writeHead(301, { Location: url.pathname + '/' + url.search }); res.end(); return;
     }
     if (err || !st.isFile()) { send(res, 404, 'Not found'); return; }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    const head = { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' };
+    const old = rel.endsWith('.html') ? cookieKey(req) : '';
+    if (old && !sameKey(old)) head['Set-Cookie'] = COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0';
+    res.writeHead(200, head);
     fs.createReadStream(file).pipe(res);
   });
 }
@@ -267,10 +270,13 @@ async function handle(req, res) {
   const tokenMay = agent && agent.channel === m[1] && tokenReaches(agent, req.method, m[2] || '', seat);
   if (!authorized(req, url) && !tokenMay && (seat || (office && plays))) { problem(res, 403, 'forbidden', seat ? 'A seat in a round only plays, with node "$OFFICE_PLAY".' : 'Only a seat in the round that runs can play.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/order$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.'); return; }
+  if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && m[2] === '/settings') { problem(res, 403, 'person_only', 'Only the person changes the settings, PM trust included.'); return; }
+  if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/advice$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the PM answers the check of a ticket.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/rules(\/|$)/.test(m[2] || '')) { problem(res, 403, 'person_only', 'Only the person adds, changes or removes a standing rule. A session can read the list.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/edit$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the person, the PM and the Lead edit a ticket.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/propose$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'Only the PM and the Lead propose to replace, merge or close a ticket, or to change its blockers. File a ticket instead.'); return; }
-  if (!authorized(req, url) && agent && agent.role === 'pm' && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(move|start)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'The PM does not move or start a ticket, or change its base or kind. It edits the title and body of tickets in Triage or Ready, and with Let the PM set the order on, their priority and place.'); return; }
+  if (!authorized(req, url) && agent && agent.role === 'pm' && agent.channel === m[1] && /^\/tickets\/[\w-]{1,64}\/(move|start)$/.test(m[2] || '')) { problem(res, 403, 'forbidden', 'The PM does not move or start a ticket, or change its base or kind. It edits the title and body of tickets in Triage or Ready, and with PM trust at Order or above, their priority and place.'); return; }
+  if (!authorized(req, url) && !tokenMay && agent && agent.channel === m[1] && m[2] === '/jams') { problem(res, 403, 'person_only', 'Only the person writes or reads the jam log.'); return; }
   if (!authorized(req, url) && !tokenMay && agent && m[2] === '/floor') { problem(res, 401, 'unauthorized', 'Only the Lead can read the floor.'); return; }
   if (!authorized(req, url) && !tokenMay) { problem(res, 401, 'unauthorized', agent ? 'This session can only list and file tickets, and read and post on the chat board. Only a Lead you have let move the board can do that, and only one you have let start tickets can start one.' : (givenKey(req, url) ? 'That key is not this relay\'s key. Use the key the relay was started with (RELAY_KEY): the link npm run office prints has it, after key=.' : 'Send the relay key as "Authorization: Bearer <key>" or ?key=<key>, or open the room page with the key once to get its cookie.')); return; }
   let name = '';
@@ -425,7 +431,7 @@ server.listen(PORT, HOST, async () => {
     for (const w of ONE ? [ONE] : worlds()) console.log('Open ' + w.name + ': http://localhost:' + PORT + '/' + w.dir + '/?channel=' + encodeURIComponent(w.channel) + '&key=' + KEY);
     if (WEBHOOK_URL) console.log('Webhook: ' + WEBHOOK_URL + ' for ' + WEBHOOK_TYPES.join(', '));
     if (!office) return;
-    const { terminal, chat, sessions, reviews, autopilot, checkouts, leadCheck } = office;
+    const { terminal, chat, sessions, reviews, autopilot, checkouts, leadCheck, pmSort } = office;
     if (terminal.ENABLED) console.log('Claude Code panel: on, for the room page on this computer only.');
     // The sweep must run after restoreAll, and works only because terminal.start is synchronous: a restored
     // session is in runningIn at once, so its checkout is kept. If start ever becomes async, await
@@ -437,6 +443,7 @@ server.listen(PORT, HOST, async () => {
     await office.oldRelays.begin({ port: PORT, defaultPort: (ONE && ONE.port) || 8787, host: HOST, world: WORLD, log });
     sessions.restoreAll({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     sessions.startLead(LEAD_CHANNEL, { port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
+    office.metrics.start(LEAD_CHANNEL);
     reviews.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     autopilot.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.update.begin({ port: PORT, key: KEY, log });
@@ -450,6 +457,7 @@ server.listen(PORT, HOST, async () => {
     replayHooks(hookQueue.take(stateDir()).concat(earlyHooks.splice(0)).sort((a, b) => a.event.at - b.event.at));
     setTimeout(() => replayHooks(hookQueue.take(stateDir())), 3000).unref();
     leadCheck.begin();
+    pmSort.begin();
     checkouts.sweep().catch((e) => log('Could not tidy the checkouts: ' + e.message));
   });
 

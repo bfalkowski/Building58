@@ -1,4 +1,4 @@
-// T-45: Let the PM set the order. While the person's switch is on, the PM's token sets the priority and
+// T-45, T-386: the PM sets the order from PM trust rung 3 (Order). From there, the PM's token sets the priority and
 // place of Triage and Ready tickets, and nothing else. Every other session's token gets 403 either way.
 'use strict';
 const { execFileSync } = require('child_process');
@@ -10,8 +10,8 @@ const assert = require('node:assert');
 const H = require('./helpers.js');
 
 const PR = 'https://github.com/o/r/pull/7';
-const switchTo = (R, on) => R.call('POST', '/settings', { values: { pmOrder: on } });
-const switchNow = async (R) => (await R.call('GET', '/settings')).body.settings.find((s) => s.name === 'pmOrder').value;
+const switchTo = (R, on) => R.call('POST', '/settings', { values: { pmTrust: on ? 3 : 1 } });
+const switchNow = async (R) => (await R.call('GET', '/settings')).body.settings.find((s) => s.name === 'pmTrust').value >= 3;
 
 test('the PM sets priority and order only with the switch on, only in Triage or Ready, and never a status', async (t) => {
   const R = await H.relay({});
@@ -41,7 +41,7 @@ test('the PM sets priority and order only with the switch on, only in Triage or 
     const before = await titles();
     const r = await prio(ids.C, 'high', pmT);
     assert.strictEqual(r.status, 403);
-    assert.match(r.body.message, /Let the PM set the order/);
+    assert.match(r.body.message, /PM trust to Order/);
     assert.strictEqual((await order(ids.C, { before: ids.A }, pmT)).status, 403);
     assert.deepStrictEqual(await titles(), before);
   });

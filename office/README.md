@@ -65,8 +65,8 @@ terminal](../docs/manual/running.html#own-terminal) and [What the hook sends](..
   tired, needs a refresh), where you see it, and what **Refresh the Lead** does about it.
 - [Where the PM reads](../docs/manual/running.html#pm-checkout): **Ask the PM** reads the branch you typed at
   the remote's latest commit, in a checkout of its own that goes when the PM ends. Your folder is not changed.
-- [The PM sets the order](../docs/manual/roles.html#pm-order): with **Let the PM set the order** on in
-  Settings (off by default), the PM can run `ticket.js priority T-5 high` and `ticket.js order T-5 --before T-4`
+- [The PM sets the order](../docs/manual/roles.html#pm-order): with **PM trust** at Order or above in
+  Settings (rung 1 by default), the PM can run `ticket.js priority T-5 high` and `ticket.js order T-5 --before T-4`
   on tickets in Triage or Ready.
 - [The Lead sets priority](../docs/manual/roles.html#lead-order): **Let the Lead set priority** (off by
   default) lets the Lead run the same two commands, on tickets in Triage or Ready.

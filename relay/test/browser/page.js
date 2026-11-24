@@ -48,7 +48,7 @@ const SLOW = 120000, SOFTWARE = { timeout: 300000 };
 // Starts a relay and a browser. Each test gets a fresh page from page(). stop() ends both.
 async function office(options) {
   const o = options || {};
-  const R = await relay(o.env);
+  const R = await relay(o.env, o.home);
   let browser;
   try { browser = await chromium.launch({ args: o.webgl ? SOFTWARE_GL : NO_GL }); } catch (e) { await R.stop(); throw e; }
   const address = 'http://127.0.0.1:' + R.port + '/office/?channel=t&key=test-key';

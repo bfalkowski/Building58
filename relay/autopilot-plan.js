@@ -54,6 +54,29 @@ function forPersonMerge(pr, locked, verdict, d) {
   return { ready: null, why: onlyAPerson(locked) + ' ' + now };
 }
 
+const API_FILES = ['docs/manual/relay.html', 'docs/openapi.json', 'relay/api-schemas.js'];
+const touchesApi = (files) => (files || []).some((f) => API_FILES.includes(f));
+const CONFLICT_ASKS = 2;
+function conflictStep({ known, sameHead, dropped, mergedMain, mainMerges, asks, cap }) {
+  if (!known) return { act: 'ask', merges: 0, asks: 1, first: true };
+  if (sameHead) {
+    if (!dropped) return { act: 'wait' };
+    if (asks >= CONFLICT_ASKS) return { act: 'person', reason: 'conflict-dropped' };
+    return { act: 'ask', merges: mainMerges, asks: asks + 1 };
+  }
+  if (!mergedMain) return { act: 'ask', merges: 0, asks: 1, first: true };
+  if (mainMerges + 1 >= cap) return { act: 'person', reason: 'main-kept-moving', merges: mainMerges + 1 };
+  return { act: 'ask', merges: mainMerges + 1, asks: 1, moved: true };
+}
+function clearConflictCount(rec) { rec.mainMerges = 0; rec.conflictAsks = 1; return rec; }
+function apiTurn({ touches, seen, seq, asked, head, turn, me }) {
+  if (!touches || seen === seq) return { act: 'merge' };
+  if (asked && asked.seq === seq && asked.head !== head) return { act: 'merge', caught: true };
+  if (turn && turn !== me) return { act: 'wait', why: 'It changes the API version, and PR ' + turn + ' merges main first, so main holds still for each of them.' };
+  if (asked && asked.seq === seq) return { act: 'wait', why: 'Its Dev was asked to merge main before it merges, since another PR that changes the API version merged. Waiting for the push.' };
+  return { act: 'ask-main' };
+}
+
 const MARKS = ['hold', 'replaced'];
 const OPEN = ['triage', 'ready', 'started'];
 function proposalWords(p, id) {
@@ -77,8 +100,9 @@ function heldBack(t, all) {
 const allowed = (t, only) => !only || only.includes(t.id) || (Array.isArray(t.labels) && t.labels.some((l) => only.includes(l)));
 const approved = (t) => ('approvedBy' in t ? t.approvedBy === 'you' : t.createdBy === 'you');
 const unsettled = (t, all) => (t.blockedBy || []).filter((id) => { const b = all.find((x) => x.id === id); return !b || b.status !== 'done'; });
-function nextTicket(all, hasTask, only) {
-  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && !unsettled(t, all).length && !heldBack(t, all) && !hasTask(t) && allowed(t, only)))[0] || null;
+function nextTicket(all, hasTask, only, prefer) {
+  const startable = boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && !unsettled(t, all).length && !heldBack(t, all) && !hasTask(t) && allowed(t, only)));
+  return (prefer && startable.find((t) => t.id === prefer)) || startable[0] || null;
 }
 function waitsWhy(t, all) {
   if (t.status === 'rejected') return 'Rejected';
@@ -112,4 +136,4 @@ function reviewPostFor(comments, { login, since, commit }) {
   return found;
 }
 
-module.exports = { WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };

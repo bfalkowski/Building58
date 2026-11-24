@@ -43,6 +43,8 @@ const TAGS = {
   games: ['Games', 'The games there are, their rounds, and each seat\'s actions.'],
   huddle: ['Huddle', 'A question to the idle sessions, and the report of their answers.'],
   manager: ['Manager watch', 'What the manager notices about stuck work, and the limits he uses.'],
+  jams: ['Jams', 'The jam log: stalls the person fixed by hand, which the Metrics page counts.'],
+  metrics: ['Metrics', 'The numbers behind the Metrics page: how the room works over time.'],
   'needs-you': ['Needs you', 'The things that wait on the person, most urgent first.'],
   officers: ['Officers', 'The COO and the security officer: their reports, and what they write from.'],
   'old-relays': ['Old relays', 'Other relays that still run on this room\'s state folder, and stopping one.'],

@@ -22,6 +22,9 @@ const { heldBack, MARKS, proposalWords } = require('./autopilot-plan.js');
 const { likelyTwins } = require('./ticket-twins.js');
 const { writeLine } = require('./needs-you-plan.js');
 const notes = require('./ticket-notes.js');
+const trust = require('./pm-trust.js');
+const pmCheck = require('./pm-check.js');
+const { ANSWERS } = require('./pm-check-brief.js');
 
 const STATUSES = ['triage', 'ready', 'started', 'done', 'rejected'];
 const PRIORITIES = ['high', 'normal', 'low'];
@@ -252,7 +255,7 @@ const NOT_YOURS = 'Only the person sets a ticket\'s priority and place in the wo
 function sessionMayOrder(channel, agent) {
   if (agent.lead) return config.get('leadOrder') ? null : 'The person has not let the Lead set priority. They turn it on with Let the Lead set priority in Settings. Until then, recommend an order and let them set it.';
   if (agent.role !== 'pm') return NOT_YOURS;
-  if (!config.get('pmOrder')) return 'The person has not let the PM set the order. They turn it on with Let the PM set the order in Settings. Until then, recommend an order and let them set it.';
+  if (!trust.may(trust.ORDER)) return 'The person has not let the PM set the order. They raise PM trust to Order in Settings. Until then, recommend an order and let them set it.';
   const newest = terminal.all(channel).filter((t) => t.role === 'pm').sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))[0];
   if (newest !== agent) return 'Another PM started after this one, and only the newest PM may set the order.';
   return null;
@@ -329,7 +332,7 @@ function propose(channel, ticket, body, agent) {
     return [200, { ok: true, message, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
   });
 }
-function decide(channel, ticket, body) {
+function decide(channel, ticket, body, by = 'you') {
   const decision = String((body && body.decision) || '');
   if (!['approve', 'decline'].includes(decision)) return [400, { ok: false, error: 'bad_param', message: '"decision" is approve or decline.' }];
   return inTurn(channel, async () => {
@@ -337,7 +340,7 @@ function decide(channel, ticket, body) {
     const now = all.find((t) => t.id === ticket.id) || ticket;
     const p = now.proposal;
     if (!p) return [409, { ok: false, error: 'no_proposal', message: 'No proposal waits on ' + now.id + '.' }];
-    const step = { by: 'you', action: p.action, ids: p.ids, from: p.by };
+    const step = { by, action: p.action, ids: p.ids, from: p.by };
     if (decision === 'decline') {
       const changed = await store.update(channel, now.id, { proposal: null });
       history.add(channel, now, Object.assign({ stage: 'proposal-declined' }, step));
@@ -353,6 +356,62 @@ function decide(channel, ticket, body) {
     history.add(channel, now, Object.assign({ stage: 'proposal-approved' }, step));
     if (changes.status === 'rejected') chat.archiveTicketRoom(channel, now.id, now.createdAt, 'the ticket was ' + CLOSED_AS[p.action]);
     return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
+  });
+}
+
+const ADVICE_WORDS = { start: 'start', first: 'another first', 'not-needed': 'not needed', duplicate: 'a duplicate', 'part-of': 'part of another ticket' };
+const HOLDS = { 'not-needed': 'close', duplicate: 'merge', 'part-of': 'merge' };
+function adviceFrom(body) {
+  const bad = (message) => ({ error: [400, { ok: false, error: 'bad_advice', message }] });
+  const answer = String(body.answer || '');
+  if (!ANSWERS.includes(answer)) return bad('The answer is one of: ' + ANSWERS.join(', ') + '.');
+  const why = oneLine(body.why || '');
+  if (!why) return bad('Give the reason in one or two sentences, with --why.');
+  if (why.length > MAX_WHY) return bad('Keep the reason to ' + MAX_WHY + ' characters.');
+  const of = clean(body.of);
+  if (answer !== 'start' && answer !== 'not-needed' && !of) return bad('Name the other ticket with --of.');
+  if ((answer === 'start' || answer === 'not-needed') && of) return bad('"' + answer + '" names no other ticket.');
+  return { advice: { answer, why, of: of || null } };
+}
+function advise(channel, ticket, body, agent) {
+  if (!agent || agent.role !== 'pm') return [403, { ok: false, error: 'forbidden', message: 'Only the PM answers the check of a ticket.' }];
+  if (!trust.may(trust.ADVISE)) return [403, { ok: false, error: 'forbidden', message: 'PM trust is Off, so the PM does not check tickets.' }];
+  if (pmCheck.seat(channel) !== agent) return [403, { ok: false, error: 'forbidden', message: 'Another PM started after this one, and only the newest PM may answer the check.' }];
+  const { advice, error } = adviceFrom(body);
+  if (error) return error;
+  return inTurn(channel, async () => {
+    const all = await listAll(channel);
+    const now = all.find((t) => t.id === ticket.id) || ticket;
+    const state = starting.has(channel + '/' + now.id) ? 'starting' : now.status;
+    if (!ORDERABLE.includes(state)) return [403, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready takes advice. This one is ' + state + '.' }];
+    const other = advice.of && all.find((t) => t.id === advice.of);
+    if (advice.of && (!other || other.id === now.id)) return [400, { ok: false, error: 'bad_advice', message: 'No other ticket ' + advice.of + ' to name.' }];
+    return [200, { advice, now }];
+  }).then(async (checked) => {
+    if (checked[0] !== 200) return checked;
+    const { now } = checked[1];
+    const rung = trust.level();
+    const text = 'PM check, ' + ADVICE_WORDS[advice.answer] + (advice.of ? ' (' + advice.of + ')' : '') + ': ' + advice.why;
+    const noted = await addNote(channel, now, { text }, agent);
+    if (!noted[1].ok && noted[1].error !== 'notes_full') return noted;
+    history.add(channel, now, { stage: 'pm-advice', by: 'PM', answer: advice.answer, of: advice.of, why: advice.why, rung }, agent);
+    let did = 'advised';
+    if (rung >= trust.HOLD && HOLDS[advice.answer]) {
+      const proposed = await propose(channel, now, { action: HOLDS[advice.answer], ids: advice.of ? [advice.of] : [], why: advice.why }, agent);
+      if (!proposed[1].ok) return [proposed[0], Object.assign({}, proposed[1], { message: 'Your advice is on the ticket, but the proposal was refused: ' + proposed[1].message })];
+      did = 'proposed';
+      if (rung >= trust.MERGE) {
+        const decided = await decide(channel, now, { decision: 'approve' }, 'PM');
+        if (!decided[1].ok) return [decided[0], Object.assign({}, decided[1], { message: 'Your advice is on the ticket and the proposal waits for the person, but carrying it out failed: ' + decided[1].message })];
+        did = 'carried out';
+        const carried = HOLDS[advice.answer] === 'merge' ? 'merged it into ' + advice.of : 'closed it';
+        await addNote(channel, now, { text: 'PM trust is Close and merge, so the PM ' + carried + ': ' + advice.why + ' To bring it back, move it to Triage.' }, agent);
+      }
+    }
+    pmCheck.answered(channel, now.id, advice, did);
+    const fresh = await listAll(channel);
+    const words = did === 'advised' ? 'Advice saved on ' + now.id + '.' : did === 'proposed' ? 'Advice saved on ' + now.id + ', and a proposal waits for the person, so it does not start.' : 'Advice saved on ' + now.id + ', and the relay carried it out.';
+    return [200, { ok: true, did, answer: advice.answer, message: words, ticket: await view(channel, fresh.find((t) => t.id === now.id) || now, fresh) }];
   });
 }
 
@@ -480,7 +539,7 @@ async function askPm(channel, body, ctx) {
   try { repo = await tasks.mainCheckout(top); } catch (e) { return [500, { ok: false, error: 'git', message: 'Git could not find the main checkout of ' + top + ': ' + e.message }]; }
   const [status, started] = await checkouts.forPm(channel, { top, base, title: 'PM: ' + idea.slice(0, 70), cols: body.cols, rows: body.rows }, ctx);
   if (status >= 400) return [status, started];
-  delivery.promptOnce(channel, started.id, pmBrief({ idea, mayOrder: !!config.get('pmOrder'), notes: pmNotes.brief(repo), cli: CLI, skills: require('./skills.js').brief('pm') + require('./rules.js').brief() }), (problem) => { if (problem) ctx.log('The PM was not briefed: ' + problem); });
+  delivery.promptOnce(channel, started.id, pmBrief({ idea, mayOrder: trust.may(trust.ORDER), notes: pmNotes.brief(repo), cli: CLI, skills: require('./skills.js').brief('pm') + require('./rules.js').brief() }), (problem) => { if (problem) ctx.log('The PM was not briefed: ' + problem); });
   return [201, { ok: true, terminal: started.id }];
 }
 
@@ -580,7 +639,7 @@ async function edit(channel, ticket, body, agent) {
 }
 
 async function handle(req, res, channel, rest, ctx) {
-  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|order|edit|propose|proposal|note)|\/([\w-]{1,64}))?$/);
+  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|order|edit|propose|proposal|note|advice)|\/([\w-]{1,64}))?$/);
   if (!route) { if (!/^\/tickets(\/|$)/.test(rest)) return false; ctx.problem(res, 404, 'not_found', 'Unknown ticket route.'); return true; }
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
@@ -623,6 +682,10 @@ async function handle(req, res, channel, rest, ctx) {
         out = await propose(channel, ticket, body || {}, ctx.agent);
         if (ctx.agent && out[1].ok) ctx.log(out[1].message);
       }
+      else if (req.method === 'POST' && verb === 'advice') {
+        out = await advise(channel, ticket, body || {}, ctx.agent);
+        if (ctx.agent && out[1].ok) ctx.log('The PM advised ' + ticket.id + ': ' + out[1].answer + '. ' + out[1].message);
+      }
       else if (req.method === 'POST' && verb === 'proposal') {
         if (ctx.agent) { ctx.problem(res, 401, 'unauthorized', 'Only the person approves or declines a proposal.'); return true; }
         out = await decide(channel, ticket, body || {});
@@ -645,6 +708,7 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
+const startingNow = (channel) => leadStarting.has(channel) || [...starting].some((k) => k.startsWith(channel + '/'));
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
