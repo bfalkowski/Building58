@@ -13,7 +13,7 @@ only for setting the room up.
 
 Node 18 or later, `git`, `python3`, Claude Code (`claude` on your `PATH`, logged in) and the GitHub
 CLI (`gh`, logged in). No packages to install. The full list, and what each is for, is in
-[the main README](../README.md#run-them).
+[the main README](../README.md#without-docker).
 
 ```
 RELAY_KEY=pick-a-key npm run office
