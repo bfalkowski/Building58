@@ -358,3 +358,39 @@ test('github: only an issue with comments costs a request to read them, and a wr
   await fresh.update('p', a.id, { status: 'started' });
   assert.strictEqual(reads() - before, 1, 'a write reuses the comments it read, and keeps them');
 });
+
+test('github: notes signed with another key are counted, logged once, and a person\'s move signs a new note', async () => {
+  const s = onGithub();
+  const a = await s.create('p', { title: 'A', body: 'B', status: 'ready', priority: 'normal', repo: '/real', base: 'main', createdBy: 'you', approvedBy: 'you', blockedBy: [] });
+  const b = await s.create('p', { title: 'C', body: 'D', status: 'ready', priority: 'normal', repo: '/real', createdBy: 'you', approvedBy: 'you', blockedBy: [] });
+  const other = github.open({ repo: 'p=o/r', gh: fakeGh, folder: '/f', keyFile: path.join(s.dir, 'new-key'), cacheMs: 0 });
+  const err = console.error, said = []; console.error = (m) => said.push(m);
+  try {
+    assert.strictEqual((await other.list('p')).filter((t) => t.approvedBy === 'you').length, 0, 'approvals are not read');
+    await other.list('p');
+    assert.deepStrictEqual(other.unreadNotes('p').ids, [a.id, b.id]);
+    assert.match(other.unreadNotes('p').line, /^2 tickets have notes signed with another key: approvals and order are not read\./);
+    assert.strictEqual(said.filter((m) => /signed with another key/.test(m)).length, 1, 'said once');
+    await assert.rejects(other.update('p', a.id, { approvedBy: 'you' }), /key did not sign/, 'a session cannot sign');
+    const moved = await other.update('p', a.id, { status: 'ready', approvedBy: 'you' }, { person: true });
+    assert.strictEqual(moved.approvedBy, 'you');
+    assert.deepStrictEqual(other.unreadNotes('p').ids, [b.id]);
+  } finally { console.error = err; }
+  const again = github.open({ repo: 'p=o/r', gh: fakeGh, folder: '/f', keyFile: path.join(s.dir, 'new-key'), cacheMs: 0 });
+  assert.strictEqual((await again.get('p', a.id)).approvedBy, 'you', 'approved under the new key');
+});
+
+test('github: the key from the environment is the same on every relay, so two relays read each other\'s notes', async () => {
+  const d = fs.mkdtempSync(path.join(dir, 'github-'));
+  process.env.FAKE_GITHUB_DIR = d;
+  const mac = github.open({ repo: 'p=o/r', gh: fakeGh, folder: '/m', keyFile: path.join(d, 'mac-key'), key: 'one shared secret' });
+  const box = github.open({ repo: 'p=o/r', gh: fakeGh, folder: '/b', keyFile: path.join(d, 'box-key'), key: 'one shared secret', cacheMs: 0 });
+  const t = await mac.create('p', { title: 'A', body: 'B', status: 'ready', priority: 'normal', repo: '/real', base: 'dev', createdBy: 'you', approvedBy: 'you', blockedBy: [] });
+  const read = await box.get('p', t.id);
+  assert.deepStrictEqual([read.approvedBy, read.base, read.createdBy], ['you', 'dev', 'you']);
+  await box.list('p');
+  assert.strictEqual(box.unreadNotes('p').count, 0);
+  assert.ok(!fs.existsSync(path.join(d, 'box-key')), 'no key file is made');
+  const stranger = github.open({ repo: 'p=o/r', gh: fakeGh, folder: '/b', keyFile: path.join(d, 'x'), key: 'another', cacheMs: 0 });
+  assert.strictEqual((await stranger.get('p', t.id)).approvedBy, undefined);
+});

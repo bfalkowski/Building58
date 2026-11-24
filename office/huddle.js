@@ -8,10 +8,10 @@
   const bar = $('huddle-bar'), freeBtn = $('huddle-free'), askBtn = $('huddle-ask'), leadBox = $('huddle-lead');
   const section = $('huddle-report'), headline = $('huddle-headline'), note = $('huddle-note'), rows = $('huddle-rows'), floor = section.closest('.floor');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!channel) return;
 
-  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/huddle?key=' + encodeURIComponent(key);
+  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/huddle';
   function api(body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url, opt).then((r) => r.text().then((t) => { try { return JSON.parse(t); } catch (e) { return { ok: false, message: 'The relay answered with a page, not JSON (' + r.status + '). On the public page your sign-in may have run out: reload it.' }; } }), () => ({ ok: false, message: 'The relay did not answer.' }));

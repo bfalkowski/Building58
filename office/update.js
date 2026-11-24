@@ -13,10 +13,10 @@
   const $ = (id) => document.getElementById(id);
   const btn = $('cc-update'), offBtn = $('cc-update-off'), note = $('cc-update-note');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!channel || !btn) return;
 
-  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/update?key=' + encodeURIComponent(key);
+  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/update';
   function api(body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url, opt).then((r) => r.json().then((j) => Object.assign({ status: r.status }, j)), () => null).catch(() => null);
@@ -27,6 +27,11 @@
   const LOOK_EVERY = 10 * 1000;
   const NOTE_FOR = 10 * 60 * 1000;
   let timer = null, wentAway = false, run = null, goneSince = 0, reloads = null;
+  function limitWords(u) {
+    if (typeof u.waitedMinutes !== 'number' || !u.restartsAnywayAt) return '';
+    const at = new Date(u.restartsAnywayAt);
+    return ' It has waited ' + u.waitedMinutes + ' min, and restarts anyway at ' + String(at.getHours()).padStart(2, '0') + ':' + String(at.getMinutes()).padStart(2, '0') + '. Every session comes back.';
+  }
   function waitingWords(u) {
     const named = (l) => (l || []).map((w) => w.title + ' (' + w.why + ')').join(', ');
     const list = named(u.waitingOn);
@@ -35,11 +40,11 @@
       const what = u.state === 'restarting' ? 'Restarting the relay on it. Every session comes back.'
         : u.state === 'checking' ? 'The new relay is in. Waiting for its check before the next merge.'
           : u.state === 'stepping' ? 'Putting it in.'
-            : 'It changes the relay, so the relay restarts on it when nobody is in a turn. A session at a question stays at it.' + (list ? ' Waiting for: ' + list + '.' : '');
+            : 'It changes the relay, so the relay restarts on it when nobody is in a turn. A session at a question stays at it.' + (list ? ' Waiting for: ' + list + '.' : '') + limitWords(u);
       return 'Update: ' + s.at + ' of ' + s.of + ', ' + s.name + '. ' + what + (s.stopping ? ' It stops after this merge.' : '') + (s.later ? ' ' + s.later + ' more wait for the next Update.' : '');
     }
     if (u.state === 'restarting') return 'Restarting the relay. Every session comes back.';
-    return 'Fetched. The relay pulls it and restarts when nobody is in a turn. A session at a question stays at it.' + (list ? ' Waiting for: ' + list + '.' : '');
+    return 'Fetched. The relay pulls it and restarts when nobody is in a turn. A session at a question stays at it.' + (list ? ' Waiting for: ' + list + '.' : '') + limitWords(u);
   }
   function showOff(u) {
     const s = u && u.step;

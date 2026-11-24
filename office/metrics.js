@@ -4,7 +4,7 @@
 (function () {
   'use strict';
   var params = new URLSearchParams(location.search);
-  var channel = params.get('channel'), key = params.get('key') || '';
+  var channel = params.get('channel');
   var NS = 'http://www.w3.org/2000/svg';
   var SERIES = ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6'].map(function (v) { return 'var(' + v + ')'; });
   var $ = function (id) { return document.getElementById(id); };
@@ -324,7 +324,7 @@
 
   function problem(text) { status.textContent = text || ''; status.hidden = !text; }
   var base = location.origin + '/channels/' + encodeURIComponent(channel || '') + '/metrics';
-  function url(format) { return base + '?range=' + range + (format ? '&format=' + format : '') + '&key=' + encodeURIComponent(key); }
+  function url(format) { return base + '?range=' + range + (format ? '&format=' + format : ''); }
   function load() {
     document.querySelectorAll('[data-range]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.range === range)); });
     delete document.body.dataset.drawn;
@@ -355,7 +355,7 @@
   $('download-csv').addEventListener('click', function () { download('csv'); });
   $('download-json').addEventListener('click', function () { download('json'); });
   var back = $('back');
-  if (channel) back.href = 'index.html?channel=' + encodeURIComponent(channel) + (key ? '&key=' + encodeURIComponent(key) : '');
+  if (channel) back.href = 'index.html?channel=' + encodeURIComponent(channel);
   var width = window.innerWidth, queued = false;
   window.addEventListener('resize', function () {
     if (queued || window.innerWidth === width) return;

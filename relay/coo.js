@@ -287,7 +287,7 @@ function measure(input) {
   for (const task of all) {
     for (const x of (task.history || []).filter((y) => y.type === 'note' && /was not delivered/.test(y.note || ''))) stalls.push({ who: 'Task ' + (task.ticket || task.id), at: x.at, ended: 'brief not delivered: ' + clean(x.note, 160) });
   }
-  const updates = events.filter((e) => e.kind === 'update_failed' || e.kind === 'update_called_off').map((e) => ({ kind: e.kind, at: e.at, detail: e.detail }));
+  const updates = events.filter((e) => ['update_failed', 'update_called_off', 'update_forced'].includes(e.kind)).map((e) => ({ kind: e.kind, at: e.at, detail: e.detail }));
   const recovery = { crashes, stalls, quiet, updates, rollbacks: null, rollbacksNote: 'The relay has no rollback. A failed Update leaves the old code running.' };
 
   const cost = {

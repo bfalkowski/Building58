@@ -6,12 +6,12 @@
   const $ = (id) => document.getElementById(id);
   const section = $('chat');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!section || !channel) return;
 
   const roomsList = $('chat-rooms'), postsList = $('chat-posts'), title = $('chat-room-title'), about = $('chat-room-about');
   const form = $('chat-form'), text = $('chat-text'), note = $('chat-note'), newForm = $('chat-new'), newName = $('chat-new-name'), del = $('chat-delete');
-  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + '/chat' + p + (p.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key);
+  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + '/chat' + p;
   function api(p, body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url(p), opt).then((r) => r.text().then((t) => { try { return JSON.parse(t); } catch (e) { return { ok: false, message: 'The relay answered with a page, not JSON (' + r.status + '). On the public page your sign-in may have run out: reload it.' }; } }), () => ({ ok: false, message: 'The relay did not answer.' }));

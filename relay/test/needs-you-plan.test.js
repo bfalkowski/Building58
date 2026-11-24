@@ -197,7 +197,7 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'merged', 'closed', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
 });
 
 // T-374: reviews waited for a desk, and every desk was held by a session the relay may not stop.
@@ -255,4 +255,11 @@ test('a PR merged on GitHub gives a Done line, and one closed with no merge give
   assert.strictEqual(c.kind, 'closed');
   assert.deepStrictEqual(c.link, { url: PR });
   assert.deepStrictEqual(listOf({ seats: [], tasks: [task({ state: 'done', pr: PR, prMerged: true })] }), [], 'a Done task gives none');
+});
+
+test('notes signed with another key give one line that names the fix', () => {
+  const unread = { count: 2, ids: ['4', '9'], line: '2 tickets have notes signed with another key: approvals and order are not read. Give this room the key.' };
+  const items = listOf({ seats: [], tasks: [], unread });
+  assert.deepStrictEqual(items, [{ kind: 'ticket-key', who: 'the relay', terminal: null, task: null, ticket: null, pr: null, line: unread.line, link: {} }]);
+  assert.deepStrictEqual(listOf({ unread: { count: 0, ids: [], line: null } }), []);
 });
