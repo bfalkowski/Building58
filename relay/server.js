@@ -165,7 +165,10 @@ function serveStatic(req, res, url) {
       res.writeHead(301, { Location: url.pathname + '/' + url.search }); res.end(); return;
     }
     if (err || !st.isFile()) { send(res, 404, 'Not found'); return; }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    const head = { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' };
+    const old = rel.endsWith('.html') ? cookieKey(req) : '';
+    if (old && !sameKey(old)) head['Set-Cookie'] = COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0';
+    res.writeHead(200, head);
     fs.createReadStream(file).pipe(res);
   });
 }
