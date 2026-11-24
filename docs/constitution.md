@@ -315,25 +315,116 @@ review. Each automatic start is an accelerator, and he warns that accelerators w
 "make a slop cannon". So add one automatic start at a time, slowly at first, and stop every loop
 after a few tries and give it to the person.
 
-The rungs, roughly in order. Each one is its own ticket, and each holds for one kind of ticket at
-first:
+The trust levels are the steps on this ladder. Settings > Trust level on the room page shows the
+same six levels in the same words, so the page and this article say the same thing. Each level
+adds one step the room does without the person. Each one is its own ticket, and each holds for
+every kind of ticket, not one:
 
-1. Review findings go back to the Dev by themselves, with a limit on the rounds (T-4, T-17).
-2. The Lead keeps tickets moving (T-18), and stops finished or idle sessions (article 3).
-   *Today (2026-11-03):* the stop is built, behind `RELAY_LEAD_STOPS`, below.
-3. A label or a ticket source starts a ticket, with no person pressing Start. *Today
-   (2026-11-04):* a smaller form of this rung is on, below, where the Lead starts a ticket.
-4. A pull request merges when CI, the review and the hidden checks pass. The relay merges it, not
-   a session, so the rule stays a check. *Today (2026-11-03):* a smaller form of this rung is on,
-   below.
-5. A monitor watches what shipped and files tickets for what it finds.
+0. **You drive.** The relay reviews each new PR one time and sends the findings to the Dev. You
+   start, move and merge all work.
+1. **Review loop.** After each push, a reviewer checks the new commits. The Dev fixes and the
+   reviewer checks again, without you. Each PR gets a limited number of automatic reviews: 3,
+   unless you change it under Limits and timings. You start, move and merge all work.
+2. **The Lead keeps work moving.** The Lead moves cards on the Board and accepts tickets from
+   Triage. It also stops sessions that are safe to stop. You start and merge work.
+3. **The Lead starts tickets.** The Lead also starts Ready tickets that you approved, one at a
+   time. The two numbers in the Lead section set its limits. When it has used all its starts,
+   that switch goes off and the level shows as custom. You merge work.
+4. **The Lead merges.** The Lead also merges a PR when it is ready: a review of the latest commit
+   is posted, each blocking finding is fixed, all checks pass, it merges into main with no
+   conflicts, and no decision is left for you. It never merges a change to CLAUDE.md or the
+   constitution. You approve tickets and do the work it gives back to you.
+5. **Autopilot.** The relay does the full loop itself. It starts each approved Ready ticket,
+   reviews each push, sends findings to the Dev, and merges when the review says merge and all
+   checks pass. It needs no Lead. Only the relay starts and merges work. A Lead keeps three
+   rights: stop a session the Floor calls safe to stop, move a task to Done once its PR has
+   merged, and ask the relay to review a task's PR. You approve tickets and do the work it puts
+   in Waiting on you.
 
-Rungs 3 and 4 take the person out of a step, so they wait for the hidden checks (article 4) and
-for sessions with only the access they need (article 7).
+The main office runs at level 5. A level is a set of switches, and the person can still change
+each switch by hand. When the switches match no level, the panel shows the level as custom.
 
-**The merge rung, as it is today.** On 2026-11-03 the person turned on a smaller form of rung 4,
+Two things are not built, and nothing below says otherwise:
+
+- The hidden checks (article 4). Levels 3, 4 and 5 are on without them. The person chose that,
+  and each section says so.
+- The monitor, the rung after level 5. It would watch what shipped and file tickets for what it
+  finds. The panel says "Rung 5 is not built yet" for it.
+
+Levels 3, 4 and 5 take the person out of a step, so they would wait for the hidden checks and for
+sessions with only the access they need (article 7). They do not wait today.
+
+**Level 1, Review loop, as it is today.** Review findings go back to the Dev by themselves, with a
+limit on the rounds (T-4, T-17). The limit is **Automatic reviews per PR** (`maxAutoReviews` in `relay/config.js`, 3 by default).
+A PR that reaches it gets no more automatic reviews, and the person decides what next.
+
+**Level 2, The Lead keeps work moving, as it is today.** The Lead keeps tickets moving (T-18), and stops finished or idle sessions (article 3). The stop is the part with its own switch, as follows. On 2026-11-03 the person could not tell which sessions could
+be stopped, idle sessions held desks, and the Mac ran hot. So a Lead the person let move the board
+can stop a session with `relay/ticket.js stop`, while the relay runs with `RELAY_LEAD_STOPS=1`. It
+is off by default. The way back is to start the relay without it, or to take back **Let the Lead
+move the board**, and a stopped task worker returns with **Bring back**. Its loop is limited: at
+most 6 stops an hour on each channel (`RELAY_LEAD_STOP_LIMIT`), and then the rest go to the person.
+
+The five questions, for this level:
+
+1. What starts it? The Lead's brief, when the Lead sees a reviewer that has posted, or an idle Dev
+   whose pull request merged or whose task is Done. The relay refuses any other session.
+2. What does it read and write? It reads the Floor, the board and the pull requests. It stops one
+   session, writes a note in the task's history, and tells the person who it stopped.
+3. What does it start next? Nothing. A stopped session frees a desk and a place under the WIP limit,
+   and only a person starts work there, or a Lead the person let start tickets (level 3,
+   below), within its own limits.
+4. Where does the person come back in? The Lead's report, the task's history, **Bring back**, and
+   every session the relay refuses to stop, with its reason.
+5. What stops two sessions from doing the same work? There is one Lead at a time, only its token
+   can ask, and the relay stops one session per request after asking the verdict.
+
+**Level 3, The Lead starts tickets, as it is today.** The Lead, not a label, starts a
+ticket. The failure behind it, from real sessions on 2026-11-03 and 2026-11-04: Ready tickets waited
+for the person to press Start. T-83, a flaky test failing on three pull requests, waited until the
+person was free, and T-84's work, already merged, needed a person's Start just to put the Board
+right.
+
+The person turned it on before the hidden checks and the narrow access are in place: there are no hidden checks
+(article 4), and the Lead and every worker it starts run with the person's full logins and files,
+GitHub included, not with only the access their ticket needs (article 7). It covers every kind of
+ticket, not one kind.
+
+Nothing but the relay's own routes protects the record of who approved a ticket. A session with the
+person's logins and files could change it outside the relay: in the ticket file, with the store's
+signing key, or on GitHub. Ticket text is not signed either, so a collaborator on GitHub could change
+an approved ticket's title or body before the Lead starts it. The person accepts this gap: today
+only the person has access to the repo, and they will revisit it if that changes.
+
+It is off by default. The person turns it on with **Let the Lead start tickets** and two numbers:
+how few tasks must be building for the Lead to start one, from 1 to one under the WIP limit, and how
+many it may start in all. Each start uses one, and the last turns it off. **Stop the Lead starting
+tickets** turns it off sooner, starts nothing more and leaves running work alone. The relay, not the
+brief, refuses a start by the Lead unless a person put the ticket in Ready (by filing it from the
+Board or approving it, never the Lead itself; a ticket from before approvals were kept counts if a
+person filed it; leaving Ready clears the approval), it is the next such ticket on the Board by
+priority and age,
+every ticket it waits for is done, fewer tasks are building than the person's number, and the worker
+on the Lead's last start has picked up its brief. Each start shows on the Board as started by the
+Lead, with the time, and the room page announces it. It does not change who merges.
+
+The five questions, for this level:
+
+1. What starts it? The Lead, with `relay/ticket.js start`, while the person's switch is on and
+   starts are left.
+2. What does it read and write? It reads the Board and the tasks. It writes a task, a checkout and
+   a worker, as Start does, signed as the Lead's.
+3. What does it start next? One worker with the ticket's brief. That worker opens a pull request,
+   which gets the usual automatic review. Nothing else starts until that worker has its brief.
+4. Where does the person come back in? Approving each ticket into Ready, the page's notice of each
+   start, the Board's card, the pull request, a blocker that was rejected, and the switch, which
+   turns off by itself when the starts run out.
+5. What stops two sessions from doing the same work? A ticket has one task, there is one Lead at
+   a time, and the relay lets the Lead start one ticket at a time.
+
+**Level 4, The Lead merges, as it is today.** On 2026-11-03 the person turned on the Lead's merge,
 because reviewed and green pull requests sat waiting only on them. The person chose to turn it on
-before the preconditions of rungs 3 and 4 are met: there are no hidden checks (article 4), and the
+before the hidden checks and the narrow access are in place: there are no hidden checks (article 4), and the
 Lead runs `gh pr merge` with the person's full GitHub login, not with only the access it needs
 (article 7). It covers every pull request except one that changes this file, `CLAUDE.md` or the lint rules
 (`eslint.config.js`, `eslint-local.js`), not one kind of ticket. The Lead may merge a pull request when all of these hold:
@@ -365,10 +456,9 @@ brief says never merge. While it is on, the brief names the five conditions and 
 press types the brief again once the Lead is idle, and the switch stays through `/clear` and
 **Bring back** and ends when another session is made the Lead, which tells the old Lead it may no
 longer merge. The switch changes only the brief:
-the Lead is told, not stopped, and until the new brief goes in it works from the old one. The full
-rung 4, where the relay merges and checks the conditions itself, is still to come.
+the Lead is told, not stopped, and until the new brief goes in it works from the old one. At level 5 the relay merges and checks the conditions itself, as below.
 
-The five questions, for this rung:
+The five questions, for this level:
 
 1. What starts it? The Lead's brief, while the person's switch is on, when the Lead sees a pull
    request that meets the conditions.
@@ -381,123 +471,51 @@ The five questions, for this rung:
 5. What stops two sessions from doing the same work? There is one Lead at a time, and only the
    Lead's brief allows a merge.
 
-**The Lead's stop, as it is today.** On 2026-11-03 the person could not tell which sessions could
-be stopped, idle sessions held desks, and the Mac ran hot. So a Lead the person let move the board
-can stop a session with `relay/ticket.js stop`, while the relay runs with `RELAY_LEAD_STOPS=1`. It
-is off by default. The way back is to start the relay without it, or to take back **Let the Lead
-move the board**, and a stopped task worker returns with **Bring back**. Its loop is limited: at
-most 6 stops an hour on each channel (`RELAY_LEAD_STOP_LIMIT`), and then the rest go to the person.
+**Level 5, Autopilot, as it is today.** The loop at the level that the relay runs, not a session.
+The failure behind it: on 2026-11-04 the room finished 4 tickets in a day. Every step waited on
+someone: the Lead had no starts left, follow-up reviews were off, the Lead's merge switch was off,
+and each merge of main gave a pull request a new head that needed a whole new review. Three pull
+requests had 9 reviews between them, and most rounds checked main, not their code. The person asked
+for one loop: pick a ticket, build it, review it, fix it once, merge it, and repeat.
 
-The five questions, for this rung:
+The person turned it on before the hidden checks (article 4) exist, and the relay merges with the
+person's full GitHub login (article 7). It covers every kind of ticket. It is off by default, and
+the person turns it on with **Autopilot**, and can list the tickets it may start. The main office
+runs with it on. Turning it off starts nothing more and leaves work under way where it is.
 
-1. What starts it? The Lead's brief, when the Lead sees a reviewer that has posted, or an idle Dev
-   whose pull request merged or whose task is Done. The relay refuses any other session.
-2. What does it read and write? It reads the Floor, the board and the pull requests. It stops one
-   session, writes a note in the task's history, and tells the person who it stopped.
-3. What does it start next? Nothing. A stopped session frees a desk and a place under the WIP limit,
-   and only a person starts work there, or a Lead the person let start tickets (the start rung,
-   below), within its own limits.
-4. Where does the person come back in? The Lead's report, the task's history, **Bring back**, and
-   every session the relay refuses to stop, with its reason.
-5. What stops two sessions from doing the same work? There is one Lead at a time, only its token
-   can ask, and the relay stops one session per request after asking the verdict.
+The relay starts and merges. A session never does, so each brake below is code and a test, not a
+line in a brief:
 
-**The start rung, as it is today.** A smaller form of rung 3: the Lead, not a label, starts a
-ticket. The failure behind it, from real sessions on 2026-11-03 and 2026-11-04: Ready tickets waited
-for the person to press Start. T-83, a flaky test failing on three pull requests, waited until the
-person was free, and T-84's work, already merged, needed a person's Start just to put the Board
-right.
+| Brake | What the relay does | Enforced in | Test |
+| --- | --- | --- | --- |
+| Merge only on a merge verdict and green checks | Each review gives a verdict, merge or fix, from the reviewer's own token, and a verdict counts once posted and only for the commit the reviewer read. It says fix while any finding is blocking or fix now (article 4). The relay merges only when the latest verdict says merge for the current head, every check on that head passed, GitHub can merge it, and the PR holds all its Dev's work. It names that commit to GitHub, which refuses the merge if the PR moved since. A commit after a merge verdict needs a follow-up review that says merge. A follow-up reads only the commits since the last review, and for a merge of main only how its conflicts were resolved. | `relay/autopilot-plan.js` (`forReviewed`), `relay/merge-hold.js`, `relay/autopilot.js` | `relay/test/autopilot-plan.test.js`, `relay/test/merge-hold.test.js` |
+| Never a PR that changes CLAUDE.md, the constitution or the lint rules | A PR that lists `CLAUDE.md`, `docs/constitution.md`, `eslint.config.js` or `eslint-local.js` among its files, even by a rename, goes to the person in Waiting on you. It is never merged by the relay or the Lead. | `relay/autopilot-plan.js` (`PROTECTED`), and `relay/pr-watch-plan.js` for a PR it did not start | `relay/test/autopilot-plan.test.js`, `relay/test/pr-watch-plan.test.js` |
+| The daily merge limit | At most 10 PRs a day (`autopilotMerges` in `relay/config.js`). The PR waits, with the reason on its card, until the next day or until the person merges it. | `relay/autopilot.js` (`MAX_MERGES_A_DAY`) | `relay/test/autopilot-limit.test.js` |
+| The WIP limit | It starts a ticket only while fewer tasks are being built than `RELAY_WIP_LIMIT` (3 by default), counting every task, Autopilot's or not, and one start at a time (`RELAY_AUTOPILOT_AT_ONCE`, 1). It starts only a Ready ticket a person approved, whose blockers are done, in Board order. | `relay/autopilot.js`, `relay/tasks.js` (`wipLimit`) | `relay/test/autopilot-desks.test.js` |
+| The review-round limit | After the **Review rounds** the person sets (2 by default, 1 to 5) that still say fix, a failed check, a closed PR or a failed merge, the task goes to Waiting on you with the reason, and the relay leaves it alone. | `relay/autopilot.js`, `relay/autopilot-plan.js` | `relay/test/autopilot-plan.test.js`, `relay/test/autopilot-stuck.test.js` |
+| The stall hand-over | When nothing moves a task for the stall time (`autopilotStallMinutes` in `relay/config.js`), the relay first nudges a Dev that stopped without a PR, and then hands the task to the person in Waiting on you, leaving the session running. It brings the task back by itself once something moves it. The merge hold (`relay/merge-hold.js`) also hands over a task whose Dev is idle or gone with uncommitted or unpushed work, work git cannot check, or review news it was never told. | `relay/autopilot.js` (`stalled`), `relay/merge-hold.js` | `relay/test/autopilot-stuck.test.js`, `relay/test/autopilot-stall-back.test.js`, `relay/test/merge-hold.test.js` |
+| Rollback | After a merge it pulls main into the relay's own folder, as **Update** does, and starts nothing while that runs. When the supervisor runs with `RELAY_ROLLBACK=1` (off by default) and the relay fails to answer on the new code, it checks out the last good commit and starts again, at most once in a row, and never over changes to tracked files. | `relay/rollback.js`, `relay/supervisor.js` | `relay/test/rollback.test.js` |
 
-The person turned it on before the preconditions of rung 3 are met: there are no hidden checks
-(article 4), and the Lead and every worker it starts run with the person's full logins and files,
-GitHub included, not with only the access their ticket needs (article 7). It covers every kind of
-ticket, not one kind.
+It works only on tasks it started, plus a PR it finds by its branch, which it reviews and hands to
+the person to merge. A branch behind main merges as it is, since main does not ask for branches to
+be up to date.
 
-Nothing but the relay's own routes protects the record of who approved a ticket. A session with the
-person's logins and files could change it outside the relay: in the ticket file, with the store's
-signing key, or on GitHub. Ticket text is not signed either, so a collaborator on GitHub could change
-an approved ticket's title or body before the Lead starts it. The person accepts this gap: today
-only the person has access to the repo, and they will revisit it if that changes.
+Only the relay starts and merges work. A Lead keeps three rights: stop a session the Floor calls
+safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task's PR.
+Level 5 on the room page leaves **Let the Lead move the board** and **Let the Lead stop sessions**
+on for this. The stop is the same as at level 2, with the same verdict and hourly limit. The review
+is the one **Let the Lead start reviews** gives (T-98): the relay starts the reviewer, with the same
+limits, and it counts toward the reviews a pull request gets. While Autopilot is on, the relay lets
+the Lead ask for it whatever that switch says, and when Autopilot is off, the switch decides. While
+Autopilot is on, the relay refuses every other move the Lead asks for, any move to Done before the
+relay has seen the PR merge, and every start of a ticket, and the Lead's brief says never merge.
+The failure behind that: on 2026-11-07 the person had to stop reviewers and Devs that never got
+their first prompt or brief, stop Devs whose PR had merged, and clear a task that held a building
+slot with no Dev, because at level 5 the Lead could only read and file tickets. The review came
+later (T-333): one night a pull request (#107) sat with no review, and the Lead could see it but
+not start one, because **Let the Lead start reviews** was off.
 
-It is off by default. The person turns it on with **Let the Lead start tickets** and two numbers:
-how few tasks must be building for the Lead to start one, from 1 to one under the WIP limit, and how
-many it may start in all. Each start uses one, and the last turns it off. **Stop the Lead starting
-tickets** turns it off sooner, starts nothing more and leaves running work alone. The relay, not the
-brief, refuses a start by the Lead unless a person put the ticket in Ready (by filing it from the
-Board or approving it, never the Lead itself; a ticket from before approvals were kept counts if a
-person filed it; leaving Ready clears the approval), it is the next such ticket on the Board by
-priority and age,
-every ticket it waits for is done, fewer tasks are building than the person's number, and the worker
-on the Lead's last start has picked up its brief. Each start shows on the Board as started by the
-Lead, with the time, and the room page announces it. It does not change who merges.
-
-The five questions, for this rung:
-
-1. What starts it? The Lead, with `relay/ticket.js start`, while the person's switch is on and
-   starts are left.
-2. What does it read and write? It reads the Board and the tasks. It writes a task, a checkout and
-   a worker, as Start does, signed as the Lead's.
-3. What does it start next? One worker with the ticket's brief. That worker opens a pull request,
-   which gets the usual automatic review. Nothing else starts until that worker has its brief.
-4. Where does the person come back in? Approving each ticket into Ready, the page's notice of each
-   start, the Board's card, the pull request, a blocker that was rejected, and the switch, which
-   turns off by itself when the starts run out.
-5. What stops two sessions from doing the same work? A ticket has one task, there is one Lead at
-   a time, and the relay lets the Lead start one ticket at a time.
-
-**Autopilot, as it is today.** Rungs 3 and 4 together, run by the relay, not by a session. On
-2026-11-04 the room finished 4 tickets in a day. Every step waited on someone: the Lead had no
-starts left, follow-up reviews were off, the Lead's merge switch was off, and each merge of main
-gave a pull request a new head that needed a whole new review. Three pull requests had 9 reviews
-between them, and most rounds checked main, not their code. The person asked for one loop: pick a
-ticket, build it, review it, fix it once, merge it, and repeat.
-
-The person turned it on before the preconditions of rungs 3 and 4 are met: there are no hidden
-checks (article 4), and the relay merges with the person's full GitHub login (article 7). It covers
-every kind of ticket.
-
-It is off by default. The person turns it on with **Autopilot**, and can list the tickets it may
-start. The relay, not a brief, holds it to these:
-- It starts only a Ready ticket a person approved, whose blockers are done, in Board order, and one
-  at a time (`RELAY_AUTOPILOT_AT_ONCE`, 1).
-- Each review gives a verdict, merge or fix, from the reviewer's own token. It says fix while any
-  finding is blocking or fix now (article 4). A verdict counts once its review is posted, and only for the commit the reviewer read. A follow-up review reads only
-  the commits since the last one, and for a merge of main only how its conflicts were resolved.
-  This replaces "a review of the current head" for a merge it makes: a commit after a merge
-  verdict needs a follow-up that says merge.
-- It merges only when the latest verdict says merge for the current head, every check on that head
-  passed, GitHub can merge it, and the pull request holds all its Dev's work. Before a merge, the
-  merge hold (`relay/merge-hold.js`) waits while the Dev may still be answering the latest review.
-  It hands the task to the person, in Waiting on you, when the Dev is idle or gone with uncommitted
-  or unpushed work or work git cannot check, or gone with review news it was never told. It names
-  that commit to GitHub, which refuses the merge if the PR moved since. A branch behind main
-  merges as it is, since main does not ask for branches to be up to date.
-- It works only on tasks it started. It never merges a change to this file, `CLAUDE.md` or the
-  lint rules. Its loop is limited: after the number of review rounds that the person sets in
-  **Review rounds** in Settings (2 by default, 1 to 5) that still say fix, a failed check, a
-  closed pull request or a failed merge, the task goes to Waiting on you with the reason, and it
-  leaves it alone. It merges at most 10 pull requests a day.
-- After a merge it pulls main into the relay's own folder, as **Update** does, and starts nothing
-  while that runs.
-
-Turning it off starts nothing more and leaves work under way where it is.
-
-Only the relay starts and merges work. A Lead keeps three rights: stop a session the Floor calls safe
-to stop, move a task to Done once its PR has merged, and ask the relay to review a task's PR. Trust
-level 5 on the room page leaves **Let the Lead move the board** and **Let the Lead stop sessions** on
-for this. The stop is the same as at rung 2, with the same verdict and hourly limit. The review is the
-one **Let the Lead start reviews** gives (T-98): the relay starts the reviewer, with the same limits,
-and it counts toward the reviews a pull request gets. While Autopilot is on, the relay lets the Lead
-ask for it whatever that switch says, and when Autopilot is off, the switch decides. While Autopilot
-is on, the relay refuses every other move the Lead asks for, any move to Done before the relay has
-seen the PR merge, and every start of a ticket, and the Lead's brief says never merge. The failure
-behind it: on 2026-11-07 the person had to stop reviewers and Devs that never got their first prompt
-or brief, stop Devs whose PR had merged, and clear a task that held a building slot with no Dev,
-because at level 5 the Lead could only read and file tickets. The review came later (T-333): one
-night a pull request (#107) sat with no review, and the Lead could see it but not start one, because
-**Let the Lead start reviews** was off.
-
-The five questions, for this rung:
+The five questions, for this level:
 
 1. What starts it? The relay, every 20 seconds, while the person's switch is on.
 2. What does it read and write? It reads the Board, the tasks, and each pull request's state,
