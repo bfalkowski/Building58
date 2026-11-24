@@ -78,7 +78,7 @@ test('github-app.js create --no-open prints the link and starts no opener', () =
   const child = spawn(process.execPath, [path.join(root, 'relay', 'github-app.js'), 'create', '--env', path.join(dir, '.env'), '--port', '0', '--no-open'], { env: { PATH: bin + ':/usr/bin:/bin' } });
   return new Promise((resolve) => {
     let out = '';
-    child.stdout.on('data', (d) => { out += d; if (/Opening /.test(out)) child.kill(); });
+    child.stdout.on('data', (d) => { out += d; if ((out.match(/\n/g) || []).length >= 2) child.kill(); });
     child.on('close', () => {
       const opened = fs.existsSync(mark);
       fs.rmSync(dir, { recursive: true, force: true });
