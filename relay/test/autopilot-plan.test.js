@@ -176,3 +176,40 @@ test('with an allowed list and nothing to start, the idle note names why each al
   assert.strictEqual(whyNoneAllowed(all, none, ['T-99', 'games']), 'No ticket on the Board has an id or label you allowed.');
   assert.strictEqual(whyNoneAllowed([ready('T-5', { labels: ['flaky'], mark: 'hold' })], none, ['flaky']), 'No ticket you allowed can start. T-5: On hold.', 'a label counts too');
 });
+
+const planOf = require('../autopilot-plan.js');
+const asked = { known: true, sameHead: false, dropped: false, mergedMain: true, mainMerges: 0, asks: 1, cap: 4 };
+test('a Dev who merged main, and whose PR conflicts again because main moved, is asked again and not counted as failing (T-419)', () => {
+  const step = planOf.conflictStep(asked);
+  assert.strictEqual(step.act, 'ask');
+  assert.strictEqual(step.asks, 1, 'the failed-ask count starts over');
+  assert.strictEqual(step.merges, 1);
+  assert.strictEqual(step.moved, true);
+});
+test('a turn that ends with no new merge of main counts as a failed ask, and the second one goes to the person (T-419)', () => {
+  const stay = { known: true, sameHead: true, dropped: true, mergedMain: false, mainMerges: 0, asks: 1, cap: 4 };
+  assert.deepStrictEqual(planOf.conflictStep({ ...stay, dropped: false }), { act: 'wait' });
+  assert.strictEqual(planOf.conflictStep(stay).asks, 2);
+  assert.deepStrictEqual(planOf.conflictStep({ ...stay, asks: 2 }), { act: 'person', reason: 'conflict-dropped' });
+  const other = planOf.conflictStep({ ...asked, mergedMain: false, mainMerges: 3 });
+  assert.strictEqual(other.merges, 0, 'a push that is not a merge of main breaks the run of merges');
+});
+test('after the cap of merges in a row that each conflicted again, the reason says main kept moving (T-419)', () => {
+  assert.strictEqual(planOf.conflictStep({ ...asked, mainMerges: 2 }).act, 'ask');
+  const last = planOf.conflictStep({ ...asked, mainMerges: 3 });
+  assert.deepStrictEqual(last, { act: 'person', reason: 'main-kept-moving', merges: 4 });
+  assert.match(require('../autopilot-runs.js').REASONS['main-kept-moving'], /main kept moving/);
+});
+test('two ready PRs that touch docs/openapi.json merge one at a time, each after its Dev merged main (T-419)', () => {
+  const touches = planOf.touchesApi(['a.txt', 'docs/openapi.json']);
+  assert.strictEqual(touches, true);
+  assert.strictEqual(planOf.touchesApi(['a.txt']), false);
+  const base = { touches, seen: 0, seq: 0, asked: null, head: 'h1', turn: null, me: '#8' };
+  assert.deepStrictEqual(planOf.apiTurn(base), { act: 'merge' }, 'the first merges at once');
+  const after = { ...base, seq: 1 };
+  assert.deepStrictEqual(planOf.apiTurn(after), { act: 'ask-main' }, 'once one merged, the next Dev is asked first');
+  assert.strictEqual(planOf.apiTurn({ ...after, asked: { seq: 1, head: 'h1' } }).act, 'wait', 'it does not merge before the Dev pushes');
+  assert.strictEqual(planOf.apiTurn({ ...after, turn: '#9' }).act, 'wait', 'a third PR waits its turn');
+  assert.deepStrictEqual(planOf.apiTurn({ ...after, asked: { seq: 1, head: 'h1' }, head: 'h2' }), { act: 'merge', caught: true });
+  assert.deepStrictEqual(planOf.apiTurn({ ...after, touches: false }), { act: 'merge' }, 'a PR with no API file is not held');
+});

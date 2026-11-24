@@ -63,7 +63,7 @@ const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const ghDoor = require('./gh.js');
 const config = require('./config.js');
 const AT_ONCE = () => config.get('autopilotAtOnce');
-const MAX_ROUNDS = () => config.get('autopilotRounds'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges');
+const MAX_ROUNDS = () => config.get('autopilotRounds'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges'), MAIN_MERGES = () => config.get('autopilotMainMerges');
 const NOTES_KEPT = 30;
 const BY = 'Autopilot';
 
@@ -322,6 +322,7 @@ async function lookAt(channel, task) {
   const got = await readPr(task, rec);
   if (!got) return;
   const { pr, files } = got;
+  if (files) { rec.apiFiles = plan.touchesApi(files); if (rec.apiSeq === undefined) rec.apiSeq = chOf(channel).apiSeq || 0; }
   if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
   const v = latest(rec);
   let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
@@ -330,6 +331,10 @@ async function lookAt(channel, task) {
   if (d.act === 'done') markDone(channel, task);
   else if (d.act === 'merge') {
     const c = chOf(channel);
+    const turn = chOf(channel).apiTurn && tasks.list(channel).some((x) => x.pr === c.apiTurn && x.pr !== task.pr && open(channel, x)) ? c.apiTurn : null;
+    const order = plan.apiTurn({ touches: plan.touchesApi(files), seen: rec.apiSeq, seq: c.apiSeq || 0, asked: rec.apiAsked, head: pr.headRefOid, turn: turn && number(turn), me: number(task.pr) });
+    if (order.act === 'wait') { rec.why = order.why; rec.act = 'wait'; return; }
+    if (order.act === 'ask-main') { askApiMain(channel, task, rec, pr); rec.why = 'Its Dev was asked to merge main before it merges.'; rec.act = 'wait'; return; }
     if (c.merged >= MAX_MERGES_A_DAY()) { rec.why = 'Ready to merge, but Autopilot has merged ' + MAX_MERGES_A_DAY() + ' PRs today, its limit. Merge it yourself, or wait for tomorrow.'; return; }
     if (!(await prComments.checkNow(channel, task))) { rec.why = 'Ready to merge, but its comments could not be read, so it waits for the next look.'; return; }
     if (rec.handedOver) return;
@@ -346,8 +351,8 @@ async function lookAt(channel, task) {
     }
     counted(channel, task, rec, pr.headRefOid);
     note(channel, 'Merged PR ' + number(task.pr) + ' (' + (task.ticket || task.title) + '): ' + d.why);
-  } else if (d.act === 'conflict') askToMergeMain(channel, task, rec, pr, terminal.find(channel, task.owner && task.owner.terminal));
-  else if (d.act === 'bring-back') bringBack(channel, task, rec, d, d.for === 'fix' ? v.commit : pr.headRefOid, pr);
+  } else if (d.act === 'conflict') await askToMergeMain(channel, task, rec, pr, terminal.find(channel, task.owner && task.owner.terminal));
+  else if (d.act === 'bring-back') await bringBack(channel, task, rec, d, d.for === 'fix' ? v.commit : pr.headRefOid, pr);
   else if (d.act === 'person' && d.reason === 'protected-file') {
     const f = forPersonMerge(channel, task, rec, pr, plan.lockedOf(files));
     handOver(channel, task, rec, f.why, d.reason, pr.headRefOid);
@@ -355,7 +360,6 @@ async function lookAt(channel, task) {
   } else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason, (v && v.commit) || pr.headRefOid);
 }
 const CONFLICT_KEY = (task) => 'autopilot-conflict ' + task.pr;
-const CONFLICT_ASKS = 2;
 const MERGE_MAIN = ' Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s follow-up findings. A follow-up review checks how you resolved it.';
 function conflictAsk(channel, task, rec, pr) {
   const again = rec.conflictAsks > 1;
@@ -369,32 +373,63 @@ function droppedAsk(rec, dev) {
   if (!dev || dev.exited) return true;
   return dev.state === 'idle' && (dev.turnAt || 0) >= rec.conflictTypedAt;
 }
-function askToMergeMain(channel, task, rec, pr, dev) {
-  const pending = delivery.pending(channel).some((d) => d.key === CONFLICT_KEY(task));
-  if (rec.conflictAt === pr.headRefOid) {
-    if (pending) { conflictAsk(channel, task, rec, pr); return false; }
-    if (!droppedAsk(rec, dev)) return false;
-    if ((rec.conflictAsks || 1) >= CONFLICT_ASKS) {
-      handOver(channel, task, rec, 'Its Dev was asked twice to merge main into PR ' + number(task.pr) + ' at ' + pr.headRefOid.slice(0, 7) + ', and each turn ended without it. Merge main yourself, or tell the Dev to, then move the card back to Autopilot.', 'conflict-dropped', pr.headRefOid);
-      return true;
+async function mergedMain(task, from, head) {
+  if (!task.worktree || !from) return false;
+  try {
+    const lines = (await git(task.worktree, ['rev-list', '--merges', '--parents', from + '..' + head])).split('\n').filter(Boolean);
+    for (const line of lines) {
+      for (const parent of line.split(' ').slice(2)) {
+        if (await git(task.worktree, ['merge-base', '--is-ancestor', parent, 'origin/main']).then(() => true, () => false)) return true;
+      }
     }
-    rec.conflictAsks = (rec.conflictAsks || 1) + 1;
-    note(channel, 'PR ' + number(task.pr) + ' still conflicts with main after its Dev\'s turn ended, so its Dev was asked once more.');
-  } else {
-    rec.conflictAsks = 1;
-    note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
+  } catch (e) { return false; }
+  return false;
+}
+async function askToMergeMain(channel, task, rec, pr, dev) {
+  const pending = delivery.pending(channel).some((d) => d.key === CONFLICT_KEY(task));
+  const same = rec.conflictAt === pr.headRefOid;
+  if (same && pending) { conflictAsk(channel, task, rec, pr); return false; }
+  const dropped = same && droppedAsk(rec, dev);
+  if (same && dropped) {
+    const fresh = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch(() => null);
+    if (!fresh || fresh.headRefOid !== pr.headRefOid) return false;
   }
-  rec.conflictAt = pr.headRefOid; rec.conflictTypedAt = null; save();
+  const merged = !same && !!rec.conflictAt && await mergedMain(task, rec.conflictAt, pr.headRefOid);
+  const step = plan.conflictStep({ known: !!rec.conflictAt, sameHead: same, dropped, mergedMain: merged, mainMerges: rec.mainMerges || 0, asks: rec.conflictAsks || 1, cap: MAIN_MERGES() });
+  if (step.act === 'wait') return false;
+  const at = pr.headRefOid.slice(0, 7);
+  if (step.act === 'person' && step.reason === 'main-kept-moving') {
+    rec.mainMerges = step.merges;
+    handOver(channel, task, rec, 'Main kept moving. Its Dev merged main into PR ' + number(task.pr) + ' ' + step.merges + ' times in a row as asked, and the PR conflicted again each time, now at ' + at + '. Merge main yourself when other PRs stop merging, then move the card back to Autopilot.', 'main-kept-moving', pr.headRefOid);
+    return true;
+  }
+  if (step.act === 'person') {
+    handOver(channel, task, rec, 'Its Dev was asked twice to merge main into PR ' + number(task.pr) + ' at ' + at + ', and each turn ended without it. Merge main yourself, or tell the Dev to, then move the card back to Autopilot.', 'conflict-dropped', pr.headRefOid);
+    return true;
+  }
+  rec.mainMerges = step.merges; rec.conflictAsks = step.asks;
+  if (step.moved) note(channel, 'PR ' + number(task.pr) + ' conflicts again at ' + at + ' after its Dev merged main, since main moved. That is not counted against the Dev, so it was asked again.');
+  else if (!step.first) note(channel, 'PR ' + number(task.pr) + ' still conflicts with main after its Dev\'s turn ended, so its Dev was asked once more.');
+  else note(channel, 'PR ' + number(task.pr) + ' conflicts with main, so its Dev was asked to merge main.');
+  rec.conflictAt = pr.headRefOid; rec.conflictTypedAt = null; rec.apiSeq = chOf(channel).apiSeq || 0; save();
   conflictAsk(channel, task, rec, pr);
   return false;
 }
+const APIMAIN_KEY = (task) => 'autopilot-api-main ' + task.pr;
+function askApiMain(channel, task, rec, pr) {
+  const c = chOf(channel);
+  c.apiTurn = task.pr; rec.apiAsked = { seq: c.apiSeq || 0, head: pr.headRefOid }; save();
+  delivery.save(channel, { key: APIMAIN_KEY(task), terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
+    text: 'Your PR ' + task.pr + ' is ready to merge, but another PR that changes the API version merged first.' + MERGE_MAIN });
+  note(channel, 'PR ' + number(task.pr) + ' changes the API version, and another PR that does merged first, so its Dev was asked to merge main before it merges.');
+}
 const WAITS_FOR_ROOM = ['wip_limit', 'full', 'running'];
-function bringBack(channel, task, rec, d, commit, pr) {
+async function bringBack(channel, task, rec, d, commit, pr) {
   const name = task.ticket || 'Task ' + task.id, what = { fix: 'the fixes the last review asks for', news: 'review news it was never told' }[d.for] || 'a merge of main';
   const step = ' Press Bring back on its task, then move its card back to Autopilot.';
   const key = d.for + ' ' + commit;
   if (rec.broughtBack === key) { handOver(channel, task, rec, 'Its Dev was brought back once for ' + what + ' at ' + commit.slice(0, 7) + ', and is not running again.' + step, 'dev-gone', commit); return; }
-  if (d.for === 'conflict' && askToMergeMain(channel, task, rec, pr, terminal.find(channel, task.owner && task.owner.terminal))) return;
+  if (d.for === 'conflict' && await askToMergeMain(channel, task, rec, pr, terminal.find(channel, task.owner && task.owner.terminal))) return;
   const [status, out] = tasks.resume(channel, task, {}, ctx, BY);
   if (status < 400) {
     rec.broughtBack = key; rec.act = 'wait'; rec.why = 'Autopilot brought its Dev back for ' + what + '.'; save();
@@ -407,6 +442,8 @@ function bringBack(channel, task, rec, d, commit, pr) {
 function counted(channel, task, rec, head) {
   const c = chOf(channel), run = runOf(channel, task);
   rec.mergedHead = head; c.merged++;
+  if (c.apiTurn === task.pr) c.apiTurn = null;
+  if (rec.apiFiles) c.apiSeq = (c.apiSeq || 0) + 1;
   if (run) runs.merged(run, Date.now(), BY);
   save();
 }

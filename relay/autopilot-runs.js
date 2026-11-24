@@ -25,6 +25,7 @@ const MANUAL = {
   'work-left-out': 'its Dev left work out of the PR',
   'news-untold': 'its Dev never heard the latest review',
   'dev-says-bug': 'its Dev said a non-blocking finding is a bug',
+  'main-kept-moving': 'main kept moving: its Dev merged it as asked and the PR conflicted again each time',
   'merged-by-person': 'a person merged it'
 };
 const REASONS = Object.assign({}, BLOCKED, MANUAL);

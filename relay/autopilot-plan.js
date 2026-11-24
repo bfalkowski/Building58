@@ -54,6 +54,28 @@ function forPersonMerge(pr, locked, verdict, d) {
   return { ready: null, why: onlyAPerson(locked) + ' ' + now };
 }
 
+const API_FILES = ['docs/manual/relay.html', 'docs/openapi.json', 'relay/api-schemas.js'];
+const touchesApi = (files) => (files || []).some((f) => API_FILES.includes(f));
+const CONFLICT_ASKS = 2;
+function conflictStep({ known, sameHead, dropped, mergedMain, mainMerges, asks, cap }) {
+  if (!known) return { act: 'ask', merges: 0, asks: 1, first: true };
+  if (sameHead) {
+    if (!dropped) return { act: 'wait' };
+    if (asks >= CONFLICT_ASKS) return { act: 'person', reason: 'conflict-dropped' };
+    return { act: 'ask', merges: mainMerges, asks: asks + 1 };
+  }
+  if (!mergedMain) return { act: 'ask', merges: 0, asks: 1, first: true };
+  if (mainMerges + 1 >= cap) return { act: 'person', reason: 'main-kept-moving', merges: mainMerges + 1 };
+  return { act: 'ask', merges: mainMerges + 1, asks: 1, moved: true };
+}
+function apiTurn({ touches, seen, seq, asked, head, turn, me }) {
+  if (!touches || seen === seq) return { act: 'merge' };
+  if (asked && asked.seq === seq && asked.head !== head) return { act: 'merge', caught: true };
+  if (turn && turn !== me) return { act: 'wait', why: 'It changes the API version, and PR ' + turn + ' merges main first, so main holds still for each of them.' };
+  if (asked && asked.seq === seq) return { act: 'wait', why: 'Its Dev was asked to merge main before it merges, since another PR that changes the API version merged. Waiting for the push.' };
+  return { act: 'ask-main' };
+}
+
 const MARKS = ['hold', 'replaced'];
 const OPEN = ['triage', 'ready', 'started'];
 function proposalWords(p, id) {
@@ -112,4 +134,4 @@ function reviewPostFor(comments, { login, since, commit }) {
   return found;
 }
 
-module.exports = { WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { API_FILES, touchesApi, conflictStep, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
