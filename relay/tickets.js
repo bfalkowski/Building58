@@ -198,7 +198,7 @@ async function move(channel, ticket, body, agent) {
     const owner = to === 'done' && prOwner(channel, pr, now, all);
     if (owner) return [409, { ok: false, error: 'pr_taken', message: pr + ' is already the PR of ' + owner + ', so it cannot mark ' + now.id + ' done. Give the PR that delivered ' + now.id + '.' }];
     const changes = Object.assign({ status: to }, now.proposal && (to === 'rejected' || to === 'done') ? { proposal: null } : {}, now.closedAs && to === 'triage' ? { closedAs: null, closedFor: null } : {}, to === 'done' ? { pr } : {}, to === 'ready' && now.status === 'started' ? {} : to === 'ready' ? { approvedBy: agent ? 'Lead' : 'you' } : now.status === 'ready' ? { approvedBy: 'none' } : {});
-    const moved = await store.update(channel, now.id, changes, { person: !agent });
+    const moved = await store.update(channel, now.id, changes, { person: !agent && to === 'ready' && now.status !== 'started' });
     if (to === 'done' || to === 'rejected') chat.archiveTicketRoom(channel, now.id, now.createdAt, to === 'done' ? 'the ticket moved to Done' : 'the ticket was rejected');
     else if (now.status === 'rejected') chat.openTicketRoom(channel, chatOf(moved));
     history.add(channel, now, to === 'ready' && now.status !== 'started' ? { stage: 'approved', by: agent ? 'Lead' : 'you' } : { stage: 'moved', from: now.status, to, by: agent ? 'Lead' : 'you' }, agent || null);
@@ -368,16 +368,16 @@ function setPlace(channel, ticket, body, agent) {
     if (!movable(other)) return [409, { ok: false, error: 'not_ordered', message: other.id + ' is ' + stateOf(other) + '. Only Triage and Ready tickets are in the work order.' }];
     if ((other.priority || 'normal') !== (now.priority || 'normal')) return [409, { ok: false, error: 'other_priority', message: other.id + ' has ' + (other.priority || 'normal') + ' priority and ' + now.id + ' has ' + (now.priority || 'normal') + '. Change the priority first.' }];
     const writes = placeNear(all, now, other, after !== null, movable);
-    await writeRanks(channel, all, writes, now.id, setBy(agent, 'place'), !agent);
-    if (!writes.some(([id]) => id === now.id)) await store.update(channel, now.id, setBy(agent, 'place'), { person: !agent });
+    await writeRanks(channel, all, writes, now.id, setBy(agent, 'place'));
+    if (!writes.some(([id]) => id === now.id)) await store.update(channel, now.id, setBy(agent, 'place'));
     const fresh = await listAll(channel);
     return [200, { ok: true, ticket: await view(channel, fresh.find((t) => t.id === now.id), fresh) }];
   });
 }
-async function writeRanks(channel, all, writes, markId, mark, person) {
+async function writeRanks(channel, all, writes, markId, mark) {
   const done = [];
   try {
-    for (const [id, rank] of writes) { await store.update(channel, id, Object.assign({ rank }, id === markId ? mark : {}), { person }); done.push(id); }
+    for (const [id, rank] of writes) { await store.update(channel, id, Object.assign({ rank }, id === markId ? mark : {})); done.push(id); }
   } catch (e) {
     const stuck = [];
     for (const id of done.reverse()) {

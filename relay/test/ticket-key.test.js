@@ -34,6 +34,9 @@ test('a ticket written with key A is read by a relay with key B: Needs you names
   assert.match(item.line, /^2 tickets have notes signed with another key: approvals and order are not read\./);
   assert.match(item.line, /RELAY_TICKET_KEY/, 'and it names the fix');
 
+  const order = await B.call('POST', '/tickets/' + ready.id + '/order', { after: triage.id });
+  assert.notStrictEqual(order.status, 200, 'a new place cannot rewrite a note that does not check');
+  assert.strictEqual((await B.call('GET', '/needs-you')).body.items.filter((i) => i.kind === 'ticket-key').length, 1, 'and the line stays');
   const moved = await B.call('POST', '/tickets/' + triage.id + '/move', { to: 'ready' });
   assert.strictEqual(moved.status, 200, JSON.stringify(moved.body));
   assert.strictEqual(moved.body.ticket.approved, true, 'the person\'s move approves under key B');
