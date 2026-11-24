@@ -66,6 +66,9 @@ test('a PR only a person merges says where it is, and ready only when Autopilot 
   assert.strictEqual(why(pr({ statusCheckRollup: [{ status: 'IN_PROGRESS', conclusion: '' }] }), merge).why, only + 'Waiting for CI.');
   assert.strictEqual(why(pr({ mergeStateStatus: 'BLOCKED' }), merge).why, only + 'GitHub says the PR is blocked.');
   assert.strictEqual(why(pr({ mergeStateStatus: 'DIRTY' }), merge).why, only + 'The review of aaaaaaa says merge, but it conflicts with main.');
+  const untold = { act: 'bring-back', for: 'news', why: 'There is review news its Dev was never told, and its session has ended, so Autopilot brings it back to tell it.' };
+  assert.strictEqual(forPersonMerge(pr(), lockedOf(['CLAUDE.md']), merge, untold).why, only + untold.why, 'untold news is not called a conflict');
+  assert.strictEqual(forPersonMerge(pr(), lockedOf(['CLAUDE.md']), merge, { act: 'bring-back', for: 'conflict', why: 'x' }).why, only + 'The review of aaaaaaa says merge, but it conflicts with main.');
   for (const [p, v] of [[pr(), merge], [pr(), null], [pr({ mergeStateStatus: 'DIRTY' }), merge], [pr({ statusCheckRollup: [] }), merge], [pr({ headRefOid: 'b'.repeat(40) }), merge]]) {
     assert.strictEqual(!!why(p, v).ready, act(p, v, 1, 2) === 'merge', 'ready exactly when Autopilot would merge a PR that changes no such file');
   }

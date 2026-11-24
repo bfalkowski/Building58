@@ -49,7 +49,7 @@ function forPersonMerge(pr, locked, verdict, d) {
   if (!verdict || !verdict.posted) now = 'Waiting for its review.';
   else if (verdict.commit !== pr.headRefOid) now = 'Waiting for a review of the new commits.';
   else if (verdict.kind === 'fix') now = 'The review of ' + short + ' says fix, so its Dev fixes it first.';
-  else if (d.act === 'conflict' || d.act === 'bring-back') now = 'The review of ' + short + ' says merge, but it conflicts with main.';
+  else if (d.act === 'conflict' || (d.act === 'bring-back' && d.for === 'conflict')) now = 'The review of ' + short + ' says merge, but it conflicts with main.';
   else now = d.why;
   return { ready: null, why: onlyAPerson(locked) + ' ' + now };
 }
