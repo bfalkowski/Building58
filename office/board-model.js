@@ -85,11 +85,16 @@
   }
   const CLOSED = { replaced: 'replaced by ', merged: 'merged into ' };
   const closedText = (t) => (t.closedAs === 'closed' ? 'closed' : CLOSED[t.closedAs] ? CLOSED[t.closedAs] + (t.closedFor || []).join(', ') : '');
+  function noteTime(at) {
+    const d = new Date(at);
+    if (!at || isNaN(d)) return 'time not recorded';
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
   const waitsOnYou = (t) => columnOf(t) === 'waiting_on_you' || !!t.proposal;
 
   const alsoWith = (names, assignee) => (names || []).filter((n) => !(assignee && assignee.name === n));
 
-  const api = { COLUMNS, DONE_SHOWN, PRIORITIES, GROUP_FROM, NO_LABEL, priorityOf, labelsOf, groupsOf, stateOf, columnOf, matches, filtering, repos, cardsOf, peopleOn, alsoWith, proposalText, closedText, waitsOnYou };
+  const api = { COLUMNS, DONE_SHOWN, PRIORITIES, GROUP_FROM, NO_LABEL, priorityOf, labelsOf, groupsOf, stateOf, columnOf, matches, filtering, repos, cardsOf, peopleOn, alsoWith, proposalText, closedText, noteTime, waitsOnYou };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.BoardModel = api;
 })(this);
