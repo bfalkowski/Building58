@@ -159,12 +159,12 @@ async function giveVerdict(channel, agent, kind) {
 const unposted = (rec, t) => rec && rec.verdicts.find((x) => x.sessionId === t.sessionId && !x.posted);
 const COMMENT_ID = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/\d+#issuecomment-(\d+)$/;
 const checking = new Map();
-async function bodyCounts(url) {
+async function bodyCounts(url, kind) {
   const m = String(url).match(COMMENT_ID);
   if (!m) return true;
   try {
     const comment = JSON.parse(await gh(['api', 'repos/' + m[1] + '/issues/comments/' + m[2]]));
-    return typeof comment.body !== 'string' || plan.countsAsReview(comment.body);
+    return typeof comment.body !== 'string' || plan.countsAsReview(comment.body, kind);
   } catch (e) {
     console.error('Could not read the review at ' + url + ', so it counts as posted: ' + e.message);
     return true;
@@ -173,7 +173,7 @@ async function bodyCounts(url) {
 async function judgePost(channel, t) {
   const v = unposted(chOf(channel).prs[t.reviewOf], t);
   if (!v) return;
-  if (!(await bodyCounts(t.posted.url))) { t.emptyPost = true; console.log('The review of ' + t.reviewOf + ' at ' + t.posted.url + ' has no verdict or no words, so it does not count.'); return; }
+  if (!(await bodyCounts(t.posted.url, v.kind))) { console.log('The review of ' + t.reviewOf + ' at ' + t.posted.url + ' has no verdict or no words, so it does not count.'); return; }
   if (v.posted) return;
   v.posted = t.posted.url; save(); holdPushes(channel); prComments.reviewPosted(channel, t.reviewOf, t.posted.url);
   reviews.reviewCounted(channel, t.reviewOf);
@@ -198,7 +198,7 @@ terminal.onReviewTurnEnd(async (channel, t) => {
     const login = JSON.parse(await gh(['api', 'user'])).login || null;
     const comments = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/issues/' + m[2] + '/comments?per_page=100'])).flat();
     const since = Math.min(Date.parse(t.startedAt) || Infinity, Date.parse(v.at) || Infinity) - CLOCK_SKEW_MS;
-    const url = plan.reviewPostFor(comments, { login, since, commit: v.commit });
+    const url = plan.reviewPostFor(comments, { login, since, commit: v.commit, kind: v.kind });
     if (!url || v.posted || rec.verdicts.some((x) => x.posted === url)) return;
     v.posted = url; save(); holdPushes(channel);
     reviews.reviewCounted(channel, t.reviewOf);

@@ -170,12 +170,13 @@ async function history(channel, pr, used) {
 }
 async function followUp(channel, pr, from) {
   const rec = recOf(channel, pr), p = rec.pending;
-  rec.pending = null; rec.count += 1;
+  rec.pending = null;
+  if (!p.again) rec.count += 1;
   save();
   const base = followBrief(pr, autopilot.since(channel, pr)) + autopilot.ask(channel);
   const out = await startReview(channel, { from, pr, prompt: base + await history(channel, pr, base.length), unlessAt: p.again ? undefined : rec.head });
   if (out.ok && !out.unchanged) { startedNews(channel, out, 'a follow-up review of PR ' + number(pr)); return; }
-  rec.count = Math.max(0, rec.count - 1);
+  if (!p.again) rec.count = Math.max(0, rec.count - 1);
   if (out.ok) { save(); say(channel, 'PR ' + number(pr) + ' has no new commits since its last review, so no follow-up review started.'); return; }
   if (out.error === 'unrelated') { save(); return; }
   if (out.error === 'full') { needsDesk(channel, pr, rec, p); return; }
@@ -531,9 +532,9 @@ function reviewEmpty(channel, pr) {
   if (!rec) return false;
   rec.empties = (rec.empties || 0) + 1;
   if (rec.empties >= 2) { gaveUp(channel, pr, rec, 'empty', { message: 'the review came back empty.' }); return false; }
-  const dev = devOf(channel, pr), from = (dev && dev.cwd) || rec.from || (rec.first && rec.first.from);
+  if (rec.first || rec.pending) { save(); say(channel, 'The review of PR ' + number(pr) + ' came back empty. A review already waits to start.', 'wait'); return true; }
+  const dev = devOf(channel, pr), from = (dev && dev.cwd) || rec.from;
   if (!from) { gaveUp(channel, pr, rec, 'empty', { message: 'the review came back empty.' }); return false; }
-  rec.count = Math.max(0, (rec.count || 0) - 1);
   rec.pending = { from, dev: dev ? dev.id : null, session: dev ? dev.sessionId : null, at: Date.now(), tries: 0, watch: true, again: true };
   rec.why = null;
   save();

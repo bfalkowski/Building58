@@ -124,23 +124,24 @@ function whyNoneAllowed(all, hasTask, only) {
 
 const HEADING = /^#{1,6}[ \t]+review of[ \t]+`?(?:[0-9a-f]{7,40}\.\.\.?)?([0-9a-f]{7,40})\b/i;
 const COMMENT_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+#issuecomment-\d+$/;
-const VERDICT_LINE = /^[ \t>*_#-]*verdict\W+(merge|fix)\b.*$/gim;
+const VERDICT = /verdict\W+(merge|fix)\b/i;
 const MIN_CHECKED = 20;
-function countsAsReview(body) {
+function countsAsReview(body, kind) {
   const text = String(body || '');
-  if (!/verdict\W+(merge|fix)\b/i.test(text)) return false;
-  const checked = text.replace(VERDICT_LINE, '').replace(/^#{1,6}[ \t]+review of\b.*$/gim, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const said = text.match(VERDICT);
+  if (!said || (kind && said[1].toLowerCase() !== kind)) return false;
+  const checked = text.replace(new RegExp(VERDICT.source, 'gi'), '').replace(/^#{1,6}[ \t]+review of\b.*$/gim, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   return checked.length >= MIN_CHECKED;
 }
 
-function reviewPostFor(comments, { login, since, commit }) {
+function reviewPostFor(comments, { login, since, commit, kind }) {
   let found = null, foundAt = -Infinity;
   for (const c of comments || []) {
     if (!c || !c.user || !login || String(c.user.login).toLowerCase() !== String(login).toLowerCase()) continue;
     const at = Date.parse(c.created_at);
     if (!(at >= since) || at < foundAt || !COMMENT_URL.test(String(c.html_url))) continue;
     const named = String(c.body || '').trimStart().match(HEADING);
-    if (named && countsAsReview(c.body) && String(commit).toLowerCase().startsWith(named[1].toLowerCase())) { found = c.html_url; foundAt = at; }
+    if (named && countsAsReview(c.body, kind) && String(commit).toLowerCase().startsWith(named[1].toLowerCase())) { found = c.html_url; foundAt = at; }
   }
   return found;
 }

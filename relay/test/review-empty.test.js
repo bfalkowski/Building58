@@ -16,6 +16,9 @@ test('a comment of a dash, of whitespace, or with no verdict line does not count
     assert.strictEqual(countsAsReview(body), false, JSON.stringify(body));
   }
   assert.strictEqual(countsAsReview(REAL), true);
+  assert.strictEqual(countsAsReview('Verdict: merge. I read the diff and ran the tests, all green.'), true, 'words on the verdict line count');
+  assert.strictEqual(countsAsReview(REAL, 'merge'), true);
+  assert.strictEqual(countsAsReview(REAL, 'fix'), false, 'a comment that says merge does not match a kept fix, nor the reverse');
   assert.strictEqual(countsAsReview('## Review of 04fe778\n\nOne bug in the route, see below.\n\n**Verdict: fix.**\n'), true);
 });
 
@@ -31,14 +34,16 @@ test('the lookup for an unseen post skips a dash and a comment with no verdict',
 test('after an empty review a new one starts once, and a second empty one fails the PR to the person', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-empty-'));
   process.env.RELAY_REVIEWS_FILE = path.join(dir, 'reviews.json');
-  const pr = 'https://github.com/a/b/pull/9';
-  fs.writeFileSync(process.env.RELAY_REVIEWS_FILE, JSON.stringify({ c: { prs: { [pr]: { count: 1, head: 'abc', pending: null, waits: false, from: '/work/b' } } } }));
+  const pr = 'https://github.com/a/b/pull/9', queued = 'https://github.com/a/b/pull/10';
+  fs.writeFileSync(process.env.RELAY_REVIEWS_FILE, JSON.stringify({ c: { prs: { [pr]: { count: 1, head: 'abc', pending: null, waits: false, from: '/work/b' }, [queued]: { count: 1, head: 'abc', pending: { from: '/work/b', tries: 2, notBefore: 5 }, waits: false } } } }));
   const reviews = require('../reviews.js');
   assert.strictEqual(reviews.reviewEmpty('c', pr), true);
   const rec = JSON.parse(fs.readFileSync(process.env.RELAY_REVIEWS_FILE, 'utf8')).c.prs[pr];
   assert.ok(rec.pending && rec.pending.again && rec.pending.watch, 'a review is queued');
-  assert.strictEqual(rec.count, 0, 'the empty one is not counted against the limit');
+  assert.strictEqual(rec.count, 1, 'the restart does not change the count');
   assert.strictEqual(reviews.failedOf('c', pr), null);
+  assert.strictEqual(reviews.reviewEmpty('c', queued), true);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(process.env.RELAY_REVIEWS_FILE, 'utf8')).c.prs[queued].pending, { from: '/work/b', tries: 2, notBefore: 5 }, 'a review already queued is kept as it was');
   assert.strictEqual(reviews.reviewEmpty('c', pr), false);
   assert.match(reviews.failedOf('c', pr), /came back empty/);
   const task = { id: 't1', ticket: 'T-9', title: 'x', state: 'in_review', pr, prOpen: true, owner: null, reviewRuns: false, reviewFailed: reviews.failedOf('c', pr) };

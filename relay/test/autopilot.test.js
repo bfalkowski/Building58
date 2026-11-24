@@ -268,7 +268,7 @@ test('Get a review asks for a verdict, and its merge verdict merges, while one w
     await post(r2);
     await until(() => merged().includes(PR + ' --merge --match-head-commit ' + head), 'the merge');
     const reviews = (await R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR);
-    assert.strictEqual(reviews.count, 1, 'Get a review is not counted toward the automatic review limit, only the new review after the one with no verdict');
+    assert.strictEqual(reviews.count, 0, 'Get a review is not counted toward the automatic review limit, and nor is the new review after one with no verdict');
   });
 
   await t.test('a review whose comment says only a dash gives a merge verdict that does not count, and no merge follows', async () => {

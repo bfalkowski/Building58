@@ -27,7 +27,7 @@
       const dev = terms.find((t) => t.running && (t.id === p.dev || (p.session && t.sessionId === p.session)));
       if (dev && (dev.state === 'working' || dev.state === 'waiting')) continue;
       if (terms.some((t) => t.running && t.role === 'reviewer' && t.pr === pr)) continue;
-      if ((counts[pr] || 0) >= limit) full.push(pr);
+      if ((counts[pr] || 0) >= limit && !p.again) full.push(pr);
       else start.push({ pr, from: p.from });
     }
     return { start, full };
