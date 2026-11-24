@@ -102,12 +102,12 @@ test('after a wake, a session cut off by the sleep gets one carry-on note, and o
   t.after(async () => { await R.stop().catch(() => {}); fs.rmSync(home, { recursive: true, force: true }); });
   const say = (sid, event) => R.hook({ hook_event_name: event, session_id: sid.slice(0, 12) });
   const repo = makeRepo(R.home);
-  const cut = await R.start({ cwd: repo, title: 'Cut' }), waiting = await R.start({ cwd: repo, title: 'Waiting' }), fine = await R.start({ cwd: repo, title: 'Fine' });
-  for (const s of [cut, waiting, fine]) { await say(s.sessionId, 'UserPromptSubmit'); await say(s.sessionId, 'Stop'); }
+  const old = await R.start({ cwd: repo, title: 'Old' }), cut = await R.start({ cwd: repo, title: 'Cut' }), waiting = await R.start({ cwd: repo, title: 'Waiting' }), fine = await R.start({ cwd: repo, title: 'Fine' });
+  for (const s of [old, cut, waiting, fine]) { await say(s.sessionId, 'UserPromptSubmit'); await say(s.sessionId, 'Stop'); }
   await sleep(300);
-  for (const s of [cut, waiting]) await R.call('POST', '/terminals/' + s.id + '/input', { data: '/slept\r' });
-  for (const s of [cut, waiting]) await until(async () => /went to sleep mid-response/.test(await R.screen(s.id)), 'the sleep message');
-  await say(waiting.sessionId, 'Notification');
+  const slept = (s) => R.call('POST', '/terminals/' + s.id + '/input', { data: '/slept\r' });
+  await slept(old);
+  await until(async () => /went to sleep mid-response/.test(await R.screen(old.id)), 'the old sleep message');
   await sleep(500);
   assert.doesNotMatch(await R.screen(cut.id), CARRY, 'nothing before a wake');
 
@@ -115,10 +115,14 @@ test('after a wake, a session cut off by the sleep gets one carry-on note, and o
   process.kill(pid, 'SIGSTOP');
   await sleep(1500);
   process.kill(pid, 'SIGCONT');
+  await say(waiting.sessionId, 'Notification');
+  await slept(cut); await slept(waiting);
   await until(async () => CARRY.test(await R.screen(cut.id)), 'the carry-on note');
   await say(cut.sessionId, 'UserPromptSubmit');
-  await sleep(1500);
-  assert.strictEqual(times(await R.screen(cut.id)), 1, 'once');
+  await say(cut.sessionId, 'Stop');
+  await sleep(2000);
+  assert.strictEqual(times(await R.screen(cut.id)), 1, 'once, though the message is still on its screen when its turn ends');
+  assert.doesNotMatch(await R.screen(old.id), CARRY, 'a message from an earlier sleep gets none');
   assert.doesNotMatch(await R.screen(waiting.id), CARRY, 'a session waiting on the person gets none');
   assert.doesNotMatch(await R.screen(fine.id), CARRY, 'a session that was not cut gets none');
 });

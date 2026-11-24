@@ -13,8 +13,8 @@
 // RELAY_WAKE_GAP_MS (30 seconds) when the computer slept. For WAKE_WATCH after that, each look finds the
 // sessions whose last output is the sleep message and whose hooks do not say they wait on the person, and
 // saves one carry-on note for each (relay/delivery.js). The message can come seconds after the wake, so the
-// relay looks again and again for a while, and notes a session once for each turn: not again until a turn
-// has begun in it since the note was saved.
+// relay looks again and again for a while. Only a message printed after the sleep began counts, so one
+// from an earlier sleep does not. A session is noted once for each wake, and not while it is in a turn.
 'use strict';
 const { spawn } = require('child_process');
 const config = require('./config.js');
@@ -35,8 +35,8 @@ const KEY = (sessionId) => 'carry on after sleep ' + sessionId;
 const tool = () => process.env.RELAY_CAFFEINATE || (process.platform === 'darwin' ? 'caffeinate' : null);
 const hasWork = () => autopilot.anyOn() || tasks.channels().some((c) => tasks.list(c).some((t) => WORKING.includes(t.state)));
 
-let log = () => {}, hold = null, broken = false, lastLook = Date.now(), watchUntil = 0;
-const noted = new Map();
+let log = () => {}, hold = null, broken = false, lastLook = Date.now(), watchUntil = 0, sleptAt = 0;
+const noted = new Set();
 
 function release() {
   if (!hold) return;
@@ -59,13 +59,13 @@ function settle() {
 }
 
 function cutBySleep(t) {
-  if (!t || t.exited || t.stopped || t.state === 'waiting' || t.round) return false;
+  if (!t || t.exited || t.stopped || t.state === 'waiting' || t.state === 'working' || t.round || (t.lastOutAt || 0) < sleptAt) return false;
   return terminal.screenOf(t).slice(-LAST).includes(SLEPT);
 }
 function carryOn() {
   for (const t of terminal.everyone()) {
-    if (!cutBySleep(t) || noted.get(t.sessionId) === (t.turnAt || 0)) continue;
-    noted.set(t.sessionId, t.turnAt || 0);
+    if (noted.has(t.sessionId) || !cutBySleep(t)) continue;
+    noted.add(t.sessionId);
     const who = (t.title || 'A session') + ' (' + String(t.sessionId).slice(0, 8) + ')';
     log(who + ' was cut off by the computer\'s sleep, so it gets a carry-on note once it shows its prompt mark.');
     delivery.save(t.channel, { key: KEY(t.sessionId), terminal: t.id, sessionId: t.sessionId, text: CARRY_ON, beforeTurn: true, untilTurn: true, on: (what, why) => {
@@ -76,7 +76,7 @@ function carryOn() {
 
 function look() {
   const now = Date.now();
-  if (now - lastLook > WAKE_GAP) { watchUntil = now + WAKE_WATCH; log('The computer woke after ' + Math.round((now - lastLook) / 1000) + ' seconds, so the relay looks for sessions its sleep cut off.'); }
+  if (now - lastLook > WAKE_GAP) { watchUntil = now + WAKE_WATCH; sleptAt = lastLook; noted.clear(); log('The computer woke after ' + Math.round((now - lastLook) / 1000) + ' seconds, so the relay looks for sessions its sleep cut off.'); }
   lastLook = now;
   settle();
   if (now < watchUntil) carryOn();
