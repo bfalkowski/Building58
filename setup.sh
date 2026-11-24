@@ -2,7 +2,8 @@
 # Sets up a Building58 room in Docker and starts it: ./setup.sh
 # It fills in .env, asking only for what it cannot make itself, then runs docker compose up -d, waits
 # until the room is healthy, says what the room found, and opens the room page. Each step that is
-# already done is skipped, so it is safe to run again. See docs/manual/running.html#container-setup-sh.
+# already done is skipped, so it is safe to run again. With no display (a server), it prints each link
+# in place of opening it, and before the GitHub App step it prints the ssh -L command to run on your laptop. See docs/manual/running.html#container-setup-sh.
 #   1. .env from .env.example, readable only by you, with a random RELAY_KEY.
 #   2. Claude Code: a token from `claude setup-token`, or a Claude Console API key, pasted once.
 #   3. GitHub: the room's own GitHub App (relay/github-app.js create), then a link to install it. With no
@@ -34,7 +35,11 @@ put() {
 }
 ask() { [ -t 0 ] || stop "$1 is not set in $ENV, and there is no terminal to ask in."; printf '%s ' "$2" >&2; read -r answer; printf '%s' "$answer"; }
 secret() { [ -t 0 ] || stop "$1 is not set in $ENV, and there is no terminal to ask in."; printf '%s ' "$2" >&2; stty -echo; read -r answer || true; stty echo; printf '\n' >&2; printf '%s' "$answer"; }
-open_link() { if command -v open >/dev/null 2>&1; then open "$1"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$1" >/dev/null 2>&1 || true; fi; }
+headless() { [ "${SETUP_HEADLESS:-}" = 1 ] && return 0; [ "${SETUP_HEADLESS:-}" = 0 ] && return 1; [ "$(uname -s)" != Darwin ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; }
+open_link() {
+  if headless; then say "Open this link in your browser: $1"; return 0; fi
+  if command -v open >/dev/null 2>&1; then open "$1"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$1" >/dev/null 2>&1 || true; fi
+}
 
 command -v docker >/dev/null 2>&1 || stop "Install Docker first: Docker Desktop, Colima, or Docker Engine on Linux."
 command -v curl >/dev/null 2>&1 || stop "This needs curl, to check that the room answers. Install curl, then run ./setup.sh again."
@@ -69,11 +74,20 @@ fi
 if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
   say ""
   say "The room acts on GitHub as an app of its own, which reaches only the repos you install it on."
-  say "Your browser will open GitHub with the app's settings filled in. Press Create GitHub App there."
-  ask GITHUB_APP_ID "Press Enter to start." >/dev/null
+  if headless; then say "Open the link below in your browser: it shows GitHub with the app's settings filled in. Press Create GitHub App there."; else say "Your browser will open GitHub with the app's settings filled in. Press Create GitHub App there."; fi
+  if headless; then
+    say ""
+    say "This computer has no screen. The GitHub step answers on port $APP_PORT here, which your laptop cannot reach yet."
+    say "On your laptop, in another terminal, run this and leave it open:"
+    say "  ssh -L $APP_PORT:localhost:$APP_PORT $(id -un)@$(hostname -f 2>/dev/null || hostname 2>/dev/null || uname -n)"
+    say "Use the name or address you log in to this server with, if it differs. Then open the links below on the laptop."
+    ask GITHUB_APP_ID "Press Enter when the tunnel is open." >/dev/null
+  else
+    ask GITHUB_APP_ID "Press Enter to start." >/dev/null
+  fi
   node_major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
   if [ "$node_major" -ge 18 ] 2>/dev/null; then
-    node relay/github-app.js create --env "$ENV"
+    node relay/github-app.js create --env "$ENV" --port "$APP_PORT" $(headless && echo --no-open)
     install=""
   else
     image="ghcr.io/bfalkowski/building58:$(get BUILDING58_VERSION)"; [ "$image" = "ghcr.io/bfalkowski/building58:" ] && image="ghcr.io/bfalkowski/building58:latest"
@@ -81,7 +95,7 @@ if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
     say "No Node 18 or later here, so the GitHub step runs in a container. Getting $image..."
     docker pull -q "$image" >/dev/null || stop "Could not download $image."
     docker rm -f "$HELPER" >/dev/null 2>&1 || true
-    docker create --name "$HELPER" -p "127.0.0.1:$APP_PORT:$APP_PORT" --entrypoint node "$image" /tmp/github-app.js create --print --host 0.0.0.0 --port "$APP_PORT" >/dev/null || stop "Could not make the helper container."
+    docker create --name "$HELPER" -p "127.0.0.1:$APP_PORT:$APP_PORT" --entrypoint node "$image" /tmp/github-app.js create --print --host 0.0.0.0 --port "$APP_PORT" $(headless && echo --no-open) >/dev/null || stop "Could not make the helper container."
     docker cp -q relay/github-app.js "$HELPER:/tmp/github-app.js"
     out=$(mktemp)
     docker start -a "$HELPER" > "$out" 2>&1 &
@@ -89,7 +103,7 @@ if [ -z "$(get GITHUB_APP_ID)$(get GH_TOKEN)" ]; then
     for i in $(seq 60); do grep -q '^Opening' "$out" && break; kill -0 "$helper" 2>/dev/null || break; sleep 1; done
     grep -q '^Opening' "$out" || { cat "$out" >&2; rm -f "$out"; stop "The GitHub step did not start (is port $APP_PORT free?)."; }
     open_link "http://localhost:$APP_PORT/"
-    say "If no browser opened, open http://localhost:$APP_PORT/"
+    headless || say "If no browser opened, open http://localhost:$APP_PORT/"
     wait "$helper" || true
     grep -q '^GITHUB_APP_ID=' "$out" || { cat "$out" >&2; rm -f "$out"; stop "The GitHub App was not made. Run ./setup.sh again."; }
     put GITHUB_APP_ID "$(sed -n 's/^GITHUB_APP_ID=//p' "$out")"
@@ -122,3 +136,4 @@ link="http://localhost:$port/office/?channel=office&key=$(get RELAY_KEY)"
 say ""
 say "The room is running. Open it: http://localhost:$port/office/?channel=office&key=<RELAY_KEY in $ENV>"
 open_link "$link"
+if headless; then say "On a server, reach port $port from your laptop with: ssh -L $port:localhost:$port $(id -un)@$(hostname -f 2>/dev/null || hostname 2>/dev/null || uname -n)"; fi
