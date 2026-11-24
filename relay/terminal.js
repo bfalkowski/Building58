@@ -45,7 +45,10 @@ function termsOf(channel) {
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 const LOCAL_ADDRS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 function localOnly(req, port) {
-  if (require('./cf-access.js').CF_HEADERS.some((h) => req.headers[h] !== undefined)) return 'The terminal does not answer through a tunnel.';
+  const cf = require('./cf-access.js');
+  const site = req.headers['sec-fetch-site'];
+  if (cf.ownerHere(req)) return site && site !== 'same-origin' && site !== 'none' ? 'The terminal only answers the room page served by this relay.' : null;
+  if (cf.CF_HEADERS.some((h) => req.headers[h] !== undefined)) return 'The terminal does not answer through a tunnel.';
   if (!LOCAL_ADDRS.has(req.socket.remoteAddress)) return 'The terminal only answers this computer.';
   const host = String(req.headers.host || '').replace(/:\d+$/, '').toLowerCase();
   if (!LOCAL_HOSTS.has(host)) return 'The terminal only answers http://localhost:' + port + ', not ' + host + '.';
@@ -54,7 +57,6 @@ function localOnly(req, port) {
     let o; try { o = new URL(origin); } catch (e) { return 'Bad Origin.'; }
     if (!LOCAL_HOSTS.has(o.hostname) || String(o.port || 80) !== String(port)) return 'The terminal only answers the room page served by this relay.';
   }
-  const site = req.headers['sec-fetch-site'];
   if (site && site !== 'same-origin' && site !== 'none') return 'The terminal only answers the room page served by this relay.';
   return null;
 }

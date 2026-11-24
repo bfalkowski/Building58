@@ -152,6 +152,40 @@ test('RELAY_ACCESS_MFA is amr unless set, and any other value stops the relay', 
   assert.throws(() => cf.fromEnv(Object.assign({ RELAY_ACCESS_MFA: 'off' }, env)), /RELAY_ACCESS_MFA/);
 });
 
+test('with RELAY_REMOTE_FULL=1 the owner uses a local-only route through the tunnel, and only the owner', async (t) => {
+  const R = await remote(t, { RELAY_REMOTE_FULL: '1' });
+  const KEYED = { Authorization: 'Bearer test-key' };
+  const ok = await raw(R, '/channels/t/terminals', Object.assign({ 'Cf-Access-Jwt-Assertion': token(), 'Cf-Ray': 'r1', 'Sec-Fetch-Site': 'same-origin', Origin: 'https://' + HOST }, KEYED));
+  assert.strictEqual(ok.status, 200, ok.body);
+  const noToken = await raw(R, '/channels/t/terminals', Object.assign({ 'Cf-Ray': 'r1' }, KEYED));
+  assert.strictEqual(noToken.status, 403);
+  assert.strictEqual(noToken.body, 'Forbidden');
+  const otherEmail = await raw(R, '/channels/t/terminals', Object.assign({ 'Cf-Access-Jwt-Assertion': token({ email: 'other@example.com' }) }, KEYED));
+  assert.strictEqual(otherEmail.status, 403);
+  const crossSite = await raw(R, '/channels/t/terminals', Object.assign({ 'Cf-Access-Jwt-Assertion': token(), 'Sec-Fetch-Site': 'cross-site' }, KEYED));
+  assert.strictEqual(crossSite.status, 403);
+  assert.match(crossSite.body, /local_only/);
+  const otherOrigin = await raw(R, '/channels/t/terminals', Object.assign({ 'Cf-Access-Jwt-Assertion': token(), Origin: 'https://evil.example.com' }, KEYED));
+  assert.strictEqual(otherOrigin.status, 403);
+  const noKey = await raw(R, '/channels/t/terminals', { 'Cf-Access-Jwt-Assertion': token() });
+  assert.strictEqual(noKey.status, 401);
+});
+
+test('without RELAY_REMOTE_FULL a valid token still gets 403 local_only on a local-only route', async (t) => {
+  const R = await remote(t);
+  const r = await raw(R, '/channels/t/terminals', { 'Cf-Access-Jwt-Assertion': token(), Authorization: 'Bearer test-key' });
+  assert.strictEqual(r.status, 403);
+  assert.match(r.body, /local_only/);
+});
+
+test('RELAY_REMOTE_FULL is off unless 1, and any other value stops the relay', () => {
+  const env = { RELAY_REMOTE: '1', RELAY_REMOTE_URL: 'https://a.example.com', RELAY_ACCESS_TEAM: 't.cloudflareaccess.com', RELAY_ACCESS_AUD: 'a', RELAY_ACCESS_EMAIL: 'e@x.com' };
+  assert.strictEqual(cf.fromEnv(env).full, false);
+  assert.strictEqual(cf.fromEnv(Object.assign({ RELAY_REMOTE_FULL: '0' }, env)).full, false);
+  assert.strictEqual(cf.fromEnv(Object.assign({ RELAY_REMOTE_FULL: '1' }, env)).full, true);
+  assert.throws(() => cf.fromEnv(Object.assign({ RELAY_REMOTE_FULL: 'yes' }, env)), /RELAY_REMOTE_FULL/);
+});
+
 test('remote mode is off by default, and a half-set one stops the relay', async () => {
   assert.strictEqual(cf.fromEnv({}), null);
   assert.throws(() => cf.fromEnv({ RELAY_REMOTE: '1', RELAY_REMOTE_URL: 'https://a.example.com' }), /RELAY_ACCESS_TEAM/);
