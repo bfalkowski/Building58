@@ -9,11 +9,11 @@
   const $ = (id) => document.getElementById(id);
   const section = $('needs-you'), count = $('needs-you-count'), empty = $('needs-you-empty'), list = $('needs-you-list');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!channel || !section) return;
 
   const base = location.origin + '/channels/' + encodeURIComponent(channel);
-  const url = base + '/needs-you?key=' + encodeURIComponent(key);
+  const url = base + '/needs-you';
   const TICKET = /^[\w.-]{1,20}$/;
   const PR = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
   const RUN = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/;
@@ -47,7 +47,7 @@
       stop.title = 'Stop the relay with pid ' + link.stop;
       stop.addEventListener('click', () => {
         stop.disabled = true; stop.textContent = 'Stopping';
-        fetch(base + '/old-relays/' + link.stop + '/stop?key=' + encodeURIComponent(key), { method: 'POST' })
+        fetch(base + '/old-relays/' + link.stop + '/stop', { method: 'POST' })
           .then((r) => r.json()).catch(() => null)
           .then((r) => { stop.textContent = r && r.ok ? 'Stopped' : 'Not stopped'; stop.title = (r && r.message) || stop.title; drawn = ''; read().then(draw); });
       });
@@ -59,7 +59,7 @@
       fix.title = 'You agree with the Dev: the finding must be fixed in this PR. This lifts the push hold, and its Dev is told to fix it.';
       fix.addEventListener('click', () => {
         fix.disabled = true; fix.textContent = 'Sending';
-        fetch(base + '/autopilot/fix?key=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: link.fix }) })
+        fetch(base + '/autopilot/fix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: link.fix }) })
           .then((r) => r.json()).catch(() => null)
           .then((r) => { fix.textContent = r && r.ok ? 'Sent to its Dev' : 'Not sent'; fix.title = (r && r.message) || fix.title; drawn = ''; read().then(draw); });
       });
@@ -71,7 +71,7 @@
       done.title = 'Move its task to Done. Its ticket goes to done too.';
       done.addEventListener('click', () => {
         done.disabled = true; done.textContent = 'Moving';
-        fetch(base + '/tasks/' + encodeURIComponent(link.done) + '/move?key=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: 'done' }) })
+        fetch(base + '/tasks/' + encodeURIComponent(link.done) + '/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: 'done' }) })
           .then((r) => r.json()).catch(() => null)
           .then((r) => { done.textContent = r && r.ok ? 'Moved' : 'Not moved'; done.title = (r && r.message) || done.title; drawn = ''; read().then(draw); });
       });

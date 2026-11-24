@@ -8,10 +8,10 @@
   const bar = $('huddle-bar'), freeBtn = $('huddle-free'), askBtn = $('huddle-ask'), leadBox = $('huddle-lead');
   const section = $('huddle-report'), headline = $('huddle-headline'), note = $('huddle-note'), rows = $('huddle-rows'), floor = section.closest('.floor');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!channel) return;
 
-  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/huddle?key=' + encodeURIComponent(key);
+  const url = location.origin + '/channels/' + encodeURIComponent(channel) + '/huddle';
   function api(body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url, opt).then((r) => r.json()).catch(() => ({ ok: false, message: 'The relay did not answer.' }));

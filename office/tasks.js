@@ -6,12 +6,12 @@
   const $ = (id) => document.getElementById(id);
   const section = $('tasks'), rows = $('task-rows'), form = $('task-form'), note = $('task-note');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!section) return;
   if (!channel) { section.hidden = true; return; }
 
   const LABEL = { building: 'Building', in_review: 'In review', changes_requested: 'Changes requested', waiting_on_you: 'Waiting on you', done: 'Done' };
-  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + '/tasks' + p + '?key=' + encodeURIComponent(key);
+  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + '/tasks' + p;
   function api(p, body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url(p), opt).then((r) => r.json()).catch(() => ({ ok: false, message: 'The relay did not answer.' }));

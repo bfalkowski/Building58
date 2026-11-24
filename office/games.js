@@ -9,7 +9,7 @@
   const section = $('games');
   if (!section) return;
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!channel) { section.hidden = true; return; }
 
   const list = $('game-list'), form = $('game-form'), pick = $('game-pick'), seatsIn = $('game-seats-n'), seedIn = $('game-seed');
@@ -20,7 +20,7 @@
   const aboutBox = $('game-about'), doneNote = $('game-done');
   const stepsBox = $('game-steps'), stepRows = $('game-step-rows');
 
-  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + p + '?key=' + encodeURIComponent(key);
+  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + p;
   function api(p, body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url(p), opt).then((r) => r.json()).catch(() => ({ ok: false, message: 'The relay did not answer.' }));

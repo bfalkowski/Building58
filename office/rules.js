@@ -6,10 +6,10 @@
   const $ = (id) => document.getElementById(id);
   const dialog = $('settings'), list = $('rules-list'), form = $('rules-form'), said = $('rules-said');
   const params = new URLSearchParams(location.search);
-  const channel = params.get('channel'), key = params.get('key') || '';
+  const channel = params.get('channel');
   if (!dialog || !list || !channel) return;
 
-  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + '/rules' + p + '?key=' + encodeURIComponent(key);
+  const url = (p) => location.origin + '/channels/' + encodeURIComponent(channel) + '/rules' + p;
   function api(p, body) {
     const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
     return fetch(url(p), opt).then((r) => r.json()).catch(() => ({ ok: false, message: 'The relay did not answer.' }));
