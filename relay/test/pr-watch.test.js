@@ -266,3 +266,26 @@ test('a PR found by its branch gets its first review, with the PR watch off', as
   await until(async () => (await o.terminals()).find((x) => x.role === 'reviewer' && x.pr === PR), 'a reviewer for the PR found by its branch');
   assert.match(R.output(), /found by its branch: its first review\./);
 });
+
+test('a PR found by its branch that already has a review record gets no second review', async (t) => {
+  const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
+  const R = o.R, branch = o.task.branch;
+  o.commit(true);
+  const lists = (...tasks) => fs.writeFileSync(path.join(o.ghDir, 'answers.json'), JSON.stringify({ lists: Object.fromEntries(tasks.map((b) => [b, [{ url: PR, headRefName: b, isCrossRepository: false }]])) }));
+  lists(branch);
+  const r1 = await until(async () => (await o.terminals()).find((x) => x.role === 'reviewer' && x.pr === PR), 'the first review');
+  const token = { 'X-Office-Token': await until(() => { try { return sessionToken(r1.sessionId); } catch (e) { return null; } }, 'its token') };
+  assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'fix' }, token)).status, 200);
+  await o.say(r1, 'UserPromptSubmit');
+  await o.say(r1, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-100' } });
+  await o.say(r1, 'Stop');
+  await until(async () => !(await o.terminals()).some((x) => x.id === r1.id), 'the reviewer to leave');
+  assert.strictEqual((await R.call('GET', '/reviews')).body.prs.length, 1, 'the PR has a review record');
+  const other = (await R.call('POST', '/tickets', { title: 'Another', body: 'x', repo: o.repo })).body.ticket;
+  const second = (await R.call('POST', '/tickets/' + other.id + '/start', {})).body.task;
+  lists(branch, second.branch);
+  await until(async () => (await R.call('GET', '/tasks/' + second.id)).body.task.pr === PR, 'the second task to find the PR');
+  await until(async () => /found by its branch already has a review record/.test(R.output()), 'the log to say the PR has a record');
+  await sleep(2500);
+  assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer' && x.pr === PR), 'no second review starts');
+});
