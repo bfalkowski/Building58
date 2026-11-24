@@ -536,7 +536,7 @@ function stalled(channel) {
     stuckSince.delete(key);
     const why = 'Nothing moved it for ' + Math.round(STALL_MS() / 60000) + ' minutes' + (rec && rec.why ? ' (' + rec.why + ')' : task.pr ? '' : ': ' + nudge.noPrWhy(channel, chOf(channel), task, dev, Date.now())) + '.';
     const c = chOf(channel);
-    (c.stuck || (c.stuck = {}))[task.id] = { stall: true, forReview: !!task.pr && /\(Waiting for the review\.\)/.test(why), sessionId: dev ? dev.sessionId : null, from: task.state, pr: task.pr || null, at: new Date().toISOString() };
+    (c.stuck || (c.stuck = {}))[task.id] = { stall: true, forReview: !!task.pr && why.includes('(' + plan.WAITS_FOR_REVIEW + ')'), sessionId: dev ? dev.sessionId : null, from: task.state, pr: task.pr || null, at: new Date().toISOString() };
     if (rec) handOver(channel, task, rec, why, 'stalled');
     else { handRun(channel, task, 'stalled'); tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why); save(); note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why); }
   }

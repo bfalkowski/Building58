@@ -23,8 +23,9 @@ function forPr(pr, files, verdict, rounds, maxRounds, devGone) {
 }
 const lockedOf = (files) => [...new Set((files || []).filter((f) => PROTECTED.includes(f)))];
 const onlyAPerson = (locked) => 'It changes ' + locked.join(' and ') + ', which only a person merges.';
+const WAITS_FOR_REVIEW = 'Waiting for the review.';
 function forReviewed(pr, verdict, rounds, maxRounds, devGone) {
-  if (!verdict) return { act: 'wait', why: 'Waiting for the review.' };
+  if (!verdict) return { act: 'wait', why: WAITS_FOR_REVIEW };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
     if (rounds >= maxRounds) return { act: 'person', reason: 'rounds', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };
@@ -111,4 +112,4 @@ function reviewPostFor(comments, { login, since, commit }) {
   return found;
 }
 
-module.exports = { forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
