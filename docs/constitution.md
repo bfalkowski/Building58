@@ -100,7 +100,7 @@ does not let it start a ticket. It cannot start a session, except the worker for
 under the start rung (article 5), or clean up a task. The person can take each permission back.
 
 A ticket's priority and its place in the work order are not moves: they change no status. The
-person sets them, and so does a PM that the person allowed with **Let the PM set the order**, or
+person sets them, and so does a PM that the person raised to rung 3 or 4 of **PM trust**, or
 the Lead while the person allows it with **Let the Lead set priority**, but only for tickets in
 Triage or Ready (the PM's order and the Lead's order in article 5). Neither can change a ticket's
 status or start a ticket through this, or set the priority or place of a ticket that is started,
@@ -136,8 +136,8 @@ answer when something breaks.
 *Enforced by:* the relay's routes and tokens for Start and the board
 (`relay/test/lead-board.test.js`), and the start rung's limits in the relay
 (`relay/test/lead-start.test.js`). Priority and order: the relay answers every session's token
-with 403 (`relay/server.js`), except the PM's while the person's switch **Let the PM set the order**
-is on and the Lead's while **Let the Lead set priority** is on, and then only for tickets in Triage
+with 403 (`relay/server.js`), except the PM's while **PM trust** is at Order or above
+and the Lead's while **Let the Lead set priority** is on, and then only for tickets in Triage
 or Ready (`relay/tickets.js`, tested in `relay/test/pm-order.test.js` and
 `relay/test/lead-order.test.js`). Nothing but the brief stops a session from merging, because a
 session can run `gh pr merge` with the person's GitHub login. The same is true of the Lead's
@@ -180,18 +180,19 @@ and leaves it out of this pull request.
 
 The PM files tickets into Triage. Tickets are worked in Board order: high priority first, then
 normal, then low, and in work order within a priority. The person sets that order. A PM that the
-person allowed with **Let the PM set the order** may also set it, for tickets in Triage or Ready,
+person raised to rung 3 or 4 of **PM trust** may also set it, for tickets in Triage or Ready,
 and sorts them by the goal in "Where it is going": first stronger checks, then fewer decisions for
 the person (the next rung on the ladder), then making the room show the truth, then looks. A
 Lead that the person allowed with **Let the Lead set priority** may set it too, for the same
 tickets and by the same goal. The person can always change the order, and the person's change
 wins (article 5).
 
-*Today (2026-11-08):* the person sets priority and order from the Board. Both switches are built
-(T-45, T-128) and off by default: while one is on, that PM's or Lead's token may set them for
+*Today (2026-11-24):* the person sets priority and order from the Board. The PM's rung (**PM trust**
+at Order or above, T-45 and ticket 386) and the Lead's switch (T-128, off by default) are built:
+while one allows it, that PM's or Lead's token may set them for
 Triage and Ready tickets with `ticket.js priority` and `ticket.js order`. The PM's brief tells it to
-give each ticket a priority and to sort by this goal. With the PM's switch on, it places and
-reorders Triage and Ready tickets and leaves those the person set. With it off, it only recommends
+give each ticket a priority and to sort by this goal. At rung 3 or 4, it places and
+reorders Triage and Ready tickets and leaves those the person set. Below that, it only recommends
 an order (T-46). The Lead's brief does not mention it.
 
 *Enforced by:* the PM's brief and the review. For priority and order, the relay's 403 for every
@@ -511,48 +512,87 @@ The five questions, for this rung:
 5. What stops two sessions from doing the same work? A ticket has one task, the relay runs one
    loop, and a verdict is kept per reviewer and per commit.
 
-**The PM's order, as it is today.** The failure behind it: on 2026-11-02 the person asked the PM
-what to work on next. The PM could only recommend an order in chat, because it cannot set
-priority, and `ticket.js list` did not show priority then (T-42 added it). The person then had to
-make each move by hand.
+**PM trust, as it is today.** Two failures are behind it. On 2026-11-02 the person asked the PM
+what to work on next, and the PM could only recommend an order in chat, because it could not set
+priority (T-42 added priority to `ticket.js list`; T-45 let the PM set it). And on 2026-11-24
+ticket 375 started although PR #376 had already put all of it on main, and a Dev spent hours
+before it found that out. A ticket takes about five hours of room time, and Autopilot started the
+top Ready ticket without asking whether it still mattered. Some Ready tickets are old, some repeat
+another ticket, and some belong inside another.
 
-The rule: while the person's switch **Let the PM set the order** is on, the PM may set the
-priority and the place in the work order of tickets in Triage or Ready. That is all. It cannot
-change a ticket's status, move a ticket between columns, start a ticket, or set the priority or
-place of a ticket that is started, done or rejected (article 1). It sorts by the goal in "Where it
-is going": first stronger checks, then fewer decisions for the person (the next rung on the
-ladder), then making the room show the truth, then looks. The person can always change the
-order. When the person sets a ticket's priority or place, the person's change wins: the PM does not
-set that ticket again unless the person asks it to.
+The rule: how much the PM may do is one setting, **PM trust**, a ladder of five rungs that the
+person climbs one rung at a time. Each rung does everything the rungs below it do:
 
-It is off by default, like **Let the Lead move the board**, and the person can take it back. The
-order does not move a card past Building and does not start work. But the Lead's starts and
-Autopilot take the next Ready ticket in Board order, so the PM's order chooses which approved
-ticket they start next. Approving a ticket into Ready stays with the person.
+0. **Off.** No check. Autopilot starts tickets as it always has.
+1. **Advise.** Before Autopilot starts a ticket, the PM checks it and writes its view on the
+   ticket: start, another first, not needed, duplicate, or part of another ticket, with one or two
+   sentences of reason. Autopilot starts the ticket anyway. The person reads the advice and acts.
+2. **Hold and propose.** As Advise, but when the PM says not needed, duplicate or part of another
+   ticket, the ticket does not start. The PM's answer files a proposal (close, or merge into the
+   other ticket, the proposals of article 1) for the person to approve, and Autopilot goes on to
+   the next ticket. When the PM says another first, Autopilot checks that ticket next.
+3. **Order.** As Hold and propose, and the PM may set the priority and the place in the work order
+   of tickets in Triage or Ready. That is all it may set. It cannot change a ticket's status, move
+   a ticket between columns, start a ticket, or set the priority or place of a ticket that is
+   started, done or rejected (article 1). It sorts by the goal in "Where it is going": first
+   stronger checks, then fewer decisions for the person (the next rung on the ladder), then making
+   the room show the truth, then looks. This rung replaces the switch **Let the PM set the
+   order**. A room that had it on reads as rung 3, and one that had it off as the default.
+4. **Close and merge.** As Order, and the relay carries out the PM's close and merge instead of
+   waiting for the person. It writes on each ticket what was done and why, the history says the PM
+   approved it, and the person can reopen any of them by moving it from Rejected to Triage.
 
-*Today (2026-11-08):* the switch is built (T-45): **Let the PM set the order** in Settings, off by
-default, kept through a restart only once the person turns it on. While it is on, only the PM that
-started last on the channel may set the order, and the Board shows who last set each ticket's
-priority or place. The PM's brief tells it to sort each time the person presses **Ask the PM**
-with the switch on, and `ticket.js list` marks the tickets the person set (T-46). The person's
-change wins only by the brief: the relay does not stop the PM from setting a ticket the person set.
+The default is rung 1. Only the person changes the rung, in Settings, and a session's attempt gets
+403. The person can always change any ticket's priority or place, and the person's change wins: the
+PM does not set a ticket again unless the person asks it to. The order does not move a card past
+Building and does not start work. But the Lead's starts and Autopilot take the next Ready ticket in
+Board order, so the PM's order chooses which approved ticket they start next. Approving a ticket
+into Ready stays with the person.
+
+The check is a gate in front of one start, not a permission to start. What the PM reads before it
+answers: main (is the work already there?), the open and recent pull requests and the other open
+tickets (does another one already do this, or most of it?), the ticket itself (is it still true,
+are its blockers done, is it small and clear enough for one pull request?), and the rest of Ready
+(does something more important wait?). It weighs importance in this order: what keeps the room
+working (stalls, lost work, broken setup), security, what the person marked high, then the rest.
+It prefers one bigger, focused ticket over two small ones on the same files. The answer and the
+reason are saved on the ticket, as a note and in its history, so the person can see why.
+
+The check never blocks the room. It has a time limit, **Wait for the PM's check for**. With no PM
+running, no answer in time, or PM trust at Off, Autopilot starts the ticket as it always has, and
+says so in its notes. The Lead's own starts are not checked. A second setting, **PM sorts the
+Board every**, has the PM look at all Triage and Ready tickets on a schedule, do what its rung
+allows, and post a short summary in the chat. It runs only while no start is in progress, and at
+rungs 0 and 1 it only writes advice.
+
+*Today (2026-11-24):* the ladder is built (ticket 386): **PM trust**, **Wait for the PM's check for**
+and **PM sorts the Board every** in Settings, under COO and PM. The relay keeps the rung in the
+settings file, so it stays through a restart. While rung 3 or 4 holds, only the PM that started
+last on the channel may set the order, and the Board shows who last set each ticket's priority or
+place. The person's change wins over the PM's only by the brief: the relay does not stop the PM from
+setting a ticket the person set.
 
 The five questions, for this permission:
 
-1. What starts it? The person asks the PM to sort the work, while the switch is on. The PM does not
-   sort by itself on a timer.
+1. What starts it? Autopilot's next start, for the check, and the timer **PM sorts the Board
+   every**, for the sort, and the person asking the PM, for the order. Each needs a PM that runs:
+   nothing starts one.
 2. What does it read and write? It reads the Board's tickets, their priority, place and blockers,
-   and this file. It writes only the priority and the place of tickets in Triage or Ready, and tells
-   the person what it changed and why.
-3. What does it start next? Nothing. The Lead's start rung and Autopilot start the next approved
-   Ready ticket in Board order, under their own switches and limits.
-4. Where does the person come back in? The PM's report, the Board's order, where the person can
-   change any ticket's priority or place, and the switch.
-5. What stops two sessions from doing the same work? The switch allows one PM session at a time,
-   as there is one Lead at a time, and no other session's token may set the order. The person's
-   change wins over the PM's.
+   the code, the manual and the pull requests, and this file. It writes a note and a history step
+   on a ticket, and, by rung, a proposal, the priority and place of tickets in Triage or Ready, or
+   the close or merge of a ticket, with the reason.
+3. What does it start next? Nothing. The check ends in Autopilot's own start, or in no start. The
+   Lead's start rung and Autopilot start the next approved Ready ticket in Board order, under
+   their own switches and limits.
+4. Where does the person come back in? The advice on each ticket, the proposals on the Board, the
+   PM's summary in the chat, the Board's order, where the person can change any ticket's priority or
+   place and reopen a ticket the PM closed, and the rung.
+5. What stops two sessions from doing the same work? The check goes to the newest PM only, as
+   there is one Lead at a time, and no other session's token may answer it or change the rung.
 
-Its loop is limited: the PM sorts once for each time the person asks, and never on its own.
+Its loops are limited: a check ends at its time limit, and an answer of another first sends
+Autopilot to at most three tickets in a row before it starts the one it was checking. The sort runs
+once an interval and never while a start is in progress.
 
 **The Lead's order, as it is today.** The failure behind it: on 2026-11-06 the PM recommended a new
 order for Autopilot (T-122, T-127, T-117 and T-125, T-116, T-118, T-100, with T-106, T-81, T-107

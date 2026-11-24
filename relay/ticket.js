@@ -67,7 +67,7 @@
 //   node relay/ticket.js edit T-1 --title "New title" --priority high --body - <<'EOF'
 //   The new body
 //   EOF
-// Only a PM while the person has turned on Let the PM set the order in Settings, or the Lead while they have
+// Only a PM while the person has raised PM trust to Order in Settings, or the Lead while they have
 // turned on Let the Lead set priority, can set the priority and the place in the work order of a ticket in Triage or Ready. A place is next to a ticket of the same priority:
 //   node relay/ticket.js priority T-5 high     (high, normal or low; it goes last in that priority)
 //   node relay/ticket.js order T-5 --before T-4
@@ -79,6 +79,14 @@
 //   node relay/ticket.js merge T-24 --into T-8 --why 'Same work'               (approved, T-24 is rejected as merged)
 //   node relay/ticket.js close T-5 --why 'No longer needed'                   (approved, T-5 is rejected as closed)
 //   node relay/ticket.js blockers T-19 --blocked-by T-18                      (the whole new list, or none)
+// Only the PM can answer the relay's check of a ticket before Autopilot starts it. The answer and the reason go on
+// the ticket. What else happens depends on PM trust in Settings: at Hold and propose, not-needed, duplicate and
+// part-of file a proposal for the person and the ticket does not start; at Close and merge the relay carries it out:
+//   node relay/ticket.js advise T-5 start --why 'Nothing on main does this yet'
+//   node relay/ticket.js advise T-5 first --of T-9 --why 'T-9 fixes a stall that T-5 waits behind'
+//   node relay/ticket.js advise T-5 not-needed --why 'PR 376 put all of it on main'
+//   node relay/ticket.js advise T-5 duplicate --of T-3 --why 'Same work as T-3'
+//   node relay/ticket.js advise T-5 part-of --of T-8 --why 'It is one step of T-8'
 // Only the COO can read the room's measures and save its report, which it pipes in:
 //   node relay/ticket.js measures
 //   node relay/ticket.js report < report.md
@@ -114,6 +122,7 @@ function flags(args) {
     else if (args[i] === '--by') out.by = String(args[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else if (args[i] === '--into') out.into = args[++i];
     else if (args[i] === '--why') out.why = args[++i];
+    else if (args[i] === '--of') out.of = args[++i];
     else out.rest.push(args[i]);
   }
   return out;
@@ -226,6 +235,14 @@ async function main() {
     const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/note', { method: 'POST', headers, body: JSON.stringify({ text: f.body }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log('Noted: ' + r.ticket.id + '  ' + r.ticket.title + '  (' + r.ticket.notes.length + (r.ticket.notes.length === 1 ? ' note' : ' notes') + ')');
+    return 0;
+  }
+  if (cmd === 'advise' && args[0] && args[1]) {
+    const f = flags(args.slice(2));
+    if (f.rest.length) { console.error('Unknown words: ' + f.rest.join(' ') + '. Put the reason in --why \'One or two sentences\'.'); return 1; }
+    const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/advice', { method: 'POST', headers, body: JSON.stringify({ answer: args[1], of: f.of, why: f.why }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log(r.message);
     return 0;
   }
   if (PROPOSE[cmd] && args[0]) {

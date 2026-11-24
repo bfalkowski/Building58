@@ -136,6 +136,7 @@ function entryView(channel, e) {
   const name = (e.sessionId && (names[e.sessionId] || (live && live.who))) || null;
   const out = { at: e.at || null, stage: e.stage, by: e.by || null, role: e.role || null, name, task: e.task || null, pr: e.pr || null, from: e.from || null, to: e.to || null, what: Array.isArray(e.what) ? e.what : null, old: !!e.old };
   if (e.action) Object.assign(out, { action: e.action, ids: Array.isArray(e.ids) ? e.ids : [], why: e.why || null });
+  if (e.answer) Object.assign(out, { answer: e.answer, of: e.of || null, why: e.why || null, rung: e.rung === undefined ? null : e.rung });
   out.session = e.sessionId ? sessionView(channel, e.sessionId, e.cwd) : null;
   return out;
 }

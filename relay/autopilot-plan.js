@@ -77,8 +77,9 @@ function heldBack(t, all) {
 const allowed = (t, only) => !only || only.includes(t.id) || (Array.isArray(t.labels) && t.labels.some((l) => only.includes(l)));
 const approved = (t) => ('approvedBy' in t ? t.approvedBy === 'you' : t.createdBy === 'you');
 const unsettled = (t, all) => (t.blockedBy || []).filter((id) => { const b = all.find((x) => x.id === id); return !b || b.status !== 'done'; });
-function nextTicket(all, hasTask, only) {
-  return boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && !unsettled(t, all).length && !heldBack(t, all) && !hasTask(t) && allowed(t, only)))[0] || null;
+function nextTicket(all, hasTask, only, prefer) {
+  const startable = boardOrder(all.filter((t) => t.status === 'ready' && t.repo && approved(t) && !unsettled(t, all).length && !heldBack(t, all) && !hasTask(t) && allowed(t, only)));
+  return (prefer && startable.find((t) => t.id === prefer)) || startable[0] || null;
 }
 function waitsWhy(t, all) {
   if (t.status === 'rejected') return 'Rejected';

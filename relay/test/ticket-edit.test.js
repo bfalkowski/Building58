@@ -129,18 +129,18 @@ test('who can edit a ticket, and in which state', async (t) => {
   });
 
   await t.test('the PM and the Lead set priority through an edit only with their switch on', async () => {
-    for (const [who, name, sw] of [[pmT, 'PM', 'pmOrder'], [leadT, 'Lead', 'leadOrder']]) {
+    for (const [who, name, sw, swOff] of [[pmT, 'PM', { pmTrust: 3 }, { pmTrust: 1 }], [leadT, 'Lead', { leadOrder: true }, { leadOrder: false }]]) {
       const before = words(await ticket(ids.T));
       const off = await edit(ids.T, { title: 'Not this', priority: 'low' }, who);
       assert.strictEqual(off.status, 403, name);
       assert.deepStrictEqual(words(await ticket(ids.T)), before, 'nothing changes, not even the title');
-      assert.strictEqual((await R.call('POST', '/settings', { values: { [sw]: true } })).status, 200);
+      assert.strictEqual((await R.call('POST', '/settings', { values: sw })).status, 200);
       const on = await edit(ids.T, { priority: 'low' }, who);
       assert.strictEqual(on.status, 200, name);
       assert.strictEqual(on.body.ticket.priority, 'low');
       assert.strictEqual(on.body.ticket.orderedBy, name);
       assert.strictEqual((await edit(ids.T, { priority: 'normal' }, who)).status, 200);
-      assert.strictEqual((await R.call('POST', '/settings', { values: { [sw]: false } })).status, 200);
+      assert.strictEqual((await R.call('POST', '/settings', { values: swOff })).status, 200);
     }
   });
 
