@@ -57,7 +57,6 @@ const nudge = require('./nudge.js');
 const { holdOf } = require('./merge-hold.js');
 const runs = require('./autopilot-runs.js');
 const pushHold = require('./push-hold.js');
-const jams = require('./jams.js');
 const pipeline = require('./pipeline.js');
 const { oneLine } = require('./clean.js');
 
@@ -65,6 +64,7 @@ const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const ghDoor = require('./gh.js');
 const config = require('./config.js');
 const pmCheck = require('./pm-check.js');
+const jams = require('./jams.js');
 const AT_ONCE = () => config.get('autopilotAtOnce');
 const MAX_ROUNDS = () => config.get('autopilotRounds'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges'), MAIN_MERGES = () => config.get('autopilotMainMerges');
 const NOTES_KEPT = 30;
@@ -481,6 +481,10 @@ async function mergedYet(channel, task) {
 function handOver(channel, task, rec, why, reason, head) {
   rec.handedOver = why; rec.handedOverAt = new Date().toISOString(); rec.handedReason = reason; rec.handedOverHead = head || null; save();
   handRun(channel, task, reason);
+  if (reason === 'main-kept-moving' || reason === 'conflict-dropped') {
+    const fix = reason === 'main-kept-moving' ? 'Main kept moving: the Dev merged main as asked and the PR conflicted again.' : 'Conflict dropped: the Dev did not merge main after two asks.';
+    jams.record(channel, { kind: 'handed-over', fix: fix + ' Reason ' + reason + '.', ticket: task.ticket, pr: task.pr, by: 'autopilot' });
+  }
   tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why);
   note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why);
 }

@@ -1,7 +1,8 @@
 // The jam log: a jam is a stall the room did not see, which the person (or their tools) fixed by hand, such
 // as a PR with no first review or a task left in review after its PR merged. POST /jams writes one, GET /jams
 // lists them, and Stalls by kind on the Metrics page counts them next to the stalls the room detected
-// (relay/metrics-plan.js). The relay writes one itself for each push the push hold refuses (relay/autopilot.js).
+// (relay/metrics-plan.js). The relay writes one itself for each push the push hold refuses (relay/autopilot.js),
+// and one for each conflict hand-over of Autopilot, by 'autopilot': those are listed but not counted.
 // Only the person's key writes or reads over HTTP: a session's token gets 403. They are kept
 // 90 days in RELAY_JAMS_FILE (jams.json in the state folder). Text goes through oneLine, and a jam holds only
 // a kind from KINDS, ids, times and one line about the fix. See docs/manual/how-it-works.html#metrics.
@@ -60,9 +61,11 @@ function prune(list, now) {
   return list.filter((j) => Date.parse(j.at) >= from).slice(-MAX_JAMS);
 }
 function record(channel, body) {
-  const made = make(body, Date.now());
+  const now = Date.now();
+  let made = make(body, now);
+  if (made.error) made = make({ kind: body.kind, fix: body.fix, by: body.by }, now);
   if (made.error) return null;
-  store[channel] = prune((store[channel] || []).concat(made.jam), Date.now());
+  store[channel] = prune((store[channel] || []).concat(made.jam), now);
   save();
   return made.jam;
 }

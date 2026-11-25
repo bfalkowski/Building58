@@ -983,4 +983,6 @@ test('a Dev whose turn ends without merging main is asked once more, then the pe
   assert.strictEqual(asks(await R.screen(dev.id)), 2, 'no third ask');
   assert.strictEqual((await ap()).runs.recent.find((y) => y.ticket === ticket.id).blocked.reason, 'conflict-dropped');
   assert.strictEqual(require('../autopilot-runs.js').REASONS['conflict-dropped'], 'its Dev did not merge main after two asks');
+  const jam = (await R.call('GET', '/jams?range=1d')).body.jams.filter((j) => j.ticket === ticket.id);
+  assert.deepStrictEqual(jam.map((j) => [j.kind, j.by, /Reason conflict-dropped\./.test(j.fix)]), [['handed-over', 'autopilot', true]]);
 });

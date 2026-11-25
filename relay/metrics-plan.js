@@ -25,6 +25,7 @@ const JAM_KINDS = {
 const STALLS = Object.assign({}, JAM_KINDS, { 'dev-stopped': 'Dev stopped with no PR', silent: 'Session silent', 'not-started': 'Not started on its brief', 'brief-lost': 'Brief not delivered' });
 const BLOCKED_KIND = { 'reviewer-not-started': 'no-first-review', 'dev-gone': 'dev-stopped', 'brief-not-delivered': 'brief-lost', 'conflict-dropped': 'other' };
 
+const AUTOPILOT = 'autopilot';
 const idOf = (x) => (typeof x === 'string' && /^[\w.:/#-]{1,200}$/.test(x) ? x : null);
 const ms = (iso) => Date.parse(iso);
 const iso = (at) => new Date(at).toISOString();
@@ -201,7 +202,7 @@ function stallsOf(input, from, now) {
   for (const s of out) { const r = row(s.kind).detected; r.count++; r.millis += s.millis; }
   for (const j of input.jams || []) {
     const at = ms(j.at);
-    if (at < from || !Object.hasOwn(JAM_KINDS, j.kind)) continue;
+    if (at < from || !Object.hasOwn(JAM_KINDS, j.kind) || j.by === AUTOPILOT) continue;
     const r = row(j.kind).hand;
     r.count++; r.millis += j.since ? Math.max(0, at - ms(j.since)) : 0;
   }
@@ -252,7 +253,7 @@ function build(input) {
     numbers: {
       merged: items.length, medianMinutes: median(items.map((x) => x.minutes)), waitingOnYouHours: hours(waits.reduce((a, w) => a + w.millis, 0)),
       stalledHours: round1(stalls.reduce((a, s) => a + s.hours, 0)),
-      jamsFixedByHand: (input.jams || []).filter((j) => ms(j.at) >= from && Object.hasOwn(JAM_KINDS, j.kind)).length,
+      jamsFixedByHand: (input.jams || []).filter((j) => ms(j.at) >= from && Object.hasOwn(JAM_KINDS, j.kind) && j.by !== AUTOPILOT).length,
       noHelpShare: withRun.length ? round1((withRun.filter((x) => runsOf.outcomeOf(x.run) === 'success').length / withRun.length) * 100) : null
     },
     merged: { days: mergedDays },
