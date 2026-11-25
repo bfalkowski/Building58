@@ -27,6 +27,7 @@ const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const reviews = require('./reviews.js');
 const autopilot = require('./autopilot.js');
+const { ciOf } = require('./autopilot-plan.js');
 const delivery = require('./delivery.js');
 const chat = require('./chat.js');
 const config = require('./config.js');
@@ -112,7 +113,7 @@ async function lookAt(channel, task, now) {
   const unpushed = await unpushedIn(task.worktree || (dev && dev.cwd), head);
   const verdict = autopilot.verdictOf(channel, task.pr);
   let files = null;
-  if (verdict && verdict.kind === 'merge' && verdict.posted && verdict.commit === head) {
+  if (ciOf(pr.statusCheckRollup) === 'red' || (verdict && verdict.kind === 'merge' && verdict.posted && verdict.commit === head)) {
     files = await gh.files(task.pr, head, task.repo);
   }
   const from = (dev && dev.cwd) || task.worktree || task.repo;
