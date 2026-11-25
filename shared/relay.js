@@ -7,7 +7,7 @@
   const channel = params.get('channel');
   if (!channel || !window.run || !window.EventSource) return;
   const run = window.run;
-  const base = location.origin.replace(/\/+$/, '');
+  const base = location.origin;
   const url = (p) => base + '/channels/' + encodeURIComponent(channel) + p;
   const badge = document.getElementById('relay-status');
 
