@@ -29,7 +29,7 @@ pageTest('level 5 shows with the board and stop switches on, and not as custom',
   await note.filter({ hasText: /^Now: level 5, Autopilot\./ }).waitFor();
   assert.strictEqual(await five.getAttribute('data-now'), 'true');
   assert.match(await five.innerText(), /A Lead keeps three rights: stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task's PR\./);
-  const reviews = page.locator('#set-lead-stops .set-row', { hasText: 'Let the Lead start reviews' });
+  const reviews = page.locator('#set-cfg-trust .set-row', { hasText: 'Let the Lead start reviews' });
   await reviews.locator('small', { hasText: /on while Autopilot runs$/ }).waitFor();
   assert.strictEqual(await reviews.locator('input[type="checkbox"]').isChecked(), false, 'the switch itself stays off');
 
