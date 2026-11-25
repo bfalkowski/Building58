@@ -78,7 +78,7 @@ test('reviews wait and no session may be stopped: nobody is stopped, Needs you n
   await o.R.call('POST', '/terminals/' + typed.id + '/input', { data: 'a draft' });
   await o.opens(typed, PR(2), true);  // idle, with text typed in its prompt
   await o.opens(busy, PR(1), false);  // still in its turn
-  await until(async () => (await o.needsYou()).some((x) => x.kind === 'desks'), 'Needs you to name the wait');
+  await until(async () => (await o.needsYou()).some((x) => x.kind === 'desks' && /reviews of PR #2 and #1 wait/.test(x.line)), 'Needs you to name both waiting reviews');
   await sleep(2500);  // the relay looks every second
   let now = await o.terminals();
   assert.strictEqual(now.length, DESKS);
