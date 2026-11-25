@@ -74,9 +74,10 @@ async function unpushedIn(dir, head) {
   } catch (e) { return null; }
 }
 
+const conflictText = require('./conflict-text.js');
 const TEXT = {
   push: (pr, n) => 'Your checkout has ' + n + ' commit' + (n === 1 ? '' : 's') + ' that your PR ' + pr + ' does not have. Push them with a plain git push, so the PR holds all your work and gets its review.',
-  conflict: (pr) => 'Your PR ' + pr + ' conflicts with main. Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run the tests, and push only that merge.',
+  conflict: (pr) => conflictText.first(pr),
   red: (pr, head) => 'A check failed on your PR ' + pr + ' at ' + head.slice(0, 7) + '. Run gh pr checks ' + pr + ' to see which, fix it on your branch, and push.',
   fix: (pr, head) => 'The review of your PR ' + pr + ' at ' + head.slice(0, 7) + ' has blocking or fix-now findings. Read it with gh pr view ' + pr + ' --comments, fix each blocking and fix-now finding on your branch, and push. Do not push for its follow-up findings.',
   ready: (pr, head, ticket) => 'PR ' + pr + (ticket ? ' (' + ticket + ')' : '') + ' is reviewed at its head ' + head.slice(0, 7) + ' with a merge verdict, its checks are green, and GitHub can merge it cleanly. Check it, and mark it with ticket.js ready (run it bare to see how). If you may merge it and the merge conditions hold, merge it; if not, tell the person it is ready. This is from the relay\'s PR watch and grants nothing.',
