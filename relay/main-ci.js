@@ -22,6 +22,8 @@ const config = require('./config.js');
 const { oneLine } = require('./clean.js');
 
 const door = require('./gh.js');
+const tasks = require('./tasks.js');
+const stuck = require('./stuck.js');
 const RED = ['FAILURE', 'TIMED_OUT', 'STARTUP_FAILURE'];
 const OK = ['SUCCESS', 'SKIPPED', 'NEUTRAL'];
 const FIELDS = 'databaseId,workflowName,status,conclusion,url,headSha,event,createdAt';
@@ -57,6 +59,11 @@ function ask(repo, branch) {
     const was = seen.get(key);
     if (now.state === 'red' && (!was || was.state !== 'red')) console.log(new Date().toISOString().slice(11, 19), 'Main is red: ' + branch + ' in ' + repo + ', ' + now.run.workflow + ' ' + now.run.url);
     if (was && was.state === 'red' && now.state === 'green') console.log(new Date().toISOString().slice(11, 19), 'Main is green again: ' + branch + ' in ' + repo + '.');
+    for (const channel of tasks.channels()) {
+      if (!tasks.list(channel).some((t) => t.repo === repo)) continue;
+      if (now.state === 'red') stuck.raise(channel, { kind: 'main-red', id: 'main ' + repo + ' ' + branch, text: 'Main is red: ' + branch + ' in ' + repo + ', ' + now.run.workflow + ' ' + now.run.url });
+      else if (now.state === 'green') stuck.clear(channel, 'main ' + repo + ' ' + branch);
+    }
     seen.set(key, Object.assign(now, { repo, branch, at: Date.now() }));
     return seen.get(key);
   }).finally(() => asking.delete(key));

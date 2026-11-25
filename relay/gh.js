@@ -21,10 +21,12 @@ const REPORT_EVERY_MS = 5 * 60 * 1000;
 const KEEP_MS = 10 * 60 * 1000;
 
 const calls = [];
+let made = 0;
 const prOf = (args) => (args.join(' ').match(/(?:\/pull\/|\bpulls?\/|\bpr \w+ )(\d+)/) || [])[1] || null;
 const kindOf = (args) => (args[0] === 'api' ? 'api ' + String(args.find((a, i) => i > 0 && !a.startsWith('-')) || '').replace(/^repos\/[^/]+\/[^/]+\//, '').replace(/\d+/g, 'N').split('?')[0] : args.slice(0, 2).join(' '));
 function count(args) {
   const at = Date.now();
+  made++;
   calls.push({ at, kind: kindOf(args), pr: prOf(args) });
   while (calls.length && calls[0].at < at - KEEP_MS) calls.shift();
 }
@@ -86,7 +88,7 @@ function pr(link, cwd, opts) {
   const o = opts || {};
   const now = Date.now(), have = views.get(link);
   const age = have ? now - have.at : Infinity;
-  if (have && !o.fresh && (age < freshMs(link) || paused())) return Promise.resolve(have.value);
+  if (have && !o.fresh && (age < freshMs(link) || (have.until && now < have.until) || paused())) return Promise.resolve(have.value);
   if (paused()) return Promise.reject(new Error('GitHub\'s hourly limit is nearly used up, so the relay waits until ' + new Date(budget.reset).toISOString().slice(11, 16) + 'Z'));
   if (flights.has(link) && !o.fresh) return flights.get(link);
   const p = run(['pr', 'view', link, '--json', FIELDS], { cwd, timeout: 30000 }).then((out) => {
@@ -100,6 +102,7 @@ function pr(link, cwd, opts) {
 const SLOWER = 4;
 const due = (lastAt, everyMs, link) => Date.now() - (lastAt || 0) >= everyMs * (spacing() * (onPerson(link) ? SLOWER : 1) - 0.5);
 function forget(link) { views.delete(link); }
+function seed(link, value, ttlMs) { views.set(link, { at: Date.now(), value, until: Date.now() + ttlMs }); }
 
 async function files(link, head, cwd) {
   const m = link.match(/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/);
@@ -120,4 +123,4 @@ if (process.env.RELAY_GH_BUDGET !== 'off') {
   setInterval(report, REPORT_EVERY_MS).unref();
 }
 
-module.exports = { due, count, exec, run, said, pr, forget, files, usage, spacing, paused, waiting, onPerson, readLimit, budget, FIELDS };
+module.exports = { made: () => made, seed, due, count, exec, run, said, pr, forget, files, usage, spacing, paused, waiting, onPerson, readLimit, budget, FIELDS };
