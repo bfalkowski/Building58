@@ -49,13 +49,17 @@ const KEY = process.env.OFFICE_RELAY_KEY || process.env.RELAY_KEY || '';
 const CHANNEL = process.env.OFFICE_CHANNEL || 'office';
 function installChannel(argv) {
   const at = argv.findIndex((a) => a === '--channel' || a.startsWith('--channel='));
-  if (at >= 0) return (argv[at].startsWith('--channel=') ? argv[at].slice(10) : argv[at + 1] || '') || 'office';
+  if (at >= 0) {
+    const value = argv[at].startsWith('--channel=') ? argv[at].slice(10) : argv[at + 1] || '';
+    if (!value || value.startsWith('-')) { console.error('--channel needs a channel name, not ' + (value ? "'" + value + "'" : 'nothing') + '. Example: --channel my-project'); process.exit(1); }
+    return value;
+  }
   const e = process.env, mine = e.OFFICE_CHANNEL;
   if (!mine) return 'office';
   if (e.OFFICE_PANEL_CHANNEL !== undefined ? mine === e.OFFICE_PANEL_CHANNEL : !!e.OFFICE_TERMINAL_ID) return 'office';
   return mine;
 }
-const INSTALL_CHANNEL = installChannel(process.argv.slice(3));
+const INSTALL_CHANNEL = installChannel(process.argv.slice(2));
 const OWN_URL = process.env.OFFICE_HOOK_URL && process.env.OFFICE_TICKET_TOKEN ? process.env.OFFICE_HOOK_URL : '';
 const FULL = process.env.OFFICE_DETAIL === 'full';
 const PROMPTS = process.env.OFFICE_SHOW_PROMPTS === '1';
@@ -70,7 +74,7 @@ if (require.main === module) main();
 else module.exports = { hookSettings, hooksInstalled, hookCheckout, projectOf, summarize, pushedIn, prMade };
 
 function main() {
-  const arg = process.argv[2] || '';
+  const arg = process.argv.slice(2).find((a) => ['--settings', '--install', '--uninstall', '--help', '-h'].includes(a)) || '';
   if (arg === '--settings') { console.log(JSON.stringify({ hooks: hookSettings() }, null, 2)); explain(); process.exit(0); }
   if (arg === '--install') { install(); process.exit(0); }
   if (arg === '--uninstall') { uninstall(); process.exit(0); }

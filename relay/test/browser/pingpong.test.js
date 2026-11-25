@@ -70,10 +70,9 @@ pageTest('the trailer\'s ping pong cue clears a game already going, and Kai play
   await until(p, () => { const d = window.run.debug('june'); return d && d.spot.startsWith('couch') && d.seated; });
   // Sam starts a game. Idle people also start games on their own, so on a slow computer the room may have
   // started one first. Either way a game is going before the cue, which is the case under test.
-  const before = await p.page.evaluate((label) => {
-    const r = window.run.idle({ who: 'sam', do: 'pingpong' });
-    return { r, players: window.run.state().workers.filter((w) => w.doing === label).map((w) => w.id) };
-  }, PLAYING);
+  const r = await p.page.evaluate(() => window.run.idle({ who: 'sam', do: 'pingpong' }));
+  await until(p, (label) => window.run.state().workers.filter((w) => w.doing === label).length === 2, PLAYING);
+  const before = { r, players: await p.page.evaluate((label) => window.run.state().workers.filter((w) => w.doing === label).map((w) => w.id), PLAYING) };
   assert.strictEqual(before.players.length, 2, JSON.stringify(before));
   if (before.r.ok) assert.deepStrictEqual(before.players.sort(), ['june', 'sam'], JSON.stringify(before));
   await playTo(29.7);

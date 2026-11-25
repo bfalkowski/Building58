@@ -121,3 +121,88 @@ test('the mark follows the latest posted verdict, and goes once the PR merges or
   assert.strictEqual(hold.markOf(Object.assign({}, task, { pr: null }), merge, null), null);
   assert.strictEqual(hold.sync(task, merge, null), false, 'no checkout, no mark');
 });
+
+// 2026-11-24, PR #402: main moved after a merge verdict, and the merge needed two more commits (an API version
+// bump and a test fix). The merge alone failed CI, and the hold refused the merge with its fixes (T-424).
+function mergeMain(s, file) {
+  s.commit(s.repo, file || 'b.txt');
+  s.git(s.repo, 'push', '-q', 'origin', 'main');
+  s.git(s.wt, 'fetch', '-q', 'origin');
+  s.git(s.wt, 'merge', '-q', '--no-edit', 'origin/main');
+}
+const refusedOf = (s) => hold.refusalsOf(s.task).list;
+
+test('under a push hold, a merge of main plus a commit that changes only a file the merge changed is allowed', (t) => {
+  const s = setup();
+  t.after(s.done);
+  const reviewed = s.commit(s.wt);
+  assert.ok(s.push().ok);
+  s.say('merge', reviewed);
+  mergeMain(s);
+  s.commit(s.wt, 'b.txt');
+  const r = s.push();
+  assert.strictEqual(r.ok, true, r.out);
+  assert.strictEqual(s.git(path.join(s.home, 'origin.git'), 'rev-parse', 'task/x'), s.git(s.wt, 'rev-parse', 'HEAD'));
+  assert.deepStrictEqual(refusedOf(s), [], 'nothing was refused');
+  s.commit(s.wt, 'b.txt');
+  assert.strictEqual(s.push().ok, true, 'a second fix on the same file in a later push is allowed too');
+});
+
+test('under a push hold, a merge of main plus a commit that changes an unrelated file is refused, with what and why', (t) => {
+  const s = setup();
+  t.after(s.done);
+  const reviewed = s.commit(s.wt);
+  assert.ok(s.push().ok);
+  s.say('merge', reviewed);
+  mergeMain(s);
+  s.commit(s.wt, 'b.txt');
+  const unrelated = s.commit(s.wt, 'a.txt');
+  const r = s.push();
+  assert.strictEqual(r.ok, false, r.out);
+  assert.match(r.out, SAID);
+  assert.match(r.out, new RegExp('Refused: commit ' + unrelated.slice(0, 7) + ' changes a\\.txt, which the merge did not change\\.'));
+  assert.match(r.out, /only commits that change files the merge changed/);
+  const [line] = refusedOf(s);
+  assert.deepStrictEqual([line.pr, line.commit, line.tip, line.why], [PR, reviewed, unrelated, 'commit ' + unrelated.slice(0, 7) + ' changes a.txt, which the merge did not change.']);
+  assert.strictEqual(hold.refusalsOf(s.task).seen, 0, 'the relay has not logged it yet');
+});
+
+test('a fix before the merge, or on a new file, is refused', (t) => {
+  const s = setup();
+  t.after(s.done);
+  const reviewed = s.commit(s.wt);
+  assert.ok(s.push().ok);
+  s.say('merge', reviewed);
+  s.commit(s.wt, 'a.txt');
+  mergeMain(s);
+  const before = s.push();
+  assert.strictEqual(before.ok, false, 'new work before the merge: ' + before.out);
+  assert.match(before.out, /is new work, not a merge of the base or a fix after one/);
+  s.git(s.wt, 'reset', '-q', '--hard', reviewed);
+  mergeMain(s, 'b.txt');
+  fs.writeFileSync(path.join(s.wt, 'c.txt'), 'new\n');
+  s.git(s.wt, 'add', 'c.txt');
+  s.git(s.wt, 'commit', '-qm', 'new file');
+  const added = s.push();
+  assert.strictEqual(added.ok, false, 'a file the merge did not touch: ' + added.out);
+  assert.match(added.out, /changes c\.txt, which the merge did not change/);
+});
+
+test('a refused push is noted, a later allowed push is noted after it, and the notes go with the mark', (t) => {
+  const s = setup();
+  t.after(s.done);
+  const reviewed = s.commit(s.wt);
+  assert.ok(s.push().ok);
+  s.say('merge', reviewed);
+  mergeMain(s);
+  s.commit(s.wt, 'a.txt');
+  assert.strictEqual(s.push().ok, false);
+  s.git(s.wt, 'reset', '-q', '--hard', 'HEAD~1');
+  s.commit(s.wt, 'b.txt');
+  assert.strictEqual(s.push().ok, true);
+  assert.deepStrictEqual(refusedOf(s).map((l) => !!l.allowed), [false, true]);
+  hold.markSeen(s.task, 2);
+  assert.strictEqual(hold.refusalsOf(s.task).seen, 2);
+  s.say('fix', reviewed);
+  assert.deepStrictEqual(hold.refusalsOf(s.task), { list: [], seen: 0 });
+});

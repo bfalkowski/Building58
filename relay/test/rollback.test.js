@@ -50,6 +50,9 @@ test('Update goes back to the last good commit when the new relay fails its chec
   const R = await relay({ RELAY_ROLLBACK: '1', RELAY_RESUME: '1', RELAY_ROLLBACK_SECONDS: '15' }, home, { root: dir });
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
   const terminals = async () => (await R.call('GET', '/terminals')).body.terminals;
+  // After a restart the new relay keeps its update until the supervisor's check passes, a moment after the
+  // supervisor records the commit, so a step waits for the update to end before it starts the next one.
+  const settled = () => waitFor(async () => (await R.call('GET', '/update')).body.update === null, 'the update to end');
 
   await t.test('the first start passes, and its commit is recorded outside the repo', async () => {
     await waitFor(() => good().commit === first, 'the first commit to be recorded');
@@ -74,6 +77,7 @@ test('Update goes back to the last good commit when the new relay fails its chec
 
   await t.test('a fail: the new relay does not start, so Update checks out the last good commit and restarts on it', async () => {
     await idle(R, s.sessionId);  // the session brought back is heard from, so the restart need not wait for it
+    await settled();
     const broken = push('relay/floor.js', 'throw new Error(\'a broken relay\');\n', 'a broken relay');
     const r = await R.call('POST', '/update', {});
     assert.strictEqual(r.status, 202, r.body.message);
@@ -92,6 +96,7 @@ test('Update goes back to the last good commit when the new relay fails its chec
   });
 
   await t.test('and Update pulls nothing more until a person checks out main, and says why', async () => {
+    await settled();
     const r = await R.call('POST', '/update', {});
     assert.strictEqual(r.status, 409); assert.strictEqual(r.body.error, 'not_main');
     assert.match(r.body.message, new RegExp('went back to ' + second.slice(0, 7) + ' when [0-9a-f]{7} failed its check'));
@@ -107,6 +112,7 @@ test('Update goes back to the last good commit when the new relay fails its chec
     // Main is fixed, but the new relay never finishes bringing back its sessions.
     fs.writeFileSync(path.join(src, 'relay/floor.js'), fs.readFileSync(path.join(src, 'relay/floor.js'), 'utf8').replace('throw new Error(\'a broken relay\');\n', ''));
     const stuck = push('relay/sessions.js', 'module.exports.restoreAll = () => {};\n', 'a relay that never brings its sessions back');
+    await settled();
     const r = await R.call('POST', '/update', {});
     assert.strictEqual(r.status, 202, r.body.message);
     const u = await waitFor(async () => { const g = (await R.call('GET', '/update')).body; return g.rollback && g.rollback.failed === stuck && g; }, 'the relay to come back on the old commit', 60000);

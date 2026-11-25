@@ -105,6 +105,13 @@ test('stalls by kind, with the hours each cost', () => {
 });
 const round = (n) => Math.round(n * 10) / 10;
 
+test('a jam by autopilot is not counted as fixed by hand', () => {
+  const jams = [{ at: iso(ago(1)), kind: 'handed-over', since: iso(ago(3)), fix: 'x', by: 'autopilot' }, { at: iso(ago(1)), kind: 'handed-over', since: null, fix: 'x', by: 'you' }];
+  const built = plan.build({ ...INPUT, jams, range: '7d' });
+  assert.strictEqual(built.numbers.jamsFixedByHand, 1);
+  assert.deepStrictEqual(built.stalls.kinds.find((k) => k.kind === 'handed-over').hand, { count: 1, hours: 0 });
+});
+
 test('Stalls by kind counts the jams fixed by hand next to the detected ones, per kind, with hours from since to when it was logged', () => {
   const jams = [
     { at: iso(ago(1)), kind: 'no-first-review', since: iso(ago(3)), fix: 'x', by: 'you' },

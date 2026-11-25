@@ -47,7 +47,7 @@
   }
   // While old output replays, xterm answers the questions in it, such as the cursor position. Those answers must not reach the session.
   term.onData((d) => {
-    if (!current || !current.running || replaying) return;
+    if (!current || !current.running || current.round || replaying) return;
     buf += d;
     if (!timer) timer = setTimeout(flushKeys, 8);
   });
@@ -186,20 +186,22 @@
   }
 
   const LEVELS = [
-    { n: 0, name: 'You drive', want: { auto: true, again: false, board: false, stops: false, merge: false, starts: false, autopilot: false },
+    { n: 0, name: 'You drive', want: { auto: true, again: false, board: false, stops: false, merge: false, starts: false, autopilot: false, exhibit: false },
       what: 'The relay reviews each new PR one time and sends the findings to the Dev. You start, move and merge all work.' },
-    { n: 1, name: 'Review loop', rung: 'rung 1, with its limit on rounds', want: { auto: true, again: true, board: false, stops: false, merge: false, starts: false, autopilot: false },
+    { n: 1, name: 'Review loop', rung: 'rung 1, with its limit on rounds', want: { auto: true, again: true, board: false, stops: false, merge: false, starts: false, autopilot: false, exhibit: false },
       what: 'After each push, a reviewer checks the new commits. The Dev fixes and the reviewer checks again, without you. Each PR gets a limited number of automatic reviews: 3, unless you change it under Limits and timings. You start, move and merge all work.' },
-    { n: 2, name: 'The Lead keeps work moving', rung: 'rung 2', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: false, autopilot: false },
+    { n: 2, name: 'The Lead keeps work moving', rung: 'rung 2', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: false, autopilot: false, exhibit: false },
       what: 'The Lead moves cards on the Board and accepts tickets from Triage. It also stops sessions that are safe to stop. You start and merge work.' },
-    { n: 3, name: 'The Lead starts tickets', rung: 'rung 3, the start rung', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: true, autopilot: false },
+    { n: 3, name: 'The Lead starts tickets', rung: 'rung 3, the start rung', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: true, autopilot: false, exhibit: false },
       what: 'The Lead also starts Ready tickets that you approved, one at a time. The two numbers in the Lead section set its limits. When it has used all its starts, that switch goes off and the level shows as custom. You merge work.' },
-    { n: 4, name: 'The Lead merges', rung: 'rung 4, the merge rung', want: { auto: true, again: true, board: true, stops: true, merge: true, starts: true, autopilot: false },
+    { n: 4, name: 'The Lead merges', rung: 'rung 4, the merge rung', want: { auto: true, again: true, board: true, stops: true, merge: true, starts: true, autopilot: false, exhibit: false },
       what: 'The Lead also merges a PR when it is ready: a review of the latest commit is posted, each blocking finding is fixed, all checks pass, it merges into main with no conflicts, and no decision is left for you. It never merges a change to CLAUDE.md or the constitution. You approve tickets and do the work it gives back to you.' },
-    { n: 5, name: 'Autopilot', rung: 'rungs 3 and 4, run by the relay', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: false, autopilot: true },
-      what: 'The relay does the full loop itself. It starts each approved Ready ticket, reviews each push, sends findings to the Dev, and merges when the review says merge and all checks pass. It needs no Lead. Only the relay starts and merges work. A Lead keeps three rights: stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR. You approve tickets and do the work it puts in Waiting on you.' }
+    { n: 5, name: 'Autopilot', rung: 'rungs 3 and 4, run by the relay', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: false, autopilot: true, exhibit: false },
+      what: 'The relay does the full loop itself. It starts each approved Ready ticket, reviews each push, sends findings to the Dev, and merges when the review says merge and all checks pass. It needs no Lead. Only the relay starts and merges work. A Lead keeps three rights: stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR. You approve tickets and do the work it puts in Waiting on you.' },
+    { n: 6, name: 'Autopilot with evidence', rung: 'level 5 with one more check', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: false, autopilot: true, exhibit: true },
+      what: 'Level 5, and the relay also merges only when the Exhibit summary comment on the PR says meets_policy at the PR\'s head commit. It waits for that comment, and gives you the PR when Exhibit says needs_person or error. Exhibit must run on the repo\'s PRs, or nothing merges. You approve tickets and do the work it puts in Waiting on you.' }
   ];
-  const wantOf = (L) => (L.n === 5 && !boardTerm ? Object.assign({}, L.want, { board: false }) : L.want);
+  const wantOf = (L) => (L.n >= 5 && !boardTerm ? Object.assign({}, L.want, { board: false }) : L.want);
   const trust = { reviews: null, autopilot: null, settings: null, pick: null, busy: false };
   const levelsBox = document.createElement('div'), levelsNote = document.createElement('p'), levelsApply = document.createElement('button');
   levelsBox.setAttribute('role', 'radiogroup'); levelsBox.setAttribute('aria-label', 'Trust level');
@@ -214,14 +216,14 @@
     input.addEventListener('change', () => { trust.pick = L.n; drawLevels(); });
     return input;
   });
-  const monitor = document.createElement('p'); monitor.className = 'set-what'; monitor.textContent = 'Rung 5 is not built yet. It is a monitor that watches what shipped and files tickets. Level 6, Autopilot with evidence, is not built either. It would be level 5 with one more check: the relay merges only when Exhibit\'s evidence for the PR passes. Exhibit now runs on this repo\'s PRs once a night, in shadow mode, and the relay does not read its verdict.';
+  const monitor = document.createElement('p'); monitor.className = 'set-what'; monitor.textContent = 'Rung 5 is not built yet. It is a monitor that watches what shipped and files tickets.';
   $('set-levels').append(levelsBox, monitor, levelsApply, levelsNote);
   function switchesNow() {
     if (!trust.reviews || !trust.autopilot || !trust.settings) return null;
-    return { auto: trust.reviews.auto, again: trust.reviews.again, board: !!(boardTerm && boardTerm.board), stops: !!settingOf('leadStops'), merge: !!(boardTerm && boardTerm.merge), starts: !!(boardTerm && boardTerm.starts), autopilot: !!trust.autopilot.on };
+    return { auto: trust.reviews.auto, again: trust.reviews.again, board: !!(boardTerm && boardTerm.board), stops: !!settingOf('leadStops'), merge: !!(boardTerm && boardTerm.merge), starts: !!(boardTerm && boardTerm.starts), autopilot: !!trust.autopilot.on, exhibit: !!settingOf('autopilotExhibit') };
   }
-  const KEYS = ['auto', 'again', 'board', 'stops', 'merge', 'starts', 'autopilot'];
-  const NAMES = { auto: 'Review PRs automatically', again: 'Review again after each push', board: 'Let the Lead move the board', stops: 'Let the Lead stop sessions', merge: 'Let the Lead merge', starts: 'Let the Lead start tickets', autopilot: 'Autopilot' };
+  const KEYS = ['auto', 'again', 'board', 'stops', 'merge', 'starts', 'autopilot', 'exhibit'];
+  const NAMES = { auto: 'Review PRs automatically', again: 'Review again after each push', board: 'Let the Lead move the board', stops: 'Let the Lead stop sessions', merge: 'Let the Lead merge', starts: 'Let the Lead start tickets', autopilot: 'Autopilot', exhibit: 'Merge only when Exhibit passes' };
   function levelNow(now) { const L = now && LEVELS.find((x) => KEYS.every((k) => wantOf(x)[k] === now[k])); return L ? L.n : null; }
   function drawLevels() {
     const now = switchesNow();
@@ -320,7 +322,7 @@
     if (!L || !now || trust.busy) return;
     trust.busy = true; drawLevels();
     const want = wantOf(L);
-    const order = ['autopilot', 'starts', 'merge', 'stops', 'board', 'again', 'auto'], steps = [...order.filter((k) => now[k] && !want[k]), ...order.slice().reverse().filter((k) => !now[k] && want[k])];
+    const order = ['exhibit', 'autopilot', 'starts', 'merge', 'stops', 'board', 'again', 'auto'], steps = [...order.filter((k) => now[k] && !want[k]), ...order.slice().reverse().filter((k) => !now[k] && want[k])];
     let failed = null;
     const leadAtPress = boardTerm ? boardTerm.id : null;
     for (const k of steps) {
@@ -329,6 +331,7 @@
       const r = k === 'auto' || k === 'again' ? await api('', { [k]: on }, '/reviews')
         : k === 'autopilot' ? await api('', on ? { on: true, only: apOnly.value } : { on: false }, '/autopilot')
           : k === 'stops' ? await api('', { values: { leadStops: on } }, '/settings')
+          : k === 'exhibit' ? await api('', { values: { autopilotExhibit: on } }, '/settings')
           : k === 'starts' ? await api('/lead', on ? { terminal: leadAtPress, lead: true, starts: Number(startsPick.value), total: Number(totalPick.value) } : { starts: 0 })
             : await api('/lead', { terminal: leadAtPress, lead: true, [k]: on });
       if (!r.ok) { failed = NAMES[k] + ': ' + (r.message || 'the relay did not answer.'); break; }

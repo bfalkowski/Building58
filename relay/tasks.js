@@ -139,9 +139,9 @@ function briefing(task) {
   const review = ' When a review asks for fixes, fix each blocking and fix-now finding in this PR, and push. When a review\'s verdict says merge, do not push for its findings: reply on the PR, file a ticket only for a finding that is a real bug or risk outside this PR, naming the PR and the finding, and stop. Polish not worth a ticket gets only the reply. If a finding marked follow-up is really a bug in this PR, say so in a new reply with <!-- office:hold --> on the line after <!-- office:dev -->, and push no fix: the PR then waits on the person. An edited reply does not count. A failing check and a conflict with main are still yours: fix the check, or merge main, and push only that. After a merge verdict, git push in this checkout refuses any commit but a merge of ' + task.base + ', until a later review says fix or the PR merges.';
   const base = ' This branch belongs to ' + task.base + ', the base this task records. That base wins over any other branch the ticket text names, unless the person tells you otherwise in this session. Do not reset, rebase or switch this branch onto a different branch. Catching up with ' + task.base + ' is fine.';
   const cli = path.join(__dirname, 'ticket.js');
-  const wording = ' If the change also needs CLAUDE.md or docs/constitution.md updated, leave CLAUDE.md and docs/constitution.md out of this pull request: only a person merges a PR that changes them, so your code would wait too. Write the exact change in the PR body instead, and once the PR is open, run node ' + cli + ' create "' + WORDING_TICKET + '" --body - <<\'EOF\' with a body naming ' + (task.ticket ? 'this ticket, ' : '') + 'the PR and the exact change.' +
-    ' If it says Already filed with (triage) or (ready), that open ticket gathers these changes and you cannot edit it, so run node ' + cli + ' post with that ticket\'s id from the Already filed line, which posts on its own channel, and a text in single quotes that starts with @Lead and names ' + (task.ticket ? 'this ticket and ' : 'your branch and ') + 'the PR, so the change is added from the PR body.' +
-    ' If it says (started) or (rejected), file the change as its own ticket titled "' + WORDING_TICKET + ' for ' + (task.ticket || task.branch) + '", with --blocked-by and that ticket\'s id if it started.' +
+  const wording = ' If the change also needs CLAUDE.md or docs/constitution.md updated, leave CLAUDE.md and docs/constitution.md out of this pull request: only a person merges a PR that changes them, so your code would wait too. Write the exact change in the PR body instead, and once the PR is open, run node ' + cli + ' list first. If a ticket in Triage or Ready has a title that starts with "' + WORDING_TICKET + '", that open ticket gathers these changes and you cannot edit it, so run node ' + cli + ' post with its id, which posts on its own channel, and a text in single quotes that starts with @Lead and names ' + (task.ticket ? 'this ticket and ' : 'your branch and ') + 'the PR, so the change is added from the PR body.' +
+    ' If none is open, run node ' + cli + ' create "' + WORDING_TICKET + '" --body - <<\'EOF\' with a body naming ' + (task.ticket ? 'this ticket, ' : '') + 'the PR and the exact change.' +
+    ' If it says Already filed with (triage) or (ready), post on that ticket as above. If it says (started) or (rejected), file the change as its own ticket titled "' + WORDING_TICKET + ' for ' + (task.ticket || task.branch) + '", with --blocked-by and that ticket\'s id if it started.' +
     ' Only if the code cannot ship without the wording, because the constitution must describe what the code does, put it in this PR and say why there: the PR then waits on the person.';
   const leave = task.ticket ? ' If you find something the next session on this ticket needs, such as a cause, a trap or a test to run, add it as a note: node ' + cli + ' note ' + task.ticket + ' --body - <<\'EOF\' then the note on the lines below and a last line of only EOF. A note never changes the ticket.' : '';
   const env = task.env ? ' Your checkout has its own ' + task.env.file + ' with placeholder values and no real keys, and its own ports, ' + task.env.ports.join(' and ') + '. Run servers and tests on those ports. Never copy the main checkout\'s ' + task.env.file + ' or put a real key in this one: if a test needs a real key, say so in the PR.' : '';
@@ -218,7 +218,7 @@ async function createTask(channel, body, ctx) {
   }
   tasksOf(channel).push(task);
   save();
-  if (task.ticket) history.add(channel, task, { stage: 'started', by, task: id }, body.lead || null);
+  if (task.ticket) history.add(channel, task, { stage: 'started', by, task: id, title: task.title }, body.lead || null);
   noteDev(channel, task);
   events.emit('created', channel, task);
   deliver(channel, task, started.body.id, ctx);
@@ -323,7 +323,6 @@ async function clean(channel, task, body) {
   }
   store[channel] = tasksOf(channel).filter((t) => t !== task); save();
   delivery.drop(channel, BRIEF_KEY(task));
-  if (task.ticket && task.pr) cleanedOf(channel).push({ ticket: task.ticket, ticketAt: task.ticketAt, title: task.title, pr: task.pr, history: task.history.filter((h) => h.type === 'pr') });
   return [200, { ok: true, removed: task.id, branch: task.branch }];
 }
 const AFTER_BUILDING = ['in_review', 'waiting_on_you'];
@@ -378,20 +377,13 @@ async function findPrs() {
     }
   } finally { finding = false; }
 }
-function followSessions(channel) {
-  let changed = false;
-  for (const task of tasksOf(channel)) {
-    const t = terminal.find(channel, task.owner && task.owner.terminal);
-    if (t && t.sessionId !== task.owner.sessionId && t.sessionId.length === 36) { task.owner.sessionId = t.sessionId; changed = true; noteDev(channel, task); }
-  }
-  if (changed) save();
+function followDev(channel, t, was) {
+  if (!was || t.sessionId.length !== 36) return;
+  const task = tasksOf(channel).find((x) => x.owner && x.owner.terminal === t.id);
+  if (!task || task.owner.sessionId === t.sessionId) return;
+  task.owner.sessionId = t.sessionId; save(); noteDev(channel, task);
 }
-
-const cleaned = new Map();
-function cleanedOf(channel) {
-  if (!cleaned.has(channel)) cleaned.set(channel, []);
-  return cleaned.get(channel);
-}
+if (terminal.onSessionMoved) terminal.onSessionMoved(followDev);
 function workOf(channel, t) {
   const work = (role, task, pr, label) => ({ role, ticket: task ? task.ticket : null, ticketAt: task ? task.ticketAt : null, pr, label });
   if (t.role === 'pm') return work('pm', null, null, t.title);
@@ -399,8 +391,10 @@ function workOf(channel, t) {
   if (t.role === 'security') return work('security', null, null, 'Security · report on access');
   if (t.lead) return work('lead', null, null, t.title ? 'The Lead · ' + t.title : 'The Lead');
   if (t.role === 'reviewer') {
-    const task = t.pr && tasksOf(channel).concat(cleanedOf(channel)).find((x) => x.ticket && (x.pr === t.pr || x.history.some((h) => h.type === 'pr' && h.pr === t.pr)));
-    return work('reviewer', task, t.pr, task ? 'reviewing ' + task.ticket + ' · ' + task.title : t.title);
+    const live = t.pr && tasksOf(channel).find((x) => x.ticket && (x.pr === t.pr || x.history.some((h) => h.type === 'pr' && h.pr === t.pr)));
+    const task = live || (t.pr && history.ticketOfPr(channel, t.pr));
+    const ticket = live ? live.ticket : task && task.id, title = live ? live.title : task && task.title;
+    return work('reviewer', task && { ticket, ticketAt: live ? live.ticketAt : task.createdAt }, t.pr, task ? 'reviewing ' + ticket + (title ? ' · ' + title : '') : t.title);
   }
   const task = t.task && tasksOf(channel).find((x) => x.id === t.task);
   return task && task.ticket ? work('dev', task, task.pr, task.ticket + ' · ' + task.title) : null;
@@ -416,7 +410,6 @@ async function handle(req, res, channel, rest, ctx) {
   const [, id, verb] = route;
   let out;
   if (!id && req.method === 'GET') {
-    followSessions(channel);
     out = [200, { ok: true, states: STATES, tasks: tasksOf(channel).map((t) => (ctx.agent ? { id: t.id, state: t.state, title: t.title, branch: t.branch, pr: t.pr } : view(channel, t))) }];
   } else if (!id && req.method === 'POST') out = await create(channel, await ctx.readJson(req), ctx);
   else if (id) {

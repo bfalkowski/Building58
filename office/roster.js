@@ -35,10 +35,9 @@
     startWith: 3,
 
     names: {
-      woman: ['Ada', 'Amara', 'Bea', 'Camila', 'Clara', 'Elena', 'Farah', 'Freya', 'Greta', 'Hana', 'Iris', 'Jade', 'Leila',
-        'Lucia', 'Maya', 'Mei', 'Nadia', 'Olivia', 'Rosa', 'Sofia', 'Tara', 'Uma', 'Vera', 'Yara', 'Zoe'],
-      man: ['Aaron', 'Arjun', 'Ben', 'Carlos', 'Diego', 'Eli', 'Felix', 'Hugo', 'Ivan', 'Jonas', 'Kenji', 'Leo', 'Malik',
-        'Nico', 'Omar', 'Oscar', 'Pablo', 'Rafael', 'Ravi', 'Simon', 'Tomas', 'Victor', 'Wes', 'Yusuf', 'Zane']
+      woman: ['Anita', 'Katherine', 'Wanda', 'Delores', 'Janice', 'Barbara', 'Martha'],
+      man: ['Ed', 'James', 'George', 'Lawson', 'Fred', 'Francis', 'Lou', 'Bud', 'Edmund', 'Rudy', 'Edgar', 'Homer',
+        'Luke', 'Khashdrahr', 'Ewing', 'Ned', 'Jonathan', 'Buck', 'Harold', 'Charley']
     },
 
     manager: {

@@ -14,8 +14,18 @@ const { evaluate, STAMP } = require('../pm-brief-eval.js');
 
 test('the PM brief is the one the eval last judged', () => {
   const stamp = JSON.parse(fs.readFileSync(STAMP, 'utf8'));
-  assert.ok(stamp.brief === forEval(), 'The PM brief changed since the eval last judged it. Run node relay/pm-brief-eval.js --kit DIR against edd-platform, '
-    + 'and commit relay/pm-brief-eval.json if the eval did not get worse (docs/manual/roles.html#pm-brief-eval).');
+  assert.ok(stamp.brief === forEval(), 'The PM brief changed since the eval last judged it. Run npm run pm-brief-eval -- --branch NAME --push on the computer with the model key, '
+    + 'or node relay/pm-brief-eval.js --kit DIR against edd-platform, and commit relay/pm-brief-eval.json if the eval did not get worse (docs/manual/roles.html#pm-brief-eval).');
+});
+
+test('the PM brief asks the PM to mark tickets that change the same code as blocked', () => {
+  const brief = forEval();
+  assert.match(brief, /same behavior or the same part of the relay or room/);
+  assert.ok(brief.includes('node relay/ticket.js blockers ID --blocked-by ID --why'), 'names the command');
+  assert.match(brief, /Mark only a clear overlap/);
+  assert.match(brief, /keep the blockers it has/);
+  assert.ok(brief.includes('node relay/ticket.js show ID'), 'says how to read the blockers');
+  assert.match(brief, /later one as blocked by the earlier/);
 });
 
 test('the judged brief holds nothing from this computer', () => {

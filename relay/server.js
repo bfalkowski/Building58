@@ -400,7 +400,8 @@ function replayHooks(entries) {
     try { to = new URL(e.to); } catch (err) { continue; }
     const cm = to.pathname.match(/^\/channels\/([^/]+)\/commands$/);
     if (!cm || !LOCAL.has(to.hostname) || Number(to.port) !== PORT) continue;
-    const name = decodeURIComponent(cm[1]);
+    let name;
+    try { name = decodeURIComponent(cm[1]); } catch (err) { continue; }
     if (!CHANNEL_RE.test(name)) continue;
     const event = Object.assign({}, e.event);
     if (e.auth !== hookQueue.hash(KEY)) {
