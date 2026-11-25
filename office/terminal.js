@@ -229,7 +229,7 @@
   });
   const monitor = document.createElement('p'); monitor.className = 'set-what'; monitor.textContent = 'Rung 5 is not built yet. It is a monitor that watches what shipped and files tickets.';
   const brakeNote = document.createElement('p'); brakeNote.className = 'set-what'; brakeNote.id = 'set-brake-note';
-  $('set-levels').append(levelsBox, monitor, levelsApply, levelsNote, brakeNote);
+  $('set-levels').append(levelsBox, monitor, levelsApply, brakeNote, levelsNote);
   function switchesNow() {
     if (!trust.reviews || !trust.autopilot || !trust.settings) return null;
     return { auto: trust.reviews.auto, again: trust.reviews.again, board: !!(boardTerm && boardTerm.board), stops: !!settingOf('leadStops'), merge: !!(boardTerm && boardTerm.merge), starts: !!(boardTerm && boardTerm.starts), autopilot: !!trust.autopilot.on, exhibit: !!settingOf('autopilotExhibit') };
