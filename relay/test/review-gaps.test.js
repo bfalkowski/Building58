@@ -66,6 +66,23 @@ test('a link told twice counts once, so the count matches the links after the De
   assert.ok(t.history.some((h) => /^Told the Dev about 1 new comment\./.test(h.note || '')), JSON.stringify(t.history));
 });
 
+test('a link told again still brings what it says', async () => {
+  const t = byId('dddddd');
+  t.owner = { terminal: 't1', sessionId: 'session-one-0000' };
+  prComments.tell('test', t, PR, [link(50)], { before: true });
+  const first = await held('t1');
+  assert.strictEqual(t.reviews.pending.blocks, false);
+  prComments.tell('test', t, PR, [link(50)], { blocks: true, before: false, times: { [link(50)]: '2026-01-01T00:00:00Z' } });
+  assert.strictEqual(t.reviews.pending.count, 1);
+  assert.strictEqual(t.reviews.pending.blocks, true);
+  assert.strictEqual(t.reviews.pending.before, false);
+  assert.strictEqual(t.reviews.pending.times[link(50)], '2026-01-01T00:00:00Z');
+  take(first);
+  const again = typing.find((x) => x.t.id === 't1') || await held('t1');
+  take(again);
+  await until(() => t.reviews.pending === null, 'the news told');
+});
+
 test('a note on the PR still owed when the task is Done is posted once, and not kept', async () => {
   const t = byId('bbbbbb');
   await until(() => t.reviews.owesPost === null, 'the note posted');
