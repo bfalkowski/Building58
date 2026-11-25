@@ -206,3 +206,45 @@ test('a refused push is noted, a later allowed push is noted after it, and the n
   s.say('fix', reviewed);
   assert.deepStrictEqual(hold.refusalsOf(s.task), { list: [], seen: 0 });
 });
+
+test('a merge verdict on a red PR has no mark, and the Dev push goes through', (t) => {
+  const s = setup();
+  t.after(s.done);
+  const reviewed = s.commit(s.wt);
+  assert.ok(s.push().ok);
+  const mark = path.join(hold.gitDirOf(s.wt), hold.MARK);
+  const verdict = { kind: 'merge', commit: reviewed, posted: PR + '#issuecomment-1' };
+  assert.strictEqual(hold.sync(s.task, verdict, { state: 'red', open: true }), true, 'the lift is written');
+  assert.ok(!fs.existsSync(mark));
+  assert.strictEqual(hold.untoldLift(s.task).commit, reviewed, 'the lift is kept for the relay to tell the Dev and log the jam');
+  s.commit(s.wt);
+  const r = s.push();
+  assert.ok(r.ok, r.out);
+  assert.doesNotMatch(r.out, SAID);
+  for (const state of ['pending', 'green']) {
+    hold.sync(s.task, verdict, { state, open: true });
+    assert.ok(!fs.existsSync(mark), state + ' on the same verdict keeps the hold off until a newer verdict');
+  }
+  assert.strictEqual(hold.sync(s.task, { kind: 'merge', commit: s.commit(s.wt), posted: PR + '#issuecomment-2' }, { state: 'green', open: true }), true);
+  assert.ok(fs.existsSync(mark), 'the follow-up review says merge, so the hold is back on the new commit');
+  assert.strictEqual(hold.untoldLift(s.task), null);
+});
+
+test('a merge verdict on a green, pending or unread pipeline still has the hold', (t) => {
+  const s = setup();
+  t.after(s.done);
+  const reviewed = s.commit(s.wt);
+  const verdict = { kind: 'merge', commit: reviewed, posted: PR + '#issuecomment-1' };
+  for (const seen of [{ state: 'green', open: true }, { state: 'pending', open: true }, { state: 'unknown', open: true }, undefined]) {
+    fs.rmSync(path.join(hold.gitDirOf(s.wt), hold.MARK), { force: true });
+    assert.strictEqual(hold.sync(s.task, verdict, seen), true);
+    s.commit(s.wt);
+    assert.strictEqual(s.push().ok, false);
+    s.git(s.wt, 'reset', '-q', '--hard', reviewed);
+  }
+});
+
+test('the Dev is told CI is red, not that a finding must be fixed', () => {
+  assert.strictEqual(hold.RED_CI_TEXT, 'CI is red on your PR. Fix the failure in this PR, run the tests, and push. A follow-up review checks the fix.');
+  assert.doesNotMatch(hold.RED_CI_TEXT, /finding/);
+});

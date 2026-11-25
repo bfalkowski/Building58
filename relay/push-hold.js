@@ -15,6 +15,10 @@
 //   reviewed commit or another such merge, and whose other parents are on the remote's base branch, or a
 //   commit after such a merge that changes only files a merge in the push changed (the version bump or
 //   test fix the merge forces). A follow-up review of the merge and the fixes is owed as for any push.
+//   While the PR's latest pipeline run is red, there is no mark: a merge verdict on a red PR cannot merge, and
+//   the hold would block the push that fixes it. sync() keeps office-push-hold-lifted.json for the verdict's
+//   commit, so the hold stays off until a newer verdict (the follow-up review's) says merge. A run that is
+//   only pending or cancelled lifts nothing. relay/autopilot.js tells the Dev and logs the jam once.
 //   A refused push is written to office-refused-pushes.jsonl beside the mark, and a later push that goes
 //   through is noted after it: the relay reads it for the jam log and for Needs you (relay/autopilot.js,
 //   relay/needs-you.js), and clears it with the mark.
@@ -28,6 +32,7 @@ const { execFileSync } = require('child_process');
 const MARK = 'office-push-hold.json';
 const REFUSED = 'office-refused-pushes.jsonl';
 const SEEN = 'office-refused-pushes.seen';
+const LIFTED = 'office-push-hold-lifted.json';
 const ZERO = /^0+$/;
 
 function markOf(task, verdict, seen) {
@@ -50,12 +55,20 @@ function sync(task, verdict, seen) {
   if (!task || !task.worktree) return false;
   const dir = gitDirOf(task.worktree);
   if (!dir) return false;
-  const file = path.join(dir, MARK), mark = markOf(task, verdict, seen);
+  const file = path.join(dir, MARK), lifted = path.join(dir, LIFTED);
+  let mark = markOf(task, verdict, seen);
   let was = null;
   try { was = fs.readFileSync(file, 'utf8'); } catch (e) { was = null; }
+  let lift = null;
+  try { lift = JSON.parse(fs.readFileSync(lifted, 'utf8')); } catch (e) { lift = null; }
+  if (mark && lift && lift.commit === mark.commit) mark = null;
+  else if (mark && seen && seen.state === 'red') {
+    fs.writeFileSync(lifted, JSON.stringify({ pr: mark.pr, commit: mark.commit, at: new Date().toISOString(), told: false }) + '\n');
+    mark = null;
+  } else if (lift) fs.rmSync(lifted, { force: true });
   if (!mark) {
     for (const name of [REFUSED, SEEN]) fs.rmSync(path.join(dir, name), { force: true });
-    if (was === null) return false;
+    if (was === null) return !!lift !== !!readLift(dir);
     fs.rmSync(file, { force: true });
     return true;
   }
@@ -64,6 +77,21 @@ function sync(task, verdict, seen) {
   fs.writeFileSync(file, text);
   return true;
 }
+
+function readLift(dir) {
+  try { return JSON.parse(fs.readFileSync(path.join(dir, LIFTED), 'utf8')); } catch (e) { return null; }
+}
+function untoldLift(task) {
+  const dir = task && task.worktree ? gitDirOf(task.worktree) : null;
+  const lift = dir && readLift(dir);
+  return lift && !lift.told ? lift : null;
+}
+function markLiftTold(task) {
+  const dir = task && task.worktree ? gitDirOf(task.worktree) : null;
+  const lift = dir && readLift(dir);
+  if (lift) fs.writeFileSync(path.join(dir, LIFTED), JSON.stringify(Object.assign(lift, { told: true })) + '\n');
+}
+const RED_CI_TEXT = 'CI is red on your PR. Fix the failure in this PR, run the tests, and push. A follow-up review checks the fix.';
 
 function refusal(mark, why) {
   return 'The review of ' + mark.commit.slice(0, 7) + ' says merge. Do not push. Reply on the PR, and file a ticket only for a finding that is a real bug or risk outside this PR.' +
@@ -165,4 +193,4 @@ if (require.main === module && process.argv[2] === '--pre-push') {
   });
 }
 
-module.exports = { markOf, sync, gitDirOf, check, prePush, refusal, refusalsOf, markSeen, MARK, REFUSED, SEEN };
+module.exports = { untoldLift, markLiftTold, RED_CI_TEXT, LIFTED, markOf, sync, gitDirOf, check, prePush, refusal, refusalsOf, markSeen, MARK, REFUSED, SEEN };
