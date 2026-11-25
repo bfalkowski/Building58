@@ -89,6 +89,14 @@
 //   node relay/ticket.js advise T-5 not-needed --why 'PR 376 put all of it on main'
 //   node relay/ticket.js advise T-5 duplicate --of T-3 --why 'Same work as T-3'
 //   node relay/ticket.js advise T-5 part-of --of T-8 --why 'It is one step of T-8'
+// Only a session you made the Lead, while you have turned on Let the Lead unstick the board, can work stuck items.
+// The relay counts passes: an item named on three passes in a row with no action goes on Needs you with your reason:
+//   node relay/ticket.js stuck https://github.com/owner/repo/pull/12 --why 'Green for an hour, and no review is running' [--kind no-first-review]
+//   node relay/ticket.js jam no-first-review --fix 'Started the review' --pr https://github.com/owner/repo/pull/12   (logs a fix, by Lead)
+//   node relay/ticket.js rerun https://github.com/owner/repo/pull/12     (a known-flaky failed job, once for each commit)
+//   node relay/ticket.js failures                                        (the shared failure channels, and the PRs and tickets each holds)
+//   node relay/ticket.js failure browser https://github.com/o/r/pull/1,https://github.com/o/r/pull/2   (open the channel for a failure)
+//   node relay/ticket.js failure-ticket failure-browser T-5              (link a ticket that closes when the fix merges)
 // Only the COO can read the room's measures and save its report, which it pipes in:
 //   node relay/ticket.js measures
 //   node relay/ticket.js report < report.md
@@ -125,6 +133,9 @@ function flags(args) {
     else if (args[i] === '--into') out.into = args[++i];
     else if (args[i] === '--why') out.why = args[++i];
     else if (args[i] === '--of') out.of = args[++i];
+    else if (args[i] === '--fix') out.fix = args[++i];
+    else if (args[i] === '--ticket') out.ticket = args[++i];
+    else if (args[i] === '--pr') out.pr = args[++i];
     else out.rest.push(args[i]);
   }
   return out;
@@ -319,6 +330,47 @@ async function main() {
     else console.log('Marked ' + r.pr + ' ready to merge at ' + r.head.slice(0, 7) + ': ' + r.comment + '. Who merges: ' + r.who + ' A new commit takes the "' + r.label + '" label off.');
     return 0;
   }
+  if (cmd === 'stuck' && args[0]) {
+    const f = flags(args.slice(1));
+    if (f.rest.length || !f.why) { console.error('Use: ticket.js stuck <PR link or ticket id> --why \'what you saw, and what you will do or why you cannot\' [--kind no-first-review]'); return 1; }
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/stuck'), { method: 'POST', headers, body: JSON.stringify({ item: args[0], why: f.why, kind: f.kind }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log(r.message);
+    return 0;
+  }
+  if (cmd === 'jam' && args[0]) {
+    const f = flags(args.slice(1));
+    if (f.rest.length || !f.fix) { console.error('Use: ticket.js jam <kind> --fix \'what you did\' [--ticket T-1] [--pr <PR link>]'); return 1; }
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/jams'), { method: 'POST', headers, body: JSON.stringify({ kind: args[0], fix: f.fix, ticket: f.ticket, pr: f.pr }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log('Logged: ' + r.jam.kind + ' by ' + r.jam.by + (r.jam.since ? ', stuck since ' + r.jam.since : '') + ': ' + r.jam.fix);
+    return 0;
+  }
+  if (cmd === 'rerun' && args[0]) {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/rerun'), { method: 'POST', headers, body: JSON.stringify({ pr: args[0] }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log(r.message);
+    return 0;
+  }
+  if (cmd === 'failures') {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/failures'), { headers })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    if (!r.failures.length) console.log('No shared failure channels.');
+    for (const x of r.failures) console.log('#' + x.name + '  check ' + x.check + '  ' + (x.archived ? 'archived: ' + x.archived : x.fixedBy ? 'fixed by ' + x.fixedBy : 'open') + '  PRs ' + x.prs.join(', ') + (x.tickets.length ? '  tickets ' + x.tickets.join(', ') : ''));
+    return 0;
+  }
+  if (cmd === 'failure' && args[0] && args[1]) {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/failures'), { method: 'POST', headers, body: JSON.stringify({ check: args[0], prs: args[1].split(',').filter(Boolean) }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log('Opened #' + r.failure.name + ' for the check ' + r.failure.check + ': ' + r.failure.prs.join(', '));
+    return 0;
+  }
+  if (cmd === 'failure-ticket' && args[0] && args[1]) {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/failures/' + encodeURIComponent(args[0].replace(/^#/, '')) + '/tickets'), { method: 'POST', headers, body: JSON.stringify({ ticket: args[1] }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log('Linked ' + args[1] + ' to #' + r.failure.name + '. It closes when the fix merges.');
+    return 0;
+  }
   if (cmd === 'measures') {
     const r = await (await fetch(URL_.replace(/\/tickets$/, '/officers/coo/measures'), { headers })).json();
     if (!r.ok) { console.error(r.message); return 1; }
@@ -388,7 +440,7 @@ async function main() {
     console.log('Moved: ' + moved.id + '  ' + (r.ticket ? moved.status : moved.state) + (r.ticket && r.ticket.pr ? '  ' + r.ticket.pr : ''));
     return 0;
   }
-  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js show T-1, ticket.js note T-1 --body -, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js ready (run it bare to see how), ticket.js review <PR link>, ticket.js fix T-1 (with Let the Lead merge on), or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
+  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js show T-1, ticket.js note T-1 --body -, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js ready (run it bare to see how), ticket.js review <PR link>, ticket.js fix T-1 (with Let the Lead merge on), or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the Lead while the person lets it unstick the board: ticket.js stuck <PR> --why text, ticket.js jam <kind> --fix text, ticket.js rerun <PR>, ticket.js failures, ticket.js failure <check> <PR>,<PR>, ticket.js failure-ticket <channel> <ticket>, or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
   return 1;
 }
 main().then((code) => { process.exitCode = code; }, (e) => { console.error('The relay did not answer: ' + e.message); process.exitCode = 1; });

@@ -249,19 +249,26 @@ const ORDERABLE = ['triage', 'ready'];
 const notReady = (agent, what, state) => [agent ? 403 : 409, { ok: false, error: 'not_ready', message: 'Only a ticket in Triage or Ready can change its ' + what + '. This one is ' + state + '.' }];
 const setBy = (agent, what) => ({ orderedBy: !agent ? 'you' : agent.lead ? 'Lead' : 'PM', orderedWhat: what });
 const NOT_YOURS = 'Only the person sets a ticket\'s priority and place in the work order, and a PM or Lead they let set it.';
-function sessionMayOrder(channel, agent) {
-  if (agent.lead) return config.get('leadOrder') ? null : 'The person has not let the Lead set priority. They turn it on with Let the Lead set priority in Settings. Until then, recommend an order and let them set it.';
+function leadMayOrder(channel, id) {
+  if (config.get('leadOrder')) return null;
+  const off = 'The person has not let the Lead set priority. They turn it on with Let the Lead set priority in Settings. Until then, recommend an order and let them set it.';
+  if (!config.get('leadUnstick') || !id) return off;
+  const why = require('./failures.js').ticketMay(channel, id);
+  return why ? off + ' Let the Lead unstick the board allows it only for a ticket linked to an open failure channel, while no blocked Dev runs. ' + why : null;
+}
+function sessionMayOrder(channel, agent, id) {
+  if (agent.lead) return leadMayOrder(channel, id);
   if (agent.role !== 'pm') return NOT_YOURS;
   if (!trust.may(trust.ORDER)) return 'The person has not let the PM set the order. They raise PM trust to Order in Settings. Until then, recommend an order and let them set it.';
   const newest = terminal.all(channel).filter((t) => t.role === 'pm').sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))[0];
   if (newest !== agent) return 'Another PM started after this one, and only the newest PM may set the order.';
   return null;
 }
-function orderOff(channel, agent) {
-  const no = agent && sessionMayOrder(channel, agent);
+function orderOff(channel, agent, id) {
+  const no = agent && sessionMayOrder(channel, agent, id);
   return no ? [403, { ok: false, error: 'forbidden', message: no }] : null;
 }
-const noteBy = (agent) => (!agent ? 'you' : agent.role === 'reviewer' || agent.reviewOf ? 'Reviewer' : oneLine(agentName(agent), 60));
+const noteBy = (agent) => (!agent ? 'you' : agent.role === 'relay' ? 'the relay' : agent.role === 'reviewer' || agent.reviewOf ? 'Reviewer' : oneLine(agentName(agent), 60));
 function addNote(channel, ticket, body, agent) {
   const text = clean(body.text);
   if (!text) return [400, { ok: false, error: 'bad_note', message: 'A note needs words.' }];
@@ -356,6 +363,32 @@ function decide(channel, ticket, body, by = 'you') {
   });
 }
 
+async function leadMergesTwin(channel, ticket, body) {
+  const failures = require('./failures.js'), into = Array.isArray(body.ids) ? body.ids[0] : null;
+  return body.action === 'merge' && config.get('leadUnstick') && !!into && failures.bothLinked(channel, ticket.id, into);
+}
+async function carryOut(channel, ticket) {
+  const decided = await decide(channel, ticket, { decision: 'approve' }, 'Lead');
+  if (!decided[1].ok) return decided;
+  const note = await addNote(channel, ticket, { text: 'Let the Lead unstick the board is on, and both tickets are linked to one failure channel, so the relay merged this one into ' + (decided[1].ticket.closedFor || []).join(', ') + '. To bring it back, move it to Triage.' }, RELAYER);
+  return [200, Object.assign({ ok: true, message: 'Merged ' + ticket.id + ' into ' + (decided[1].ticket.closedFor || []).join(', ') + '.' }, note[1].ok ? { ticket: note[1].ticket } : { ticket: decided[1].ticket })];
+}
+const RELAYER = { role: 'relay', who: 'the relay', sessionId: 'relay' };
+async function closeForFailure(channel, ids, pr, others, key) {
+  const n = (link) => '#' + String(link).split('/').pop();
+  for (const id of ids) {
+    const closed = await inTurn(channel, async () => {
+      const all = await listAll(channel), now = all.find((t) => t.id === id);
+      if (!now || !ORDERABLE.includes(now.status) || starting.has(channel + '/' + id)) return null;
+      await store.update(channel, id, Object.assign({ status: 'rejected', closedAs: 'closed', closedFor: [], proposal: null }, now.status === 'ready' ? { approvedBy: 'none' } : {}));
+      history.add(channel, now, { stage: 'moved', from: now.status, to: 'rejected', by: 'relay', pr });
+      chat.archiveTicketRoom(channel, id, now.createdAt, 'PR ' + n(pr) + ' fixed the failure ' + key);
+      return now;
+    });
+    if (closed) await addNote(channel, closed, { text: 'The check ' + key + ' was fixed by PR ' + n(pr) + ', which merged, so the relay closed this ticket.' + (others.length ? ' It also blocked ' + others.map(n).join(', ') + '.' : '') }, RELAYER);
+  }
+  changed(channel);
+}
 const ADVICE_WORDS = { start: 'start', first: 'another first', 'not-needed': 'not needed', duplicate: 'a duplicate', 'part-of': 'part of another ticket' };
 const HOLDS = { 'not-needed': 'close', duplicate: 'merge', 'part-of': 'merge' };
 function adviceFrom(body) {
@@ -417,7 +450,7 @@ function setPlace(channel, ticket, body, agent) {
   if ((before === null) === (after === null)) return [400, { ok: false, error: 'bad_param', message: 'Give one of "before" or "after": the id of the ticket to go next to.' }];
   const otherId = before === null ? after : before;
   return inTurn(channel, async () => {
-    const off = orderOff(channel, agent);
+    const off = orderOff(channel, agent, ticket.id);
     if (off) return off;
     const all = await listAll(channel);
     const stateOf = (t) => (starting.has(channel + '/' + t.id) ? 'starting' : t.status);
@@ -592,7 +625,7 @@ async function edit(channel, ticket, body, agent) {
   if (!asked.length) return [400, { ok: false, error: 'bad_param', message: 'Give at least one of ' + EDITABLE.map((k) => '"' + k + '"').join(', ') + '.' }];
   const theirs = agent ? asked.filter((k) => PERSON_ONLY.includes(k)) : [];
   if (theirs.length) return [403, { ok: false, error: 'forbidden', message: 'Only the person changes a ticket\'s ' + theirs.join(', ') + '. A PM or Lead edits its title, body and priority.' }];
-  if (agent && body.priority !== undefined) { const off = orderOff(channel, agent); if (off) return off; }
+  if (agent && body.priority !== undefined) { const off = orderOff(channel, agent, ticket.id); if (off) return off; }
   if (body.replacedBy !== undefined && body.mark === undefined) return [400, { ok: false, error: 'bad_mark', message: 'Send "replacedBy" with "mark": "replaced".' }];
   const want = {};
   if (body.title !== undefined) {
@@ -707,6 +740,7 @@ async function handle(req, res, channel, rest, ctx) {
       else if (req.method === 'POST' && verb === 'propose') {
         out = await propose(channel, ticket, body || {}, ctx.agent);
         if (ctx.agent && out[1].ok) ctx.log(out[1].message);
+        if (ctx.agent && ctx.agent.lead && out[1].ok && await leadMergesTwin(channel, ticket, body || {})) out = await carryOut(channel, ticket);
       }
       else if (req.method === 'POST' && verb === 'advice') {
         out = await advise(channel, ticket, body || {}, ctx.agent);
@@ -717,7 +751,7 @@ async function handle(req, res, channel, rest, ctx) {
         out = await decide(channel, ticket, body || {});
       }
       else if (req.method === 'POST' && verb === 'order') {
-        const refused = ctx.agent && sessionMayOrder(channel, ctx.agent);
+        const refused = ctx.agent && sessionMayOrder(channel, ctx.agent, ticket.id);
         if (refused) { ctx.problem(res, 403, 'forbidden', refused); return true; }
         out = await setPlace(channel, ticket, body || {}, ctx.agent);
         if (ctx.agent && out[1].ok) ctx.log('The ' + (ctx.agent.lead ? 'Lead' : 'PM') + ' set the place of ' + ticket.id);
@@ -737,4 +771,4 @@ async function handle(req, res, channel, rest, ctx) {
 const startingNow = (channel) => leadStarting.has(channel) || [...starting].some((k) => k.startsWith(channel + '/'));
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { seatPm, handle, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { closeForFailure, seatPm, handle, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };

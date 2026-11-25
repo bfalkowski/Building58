@@ -115,6 +115,7 @@ pageTest('with no data, every chart says No data yet', () => bare, async (p) => 
     assert.strictEqual(await card.getAttribute('data-empty'), '1', id + ' is empty');
     assert.match(await card.locator('.empty').innerText(), /^No data yet/);
   }
+  assert.strictEqual(await p.page.locator('#chart-lead').getAttribute('data-empty'), '1', 'the Lead section is empty too');
   assert.deepStrictEqual(p.errors, []);
 });
 

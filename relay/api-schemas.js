@@ -132,9 +132,11 @@ const SCHEMAS = {
     pr: S({ maxLength: 300, description: 'Optional: the PR\'s address.' }),
     since: S({ maxLength: 40, description: 'Optional: when it got stuck, an ISO time.' }),
     fix: S({ minLength: 1, maxLength: 200, description: 'One line: what fixed it.' }),
-    by: S({ maxLength: 40, description: 'Optional: who fixed it. you by default.' })
+    by: S({ maxLength: 40, description: 'Optional: who fixed it. you by default. The Lead\'s token always writes Lead.' }),
+    outcome: S({ enum: ['fixed', 'passed', 'seen'], description: 'Optional: fixed by default.' }),
+    blocked: N({ description: 'Optional: how many PRs a shared failure channel blocked.' })
   }, ['kind', 'fix'], { examples: [{ kind: 'no-first-review', ticket: 'T-5', since: '2026-11-24T10:00:00.000Z', fix: 'Pressed Get a review.', by: 'you' }] }),
-  Jam: obj({ at: S(), kind: S(), ticket: orNull(S()), pr: orNull(S()), since: orNull(S()), fix: S(), by: S() }, ['at', 'kind', 'fix', 'by']),
+  Jam: obj({ at: S(), kind: S(), ticket: orNull(S()), pr: orNull(S()), since: orNull(S()), fix: S(), by: S(), outcome: S({ enum: ['fixed', 'passed', 'seen'] }), blocked: N() }, ['at', 'kind', 'fix', 'by']),
   JamOne: okWith({ jam: ref('Jam') }, ['jam']),
   JamList: okWith({ range: S({ enum: ['1d', '7d', '30d'] }), keptDays: N(), kinds: { type: 'object' }, jams: list(ref('Jam')) }, ['range', 'jams']),
   Metrics: okWith({
@@ -149,8 +151,16 @@ const SCHEMAS = {
     rounds: obj({ prs: list(obj({ rounds: S(), count: N() }, ['rounds', 'count'])) }, ['prs']),
     desks: obj({ points: list(obj({ at: S(), working: N(), idle: N(), waiting: N(), stuck: N(), free: N() }, ['at'])) }, ['points']),
     load: obj({ points: list(obj({ at: S(), cpu: N(), memoryMb: N(), limitMb: N() }, ['at'])) }, ['points']),
+    lead: obj({
+      available: B,
+      timeToAct: obj({ count: N(), medianMinutes: orNull(N()), slowest: list(obj({ ticket: orNull(S()), pr: orNull(S()), kind: S(), minutes: N() }, ['kind', 'minutes'])) }, ['count', 'slowest']),
+      fixed: obj({ total: N(), kinds: list(obj({ kind: S(), label: S(), count: N() }, ['kind', 'count'])) }, ['total', 'kinds']),
+      passed: obj({ total: N(), kinds: list(obj({ kind: S(), label: S(), count: N() }, ['kind', 'count'])) }, ['total', 'kinds']),
+      neverActed: obj({ total: N(), kinds: list(obj({ kind: S(), label: S(), count: N() }, ['kind', 'count'])) }, ['total', 'kinds']),
+      failures: obj({ channels: N(), prsBlocked: N(), medianHours: orNull(N()) }, ['channels', 'prsBlocked'])
+    }, ['available', 'timeToAct', 'fixed', 'passed', 'neverActed', 'failures']),
     pm: obj({ available: B, days: list({ type: 'object' }) }, ['available', 'days'])
-  }, ['range', 'numbers', 'merged', 'perTicket', 'where', 'outcomes', 'stalls', 'waits', 'rounds', 'desks', 'load', 'pm']),
+  }, ['range', 'numbers', 'merged', 'perTicket', 'where', 'outcomes', 'stalls', 'waits', 'rounds', 'desks', 'load', 'lead', 'pm']),
   Command: obj({
     action: S({ minLength: 1, description: 'A command of the world, such as say or idle. GET /channels/{channel} lists them as unknown_action does.' }),
     wait: { type: ['boolean', 'string'], description: 'false sends it and answers at once with its id.' },
