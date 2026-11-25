@@ -457,6 +457,8 @@ server.listen(PORT, HOST, async () => {
     hooksOpen = true;
     replayHooks(hookQueue.take(stateDir()).concat(earlyHooks.splice(0)).sort((a, b) => a.event.at - b.event.at));
     setTimeout(() => replayHooks(hookQueue.take(stateDir())), 3000).unref();
+    require('./stuck.js').begin();
+    require('./github-pass.js').begin();
     leadCheck.begin();
     pmSort.begin();
     checkouts.sweep().catch((e) => log('Could not tidy the checkouts: ' + e.message));

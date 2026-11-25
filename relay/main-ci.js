@@ -57,6 +57,12 @@ function ask(repo, branch) {
     const was = seen.get(key);
     if (now.state === 'red' && (!was || was.state !== 'red')) console.log(new Date().toISOString().slice(11, 19), 'Main is red: ' + branch + ' in ' + repo + ', ' + now.run.workflow + ' ' + now.run.url);
     if (was && was.state === 'red' && now.state === 'green') console.log(new Date().toISOString().slice(11, 19), 'Main is green again: ' + branch + ' in ' + repo + '.');
+    const tasks = require('./tasks.js'), stuck = require('./stuck.js');
+    for (const channel of tasks.channels()) {
+      if (!tasks.list(channel).some((t) => t.repo === repo)) continue;
+      if (now.state === 'red') stuck.raise(channel, { kind: 'main-red', id: 'main ' + key, text: 'Main is red: ' + branch + ' in ' + repo + ', ' + now.run.workflow + ' ' + now.run.url });
+      else if (now.state === 'green') stuck.clear(channel, 'main ' + key);
+    }
     seen.set(key, Object.assign(now, { repo, branch, at: Date.now() }));
     return seen.get(key);
   }).finally(() => asking.delete(key));

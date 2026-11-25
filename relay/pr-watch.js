@@ -35,6 +35,7 @@ const plan = require('./pr-watch-plan.js');
 const { livenessOf } = require('./liveness.js');
 const { claim } = require('./lockfile.js');
 const gh = require('./gh.js');
+const stuck = require('./stuck.js');
 
 const FILE = state.file('pr-watch.json', 'RELAY_PR_WATCH_FILE');
 const PR_URL = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/;
@@ -140,6 +141,7 @@ async function lookAt(channel, task, now) {
   rec.late = late ? late.why : null;
   if (late && !rec.done[head + ' late ' + move.cause]) {
     rec.done[head + ' late ' + move.cause] = new Date(now).toISOString();
+    stuck.raise(channel, { kind: 'handed-over', id: 'pr ' + task.pr, text: 'PR ' + number(task.pr) + (task.ticket ? ' (' + task.ticket + ')' : '') + ' waits on you: ' + late.why });
     chat.announce(channel, 'PR ' + number(task.pr) + (task.ticket ? ' (' + task.ticket + ')' : '') + ' waits on you: ' + late.why, task.ticket);
     log('PR ' + number(task.pr) + ' waits on the person: ' + late.why);
   }
