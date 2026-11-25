@@ -32,9 +32,10 @@
   .page-theme .btn:last-of-type { border-radius: 0 4px 4px 0; }
   .page-theme .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
 
-  .bench { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto minmax(420px, 1fr); min-height: calc(100vh - 32px); gap: 16px; align-items: start; }
+  .bench { display: flex; flex-direction: column; gap: 16px; }
+  .bench-top { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto auto; min-height: calc(100vh - 32px); gap: 16px; align-items: start; }
   .stage { grid-column: 1; grid-row: 1; }
-  .floor { grid-column: 1; grid-row: 2; align-self: stretch; min-height: 420px; }
+  .floor { grid-column: 1; grid-row: 2; align-self: stretch; }
   /* the terminal stays on screen beside the office, so clicking a person shows their session */
   .cc { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 16px; height: calc(100vh - 32px); display: flex; flex-direction: column; }
   .stage { position: relative; aspect-ratio: 16 / 10; border-radius: 8px; overflow: hidden; background: var(--stage); color: var(--hud); }
@@ -76,7 +77,7 @@
   .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; font: 14px/1.7 var(--mono); }
 
   .floor { position: relative; min-width: 0; border-radius: 8px; overflow: hidden; background: var(--pane); color: var(--pane-fg); display: flex; flex-direction: column; font: 12.5px/1.45 var(--mono); }
-  .floor-in { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .floor-in { display: flex; flex-direction: column; }
   .floor header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 10px 12px 8px; border-bottom: 1px solid var(--pane-line); }
   .floor h2, .floor h3 { margin: 0; font: 500 13px/1.3 var(--mono); color: var(--pane-strong); letter-spacing: 0.04em; }
   .floor h3 { padding: 10px 12px 6px; border-top: 1px solid var(--pane-line); display: flex; justify-content: space-between; }
@@ -85,56 +86,88 @@
   #relay-status::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; background: var(--err); vertical-align: 1px; }
   #relay-status[data-state="on"]::before { background: var(--ok); }
   #relay-status[data-state="wait"]::before { background: var(--wait); }
-  /* People take the Floor's free height and scroll, sharing it with a huddle or officer report when one shows. The scrollbars stay visible, even where the system hides them. */
-  #people { list-style: none; margin: 0; padding: 4px 0; flex: 1 1 0; min-height: 168px; overflow-y: auto; }
-  #people::-webkit-scrollbar, .feed-scroll::-webkit-scrollbar { width: 10px; }
-  #people::-webkit-scrollbar-track, .feed-scroll::-webkit-scrollbar-track { background: var(--pane-tint); }
-  #people::-webkit-scrollbar-thumb, .feed-scroll::-webkit-scrollbar-thumb { background: var(--pane-dim); border: 2px solid transparent; border-radius: 5px; background-clip: padding-box; }
-  @supports not selector(::-webkit-scrollbar) { #people, .feed-scroll { scrollbar-width: thin; scrollbar-color: var(--pane-dim) transparent; } }
-  #people li { position: relative; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 2px 8px; padding: 6px 12px; align-items: baseline; }
-  #people li > :not(.person) { pointer-events: none; }  /* clicks go through the text to the person */
-  #people .person { all: unset; position: absolute; inset: 0; cursor: pointer; }
-  #people .person:hover, #people .person:focus-visible, #people .person[aria-pressed="true"] { background: var(--pane-hover); }
-  #people .person:focus-visible { outline: 2px solid var(--pane-dim); outline-offset: -2px; }
-  #people .ticket { all: unset; position: relative; z-index: 1; pointer-events: auto; cursor: pointer; color: var(--link); text-decoration: underline; }
-  #people .ticket[hidden] { display: none; }
-  #people .ticket:hover { color: var(--pane-strong); }
-  #people .ticket:focus-visible { outline: 2px solid var(--pane-dim); }
-  #people i { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); align-self: center; }
-  #people [data-state="working"] i { background: var(--c); animation: pulse 1.6s ease-in-out infinite; }
-  #people [data-state="waiting"] i { background: var(--wait); animation: pulse 0.8s ease-in-out infinite; }
-  #people .who { color: var(--pane-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #people .who em { font-style: normal; }
-  #people .who small { color: var(--pane-dim); font-size: 11.5px; margin-left: 6px; }
-  #people time { color: var(--pane-dim); font-variant-numeric: tabular-nums; }
-  #people .doing { grid-column: 2 / 4; color: var(--pane-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #people [data-state="working"] .doing { color: color-mix(in srgb, var(--c) var(--c-mix), var(--pane-strong)); }  /* the person's colour, darkened in Light so it reads */
-  #people [data-state="waiting"] .doing { color: var(--wait); }
-  /* What the desk says (office/desks.js): a Dev's status icon, what it is doing, column, PR, CI and review, the next step, Safe to stop. */
-  #people .desk { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 0 8px; color: var(--pane-dim); font-size: 11.5px; }
-  #people .desk[hidden], #people .desk [hidden] { display: none; }
-  #people .desk-next { flex-basis: 100%; color: var(--pane-fg); }
-  /* The Lead's row stays at the top of the list while the rest scrolls under it (office/panel.js). */
-  #people li[data-lead="1"] { position: sticky; top: -4px; z-index: 2; background: var(--pane); border-bottom: 1px solid var(--pane-line); }
-  /* A reviewer sits under the Dev whose PR it reviews, indented, with a line back to that Dev (office/panel.js). */
-  #people li[data-under="1"] { margin-left: 22px; border-left: 2px solid var(--pane-dim); padding-left: 10px; }
-  #people .desk-pair { flex-basis: 100%; color: var(--pane-strong); }
-  /* How tired the Lead is (office/panel.js): fresh, getting tired, needs a refresh. */
-  #people .desk-tired { flex-basis: 100%; color: var(--ok); position: relative; z-index: 1; pointer-events: auto; cursor: help; }
-  #people .desk-tired > span:first-child { margin-right: 4px; }
-  #people .desk-tired[data-level="tired"] { color: var(--wait); }
-  #people .desk-tired[data-level="refresh"] { color: var(--err); }
-  #people .desk-tired[data-level=""] { color: var(--pane-fg); }
-  #people .desk-status { flex-basis: 100%; color: var(--pane-strong); }
-  #people .desk-status > span:first-child { margin-right: 4px; }
-  #people .desk-status[data-status="ci_failed"] { color: var(--err); }
-  #people .desk-status[data-status="merge"], #people .desk-status[data-status="merged"], #people .desk-status[data-status="done"] { color: var(--ok); }
-  #people .desk-status[data-status="waiting_on_you"], #people .desk-status[data-status="fix"] { color: var(--wait); }
-  #people [data-next="you"] .desk-next { color: var(--wait); }
-  #people .desk-pr, #people .desk-stop .btn { position: relative; z-index: 1; pointer-events: auto; }
-  #people .desk-pr { color: var(--link); }
-  #people .desk-stop { flex-basis: 100%; display: flex; align-items: center; gap: 8px; color: var(--ok); }
-  #people .desk-stop .btn { font: 600 11.5px/1 var(--sans); padding: 3px 8px; border-color: var(--ok); color: var(--ok); }
+  .feed-scroll::-webkit-scrollbar { width: 10px; }
+  .feed-scroll::-webkit-scrollbar-track { background: var(--pane-tint); }
+  .feed-scroll::-webkit-scrollbar-thumb { background: var(--pane-dim); border: 2px solid transparent; border-radius: 5px; background-clip: padding-box; }
+  @supports not selector(::-webkit-scrollbar) { .feed-scroll { scrollbar-width: thin; scrollbar-color: var(--pane-dim) transparent; } }
+  /* The front office (office/front-view.js): the Lead and the PM in two fixed seats, then Needs you, Today and Up next. A third seat is one more child of #seats. */
+  .seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; padding: 10px; }
+  .seat { position: relative; border: 1px solid var(--pane-line); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .seat > :not(.hit) { pointer-events: none; }
+  .seat a { pointer-events: auto; position: relative; z-index: 1; }
+  .hit { all: unset; position: absolute; inset: 0; cursor: pointer; border-radius: 6px; }
+  .hit:hover, .hit:focus-visible { background: var(--pane-hover); }
+  .hit[aria-pressed="true"] { background: var(--pane-press); box-shadow: inset 0 0 0 1px var(--accent); }
+  .hit:focus-visible { outline: 2px solid var(--pane-dim); outline-offset: -2px; }
+  .seat-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .seat .role { font: 700 14px var(--sans); color: var(--pane-strong); }
+  .seat .who, .seat .next { color: var(--pane-dim); overflow-wrap: anywhere; }
+  .seat .doing { color: var(--pane-fg); overflow-wrap: anywhere; }
+  .seat .always { font-size: 11px; color: var(--pane-dim); border: 1px solid var(--pane-line); border-radius: 10px; padding: 0 7px; }
+  .seat .rung { color: var(--wait); font-size: 11.5px; }
+  .seat .tired { color: var(--ok); }
+  .seat .tired[data-level="tired"] { color: var(--wait); }
+  .seat .tired[data-level="refresh"] { color: var(--err); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--idle); }
+  .dot[data-dot="work"] { background: var(--work); } .dot[data-dot="wait"] { background: var(--wait); } .dot[data-dot="err"] { background: var(--err); }
+  .lamp { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; background: var(--idle); }
+  .lamp[data-lamp="wait"] { background: var(--wait); box-shadow: 0 0 6px var(--wait); }
+  .lamp[data-lamp="stuck"] { background: var(--err); box-shadow: 0 0 6px var(--err); }
+  .why { font-weight: 700; }
+  [data-state="wait"] .why { color: var(--wait); } [data-state="stuck"] .why { color: var(--err); }
+  .seat[data-state="wait"], .pair[data-state="wait"] { border-color: var(--wait); box-shadow: inset 4px 0 0 var(--wait); background: color-mix(in srgb, var(--wait) 7%, transparent); }
+  .seat[data-state="stuck"], .pair[data-state="stuck"] { border-color: var(--err); box-shadow: inset 4px 0 0 var(--err); background: color-mix(in srgb, var(--err) 7%, transparent); }
+  .pulse-once { animation: soft-pulse 1.6s ease-out 1; }
+  @keyframes soft-pulse { 0% { outline: 0 solid color-mix(in srgb, var(--wait) 60%, transparent); } 40% { outline: 6px solid color-mix(in srgb, var(--wait) 40%, transparent); } 100% { outline: 10px solid transparent; } }
+  [data-state="stuck"].pulse-once { animation-name: soft-pulse-err; }
+  @keyframes soft-pulse-err { 0% { outline: 0 solid color-mix(in srgb, var(--err) 60%, transparent); } 40% { outline: 6px solid color-mix(in srgb, var(--err) 40%, transparent); } 100% { outline: 10px solid transparent; } }
+  @media (prefers-reduced-motion: reduce) { .pulse-once { animation: none; } }
+  .today { margin: 0 10px 8px; padding: 6px 10px; border: 1px solid var(--pane-line); border-radius: 6px; color: var(--pane-fg); }
+  .today .tl { font: 700 11px var(--sans); text-transform: uppercase; letter-spacing: .05em; color: var(--pane-dim); margin-right: 6px; }
+  .today .you-n { color: var(--wait); font-weight: 700; }
+  .up-next h3 { border-top: 0; display: flex; justify-content: space-between; align-items: baseline; }
+  .up-next ol { list-style: none; margin: 0; padding: 0 10px; display: grid; gap: 2px; }
+  .up-next li { display: grid; grid-template-columns: 1.4em 4.5em minmax(0, 1fr) 3.4em auto; gap: 6px; align-items: baseline; padding: 3px 4px; border-radius: 4px; }
+  .up-next li:hover { background: var(--pane-hover); }
+  .up-next li.you { box-shadow: inset 3px 0 0 var(--wait); background: color-mix(in srgb, var(--wait) 7%, transparent); }
+  .up-next .n, .up-next .pri, .up-next-more { color: var(--pane-dim); }
+  .up-next .pri { font-size: 11px; }
+  .up-next .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .up-next .verdict { cursor: help; }
+  .up-next .verdict.start { color: var(--work); } .up-next .verdict.first, .up-next li.you .verdict { color: var(--wait); } .up-next .verdict.no { color: var(--err); } .up-next .verdict.none { color: var(--pane-dim); }
+  .up-next .approve { font: 600 11.5px/1 var(--sans); padding: 3px 8px; }
+  .up-next-more { margin: 0; padding: 4px 12px 10px; }
+  .lnk, .needs-ref { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+  .needs-ref { font-size: 11.5px; white-space: nowrap; }
+  /* The workers row: one card for each ticket, its Dev on the left and the reviewer of its PR on the right, then the free desks. */
+  .workers { min-width: 0; border-radius: 8px; background: var(--pane); color: var(--pane-fg); font: 12.5px/1.45 var(--mono); box-shadow: inset 0 0 0 1px var(--pane-edge); }
+  .workers header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 10px; padding: 10px 12px 8px; border-bottom: 1px solid var(--pane-line); }
+  .workers h2 { margin: 0; font: 500 13px/1.3 var(--mono); color: var(--pane-strong); letter-spacing: 0.04em; }
+  .workers-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .workers .btn { font: 600 12px/1 var(--sans); padding: 5px 8px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; padding: 10px; }
+  .pair { grid-column: span 2; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; border: 1px solid var(--pane-line); border-radius: 8px; padding: 6px; background: var(--pane-tint); }
+  .pair.single { grid-column: span 1; grid-template-columns: minmax(0, 1fr); }
+  .pair-cap { grid-column: 1 / -1; color: var(--pane-dim); font-size: 11.5px; padding: 0 4px 4px; overflow-wrap: anywhere; }
+  .pair-cap a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+  .desk { position: relative; border: 1px solid transparent; border-radius: 6px; padding: 8px 10px; color: inherit; text-align: left; display: grid; gap: 3px; min-width: 0; align-content: start; }
+  .desk > :not(.hit) { pointer-events: none; }
+  .desk .desk-stop { pointer-events: auto; }
+  .desk .name { color: var(--pane-strong); font-weight: 700; }
+  .desk .kind { color: var(--pane-dim); font-weight: 400; }
+  .desk .state, .desk .next { color: var(--pane-dim); }
+  .desk .status { color: var(--pane-strong); }
+  .desk .named { font-style: normal; color: var(--pane-dim); margin-left: 6px; }
+  .desk.empty { border: 1px dashed var(--pane-line); color: var(--pane-dim); cursor: default; place-content: center; text-align: center; min-height: 82px; }
+  .pair .desk.empty { min-height: 0; }
+  .desk.free { grid-column: span 1; }
+  .pair .link { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 6px; color: var(--pane-dim); font-size: 11px; text-align: center; }
+  .pair .link .line { width: 28px; height: 0; border-top: 2px solid var(--accent); margin: 4px 0; }
+  .pair .link[data-later] .line { border-top-style: dashed; opacity: .5; }
+  .legend { margin: 0; padding: 0 12px 10px; color: var(--pane-dim); }
+  .legend .lamp { margin-left: 6px; }
+  .desk-stop { display: flex; align-items: center; gap: 8px; color: var(--ok); position: relative; z-index: 1; }
+  .desk-stop .btn { font: 600 11.5px/1 var(--sans); padding: 3px 8px; border-color: var(--ok); color: var(--ok); }
   #stop-note[data-bad="1"] { color: var(--err); }
   .feed-scroll { max-height: 320px; overflow-y: auto; }
   #activity header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
@@ -482,10 +515,13 @@
     #org-stamp { top: 12px; right: 14px; font-size: 12px; }
   }
   @media (max-width: 1100px) {
-    .bench { grid-template-columns: minmax(0, 1fr); }
-    .bench { grid-template-rows: none; min-height: 0; }
+    .bench-top { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; min-height: 0; }
     .stage, .floor, .cc { grid-column: 1; grid-row: auto; }
-    .floor { height: 460px; align-self: start; }
+    .pair { grid-column: span 1; grid-template-columns: minmax(0, 1fr); }
+    .pair .link { flex-direction: row; gap: 6px; padding: 4px 0; }
+    .pair .link .line { width: 0; height: 14px; border-top: 0; border-left: 2px solid var(--accent); margin: 0 4px; }
+    .seats { grid-template-columns: minmax(0, 1fr); }
+    .floor { align-self: start; }
     .cc { position: static; height: 520px; }
   }
   @media (max-width: 640px) {
@@ -545,6 +581,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
   </div>
 
   <div class="bench">
+    <div class="bench-top">
     <div class="stage" id="stage">
       <canvas id="world" aria-label="A loft with developers at desks."></canvas>
       <div id="tags" aria-hidden="true"></div>
@@ -553,10 +590,10 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
       <div class="fallback" id="fallback" hidden><p>This view needs WebGL and three.js. The floor board on the right still works.</p></div>
     </div>
 
-    <section class="floor" aria-labelledby="floor-title">
+    <section class="floor" id="front-office" aria-labelledby="floor-title">
       <div class="floor-in">
         <header>
-          <h2 id="floor-title">Floor</h2>
+          <h2 id="floor-title">Front office</h2>
           <div class="meta"><span id="busy">0 busy</span><span id="relay-status" hidden></span></div>
         </header>
         <div class="huddle-bar" id="huddle-bar" hidden>
@@ -569,17 +606,19 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
             </div>
             <p class="huddle-what" id="huddle-what">One short report on everyone, with what needs you first. Asking idle workers adds a one-line answer from each.</p>
           </div>
-          <div class="stop-group">
-            <button class="btn" id="stop-safe" type="button" hidden title="Stops every desk that says Safe to stop. The relay checks each one again first.">Stop all safe</button>
-            <span id="stop-note" role="status" hidden></span>
-          </div>
         </div>
+        <div id="seats" class="seats" role="group" aria-label="The Lead and the PM, always on"></div>
         <section id="needs-you" aria-labelledby="needs-you-title" hidden>
           <h3><span id="needs-you-title">Needs you</span><span id="needs-you-count" role="status">0</span></h3>
           <p id="needs-you-empty">Nothing needs you now.</p>
           <ol id="needs-you-list" aria-label="What needs you, most urgent first"></ol>
         </section>
-        <ol id="people" aria-label="People, busy first"></ol>
+        <p id="today" class="today" role="status" hidden></p>
+        <section id="up-next" class="up-next" aria-labelledby="up-next-title" hidden>
+          <h3><span id="up-next-title">Up next</span><span id="up-next-meta" class="meta"></span></h3>
+          <ol id="up-next-list" aria-label="The next Ready tickets, in the order Autopilot takes them"></ol>
+          <p id="up-next-more" class="up-next-more"></p>
+        </section>
         <section id="huddle-report" aria-labelledby="huddle-title" hidden>
           <h3><span id="huddle-title">Huddle</span><button class="btn" id="huddle-close" type="button">Close</button></h3>
           <div class="huddle-scroll" tabindex="0">
@@ -613,13 +652,29 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
           <input id="cc-cwd" type="text" spellcheck="false" value="~" data-needs-relay>
           <label for="cc-resume">Resume</label>
           <input id="cc-resume" type="text" spellcheck="false" placeholder="optional session id" data-needs-relay>
-          <button class="btn primary" id="cc-start" type="submit" data-needs-relay>Add worker</button>
           <button class="btn" id="cc-stop" type="button" hidden>Stop this session</button>
         </form>
         <span id="cc-status">Starting</span>
       </header>
       <p class="cc-note" id="cc-note" hidden></p>
       <div id="cc-term" aria-label="Claude Code terminal"></div>
+    </section>
+    </div>
+
+    <section class="workers" id="workers" aria-labelledby="workers-title">
+      <header>
+        <h2 id="workers-title">Workers</h2>
+        <div class="workers-bar">
+          <span class="meta" id="workers-meta">0 workers</span>
+          <span class="stop-group">
+            <button class="btn" id="stop-safe" type="button" hidden title="Stops every desk that says Safe to stop. The relay checks each one again first.">Stop all safe</button>
+            <span id="stop-note" role="status" hidden></span>
+          </span>
+          <button class="btn primary" id="cc-start" type="submit" form="cc-form" data-needs-relay>Add worker</button>
+        </div>
+      </header>
+      <div id="cards" class="cards" aria-label="Workers, one card for each ticket"></div>
+      <p class="legend"><span class="lamp" data-lamp="wait"></span>waits on you <span class="lamp" data-lamp="stuck"></span>stuck: a steady light, a coloured edge and the reason, never flashing</p>
     </section>
   </div>
 
@@ -887,7 +942,9 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
 <script src="chat.js"></script>
 <script src="fold.js"></script>
 <script src="officers.js"></script>
+<script src="front.js"></script>
 <script src="desks.js"></script>
+<script src="front-view.js"></script>
 <script src="update.js"></script>
 <script src="no-relay.js"></script>
 <script src="trailer.js"></script>

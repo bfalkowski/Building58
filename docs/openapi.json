@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.9.0",
+    "version": "2.10.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -937,7 +937,7 @@
           "Floor"
         ],
         "summary": "Get floor",
-        "description": "What the Lead sees of the Floor, and each session's desk: ticket, title, column, pr, ciWords, review, doing, next (text and owner) and stop (safe and reason). The Lead's row also has tired, and every other row has null there. A Dev's row has waitsOn while the PR watch is on and its task has an open PR: owner, minutes, why, late and words. Every other row has null there. See What the Lead sees and What each desk says.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "What the Lead sees of the Floor, and each session's desk: ticket, title, column, pr, ciWords, review, doing, next (text and owner) and stop (safe and reason). The Lead's row also has tired, and every other row has null there. A Dev's row has waitsOn while the PR watch is on and its task has an open PR: owner, minutes, why, late and words. Every other row has null there. Each row has seat: lead for the Lead, pm for the PM the room keeps running (the PM's seat), and null for the rest. A Dev's desk has rounds, how many times its PR was reviewed. The answer also has pm: trust (the rung, 0 to 4), trustName, sortHours and nextSortAt, the time the PM next sorts the Board, or null when it does not. See What the Lead sees and What each desk says.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getFloor",
         "x-tokens": [
           "the Lead"
@@ -5136,6 +5136,13 @@
           "why": {
             "type": "string"
           },
+          "seat": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "lead for the Lead, pm for the PM the room keeps running, or null."
+          },
           "desk": {
             "type": "object"
           }
@@ -5162,6 +5169,28 @@
             "items": {
               "$ref": "#/components/schemas/FloorRow"
             }
+          },
+          "pm": {
+            "type": "object",
+            "properties": {
+              "trust": {
+                "type": "number"
+              },
+              "trustName": {
+                "type": "string"
+              },
+              "sortHours": {
+                "type": "number"
+              },
+              "nextSortAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [],
+            "additionalProperties": true
           },
           "leadEnded": {
             "type": [

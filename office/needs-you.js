@@ -1,4 +1,4 @@
-// The Needs you panel on the Floor: how many things wait on the person, and one line for each, from the relay
+// The Needs you panel in the front office: how many things wait on the person, and one line for each, from the relay
 // (relay/needs-you.js). It reads the list every two seconds, as the huddle bar reads its state. Clicking a line
 // opens what it names: the session at its desk, the PR or the failed CI run on GitHub, or the ticket on the Board. A line about
 // another relay on the room's state folder has a Stop button, which asks the relay to stop it (relay/old-relays.js).
@@ -77,9 +77,15 @@
       });
       li.append(done);
     }
-    if (item.pr && PR.test(item.pr) && !link.url) {
+    if (item.ticket && TICKET.test(item.ticket)) {
       const a = document.createElement('a');
-      a.href = item.pr; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'PR';
+      a.href = window.OfficeLinks ? window.OfficeLinks.ticket(item.ticket) : 'board.html?channel=' + encodeURIComponent(channel) + '&ticket=' + encodeURIComponent(item.ticket);
+      a.target = '_blank'; a.rel = 'noopener'; a.className = 'needs-ref'; a.textContent = 'Ticket ' + item.ticket; a.title = 'Open ticket ' + item.ticket;
+      li.append(a);
+    }
+    if (item.pr && PR.test(item.pr)) {
+      const a = document.createElement('a');
+      a.href = item.pr; a.target = '_blank'; a.rel = 'noopener'; a.className = 'needs-ref'; a.textContent = 'PR #' + item.pr.split('/').pop(); a.title = 'Open the PR on GitHub';
       li.append(a);
     }
     return li;
@@ -90,6 +96,7 @@
     const state = JSON.stringify(s.items);
     if (state === drawn) return;
     drawn = state;
+    window.dispatchEvent(new CustomEvent('office:needs', { detail: { items: s.items } }));
     count.textContent = String(s.count);
     section.dataset.count = String(s.count);
     empty.hidden = s.count > 0;

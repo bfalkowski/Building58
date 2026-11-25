@@ -25,6 +25,16 @@ function pmBrief({ idea, mayOrder, notes, cli, skills }) {
     .replace(/\s+/g, ' ').trim();
 }
 
+function standingBrief({ mayOrder, notes, cli, skills }) {
+  return ('You are the product manager for this repo, and the room keeps you at your desk all the time. Do not change any code, commit, or open a pull request. ' +
+    'First read CLAUDE.md and docs/constitution.md, each if there is one. ' + notes +
+    'Then wait. The room types a brief to you before it starts a ticket, and now and then to sort the Board. Answer each one the way it says, with node ' + cli + '. ' +
+    'When the person gives you an idea, split it into tickets, each one pull request for one developer, and file them with node ' + cli + ' create. ' +
+    (mayOrder ? 'You may order Triage and Ready tickets. ' : 'Do not run ticket.js priority or order: the person has not let you. ') +
+    'Order work by the goal: stronger checks first, then fewer decisions for the person, then a truer room, then looks. ' +
+    skills).replace(/\s+/g, ' ').trim();
+}
+
 const forEval = () => pmBrief({ idea: 'it is in the message.', mayOrder: false, notes: '', cli: 'relay/ticket.js', skills: '' });
 
-module.exports = { pmBrief, forEval };
+module.exports = { pmBrief, standingBrief, forEval };

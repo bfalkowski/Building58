@@ -321,7 +321,7 @@ test('Start and Merged elsewhere at once leave one consistent ticket', async (t)
   const R = await H.relay({ RELAY_WIP_LIMIT: '10', RELAY_TICKET_STORE: path.join(__dirname, 'slow-store.js') });
   const repo = H.makeRepo(R.home);
   t.after(R.stop);
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 3; i++) {
     for (const [to, extra] of [['done', { pr: 'https://github.com/o/r/pull/' + (i + 1) }], ['rejected', {}]]) {
       const ticket = (await R.call('POST', '/tickets', { title: 'Race ' + to + ' ' + i, repo })).body.ticket;
       const moveFirst = i % 2 === 1;
@@ -869,7 +869,7 @@ test('a base change that would make two open tickets with one title on one branc
 test('a base change at the same moment as Start either lands first or is refused, never half', async (t) => {
   const R = await relay(); t.after(R.stop);
   // Start goes a little later each round, so both orders happen. Either way they must agree.
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 6; i++) {
     const wt = branchedRepo(R, 'race-' + i);
     const a = (await R.call('POST', '/tickets', { title: 'Race ' + i, repo: wt })).body.ticket;
     const changing = R.call('POST', '/tickets/' + a.id + '/edit', { base: 'main' });

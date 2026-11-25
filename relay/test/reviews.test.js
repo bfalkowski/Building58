@@ -96,6 +96,13 @@ test('a push saved before a restart still waits for its Dev, brought back under 
   const other = [Object.assign(dev(PR), { id: 'new-desk', sessionId: 'sess-2', state: 'working' })];
   assert.strictEqual(followUps(pending, other, {}).start.length, 1, 'another session in a turn does not hold it');
 });
+test('a restart after an empty review starts at the review limit, and a push does not', () => {
+  const at = { [PR]: MAX_AUTO_REVIEWS };
+  const again = followUps(new Map([[PR, { from: '/repo', again: true }]]), [], at);
+  assert.deepStrictEqual([again.start.length, again.full], [1, []]);
+  const push = followUps(new Map([[PR, { from: '/repo' }]]), [], at);
+  assert.deepStrictEqual([push.start.length, push.full], [0, [PR]]);
+});
 test('a PR gets at most a few automatic reviews, then it waits on the person', () => {
   const pending = new Map([[PR, { from: '/repo', dev: 't1' }]]);
   const idle = [Object.assign(dev(PR), { state: 'idle' })];

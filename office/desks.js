@@ -1,8 +1,8 @@
 // What each desk on the Floor says, from the relay (GET /floor, relay/desk.js): its ticket's column,
-// its PR with CI and review, the next step and who owns it, and Safe to stop. office/panel.js draws
-// it on each person's row, and how tired the Lead is (relay/lead-tired.js). This file asks the relay and does the stops: a desk's Stop, and Stop all
-// safe at the top of the Floor. The relay checks each desk again before it stops it.
-// When the Lead's session has ended, a line above the Floor says so, with Bring back as the Lead, which office/terminal.js does.
+// its PR with CI and review, the next step and who owns it, and Safe to stop. office/front-view.js draws
+// it on each seat and card, and how tired the Lead is (relay/lead-tired.js). This file asks the relay and does the stops: a desk's Stop, and Stop all
+// safe in the header of the workers row. The relay checks each desk again before it stops it.
+// When the Lead's session has ended, a line above the seats says so, with Bring back as the Lead, which office/terminal.js does.
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -17,8 +17,8 @@
   goneBtn.type = 'button'; goneBtn.className = 'btn primary'; goneBtn.textContent = 'Bring back as the Lead';
   goneBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('office:bring-back-lead')));
   gone.append(goneText, goneBtn);
-  const people = $('people');
-  if (people) people.before(gone);
+  const seats = $('seats');
+  if (seats) seats.before(gone);
   function drawGone(ended) {
     gone.hidden = !ended;
     goneText.textContent = ended ? ended.says : '';
@@ -38,6 +38,7 @@
       const next = {};
       for (const s of r.sessions) if (s.desk) next[s.terminal] = Object.assign({ name: s.name, lead: s.role === 'Lead', tired: s.tired || null }, s.desk);
       desks = next;
+      window.dispatchEvent(new CustomEvent('office:floor', { detail: { sessions: r.sessions, pm: r.pm || null } }));
       drawGone(r.leadEnded || null);
       publish();
     } catch (e) { return; }

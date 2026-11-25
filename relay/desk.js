@@ -105,6 +105,7 @@ function deskOf(d) {
     column: columnOfTask(task),
     pr, prNumber: numberOf(pr),
     ci, ciWords: ci ? CI_WORDS[ci] || ci : null,
+    rounds: pr && !isReviewer && d.review ? d.review.count || 0 : 0,
     review: pr ? (isReviewer ? (t.posted ? 'review posted' : 'review running') : reviewWords(d.review, d.autopilot, d.reviewing)) : null,
     doing: doingOf(t, now, lv),
     status: role === 'Dev' && task ? statusOf(d, task, pr, ci, p) : null,

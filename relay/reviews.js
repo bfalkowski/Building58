@@ -156,9 +156,10 @@ async function firstReview(channel, pr, held) {
 function gaveUp(channel, pr, rec, which, out) {
   rec.failed = out.message || 'the relay did not say why.';
   save();
-  say(channel, 'The ' + which + ' review of PR ' + number(pr) + ' could not start ' + MAX_TRIES + ' times: ' + rec.failed + ' Press Get a review on its session.', 'off');
+  const empty = which === 'empty';
+  say(channel, empty ? 'The review of PR ' + number(pr) + ' came back empty twice. Press Get a review on its session.' : 'The ' + which + ' review of PR ' + number(pr) + ' could not start ' + MAX_TRIES + ' times: ' + rec.failed + ' Press Get a review on its session.', 'off');
   delivery.save(channel, { key: 'review-limit ' + pr, to: 'lead', expiresAt: Date.now() + LEAD_KEEP,
-    text: 'The automatic review of PR ' + pr + ' could not start ' + MAX_TRIES + ' times (' + rec.failed + '), so its review waits on the person. Tell them it is theirs to review or to start a review with Get a review.' });
+    text: empty ? 'The review of PR ' + pr + ' came back empty twice, so its review waits on the person. Tell them it is theirs to review or to start a review with Get a review.' : 'The automatic review of PR ' + pr + ' could not start ' + MAX_TRIES + ' times (' + rec.failed + '), so its review waits on the person. Tell them it is theirs to review or to start a review with Get a review.' });
 }
 async function history(channel, pr, used) {
   try {
@@ -169,12 +170,13 @@ async function history(channel, pr, used) {
 }
 async function followUp(channel, pr, from) {
   const rec = recOf(channel, pr), p = rec.pending;
-  rec.pending = null; rec.count += 1;
+  rec.pending = null;
+  if (!p.again) rec.count += 1;
   save();
   const base = followBrief(pr, autopilot.since(channel, pr)) + autopilot.ask(channel);
-  const out = await startReview(channel, { from, pr, prompt: base + await history(channel, pr, base.length), unlessAt: rec.head });
+  const out = await startReview(channel, { from, pr, prompt: base + await history(channel, pr, base.length), unlessAt: p.again ? undefined : rec.head });
   if (out.ok && !out.unchanged) { startedNews(channel, out, 'a follow-up review of PR ' + number(pr)); return; }
-  rec.count = Math.max(0, rec.count - 1);
+  if (!p.again) rec.count = Math.max(0, rec.count - 1);
   if (out.ok) { save(); say(channel, 'PR ' + number(pr) + ' has no new commits since its last review, so no follow-up review started.'); return; }
   if (out.error === 'unrelated') { save(); return; }
   if (out.error === 'full') { needsDesk(channel, pr, rec, p); return; }
@@ -240,7 +242,7 @@ function queueFirst(channel, pr, from, t) {
   if (pipeline.on()) holdFirst(channel, pr, from, t); else firstReview(channel, pr, { from, dev: t ? t.id : null, at: Date.now() });
 }
 const startingIn = (channel) => [...starting].filter((k) => k.startsWith(channel + ' ')).length;
-const deskFree = (channel) => terminal.all(channel).filter((t) => !t.exited).length + startingIn(channel) < terminal.DESKS;
+const deskFree = (channel) => terminal.workersOf(channel) + startingIn(channel) < terminal.WORKER_DESKS;
 const byWait = ([, a], [, b]) => ((a.first && a.first.at) || 0) - ((b.first && b.first.at) || 0);
 function firstReviews(channel, c) {
   for (const [pr, r] of Object.entries(c.prs).sort(byWait)) {
@@ -288,7 +290,7 @@ function makeRoom(channel, now) {
     return;
   }
   if (!deadlocks.has(channel) || deadlocks.get(channel).prs[0] !== pr) say(channel, 'No desk is free for the review of PR ' + number(pr) + ', and the relay may stop no session for it. Stop one yourself.', 'off');
-  deadlocks.set(channel, { prs: queue, taken: terminal.all(channel).filter((t) => !t.exited).length });
+  deadlocks.set(channel, { prs: queue, taken: terminal.workersOf(channel) });
 }
 function deadlockOf(channel) {
   const d = deadlocks.get(channel);
@@ -521,6 +523,25 @@ function deskOf(channel, pr) {
   return r ? { count: r.count || 0, waits: !!r.waits, held: !desk && !retry && !!(r.first || (r.pending && r.why)), desk, retry, failed: !!r.failed } : null;
 }
 
+function reviewCounted(channel, pr) {
+  const rec = recOf(channel, pr);
+  if (rec && rec.empties) { delete rec.empties; save(); }
+}
+function reviewEmpty(channel, pr) {
+  const rec = recOf(channel, pr);
+  if (!rec) return false;
+  rec.empties = (rec.empties || 0) + 1;
+  if (rec.empties >= 2) { gaveUp(channel, pr, rec, 'empty', { message: 'the review came back empty.' }); return false; }
+  if (rec.first || rec.pending) { save(); say(channel, 'The review of PR ' + number(pr) + ' came back empty. A review already waits to start.', 'wait'); return true; }
+  const dev = devOf(channel, pr), from = (dev && dev.cwd) || rec.from;
+  if (!from) { gaveUp(channel, pr, rec, 'empty', { message: 'the review came back empty.' }); return false; }
+  rec.pending = { from, dev: dev ? dev.id : null, session: dev ? dev.sessionId : null, at: Date.now(), tries: 0, watch: true, again: true };
+  rec.why = null;
+  save();
+  say(channel, 'The review of PR ' + number(pr) + ' came back empty. A new review starts.', 'wait');
+  return true;
+}
+
 const failedOf = (channel, pr) => { const r = pr && recOf(channel, pr); return (r && r.failed) || null; };
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf };
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };

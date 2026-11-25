@@ -251,7 +251,7 @@ test('Get a review asks for a verdict, and its merge verdict merges, while one w
   await t.test('a Get a review with no verdict does not count', async () => {
     const r1 = await getAReview();
     await post(r1);
-    await until(async () => (await ap()).notes.some((n) => /PR #7 was posted without a verdict, so it does not count/.test(n.text)), 'the note that it does not count');
+    await until(async () => (await ap()).notes.some((n) => /PR #7 came back empty/.test(n.text)), 'the note that it does not count');
     await sleep(1000);
     assert.strictEqual(merged(), '', 'no merge without a verdict');
   });
@@ -268,7 +268,20 @@ test('Get a review asks for a verdict, and its merge verdict merges, while one w
     await post(r2);
     await until(() => merged().includes(PR + ' --merge --match-head-commit ' + head), 'the merge');
     const reviews = (await R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR);
-    assert.strictEqual(reviews.count, 0, 'Get a review is not counted toward the automatic review limit');
+    assert.strictEqual(reviews.count, 0, 'Get a review is not counted toward the automatic review limit, and nor is the new review after one with no verdict');
+  });
+
+  await t.test('a review whose comment says only a dash gives a merge verdict that does not count, and no merge follows', async () => {
+    const answers = JSON.parse(fs.readFileSync(path.join(ghDir, 'answers.json'), 'utf8'));
+    answers.api['repos/acme/widgets/issues/comments/101'] = { body: '-' };
+    fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify(answers));
+    const before = merged();
+    const r0 = await getAReview();
+    assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, await token(r0))).status, 200);
+    await post(r0);
+    await until(async () => (await ap()).notes.some((n) => /PR #7 came back empty/.test(n.text)), 'the note that the review came back empty');
+    await sleep(1000);
+    assert.strictEqual(merged(), before, 'a dash is not a merge verdict');
   });
 
   await t.test('the brief and the ask do not count toward the prompt limit, which is only for what the page sends', async () => {

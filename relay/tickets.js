@@ -16,7 +16,7 @@ const chat = require('./chat.js');
 const history = require('./ticket-history.js');
 const config = require('./config.js');
 const pmNotes = require('./pm-notes.js');
-const { pmBrief } = require('./pm-brief.js');
+const { pmBrief, standingBrief } = require('./pm-brief.js');
 const { boardOrder, lastRank, placeNear } = require('./ticket-order.js');
 const { heldBack, MARKS, proposalWords } = require('./autopilot-plan.js');
 const { likelyTwins } = require('./ticket-twins.js');
@@ -522,11 +522,7 @@ async function startTicket(channel, ticket, body, ctx, agent, by) {
   } finally { starting.delete(key); }
 }
 
-async function askPm(channel, body, ctx) {
-  const idea = clean(body.idea).replace(/\s+/g, ' ');
-  if (!idea) return [400, { ok: false, error: 'bad_idea', message: 'Tell the PM what the idea is.' }];
-  if (idea.length > MAX_BODY) return [400, { ok: false, error: 'bad_idea', message: 'Keep the idea to ' + MAX_BODY + ' characters.' }];
-  const from = terminal.expand(body.repo);
+async function pmGround(from) {
   let top, base;
   try { top = await tasks.git(from, ['rev-parse', '--show-toplevel']); } catch (e) { return [400, { ok: false, error: 'bad_repo', message: 'The PM needs a git repo: ' + from }]; }
   try { base = await tasks.branchOf(top); } catch (e) {
@@ -537,9 +533,35 @@ async function askPm(channel, body, ctx) {
   if (unusable) return [400, { ok: false, error: 'bad_base', message: unusable }];
   let repo;
   try { repo = await tasks.mainCheckout(top); } catch (e) { return [500, { ok: false, error: 'git', message: 'Git could not find the main checkout of ' + top + ': ' + e.message }]; }
+  return [null, { top, base, repo }];
+}
+
+async function askPm(channel, body, ctx) {
+  const idea = clean(body.idea).replace(/\s+/g, ' ');
+  if (!idea) return [400, { ok: false, error: 'bad_idea', message: 'Tell the PM what the idea is.' }];
+  if (idea.length > MAX_BODY) return [400, { ok: false, error: 'bad_idea', message: 'Keep the idea to ' + MAX_BODY + ' characters.' }];
+  const [bad, ground] = await pmGround(terminal.expand(body.repo));
+  if (bad) return [bad, ground];
+  const { top, base, repo } = ground;
   const [status, started] = await checkouts.forPm(channel, { top, base, title: 'PM: ' + idea.slice(0, 70), cols: body.cols, rows: body.rows }, ctx);
   if (status >= 400) return [status, started];
   delivery.promptOnce(channel, started.id, pmBrief({ idea, mayOrder: trust.may(trust.ORDER), notes: pmNotes.brief(repo), cli: CLI, skills: require('./skills.js').brief('pm') + require('./rules.js').brief() }), (problem) => { if (problem) ctx.log('The PM was not briefed: ' + problem); });
+  return [201, { ok: true, terminal: started.id }];
+}
+
+async function seatPm(channel, from, ctx) {
+  const [bad, ground] = await pmGround(from);
+  let status, started, notes = '';
+  if (bad) {
+    ctx.log('The PM reads ' + from + ' itself, with no checkout of its own: ' + ground.message);
+    const r = terminal.start(channel, { cwd: from, title: 'PM', role: 'pm' }, ctx, undefined, { standing: true });
+    [status, started] = [r.status, r.body];
+  } else {
+    [status, started] = await checkouts.forPm(channel, { top: ground.top, base: ground.base, title: 'PM', standing: true }, ctx);
+    notes = pmNotes.brief(ground.repo);
+  }
+  if (status >= 400) return [status, started];
+  delivery.promptOnce(channel, started.id, standingBrief({ mayOrder: trust.may(trust.ORDER), notes, cli: CLI, skills: require('./skills.js').brief('pm') + require('./rules.js').brief() }), (problem) => { if (problem) ctx.log('The PM was not briefed: ' + problem); });
   return [201, { ok: true, terminal: started.id }];
 }
 
@@ -711,4 +733,4 @@ async function handle(req, res, channel, rest, ctx) {
 const startingNow = (channel) => leadStarting.has(channel) || [...starting].some((k) => k.startsWith(channel + '/'));
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { seatPm, handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };

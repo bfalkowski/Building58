@@ -335,10 +335,11 @@ const PM_NOTES = {
   unreachable: (c, r) => r + ' could not be reached, so it may be behind.',
   has_local_commits: (c, r) => 'it has commits that ' + r + ' does not.'
 };
-async function forPm(channel, { top, base, title, cols, rows }, ctx) {
+async function forPm(channel, { top, base, title, cols, rows, standing }, ctx) {
   making++;
   try {
     const own = { cwd: top, title, role: 'pm', cols, rows };
+    const seat = standing ? { standing: true } : undefined;
     const repo = await mainCheckout(top), id = crypto.randomBytes(3).toString('hex');
     const c = { id, kind: 'pm', repo, from: top, path: path.join(repo, WORKTREES, 'pm-' + id), branch: null, ref: null, pr: null, base, commit: null, createdAt: new Date().toISOString() };
     try {
@@ -351,10 +352,10 @@ async function forPm(channel, { top, base, title, cols, rows }, ctx) {
       await linkModules(repo, c.path);
     } catch (e) {
       ctx.log('The PM reads ' + top + ' itself, with no checkout of its own: ' + unsecret(e.message));
-      const r = terminal.start(channel, own, ctx);
+      const r = terminal.start(channel, own, ctx, undefined, seat);
       return [r.status, r.body];
     }
-    const r = terminal.start(channel, Object.assign(own, { cwd: c.path, from: top }), ctx, (t) => settle(channel, c, t.spoke, ctx.log));
+    const r = terminal.start(channel, Object.assign(own, { cwd: c.path, from: top }), ctx, (t) => settle(channel, c, t.spoke, ctx.log), seat);
     if (r.status >= 400) {
       await remove(c).catch((e) => ctx.log('Could not clean up ' + c.path + ': ' + e.message));
       return [r.status, r.body];

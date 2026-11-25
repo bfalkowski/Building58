@@ -19,15 +19,34 @@ script, a coding agent's hooks) to whichever world is open.
 | --- | --- | --- |
 | Room | [`office/`](office/README.md) | A loft in New York. Each developer is one of your Claude Code sessions. They work at their desk, raise a hand when the session needs you, and get coffee when it is done. Click someone to open their session. |
 
-## Run them
+## Run a room
 
-You need:
+A room runs in Docker. You need:
+
+- Docker with Compose, running, and `curl`.
+- A Claude sign-in: a Claude subscription token (`claude setup-token`) or an Anthropic API key. Every worker, the Lead, each reviewer and the PM is a Claude Code session on it.
+- A GitHub account, and the repos the room works on. The room acts as a GitHub App of its own, which the setup makes for you.
+
+Then, in a clone of this repo:
+
+```
+./setup.sh
+```
+
+It asks only for what it cannot make itself (the Claude sign-in and the repos), makes the room's GitHub App, starts the room, and opens its page. It is safe to run again. See [In a container](docs/manual/running.html#container) and the [quickstart](https://docs.building58.ai/quickstart).
+
+### On a server
+
+The room can run on a server with no screen, so it keeps working while your laptop sleeps. Run `./setup.sh` on the server. It prints each link in place of opening it, and the `ssh -L` command to run on your laptop, first for the GitHub App step and at the end for the room's page. The page then reaches the room through that tunnel, and counts as the room's own computer. See [On a server with no screen](docs/manual/running.html#container-server). To reach a room from anywhere without SSH, see [Remote mode](docs/manual/relay.html#remote).
+
+### Without Docker
+
+To work on Building58 itself, run the relay straight from this clone. You need:
 
 - Node 18 or later. No packages to install.
 - `git`.
 - `python3`. It runs each session's terminal, with Python's pty module, so the room runs on macOS or Linux.
 - [Claude Code](https://docs.claude.com/en/docs/claude-code), as `claude` on your `PATH`, and logged in.
-  Every worker, the Lead, each reviewer and the PM is a Claude Code session on your own plan.
 - The GitHub CLI, `gh`, logged in with `gh auth login`. Workers open pull requests, and the relay
   reads them with `gh` for reviews, CI, Autopilot and the chat board. Without it the room opens, but
   no review starts.
@@ -35,8 +54,6 @@ You need:
 - Internet access: the page loads three.js and the terminal from CDNs.
 
 The demo (`npm run office:demo`) needs only Node, a browser and internet access.
-
-To run a room in a container instead, run `./setup.sh`. See [In a container](docs/manual/running.html#container).
 
 Each world runs on a relay of its own, with its own port and key, so one world's restart or key
 does not touch another:
