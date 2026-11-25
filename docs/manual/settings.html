@@ -50,6 +50,7 @@
     <tbody>
       <tr><td><span class="ui">Let the Lead stop sessions</span></td><td class="plain">off</td><td><code>RELAY_LEAD_STOPS</code></td><td>The Lead can stop a session that is done or idle, with ticket.js stop.</td></tr>
       <tr><td><span class="ui">Let the Lead set priority</span></td><td class="plain">off</td><td>none</td><td>The Lead can set the priority and the place in the work order of tickets in Triage or Ready, with ticket.js priority and ticket.js order.</td></tr>
+      <tr><td><span class="ui">Let the manager lower the trust level</span></td><td class="plain">off</td><td>none</td><td>While it is on and the manager's watch finds a stall that work cannot get past, the relay lowers the trust level by one, at most twice in 24 hours. It never raises it. See <a href="roles.html#manager-brake">The manager's brake</a>.</td></tr>
       <tr><td><span class="ui">Let the Lead unstick the board</span></td><td class="plain">off</td><td>none</td><td>On each pass the Lead works through stuck work before anything else, and reports to you only what it cannot do.</td></tr>
       <tr><td><span class="ui">Let the Lead start reviews</span></td><td class="plain">off</td><td>none</td><td>The Lead can ask the relay for a review of a task's PR, with ticket.js review, as you would with Get a review.</td></tr>
       <tr><td><span class="ui">PM trust</span></td><td class="plain">1 rung</td><td><code>RELAY_PM_TRUST</code></td><td>How much the PM may do about the ticket Autopilot is about to start.</td></tr>

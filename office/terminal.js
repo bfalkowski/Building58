@@ -228,7 +228,8 @@
     return input;
   });
   const monitor = document.createElement('p'); monitor.className = 'set-what'; monitor.textContent = 'Rung 5 is not built yet. It is a monitor that watches what shipped and files tickets.';
-  $('set-levels').append(levelsBox, monitor, levelsApply, levelsNote);
+  const brakeNote = document.createElement('p'); brakeNote.className = 'set-what'; brakeNote.id = 'set-brake-note';
+  $('set-levels').append(levelsBox, monitor, levelsApply, levelsNote, brakeNote);
   function switchesNow() {
     if (!trust.reviews || !trust.autopilot || !trust.settings) return null;
     return { auto: trust.reviews.auto, again: trust.reviews.again, board: !!(boardTerm && boardTerm.board), stops: !!settingOf('leadStops'), merge: !!(boardTerm && boardTerm.merge), starts: !!(boardTerm && boardTerm.starts), autopilot: !!trust.autopilot.on, exhibit: !!settingOf('autopilotExhibit') };
@@ -326,7 +327,11 @@
     }
     drawLevels();
   }
-  const syncSettings = () => api('', undefined, '/settings').then(drawSettings);
+  const syncSettings = () => Promise.all([api('', undefined, '/settings').then(drawSettings), api('', undefined, '/manager').then((m) => {
+    const last = m && m.ok && Array.isArray(m.lowered) ? m.lowered[m.lowered.length - 1] : null;
+    brakeNote.textContent = last ? 'The manager lowered the trust level on ' + new Date(last.at).toLocaleString() + ': ' + last.said : '';
+    brakeNote.hidden = !last;
+  })]);
 
   levelsApply.addEventListener('click', async () => {
     const L = LEVELS[trust.pick !== null ? trust.pick : -1], now = switchesNow();

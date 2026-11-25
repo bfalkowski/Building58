@@ -802,4 +802,13 @@ function endedRuns(channel) {
 
 const runsKept = (channel) => (store[channel] && store[channel].runs) || {};
 
-module.exports = { runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };
+function turnOff(channel, by) {
+  const c = chOf(channel);
+  if (!c.on) return false;
+  c.on = false; c.only = null; c.idle = null;
+  terminal.rebriefLead(channel);
+  note(channel, 'Turned off by ' + by + '.');
+  return true;
+}
+
+module.exports = { turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };

@@ -4,9 +4,10 @@
 //
 // What it reads: each task (relay/tasks.js), its Dev's session and the reviewers' sessions (relay/terminal.js,
 // relay/liveness.js), each open task PR's checks from the shared lookup (relay/gh.js), Autopilot's finished runs
-// (relay/autopilot.js) and the tickets in Ready (relay/tickets.js). It changes no switch, status, session or PR.
-// Its only writes are its own file, RELAY_MANAGER_WATCH_FILE, and one ticket in Triage for each new problem, labelled
-// manager, filed with relay/tickets.js.
+// (relay/autopilot.js) and the tickets in Ready (relay/tickets.js). It changes no status, session or PR. Its only
+// writes are its own file, RELAY_MANAGER_WATCH_FILE, one ticket in Triage for each new problem, labelled manager, filed
+// with relay/tickets.js, and, only while Let the manager lower the trust level is on and a stall that work cannot get
+// past lasts, one step down the trust level (relay/trust-brake.js).
 //
 // Each problem is one note, kept with a sequence number. The room page reads them (GET /manager), puts each new one
 // in Activity, and walks the manager to the desk it is about. A problem that lasts is one note and one ticket: the
@@ -28,6 +29,7 @@ const { oneLine, keepLines } = require('./clean.js');
 const { livenessOf } = require('./liveness.js');
 const { claim } = require('./lockfile.js');
 const plan = require('./manager-watch-plan.js');
+const brake = require('./trust-brake.js');
 
 const FILE = state.file('manager-watch.json', 'RELAY_MANAGER_WATCH_FILE');
 const NOTES_KEPT = 30;
@@ -56,7 +58,7 @@ function save() {
 }
 const chOf = (channel) => {
   const c = store[channel] || (store[channel] = {});
-  return Object.assign(c, { open: c.open || {}, notes: c.notes || [], seq: c.seq || 0, checks: c.checks || {}, skipSince: c.skipSince || {} });
+  return Object.assign(c, { open: c.open || {}, notes: c.notes || [], seq: c.seq || 0, checks: c.checks || {}, skipSince: c.skipSince || {}, lowered: c.lowered || [] });
 };
 let ctx = null;
 const log = (text) => { if (ctx) ctx.log('Manager: ' + text); };
@@ -167,6 +169,16 @@ async function look(channel, now) {
       c.notes = c.notes.slice(-NOTES_KEPT);
       log(f.reason);
     }
+    if (!rec.braked && brake.STALLS.has(f.kind) && config.get('managerLowersTrust')) {
+      rec.braked = true;
+      const out = brake.lower(channel, f, c.lowered, now);
+      if (out && out.limit) log('Not lowering the trust level for ' + f.key + ': it was lowered ' + brake.PER_DAY + ' times in the last day already. The rest is yours.');
+      else if (out) {
+        c.notes.push({ seq: ++c.seq, at: new Date(now).toISOString(), key: f.key, kind: 'brake', ticket: f.ticket, task: f.task, terminal: f.terminal, reason: out.entry.said, say: out.entry.say, filed: null });
+        c.notes = c.notes.slice(-NOTES_KEPT);
+        log(out.entry.said);
+      }
+    }
   }
   looked.set(channel, { at: now, count: ((looked.get(channel) || {}).count || 0) + 1 });
   save();
@@ -184,7 +196,7 @@ function viewOf(channel) {
   const l = looked.get(channel);
   return { ok: true, on: ON(), every: config.get('managerWatchSeconds'), looks: l ? l.count : 0, lastLook: l ? new Date(l.at).toISOString() : null, limits: { buildingMinutes: config.get('managerBuildingMinutes'), checkFails: config.get('managerCheckFails'), briefMinutes: config.get('managerBriefMinutes'), slotMinutes: config.get('managerSlotMinutes'), handoffs: config.get('managerHandoffs'), skipMinutes: config.get('managerSkipMinutes') },
     checks: Object.entries(c.checks).flatMap(([pr, mine]) => Object.entries(mine).map(([name, heads]) => ({ pr, name, commits: heads.length }))),
-    open: Object.entries(c.open).map(([key, r]) => ({ key, since: new Date(r.at).toISOString(), ticket: r.ticket })), notes: c.notes.map((n) => Object.assign({ filed: null }, n)) };
+    lowersTrust: !!config.get('managerLowersTrust'), lowered: c.lowered.map((x) => Object.assign({}, x)), open: Object.entries(c.open).map(([key, r]) => ({ key, since: new Date(r.at).toISOString(), ticket: r.ticket })), notes: c.notes.map((n) => Object.assign({ filed: null }, n)) };
 }
 
 async function handle(req, res, channel, rest, rctx) {
