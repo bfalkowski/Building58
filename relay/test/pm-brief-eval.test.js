@@ -54,7 +54,7 @@ function fakeEdd(passes) {
       const run = /\/versions\/([^/]+)\/suite-runs$/.exec(route);
       const suiteOf = (vid) => {
         const pass = passes[versions[vid].label];
-        const tests = scenarios.map((s, i) => ({ scenario_id: s, eval_result: { passed: pass[i], score: pass[i] ? 8 : 5 } }));
+        const tests = scenarios.map((s, i) => ({ scenario_id: s, eval_result: { passed: pass[i] === true || pass[i] >= 8, score: typeof pass[i] === 'number' ? pass[i] : pass[i] ? 8 : 5, ...(passes.rules && !(pass[i] === true || pass[i] >= 8) ? { [passes.key || 'check_results']: passes.rules } : {}) } }));
         return { passed: tests.filter((t) => t.eval_result.passed).length, total: tests.length, tests };
       };
       if (run) return send(suiteOf(run[1]));
@@ -106,9 +106,9 @@ test('a changed brief that fails a test the old one passed is worse: exit 1, the
   assert.strictEqual(edd.calls.filter((c) => c === 'POST /scenarios').length, 3, 'the kit\'s three tests');
   assert.strictEqual(edd.calls.filter((c) => c === 'POST /eval-contracts').length, 4, 'a contract on each test, so the suite counts it');
   const out = s.lines.join('\n');
-  assert.match(out, /C: failed, score 5, regressed/);
-  assert.match(out, /B: passed, score 8, fixed/);
-  assert.match(out, /The eval got worse: 1 test\(s\)/);
+  assert.match(out, /C: failed, score 5 \(was 8\), regressed/);
+  assert.match(out, /B: passed, score 8 \(was 5\), fixed/);
+  assert.match(out, /The eval got worse: C passed before and fails now/);
 });
 
 test('a changed brief that loses no test is kept, with what the eval found', async (t) => {
@@ -146,4 +146,59 @@ test('a missing kit file or an edd-platform that is down stops the eval and writ
   edd.stop();
   await assert.rejects(evaluate({ kit: s.kit, api: edd.api, project: 'project_default', stamp: s.file }, s.log), /Could not reach .*Start edd-platform/);
   assert.strictEqual(s.read(), before);
+});
+
+test('a score drop in one scenario, with no pass turning to fail, is worse: exit 1, the judged text stays', async (t) => {
+  const s = setup(t, { brief: 'the old brief' });
+  const before = s.read();
+  const edd = await fakeEdd({ judged: [4, 5, 5], changed: [5, 5, 3] });
+  t.after(edd.stop);
+  assert.strictEqual(await evaluate({ kit: s.kit, api: edd.api, project: 'project_default', stamp: s.file }, s.log), 1);
+  assert.strictEqual(s.read(), before);
+  const out = s.lines.join('\n');
+  assert.match(out, /C score dropped from 5 to 3/);
+  assert.doesNotMatch(out, /total score/);
+  assert.doesNotMatch(out, /A score dropped/);
+});
+
+test('a rise in one scenario does not hide a drop in another', async (t) => {
+  const s = setup(t, { brief: 'the old brief' });
+  const edd = await fakeEdd({ judged: [4, 5, 5], changed: [6, 5, 4] });
+  t.after(edd.stop);
+  assert.strictEqual(await evaluate({ kit: s.kit, api: edd.api, project: 'project_default', stamp: s.file }, s.log), 1);
+  assert.match(s.lines.join('\n'), /C score dropped from 5 to 4/);
+});
+
+test('a score that rises with no pass changing is kept, and the total is written', async (t) => {
+  const s = setup(t, { brief: 'the old brief' });
+  const edd = await fakeEdd({ judged: [4, 4, 5], changed: [5, 4, 6] });
+  t.after(edd.stop);
+  assert.strictEqual(await evaluate({ kit: s.kit, api: edd.api, project: 'project_default', stamp: s.file }, s.log), 0);
+  assert.strictEqual(JSON.parse(s.read()).judged.score, 15);
+});
+
+test('the output names the failing rules in each scenario', async (t) => {
+  const s = setup(t, { brief: 'the old brief' });
+  const rules = [{ id: 'R3', passed: false, reason: 'Acceptance criteria name no seam.' }, { id: 'R1', passed: true, reason: 'fine' }];
+  const edd = await fakeEdd({ judged: [4, 4, 4], changed: [5, 5, 5], rules });
+  t.after(edd.stop);
+  await evaluate({ kit: s.kit, api: edd.api, project: 'project_default', stamp: s.file }, s.log);
+  const out = s.lines.join('\n');
+  for (const k of ['A', 'B', 'C']) assert.match(out, new RegExp(k + ': failed, score 5 \\(was 4\\)[^\\n]*\\n {2}failed R3: Acceptance criteria name no seam\\.'));
+  assert.doesNotMatch(out, /failed R1/);
+});
+
+test('failing rules are read from the checks key too, and an answer with neither key prints none', async (t) => {
+  const rules = [{ id: 'R2', passed: false, reason: 'No blocked by line.' }];
+  const a = setup(t, { brief: 'the old brief' });
+  const edd = await fakeEdd({ judged: [4, 4, 4], changed: [5, 5, 5], rules, key: 'checks' });
+  t.after(edd.stop);
+  await evaluate({ kit: a.kit, api: edd.api, project: 'project_default', stamp: a.file }, a.log);
+  assert.match(a.lines.join('\n'), /A: failed, score 5 \(was 4\)[^\n]*\n {2}failed R2: No blocked by line\./);
+  const b = setup(t, { brief: 'the old brief' });
+  const bare = await fakeEdd({ judged: [4, 4, 4], changed: [5, 5, 5] });
+  t.after(bare.stop);
+  await evaluate({ kit: b.kit, api: bare.api, project: 'project_default', stamp: b.file }, b.log);
+  assert.doesNotMatch(b.lines.join('\n'), /\n {2}failed /);
+  assert.deepStrictEqual(JSON.parse(b.read()).judged.tests.map((x) => x.failing), [[], [], []]);
 });
