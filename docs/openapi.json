@@ -2706,7 +2706,7 @@
           "Settings"
         ],
         "summary": "Get settings",
-        "description": "The settings on the page (see Limits and timings). Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "The settings on the page (see The Settings window, by tab), each with the tab it sits on. Only the person.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getSettings",
         "x-tokens": [],
         "responses": {
