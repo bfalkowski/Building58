@@ -713,7 +713,8 @@ function logRefusals() {
       let got;
       try { got = pushHold.refusalsOf(task); } catch (e) { continue; }
       if (got.list.length <= got.seen) continue;
-      for (const r of got.list.slice(got.seen).filter((x) => !x.allowed)) jams.record(channel, { kind: 'push-refused', ticket: task.ticket || undefined, pr: task.pr, since: r.at, fix: 'Push refused: ' + r.why, by: 'the relay' });
+      const logged = got.list.slice(got.seen).filter((x) => !x.allowed).every((r) => jams.record(channel, { kind: 'push-refused', ticket: task.ticket || undefined, pr: task.pr, since: r.at, fix: oneLine('Push refused: ' + r.why, 200), by: 'the relay' }));
+      if (!logged) continue;
       try { pushHold.markSeen(task, got.list.length); } catch (e) { if (ctx) ctx.log('Could not note the refused pushes of ' + task.worktree + ': ' + e.message); }
     }
   }

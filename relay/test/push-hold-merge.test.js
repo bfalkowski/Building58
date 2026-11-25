@@ -71,22 +71,26 @@ test('under a push hold, a merge of main with a fix on a file it changed is push
   sh(wt, 'update-ref', 'refs/remotes/origin/' + trunk, 'FETCH_HEAD');
   sh(wt, 'merge', '-q', '--no-ff', '-m', 'Merge main', 'FETCH_HEAD');
   await say(dev, 'UserPromptSubmit');
+  const longNames = ['x', 'y', 'z'].map((c) => c.repeat(80) + '.txt');
+  for (const f of longNames) fs.writeFileSync(path.join(wt, f), 'new\n');
+  sh(wt, 'add', '-A');
   const unrelated = edit(wt, 'a.txt');
 
   await t.test('a commit on a file the merge did not change is refused, and Needs you offers Fix it', async () => {
     const refused = push();
     assert.strictEqual(refused.ok, false, refused.out);
-    assert.match(refused.out, new RegExp('Refused: commit ' + unrelated.slice(0, 7) + ' changes a\\.txt, which the merge did not change\\.'));
+    assert.match(refused.out, new RegExp('Refused: commit ' + unrelated.slice(0, 7) + ' changes .*, which the merge did not change\\.'));
     const item = await until(async () => (await R.call('GET', '/needs-you')).body.items.find((i) => i.kind === 'push-refused'), 'the Needs you line');
     assert.deepStrictEqual(item.link, { url: PR, fix: x.id });
-    assert.match(item.line, /^Look at PR #7 \(\S+\): the push hold refused its Dev's push\. commit \w{7} changes a\.txt/);
+    assert.match(item.line, /^Look at PR #7 \(\S+\): the push hold refused its Dev's push\. commit \w{7} changes /);
   });
 
   await t.test('the jam log has the refused push, once', async () => {
     const jam = await until(async () => (await R.call('GET', '/jams?range=1d')).body.jams.find((j) => j.kind === 'push-refused'), 'the jam');
     assert.deepStrictEqual([jam.pr, jam.by], [PR, 'the relay']);
-    assert.match(jam.fix, /^Push refused: commit \w{7} changes a\.txt/);
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    assert.match(jam.fix, /^Push refused: commit \w{7} changes /);
+    assert.ok(jam.fix.length <= 200, 'a long reason is cut to what the jam log keeps');
+    await until(() => pushHold.refusalsOf(x).seen === 1, 'the relay to note the refusal as logged');
     assert.strictEqual((await R.call('GET', '/jams?range=1d')).body.jams.filter((j) => j.kind === 'push-refused').length, 1, 'later looks do not log it again');
   });
 
