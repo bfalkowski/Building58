@@ -47,7 +47,7 @@
   }
   // While old output replays, xterm answers the questions in it, such as the cursor position. Those answers must not reach the session.
   term.onData((d) => {
-    if (!current || !current.running || replaying) return;
+    if (!current || !current.running || current.round || replaying) return;
     buf += d;
     if (!timer) timer = setTimeout(flushKeys, 8);
   });

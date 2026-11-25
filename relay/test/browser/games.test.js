@@ -85,6 +85,11 @@ pageTest('a round starts from the panel, shows its seats, takes the trust answer
   await seatRow(page, 'S1', '').getByRole('button', { name: 'Show its screen' }).click();
   await page.locator('#cc-term .xterm-rows', { hasText: 'BRIEF-MARK-S1' }).waitFor();
   await page.locator('#cc-status', { hasText: 'read-only' }).waitFor();
+  // Typing in a read-only seat sends nothing to it; the check is at the end, after the round's many requests.
+  const inputs = [];
+  page.on('request', (r) => { if (/\/input$/.test(new URL(r.url()).pathname)) inputs.push(r.url()); });
+  await page.click('#cc-term');
+  await page.keyboard.type('typed into a seat');
   // Each seat works, as its transcript shows, and is idle again: the panel says to press Finish.
   for (const s of round.seats) {
     const x = terms.find((y) => y.id === s.terminal);
@@ -126,6 +131,7 @@ pageTest('a round starts from the panel, shows its seats, takes the trust answer
   await page.locator('#game-step-rows li', { hasText: 'STEP-BRIEF-S1' }).waitFor();
   await shot(page, 'after');
   assert.strictEqual((await o.R.call('GET', '/rounds/current')).body.round, null);
+  assert.deepStrictEqual(inputs, [], 'nothing was typed into a read-only seat');
   assert.deepStrictEqual(p.errors, []);
 });
 

@@ -95,6 +95,16 @@ test('a hook sent while the relay is down is applied when it is back', async (t)
     await sleep(300);
     assert.strictEqual(await stateOf(R, s.id), 'working');
   });
+
+  await t.test('a malformed escape in a queued channel skips that entry, and the later ones still apply', async () => {
+    await R.kill();
+    const dir = path.join(home, '.office-world'), at = Date.now(), auth = queue.hash(token);
+    queue.append(dir, { to: 'http://127.0.0.1:' + port + '/channels/%E0%A4%A/commands', auth, event: { hook_event_name: 'UserPromptSubmit', session_id: sid, at } });
+    queue.append(dir, { to: 'http://127.0.0.1:' + port + '/channels/t/commands', auth, event: { hook_event_name: 'Stop', session_id: sid, at: at + 1 } });
+    R = await relay(env, home, { port });
+    await until(async () => !fs.existsSync(queueFile(home)), 'the queue to be read');
+    await until(async () => (await stateOf(R, s.id)) === 'idle', 'the entry after the malformed one');
+  });
 });
 
 test('the hook queues in the folder RELAY_STATE_DIR names, so two rooms keep apart', () => {
