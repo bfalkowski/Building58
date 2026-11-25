@@ -638,7 +638,7 @@ async function edit(channel, ticket, body, agent) {
     const kindNow = want.kind !== undefined ? want.kind : now.kind;
     if (kindNow === JAM) {
       if (want.priority !== undefined && want.priority !== 'high') return [409, { ok: false, error: 'jam_priority', message: 'A jam ticket stays high priority: stuck work holds other PRs. Close it, or leave its priority.' }];
-      if (want.priority === undefined && (now.priority || 'normal') !== 'high') want.priority = 'high';
+      if (want.priority === undefined && want.kind === JAM && now.kind !== JAM && (now.priority || 'normal') !== 'high') want.priority = 'high';
     }
     const had = (k) => (k === 'priority' ? (now.priority || 'normal') : k === 'labels' || k === 'shapes' ? (Array.isArray(now[k]) ? now[k] : []).join(',') : k === 'mark' || k === 'replacedBy' || k === 'kind' ? (now[k] || null) : (now[k] || ''));
     const what = Object.keys(want).filter((k) => had(k) !== (Array.isArray(want[k]) ? want[k].join(',') : want[k]));
@@ -651,7 +651,9 @@ async function edit(channel, ticket, body, agent) {
     const changes = {};
     for (const k of what) changes[k] = want[k];
     if (what.includes('mark') || what.includes('replacedBy')) Object.assign(changes, { mark: want.mark, replacedBy: want.replacedBy });
-    if (what.includes('priority')) Object.assign(changes, { rank: lastRank(all.filter((t) => t.id !== now.id), want.priority, Date.now()) }, setBy(agent, 'priority'));
+    const others = all.filter((t) => t.id !== now.id);
+    if (what.includes('priority')) Object.assign(changes, { rank: want.kind === JAM ? firstRank(others, want.priority, Date.now()) : lastRank(others, want.priority, Date.now()) }, setBy(agent, 'priority'));
+    else if (what.includes('kind') && want.kind === JAM && (now.priority || 'normal') === 'high') changes.rank = firstRank(others, 'high', Date.now());
     const approvalTaken = !!agent && now.status === 'ready' && personApproved(now) && (what.includes('title') || what.includes('body'));
     if (approvalTaken) changes.approvedBy = 'none';
     const edited = await store.update(channel, now.id, changes);

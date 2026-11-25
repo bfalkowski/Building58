@@ -26,6 +26,12 @@ test('a jam ticket is high priority and first in High, and no one lowers it', as
   const made = await R.call('POST', '/tickets/' + plain.id + '/edit', { kind: 'jam' });
   assert.strictEqual(made.status, 200, JSON.stringify(made.body));
   assert.deepStrictEqual([made.body.ticket.kind, made.body.ticket.priority], ['jam', 'high'], 'the kind raises it');
+  const high2 = (await file({ title: 'Already high', priority: 'high' })).body.ticket;
+  const again = (await file({ title: 'High and made a jam', priority: 'high' })).body.ticket;
+  assert.strictEqual((await R.call('POST', '/tickets/' + again.id + '/edit', { kind: 'jam' })).status, 200);
+  const order2 = (await R.call('GET', '/tickets')).body.tickets.map((x) => x.id);
+  assert.ok(order2.indexOf(again.id) < order2.indexOf(high2.id) && order2.indexOf(again.id) < order2.indexOf(high.id), 'a high ticket made a jam goes first in High');
+  assert.ok(order2.indexOf(plain.id) < order2.indexOf(high2.id), 'a low ticket made a jam goes first in High too');
 });
 
 test('a session files a jam ticket at high priority too, and the PM check puts it ahead', async (t) => {
