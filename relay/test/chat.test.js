@@ -78,6 +78,11 @@ test('the chat board', async (t) => {
     assert.strictEqual((await call('POST', '/chat/' + ticket.id, { text: 'x'.repeat(501) })).status, 400);
     assert.strictEqual((await call('POST', '/chat/nope', { text: 'hi' })).status, 404);
   });
+  await t.test('a post comes back without zero-width characters or bidi controls', async () => {
+    const r = await call('POST', '/chat/' + ticket.id, { text: 'safe\u202Etxt\u200Bok\u2066x\ufeff' });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(r.body.post.text, 'safetxtokx');
+  });
   await t.test('only a page on this computer gets an answer', async () => {
     assert.strictEqual((await call('GET', '/chat', null, { Authorization: 'Bearer test-key', Origin: 'https://example.com' })).status, 403);
     assert.strictEqual((await call('POST', '/chat/office', { text: 'hi' }, { Authorization: 'Bearer test-key', 'Sec-Fetch-Site': 'cross-site' })).status, 403);

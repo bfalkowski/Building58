@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { oneLine, keepLines } = require('../clean.js');
+const { oneLine, keepLines, noHidden } = require('../clean.js');
 const { plainName } = require('../seats.js');
 
 const messy = 'a\tb\r\n\nc\x00d\x07e\x1bf\x7fg\x85h\x9fi   j';
@@ -34,4 +34,10 @@ test('a seat name still loses hidden marks and control characters, and keeps 40 
   assert.strictEqual(plainName('Ada​ \x00 ‮Love'), 'Ada Love');
   assert.strictEqual(plainName('😀'.repeat(41)), '😀'.repeat(40));
   assert.strictEqual(plainName(null), '');
+});
+
+test('noHidden takes out zero-width characters and bidi controls, and nothing else', () => {
+  assert.strictEqual(noHidden('a\u202Eb\u200Bc\u2066d\u2069e\u061cf\ufeffg'), 'abcdefg');
+  assert.strictEqual(noHidden(null), '');
+  assert.strictEqual(noHidden('plain text'), 'plain text');
 });
