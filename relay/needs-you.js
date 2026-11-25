@@ -81,6 +81,7 @@ function stateOf(channel, now, lastReport) {
     owner: task.owner && terminal.find(channel, task.owner.terminal) ? task.owner.terminal : null,
     note: noteOf(task), reviewRuns: !!task.pr && reviewing(task.pr), pipelineWaits: !!(tasks.pipelineOf(task) || {}).waits,
     ...handedOf(channel, task),
+    reviewOwed: !!task.pr && !!(reviews.deskOf(channel, task.pr) || {}).followUp,
     reviewFailed: task.pr ? reviews.failedOf(channel, task.pr) : null,
     onlyYouMerge: task.pr ? onlyYouMerge(channel, task.pr, report) : null,
   }));

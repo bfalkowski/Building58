@@ -117,6 +117,7 @@ async function lookAt(channel, task, now) {
   }
   const from = (dev && dev.cwd) || task.worktree || task.repo;
   if (from && reviews.owesFirst(channel, task.pr)) log('PR ' + number(task.pr) + ' had no review of ' + head.slice(0, 7) + ': ' + reviews.owe(channel, task.pr, { from, dev, head }) + '.');
+  if (from && autopilot.movesIt(channel, task) && reviews.owesFollowUp(channel, task.pr, head)) log('PR ' + number(task.pr) + ' had no review of ' + head.slice(0, 7) + ': ' + reviews.owe(channel, task.pr, { from, dev, head }) + '.');
   const lead = terminal.leadOf(channel);
   const move = plan.nextMove({
     pr, task: { state: task.state, autopilot: autopilot.movesIt(channel, task) },
