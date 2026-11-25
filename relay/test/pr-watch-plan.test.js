@@ -57,6 +57,15 @@ test('commits the PR does not have, with the Dev idle: it tells the Dev to push,
   assert.deepStrictEqual(pick(nextMove(base({ unpushed: 1, dev: null }))), ['you', 'push', null]);
 });
 
+test('a red PR that changes the PM brief and not its eval file waits on you to run the eval', () => {
+  const red = (files) => pick(nextMove(base({ pr: pr({ statusCheckRollup: RED }), files })));
+  assert.deepStrictEqual(red(['relay/pm-brief.js']), ['you', 'eval', null]);
+  assert.match(nextMove(base({ pr: pr({ statusCheckRollup: RED }), files: ['relay/pm-brief.js'] })).why, /Run the PM-brief eval/);
+  assert.deepStrictEqual(red(['relay/pm-brief.js', 'relay/pm-brief-eval.json']), ['Dev', 'red', 'tell-dev'], 'with the eval file in it, a red check is the Dev\'s');
+  assert.deepStrictEqual(red(['a.txt']), ['Dev', 'red', 'tell-dev']);
+  assert.deepStrictEqual(red(null), ['Dev', 'red', 'tell-dev']);
+});
+
 test('reviewed at the head, green and clean: it tells the Lead', () => {
   assert.deepStrictEqual(pick(nextMove(base())), ['Lead', 'ready', 'tell-lead']);
   assert.deepStrictEqual(pick(nextMove(base({ leadMerges: false }))), ['you', 'ready', 'tell-lead'], 'with no Lead that may merge, it waits on you, and a Lead is still told');

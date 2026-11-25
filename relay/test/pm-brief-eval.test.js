@@ -14,8 +14,8 @@ const { evaluate, STAMP } = require('../pm-brief-eval.js');
 
 test('the PM brief is the one the eval last judged', () => {
   const stamp = JSON.parse(fs.readFileSync(STAMP, 'utf8'));
-  assert.ok(stamp.brief === forEval(), 'The PM brief changed since the eval last judged it. Run node relay/pm-brief-eval.js --kit DIR against edd-platform, '
-    + 'and commit relay/pm-brief-eval.json if the eval did not get worse (docs/manual/roles.html#pm-brief-eval).');
+  assert.ok(stamp.brief === forEval(), 'The PM brief changed since the eval last judged it. Run npm run pm-brief-eval -- --branch NAME --push on the computer with the model key, '
+    + 'or node relay/pm-brief-eval.js --kit DIR against edd-platform, and commit relay/pm-brief-eval.json if the eval did not get worse (docs/manual/roles.html#pm-brief-eval).');
 });
 
 test('the judged brief holds nothing from this computer', () => {
