@@ -59,6 +59,13 @@ test('Exhibit is pinned by a full commit, fetched and checked in both jobs, neve
   assert.ok(workflow.includes(pin[1]), 'the comment names the release of that commit');
 });
 
+test('the publish job runs after a failed check job but never after a failed plan', () => {
+  const cond = code.match(/^ {4}if: \$\{\{ (!cancelled\(\)[^\n]*) \}\}$/m);
+  assert.ok(cond && job('publish').includes(cond[0]), 'the publish job has the !cancelled() condition');
+  assert.match(cond[1], /needs\.plan\.result == 'success'/, 'a failed plan has an empty count, so its result must be named');
+  assert.match(cond[1], /needs\.plan\.outputs\.count != '0'/);
+});
+
 test('the publish job runs no code from a PR, and checks each exhibit against the plan before it stores it', () => {
   const publish = job('publish');
   assert.doesNotMatch(publish, /refs\/pull|pr\/\$/);

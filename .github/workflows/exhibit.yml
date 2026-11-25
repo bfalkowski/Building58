@@ -161,7 +161,10 @@ jobs:
   publish:
     name: Exhibit publish
     needs: [plan, check]
-    if: ${{ !cancelled() && needs.plan.outputs.count != '0' }}
+    # !cancelled() runs this job after a failed check job, so a bad PR does not stop the others from being
+    # stored. It also drops the implicit success() of the plan job, so the plan's result is named: a failed
+    # plan has an empty count, and without this the job would run on an empty list and end green.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.count != '0' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
