@@ -748,8 +748,8 @@ for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..'
     // The person adds one by giving it, and then a session can use it too.
     const chore = await R.call('POST', '/tickets', { title: 'Tidy the logs', repo: R.repo, kind: 'chore' });
     assert.strictEqual(chore.status, 201, JSON.stringify(chore.body));
-    assert.deepStrictEqual((await R.call('GET', '/tickets')).body.kinds, ['docs', 'tests', 'bug', 'feature', 'chore']);
-    assert.match(cli('kinds'), /^docs\ntests\nbug\nfeature\nchore\n$/);
+    assert.deepStrictEqual((await R.call('GET', '/tickets')).body.kinds, ['docs', 'tests', 'bug', 'feature', 'jam', 'chore']);
+    assert.match(cli('kinds'), /^docs\ntests\nbug\nfeature\njam\nchore\n$/);
     assert.match(cli('create', 'Another chore', '--kind', 'chore', '--body', 'Tidy'), /Filed:/);
 
     // Only the person changes it: a session's token cannot.

@@ -17,7 +17,7 @@ const history = require('./ticket-history.js');
 const config = require('./config.js');
 const pmNotes = require('./pm-notes.js');
 const { pmBrief, standingBrief } = require('./pm-brief.js');
-const { boardOrder, lastRank, placeNear } = require('./ticket-order.js');
+const { boardOrder, firstRank, lastRank, placeNear } = require('./ticket-order.js');
 const { heldBack, MARKS, proposalWords } = require('./autopilot-plan.js');
 const { likelyTwins } = require('./ticket-twins.js');
 const { writeLine } = require('./needs-you-plan.js');
@@ -28,7 +28,8 @@ const { ANSWERS } = require('./pm-check-brief.js');
 
 const STATUSES = ['triage', 'ready', 'started', 'done', 'rejected'];
 const PRIORITIES = ['high', 'normal', 'low'];
-const KINDS = ['docs', 'tests', 'bug', 'feature'];
+const KINDS = ['docs', 'tests', 'bug', 'feature', 'jam'];
+const JAM = 'jam';
 const KIND = /^[a-z][a-z0-9-]{0,23}$/;
 const kindsOf = (all) => [...new Set(KINDS.concat(all.map((t) => t.kind).filter((k) => typeof k === 'string' && k)))];
 function kindFrom(value, all, agent) {
@@ -173,7 +174,8 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   if (agent && all.filter((t) => t.status === 'triage').length >= MAX_TRIAGE) {
     return [429, { ok: false, error: 'triage_full', message: 'Triage already has ' + MAX_TRIAGE + ' tickets waiting for a person. Stop filing and carry on.' }];
   }
-  const rank = lastRank(all, priority, Date.now());
+  if (kind === JAM) priority = 'high';
+  const rank = kind === JAM ? firstRank(all, priority, Date.now()) : lastRank(all, priority, Date.now());
   const ticket = await store.create(channel, Object.assign({ title, body: text, priority, rank, repo, base, blockedBy }, shapes.length ? { shapes } : {}, kind ? { kind } : {}, labels.length ? { labels } : {}, { status: agent ? 'triage' : 'ready', createdBy: agent ? agentName(agent) : 'you' }, agent ? {} : { approvedBy: 'you' }));
   history.add(channel, ticket, { stage: 'filed', by: ticket.createdBy }, agent || null);
   chat.openTicketRoom(channel, chatOf(ticket));
@@ -633,6 +635,11 @@ async function edit(channel, ticket, body, agent) {
     if (body.labels !== undefined) { const r = labelsFrom(body.labels, all, null); if (r.error) return r.error; want.labels = r.labels; }
     if (body.shapes !== undefined) { const r = shapesFrom(body.shapes, all, now.id); if (r.error) return r.error; want.shapes = r.shapes; }
     if (want.replacedBy && (want.replacedBy === now.id || !all.some((t) => t.id === want.replacedBy))) return [400, { ok: false, error: 'bad_mark', message: want.replacedBy === now.id ? 'A ticket cannot replace itself.' : 'No such ticket: ' + want.replacedBy + '.' }];
+    const kindNow = want.kind !== undefined ? want.kind : now.kind;
+    if (kindNow === JAM) {
+      if (want.priority !== undefined && want.priority !== 'high') return [409, { ok: false, error: 'jam_priority', message: 'A jam ticket stays high priority: stuck work holds other PRs. Close it, or leave its priority.' }];
+      if (want.priority === undefined && (now.priority || 'normal') !== 'high') want.priority = 'high';
+    }
     const had = (k) => (k === 'priority' ? (now.priority || 'normal') : k === 'labels' || k === 'shapes' ? (Array.isArray(now[k]) ? now[k] : []).join(',') : k === 'mark' || k === 'replacedBy' || k === 'kind' ? (now[k] || null) : (now[k] || ''));
     const what = Object.keys(want).filter((k) => had(k) !== (Array.isArray(want[k]) ? want[k].join(',') : want[k]));
     if (!what.length) return [200, { ok: true, unchanged: true, edited: [], ticket: await view(channel, now, all) }];

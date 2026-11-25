@@ -7,6 +7,8 @@
 //   (a design ticket: while it is open, Autopilot and the Lead start none of the tickets it shapes, which must be in Triage)
 //   node relay/ticket.js create "Title" --kind docs --body - <<'EOF'
 //   (kind is docs, tests, bug, feature, or one the person added; ticket.js kinds lists them. Leave it out if unsure)
+//   (kind jam is for stuck work: a jam, a stall, a flaky test, a red main, anything that holds other PRs. The relay files it at
+//   high priority, first in High, whoever files it, and refuses a lower priority for it)
 //   --label flaky,follow-up adds labels that tickets have already; ticket.js labels lists them
 // A body with line breaks, quotes, backticks or $( ) is safe only outside the shell's double quotes, so
 // pass it on stdin with a quoted heredoc, which the shell leaves as written, or from a file (T-49):
