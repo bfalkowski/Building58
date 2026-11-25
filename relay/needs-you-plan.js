@@ -29,6 +29,7 @@
 // A main is one base branch whose latest CI run failed (relay/main-ci.js): { name, branch, run: { workflow, sha, url, conclusion } }.
 // A write is one ticket whose last write to the GitHub ticket store failed (relay/ticket-stores/github.js):
 // { id, what, message, inMs }, where message is what GitHub said and inMs is the time to the next try.
+// leadStuck is the items the Lead named on three passes in a row without acting: { item, why, passes }.
 //
 // One rule for each kind. A session gives at most one item, and so does a task. A task whose Dev already has an
 // item gives none, since answering the Dev is the one move. The kinds, most urgent first:
@@ -44,6 +45,8 @@
 //   merged       a task's PR merged on GitHub, whoever merged it, and its task is not Done: the line has a Done button
 //   closed       a task's PR was closed on GitHub without a merge: the line has no Done button
 //   merge        an open PR that only the person may merge
+//   lead-stuck   an item the Lead named on three passes in a row and did not act on, with the Lead's reason
+//                (relay/lead-stuck.js), while Let the Lead unstick the board is on
 //   push-refused an open PR whose Dev's push the push hold refused after a merge verdict, with the reason and
 //                a Fix it button that lifts the hold, unless the hand-over for a Dev's bug claim has that button
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
@@ -63,7 +66,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -175,6 +178,10 @@ function listOf(input) {
     if (!m || !m.run) continue;
     const url = oneLine(m.run.url, 300);
     items.push({ kind: 'main', who: 'CI', terminal: null, task: null, ticket: null, pr: null, line: 'Look at the failed CI run on ' + redMain(m), link: url ? { url } : {} });
+  }
+  for (const x of (input && input.leadStuck) || []) {
+    if (!x || !x.item) continue;
+    items.push({ kind: 'lead-stuck', who: 'Lead', terminal: null, task: null, ticket: null, pr: /^https:/.test(x.item) ? x.item : null, line: 'The Lead cannot unstick ' + oneLine(x.item, 120) + ': ' + oneLine(x.why, 300).replace(/([^.!?])$/, '$1.') + ' It named it on ' + (Number(x.passes) || 3) + ' passes in a row and did not act.', link: /^https:/.test(x.item) ? { url: x.item } : {} });
   }
   const claude = claudeItem(input && input.claude);
   if (claude) items.push(claude);

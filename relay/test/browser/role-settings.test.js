@@ -17,7 +17,8 @@ pageTest('a role\'s model saves from Settings, and its skills say which are miss
   const page = p.page;
   await page.click('#cc-settings');
   await page.locator('#settings[open]').waitFor();
-  const model = page.locator('#set-limits input[aria-label="The PM: model"]');
+  await page.click('#set-tab-roles');
+  const model = page.locator('#set-cfg-roles input[aria-label="The PM: model"]');
   assert.strictEqual(await model.inputValue(), '', 'every model starts empty');
   assert.strictEqual(await model.getAttribute('list'), 'set-models', 'it suggests opus, sonnet and haiku');
   await model.fill('sonnet');
@@ -26,9 +27,9 @@ pageTest('a role\'s model saves from Settings, and its skills say which are miss
   const pm = (await o.R.call('GET', '/settings')).body.settings.find((s) => s.name === 'pmModel');
   assert.deepStrictEqual([pm.value, pm.from], ['sonnet', 'page']);
   // The test's Claude Code folder has no plugins, so every skill on the Dev's list is not found.
-  const skills = page.locator('#set-limits input[aria-label="Devs: skills"]');
+  const skills = page.locator('#set-cfg-roles input[aria-label="Devs: skills"]');
   assert.match(await skills.inputValue(), /^mattpocock-skills:tdd, /);
-  const row = page.locator('#set-limits .set-row', { has: page.locator('input[aria-label="Devs: skills"]') });
+  const row = page.locator('#set-cfg-roles .set-row', { has: page.locator('input[aria-label="Devs: skills"]') });
   assert.match(await row.locator('.set-from').innerText(), /missing: mattpocock-skills:tdd, .*pstack:blast-radius/);
   assert.deepStrictEqual(p.errors, []);
 });

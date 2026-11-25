@@ -9,11 +9,17 @@ const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 const { relay, makeRepo, removeDir, until, sleep } = require('./helpers.js');
-const { stateOf, gate } = require('../pipeline.js');
+const { stateOf, gate, failedOf } = require('../pipeline.js');
 
 const PASSED = { __typename: 'CheckRun', name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' };
 const FAILED = { __typename: 'CheckRun', name: 'pipeline', status: 'COMPLETED', conclusion: 'FAILURE' };
 const RUNNING = { __typename: 'CheckRun', name: 'pipeline', status: 'IN_PROGRESS', conclusion: '' };
+
+test('the aggregate pipeline check is not a failure of its own', () => {
+  const lint = { name: 'lint and npm test', status: 'COMPLETED', conclusion: 'FAILURE' };
+  assert.deepStrictEqual(failedOf([FAILED, lint]).map((c) => c.name), ['lint and npm test']);
+  assert.deepStrictEqual(failedOf([FAILED]), []);
+});
 
 test('what the checks on a commit say', () => {
   assert.strictEqual(stateOf([PASSED, { status: 'COMPLETED', conclusion: 'SKIPPED' }]), 'green');
@@ -32,6 +38,8 @@ test('when a waiting review may start', () => {
   assert.deepStrictEqual(gate(null, { heldAt: at, now: at + 5000, grace }).go, false, 'nothing heard yet');
   assert.strictEqual(gate(p('green'), { heldAt: at, now: at, grace }).go, true);
   assert.deepStrictEqual(gate(p('red'), { heldAt: at, now: at + 5000, grace }), { go: false, red: true, why: 'A check failed.' });
+  assert.deepStrictEqual(gate(p('none', { conflict: true }), { heldAt: at, now: at + 999999, grace }), { go: false, conflict: true, why: 'It conflicts with main.' }, 'a PR that conflicts is never reviewed, though GitHub runs no checks on it');
+  assert.strictEqual(gate(p('green', { conflict: true }), { heldAt: at, now: at, grace }).go, false);
   assert.strictEqual(gate(p('pending'), { heldAt: at, now: at + 999999, grace }).go, false, 'running checks are waited on for as long as they run');
   assert.strictEqual(gate(p('none'), { heldAt: at, now: at + 500, grace }).go, false, 'GitHub may not have started them yet');
   assert.match(gate(p('none'), { heldAt: at, now: at + 1000, grace }).why, /no checks/, 'then it has none, and the review starts');
@@ -119,6 +127,26 @@ test('automatic reviews wait for a green pipeline', async (t) => {
     await noReviewer(pr, 'the fix is still being checked');
     answer(pr, fixed, [PASSED]);
     assert.strictEqual(await commitOf(await reviewer(pr)), fixed, 'the review reads the commit that passed');
+    await stop((await reviewersOf(pr))[0]);
+    await stop(d);
+  });
+
+  await t.test('conflict: no review, the Dev gets the steps, then the files after a push that did not clear it', async () => {
+    const d = await dev(), pr = PR(6), dirty = (head, checks) => { prs[pr] = { state: 'OPEN', headRefOid: head, mergeStateStatus: 'DIRTY', mergeable: 'CONFLICTING', statusCheckRollup: checks }; fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs })); };
+    dirty(commit(pr), []);
+    await opens(d, pr);
+    await noReviewer(pr, 'it conflicts with main');
+    await until(async () => (await R.screen(d.id)).includes('git fetch origin'), 'the Dev to be told the steps');
+    assert.match(await news(), /PR #6 conflicts with main, so no review started\. Its Dev was told\./);
+    const other = commit(pr);
+    dirty(other, []);
+    await pushes(d); await say(d, 'Stop');
+    await noReviewer(pr, 'it still conflicts');
+    await until(async () => /PR #6 still conflicts with main, so no review started/.test(await news()), 'the second message');
+    await until(async () => (await R.screen(d.id)).includes('still conflicts with main at ' + other.slice(0, 7)), 'the Dev to be told again');
+    assert.strictEqual((await news()).match(/PR #6 still conflicts/g).length, 1, 'told once for that commit');
+    answer(pr, commit(pr), [PASSED]);
+    await reviewer(pr);
     await stop((await reviewersOf(pr))[0]);
     await stop(d);
   });

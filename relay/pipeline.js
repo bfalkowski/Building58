@@ -10,6 +10,7 @@
 //   none     the PR has no checks at all. Right after a push GitHub may not have started them yet,
 //            so this is waited on for pipelineNoChecksSeconds, and then it means no pipeline
 //   unknown  gh did not answer, or sent something unreadable
+// It keeps the name and address of each failed check too (failed), for the shared failure channels (relay/failures.js).
 // It also keeps whether the PR is still open (open: false once it merged or closed), since a review
 // that waits for a PR that is gone never starts.
 'use strict';
@@ -29,10 +30,22 @@ function stateOf(rollup) {
   return 'green';
 }
 
+const BAD = ['FAILURE', 'ERROR', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
+const AGGREGATE = 'pipeline';
+function failedOf(rollup) {
+  const out = [];
+  for (const c of Array.isArray(rollup) ? rollup : []) {
+    const result = String(c.conclusion || c.state || '').toUpperCase(), name = String(c.name || c.context || '').slice(0, 80);
+    if (name && name !== AGGREGATE && BAD.includes(result)) out.push({ name, url: String(c.detailsUrl || c.targetUrl || '').slice(0, 300) });
+  }
+  return out;
+}
+
 function gate(p, { heldAt, lastHead, now, grace }) {
   const waited = (since) => now - Math.max(since || 0, heldAt || 0) >= grace;
   if (!p) return { go: false, why: 'Asking GitHub about its checks.' };
   if (p.open === false) return { go: false, gone: true, why: 'It was ' + (p.prState === 'MERGED' ? 'merged' : 'closed') + ' before its review started.' };
+  if (p.conflict) return { go: false, conflict: true, why: 'It conflicts with main.' };
   if (p.state === 'unknown') return waited(p.since) ? { go: true, why: 'gh could not read its checks (' + p.error + '), so the review starts without them.' } : { go: false, why: 'gh could not read its checks: ' + p.error };
   if (lastHead && p.head === lastHead && !waited(0)) return { go: false, why: 'Waiting for GitHub to see the push.' };
   if (p.state === 'green') return { go: true };
@@ -52,7 +65,7 @@ async function view(pr, cwd, fresh) {
   try {
     const p = await gh.pr(pr, cwd, { fresh });
     const prState = String(p.state || 'OPEN').toUpperCase();
-    return { state: stateOf(p.statusCheckRollup), head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' };
+    return { state: stateOf(p.statusCheckRollup), failed: failedOf(p.statusCheckRollup), conflict: p.mergeStateStatus === 'DIRTY' || p.mergeable === 'CONFLICTING', head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' };
   } catch (e) {
     return { state: 'unknown', error: e instanceof SyntaxError ? 'gh sent something unreadable' : e.message.slice(0, 160) };
   }
@@ -90,4 +103,4 @@ function begin() {
   config.every('pipelinePollSeconds', poll, 1000);
 }
 
-module.exports = { stateOf, gate, watch, of, soon, summary, on, begin, poll };
+module.exports = { stateOf, failedOf, gate, watch, of, soon, summary, on, begin, poll };

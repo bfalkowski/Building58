@@ -1,0 +1,139 @@
+# A first policy for Building58 (Exhibit's docs/spec.md section 8.1). Copy it to evidence.yml at
+# the top of Building58. A change to this file always needs a person (spec 9.8).
+# The kinds code and docs are the starter policy. The kinds relay-tests, test-helpers and needs-you
+# come from Building58's own escaped defects, which the person labeled in phase A of the field test
+# (docs/field/phase-a-labels.md). Each one has a rule only because at least two labeled defects
+# call for it, and its match is the files where those defects' lines came from. source names them.
+version: 3
+
+settings:
+  # All of relay/test/*.test.js as JUnit, six files at a time, as relay/test/run.js runs them.
+  # run.js writes no JUnit, so this does what it does with node --test: each file gets a new empty
+  # HOME of its own, so no test reads a room's files under ~/.office-world or another file's, and
+  # writes its own JUnit file. Then the files are joined into one. --ignore-scripts skips
+  # "prepare", which only sets git hooks. The browser tests in relay/test/browser/ are not in it.
+  #
+  # Each file also has a time limit, 600 seconds as in run.js. TEST_FILE_SECONDS sets another one,
+  # read as run.js reads it, so a value that is not a number, or 0, gives 600. A file can leave a
+  # timer, a relay or a child process running after its last test, and then it never ends.
+  # RUN_FILE is a short node script that runs one file. Past the limit, it stops the file and every
+  # process still under it, and writes a JUnit file with one failing test case that names the
+  # file, so the joined file still names it. The other files go on. A process whose parent ended
+  # is no longer under the file, so it runs on until Exhibit stops the whole command. macOS has no
+  # timeout command, so the script is in node, which every run already has.
+  test_command: |-
+    npm ci --ignore-scripts --no-audit --no-fund &&
+    mkdir -p .exhibit/junit &&
+    export RUN_FILE='
+    const { spawn, execFileSync } = require("node:child_process");
+    const { writeFileSync } = require("node:fs");
+    const { resolve } = require("node:path");
+    const file = process.argv[1];
+    const limit = Math.max(1, Number(process.env.TEST_FILE_SECONDS) || 600);
+    const out = `.exhibit/junit/${file.split("/").pop()}.xml`;
+    const child = spawn(process.execPath, ["--test", "--test-timeout=120000", "--test-reporter=junit", `--test-reporter-destination=${out}`, file], { stdio: "ignore" });
+    const timer = setTimeout(() => {
+      const rows = execFileSync("ps", ["-A", "-o", "pid=", "-o", "ppid="], { encoding: "utf8" }).trim().split("\n").map((row) => row.trim().split(/\s+/).map(Number));
+      const tree = [child.pid];
+      for (let i = 0; i < tree.length; i++) for (const [pid, ppid] of rows) if (ppid === tree[i]) tree.push(pid);
+      for (const pid of tree) try { process.kill(pid, "SIGKILL"); } catch { /* already gone */ }
+      const name = `${file} ran past its time limit of ${limit} seconds`;
+      const xml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+      writeFileSync(out, `<?xml version="1.0" encoding="utf-8"?>\n<testsuites>\n<testcase name="${xml(name)}" classname="test" file="${xml(resolve(file))}"><failure message="${xml(name)}"/></testcase>\n</testsuites>\n`);
+      console.error(`${name}, so it was stopped and counts as failed`);
+      process.exit(1);
+    }, limit * 1000);
+    child.on("exit", (code) => { clearTimeout(timer); process.exit(code ?? 1); });
+    ' &&
+    { ls relay/test/*.test.js | xargs -P 6 -n 1 sh -c 'HOME="$(mktemp -d)" node -e "$RUN_FILE" "$1"' sh; code=$?;
+    { echo '<?xml version="1.0" encoding="utf-8"?>'; echo '<testsuites>'; sed -e '/^<?xml/d' -e '/^<\/*testsuites>$/d' .exhibit/junit/*.xml; echo '</testsuites>'; } > .exhibit/junit.xml;
+    exit $code; }
+  test_results: .exhibit/junit.xml
+  # Titles start with a ticket key, such as "T-401: ...", so title_after_key skips it (spec 9.1).
+  fix_signals: [label:bug, title_after_key:fix, branch:fix/]
+  # The load probe of relay-tests runs the changed test files three times at once, so it gets 20
+  # minutes, not the default 10.
+  probe_timeout_seconds: 1200
+
+kinds:
+  # The code that runs: the relay, the office page, and what they share, with the packages, the
+  # git hooks and CI.
+  code:
+    match: ["relay/**", "office/**", "shared/**", "index.html", "package.json", "package-lock.json", ".githooks/**", ".github/**", "eslint.config.js", "eslint-local.js", "eslint-suppressions.json"]
+    risk: medium
+    needs:
+      - tests-before-after
+      - failing-before: { when: [fix] }
+
+  # The manual and the other Markdown files. The probe is the manual's checks that CI runs for a
+  # docs-only change: links, anchors and no em dashes.
+  docs:
+    match: ["docs/**", "**/*.md"]
+    risk: low
+    needs:
+      - probe: { name: manual, run: "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js" }
+
+  # Flaky tests: 5 labeled defects (category "flaky test"). A sixth, D-066, review saw and left
+  # for later, so it is a deferral and not in source. Each was a test that raced a timer or a
+  # kept-alive connection, and passed alone but failed on a busy machine. The probe runs each test
+  # file the PR added or changed three times at once, with no shared test slots, so the machine is
+  # busy. It runs nothing when no such file changed. origin/main must be in the clone, as it is
+  # with the workflow's fetch-depth 0. set -e makes any step that fails, such as git merge-base
+  # or npm ci, fail the probe, so it never passes without running the tests.
+  # The match is the whole folder, wider than the files the defects' PRs changed, because a
+  # flaky test can come in any new test file.
+  relay-tests:
+    match: ["relay/test/*.test.js"]
+    risk: medium
+    needs:
+      - probe:
+          name: load
+          run: >-
+            set -e;
+            base="$(git merge-base HEAD origin/main)";
+            files="$(git diff --name-only --diff-filter=AM "$base" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)";
+            if [ -z "$files" ]; then echo "No relay test file was added or changed."; exit 0; fi;
+            npm ci --ignore-scripts --no-audit --no-fund > /dev/null;
+            pids="";
+            for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > "load-$i.log" 2>&1 & pids="$pids $!"; done;
+            code=0; for p in $pids; do wait "$p" || code=1; done;
+            tail -n 20 load-1.log load-2.log load-3.log; exit $code
+    source: [D-144, D-139, D-136, D-131, D-088]
+
+  # Room settings that leak into test relays: 2 labeled defects (category "Test environment
+  # leak"). In both, relay/test/helpers.js gave each test relay the shell's settings, so a test
+  # passed on CI and failed in an office session. The probe runs the tests that start relays with
+  # a room's settings set. relay/test/run.js takes them away, so the probe uses node --test.
+  test-helpers:
+    match: ["relay/test/helpers.js"]
+    risk: medium
+    needs:
+      - probe:
+          name: room-settings
+          run: >-
+            npm ci --ignore-scripts --no-audit --no-fund > /dev/null &&
+            HOME="$(mktemp -d)" RELAY_ROLLBACK=1 RELAY_WORLD=office OFFICE_HOOK_URL=http://127.0.0.1:9/hook
+            OFFICE_TICKET_TOKEN=probe OFFICE_ROOM_PROBE=1 CLAUDE_CODE_ROOM_PROBE=1
+            node --test --test-timeout=120000 relay/test/room-env.test.js relay/test/rollback.test.js
+            relay/test/restart.test.js relay/test/review-link.test.js
+    source: [D-135, D-092]
+
+  # Needs you: 2 labeled defects (category "Stale state"), both from PR 48, which made the Needs
+  # you list. Each showed an old hand-over after the state had moved on. A test that fails before
+  # the change would have shown each case. The requirement has no when, so it applies to every
+  # PR here: PRs here have no labels, and the pinned release v0.1.0 cannot see a feature, so
+  # when: [fix, feature] would not have applied to PR 48. A refactor here will be asked for a
+  # failing test too. The setup note says how to narrow it once a newer release is pinned.
+  needs-you:
+    match: ["relay/needs-you-plan.js", "relay/needs-you.js", "office/needs-you.js"]
+    risk: medium
+    needs:
+      - tests-before-after
+      - failing-before
+    source: [D-120, D-053]
+
+# Any other file.
+default:
+  risk: medium
+  needs:
+    - tests-before-after

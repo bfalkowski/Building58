@@ -20,12 +20,19 @@ const WAIT_REASONS = { merge: 'Merge', rounds: 'Review rounds', protected: 'Prot
 const JAM_KINDS = {
   'no-first-review': 'No first review', 'desks-full': 'Desks full', 'news-untold': 'Review news untold', 'handed-over': 'Handed over',
   'waits-on-state': 'Waits on state', 'person-merge': 'Waits on a person merge', 'merged-not-done': 'Merged, not done', 'no-new-commit': 'No new commit',
-  'main-red': 'Main red', 'signing-key': 'Signing key', 'workflows-push': 'Workflows push', 'dev-idle': 'Dev idle', 'tunnel-down': 'Tunnel down', 'push-refused': 'Push refused', other: 'Other'
+  'main-red': 'Main red', 'signing-key': 'Signing key', 'workflows-push': 'Workflows push', 'dev-idle': 'Dev idle', 'tunnel-down': 'Tunnel down', 'push-refused': 'Push refused',
+  'stuck-job': 'Job never ends', 'stale-cache': 'Stale GitHub read', 'out-of-rounds': 'Out of review rounds', 'permission-prompt': 'Permission prompt',
+  'news-behind-menu': 'News behind a menu', 'dev-asks': 'Dev asks instead of acting', 'not-needed': 'Ticket not needed', 'handover-starts-new': 'Hand-over starts new work',
+  'flake-blocks': 'Flaky test blocks', 'push-hold-red-ci': 'Push hold on red CI', 'update-waits': 'Update waits',
+  other: 'Other'
 };
 const STALLS = Object.assign({}, JAM_KINDS, { 'dev-stopped': 'Dev stopped with no PR', silent: 'Session silent', 'not-started': 'Not started on its brief', 'brief-lost': 'Brief not delivered' });
 const BLOCKED_KIND = { 'reviewer-not-started': 'no-first-review', 'dev-gone': 'dev-stopped', 'brief-not-delivered': 'brief-lost', 'conflict-dropped': 'other' };
 
 const AUTOPILOT = 'autopilot';
+const LEAD = 'Lead';
+const ROOM = 'room';
+const SLOWEST = 3;
 const idOf = (x) => (typeof x === 'string' && /^[\w.:/#-]{1,200}$/.test(x) ? x : null);
 const ms = (iso) => Date.parse(iso);
 const iso = (at) => new Date(at).toISOString();
@@ -202,13 +209,34 @@ function stallsOf(input, from, now) {
   for (const s of out) { const r = row(s.kind).detected; r.count++; r.millis += s.millis; }
   for (const j of input.jams || []) {
     const at = ms(j.at);
-    if (at < from || !Object.hasOwn(JAM_KINDS, j.kind) || j.by === AUTOPILOT) continue;
-    const r = row(j.kind).hand;
+    if (at < from || !Object.hasOwn(JAM_KINDS, j.kind) || j.by === AUTOPILOT || j.by === LEAD) continue;
+    const r = row(j.kind)[j.by === ROOM ? 'detected' : 'hand'];
     r.count++; r.millis += j.since ? Math.max(0, at - ms(j.since)) : 0;
   }
   const side = (x) => ({ count: x.count, hours: hours(x.millis) });
   return Object.values(kinds).map((k) => ({ kind: k.kind, label: k.label, detected: side(k.detected), hand: side(k.hand), count: k.detected.count, hours: hours(k.detected.millis) }))
     .sort((a, b) => (b.detected.hours + b.hand.hours) - (a.detected.hours + a.hand.hours) || (b.detected.count + b.hand.count) - (a.detected.count + a.hand.count) || (a.kind < b.kind ? -1 : 1));
+}
+
+function leadOf(jams, from) {
+  const mine = (jams || []).filter((j) => ms(j.at) >= from && Object.hasOwn(JAM_KINDS, j.kind) && j.by === LEAD);
+  const part = (outcome) => mine.filter((j) => (j.outcome || 'fixed') === outcome);
+  const byKind = (list) => {
+    const counts = {};
+    for (const j of list) counts[j.kind] = (counts[j.kind] || 0) + 1;
+    return Object.entries(counts).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([kind, count]) => ({ kind, label: JAM_KINDS[kind], count }));
+  };
+  const fixed = part('fixed'), passed = part('passed'), seen = part('seen');
+  const acts = fixed.filter((j) => j.since).map((j) => ({ ticket: idOf(j.ticket), pr: idOf(j.pr), kind: j.kind, minutes: round1(Math.max(0, ms(j.at) - ms(j.since)) / 60000) }));
+  const channels = (jams || []).filter((j) => ms(j.at) >= from && Object.hasOwn(JAM_KINDS, j.kind) && j.by === ROOM);
+  return {
+    available: mine.length > 0 || channels.length > 0,
+    timeToAct: { count: acts.length, medianMinutes: median(acts.map((x) => x.minutes)), slowest: acts.slice().sort((a, b) => b.minutes - a.minutes).slice(0, SLOWEST) },
+    fixed: { total: fixed.length, kinds: byKind(fixed) },
+    passed: { total: passed.length, kinds: byKind(passed) },
+    neverActed: { total: seen.length, kinds: byKind(seen) },
+    failures: { channels: channels.length, prsBlocked: channels.reduce((a, j) => a + (Number(j.blocked) || 0), 0), medianHours: median(channels.filter((j) => j.since).map((j) => hours(ms(j.at) - ms(j.since)))) }
+  };
 }
 
 function outcomesOf(runs, from) {
@@ -253,7 +281,7 @@ function build(input) {
     numbers: {
       merged: items.length, medianMinutes: median(items.map((x) => x.minutes)), waitingOnYouHours: hours(waits.reduce((a, w) => a + w.millis, 0)),
       stalledHours: round1(stalls.reduce((a, s) => a + s.hours, 0)),
-      jamsFixedByHand: (input.jams || []).filter((j) => ms(j.at) >= from && Object.hasOwn(JAM_KINDS, j.kind) && j.by !== AUTOPILOT).length,
+      jamsFixedByHand: (input.jams || []).filter((j) => ms(j.at) >= from && Object.hasOwn(JAM_KINDS, j.kind) && j.by !== AUTOPILOT && j.by !== LEAD && j.by !== ROOM).length,
       noHelpShare: withRun.length ? round1((withRun.filter((x) => runsOf.outcomeOf(x.run) === 'success').length / withRun.length) * 100) : null
     },
     merged: { days: mergedDays },
@@ -265,6 +293,7 @@ function build(input) {
     rounds: { prs: [{ rounds: '1', count: rounds[1] }, { rounds: '2', count: rounds[2] }, { rounds: '3 or more', count: rounds[3] }] },
     desks: { points: bucketed(desks, from, size.bucket, ['working', 'idle', 'waiting', 'stuck', 'free']) },
     load: { points: bucketed((input.room || []).map((r) => [r[0], r[1], r[2] / 1048576, r[3] / 1048576]), from, size.bucket, ['cpu', 'memoryMb', 'limitMb']) },
+    lead: leadOf(input.jams, from),
     pm: { available: pmDays.some((d) => d.checked || d.held || d.closed || d.merged || d.moved), days: pmDays }
   };
 }
@@ -285,8 +314,14 @@ function csv(data) {
   for (const r of data.rounds.prs) add('review_rounds', '', r.rounds, 'prs', r.count);
   for (const p of data.desks.points) for (const s of ['working', 'idle', 'waiting', 'stuck', 'free']) add('desks', p.at, '', s, p[s]);
   for (const p of data.load.points) { add('room_load', p.at, '', 'cpu_percent_of_one_core', p.cpu); add('room_load', p.at, '', 'memory_mb', p.memoryMb); }
+  const lead = data.lead;
+  add('lead', '', '', 'minutes_to_act_median', lead.timeToAct.medianMinutes);
+  for (const x of lead.timeToAct.slowest) add('lead_slowest', '', (x.pr || x.ticket || '') + ' ' + x.kind, 'minutes', x.minutes);
+  for (const o of ['fixed', 'passed', 'neverActed']) for (const k of lead[o].kinds) add('lead_' + o, '', k.kind, 'jams', k.count);
+  add('lead', '', '', 'failure_channels', lead.failures.channels);
+  add('lead', '', '', 'failure_prs_blocked', lead.failures.prsBlocked);
   for (const d of data.pm.days) for (const s of ['checked', 'held', 'closed', 'merged', 'moved', 'hoursSaved']) add('pm', d.day, '', s, d[s]);
   return rows.map((r) => r.map(cell).join(',')).join('\n') + '\n';
 }
 
-module.exports = { JAM_KINDS, build, csv, take, prune, noteReview, shape, blank, rangeOf, KEEP_DAYS, EVERY_MS, RANGES, PARTS, STALLS, WAIT_REASONS, WAIT_MINUTES };
+module.exports = { JAM_KINDS, leadOf, build, csv, take, prune, noteReview, shape, blank, rangeOf, KEEP_DAYS, EVERY_MS, RANGES, PARTS, STALLS, WAIT_REASONS, WAIT_MINUTES };
