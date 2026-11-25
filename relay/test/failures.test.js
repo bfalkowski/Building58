@@ -144,4 +144,14 @@ test('a failure on two PRs: one channel, both Devs told, the fix tells the other
     await sleep(3000);
     assert.ok(!(await chats()).some((r) => r.name === 'failure-pipeline'), 'no channel named for the aggregate');
   });
+
+  await t.test('a channel whose blocked PR passes with no merge is archived with its own reason in the jam', async () => {
+    const opened = await R.call('POST', '/failures', { check: 'lint', prs: [url(1), url(3)] });
+    assert.strictEqual(opened.status, 201, JSON.stringify(opened.body));
+    answers({ ...rollup(1, [PASSED]), ...rollup(2, [PASSED], 'MERGED', { mergedAt: '2026-11-25T10:00:00Z' }) });
+    await until(async () => (await chats()).find((r) => r.name === 'failure-lint').archived, 'the channel to be archived');
+    const jam = (await R.call('GET', '/jams')).body.jams.filter((j) => j.by === 'room').pop();
+    assert.match(jam.fix, /Every PR it blocked passed the check and no fix merged/);
+    assert.doesNotMatch(jam.fix, /24 hours/);
+  });
 });

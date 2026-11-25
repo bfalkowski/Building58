@@ -117,7 +117,7 @@ async function apply(channel, action) {
   else if (action.do === 'fixed') await fixed(channel, room, action.pr);
   else if (action.do === 'archive') {
     const f = room.failure, took = Date.parse(f.fixedAt || new Date().toISOString()) - Date.parse(f.openedAt), hours = Math.max(0, Math.round(took / 360000) / 10);
-    if (!f.fixedBy) counted(channel, room, 'No fix merged, and the channel had no post for 24 hours.');
+    if (!f.fixedBy) counted(channel, room, action.why.charAt(0).toUpperCase() + action.why.slice(1) + '.');
     chat.sayIn(channel, room.name, 'Summary: the check "' + f.key + '" blocked ' + f.prs.length + ' PRs (' + f.prs.map(nameOfPr).join(', ') + '). ' + (f.fixedBy ? 'The fix merged in ' + nameOfPr(f.fixedBy) + ' after ' + hours + ' hours.' : 'No fix merged here.'));
     chat.archiveFailureRoom(channel, room.name, action.why);
     tell(channel, lead(channel), 'failure-closed-' + f.key, '#' + room.name + ' is archived: ' + action.why + '. The relay wrote its summary there. If you know the cause, note it on the ticket of the fix.');

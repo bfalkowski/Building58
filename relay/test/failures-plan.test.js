@@ -54,6 +54,7 @@ test('a channel whose blocked PRs all pass with no merge, as after a rerun, is a
   const out = plan({ rooms: [room()], prs: [pr(1, { green: true }), pr(2, { green: true })], now: NOW });
   assert.deepStrictEqual(out.map((a) => a.do), ['archive']);
   assert.match(out[0].why, /no fix merged/);
+  assert.deepStrictEqual(plan({ rooms: [room()], prs: [pr(1, { open: false, closed: true }), pr(2, { open: false, closed: true })], now: NOW }), [], 'all closed unmerged: not a pass');
 });
 
 test('a channel with no post for 24 hours is archived, fixed or not', () => {

@@ -10,8 +10,9 @@
 //   open     no channel for that failure yet, and two or more open PRs show it
 //   join     a channel is open and another open PR shows the same failure
 //   fixed    a PR of an open channel merged, and the channel has no fix yet: its first merge is the fix
-//   archive  every blocked PR passed the check with no merge, or the fix merged and every PR the failure blocked has merged, closed or passed the check, or the
-//            channel has had no post for QUIET_MS
+//   archive  every blocked PR passed the check or closed with none merged, and one is open and green,
+//            or the fix merged and every PR the failure blocked has merged, closed or passed the check,
+//            or the channel has had no post for QUIET_MS
 'use strict';
 
 const QUIET_MS = 24 * 60 * 60 * 1000;
@@ -50,7 +51,8 @@ function plan({ rooms, prs, now }) {
       if (merged) { fixedBy = merged; out.push({ do: 'fixed', key: room.key, pr: merged }); }
     }
     const done = fixedBy && room.prs.every((pr) => cleared(by.get(pr), room.key));
-    const passed = !fixedBy && room.prs.every((pr) => cleared(by.get(pr), room.key) && !(by.get(pr) || {}).merged);
+    const gone = (pr) => !by.get(pr) || by.get(pr).closed || by.get(pr).merged;
+    const passed = !fixedBy && room.prs.every((pr) => cleared(by.get(pr), room.key)) && !room.prs.every(gone);
     if (passed) out.push({ do: 'archive', key: room.key, why: 'every PR it blocked passed the check and no fix merged, so it was likely a flaky run' });
     else if (done) out.push({ do: 'archive', key: room.key, why: 'the fix merged and every PR it blocked has merged, closed or passed the check' });
     else if (now - room.lastAt >= QUIET_MS) out.push({ do: 'archive', key: room.key, why: 'it had no post for 24 hours' });
