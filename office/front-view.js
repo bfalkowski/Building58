@@ -76,6 +76,7 @@
     const next = el('div', 'next');
     if (seat.reason) next.append(el('span', 'why', seat.reason.text + ' '));
     words(seat.next ? (seat.reason ? '' : 'Next: ') + seat.next : '', next);
+    if (seat.proposal) next.append(' ' + seat.proposal);
     if (seat.sort) next.append(' ' + seat.sort);
     node.append(top, who, doing, next);
     const tired = seat.row && seat.row.tired;
@@ -164,7 +165,7 @@
   function drawSeats() {
     const rows = floor.sessions, pm = floor.pm ? Object.assign({ now: Date.now() }, floor.pm) : null;
     const seats = [F.seatOf('lead', rows, needs, board && board.tickets, null), F.seatOf('pm', rows, needs, board && board.tickets, pm)];
-    const sig = JSON.stringify([seats.map((s) => [s.kind, s.name, s.state, s.dot, s.doing, s.next, s.rung, s.sort, s.reason && s.reason.text, s.terminal]), selected, board && board.store, slug(), Math.floor(Date.now() / 60000)]);
+    const sig = JSON.stringify([seats.map((s) => [s.kind, s.name, s.state, s.dot, s.doing, s.next, s.proposal, s.rung, s.sort, s.reason && s.reason.text, s.terminal]), selected, board && board.store, slug(), Math.floor(Date.now() / 60000)]);
     const nodes = seats.map(seatNode);
     if (put(seatsEl, nodes, sig, 'seats')) seats.forEach((s, i) => pulse(nodes[i], 'seat:' + s.kind, s.state));
   }
@@ -215,7 +216,7 @@
   }
   function drawWorkers() {
     const { cards, extras } = F.cardsOf(floor.sessions, needs);
-    const workers = floor.sessions.filter((r) => !r.seat).length, free = Math.max(0, F.WORKER_DESKS - workers);
+    const workers = floor.sessions.filter((r) => !r.seat && r.role !== 'PM').length, free = Math.max(0, F.WORKER_DESKS - workers);
     const reviewers = floor.sessions.filter((r) => r.role === 'reviewer').length, ticketed = cards.filter((c) => c.ticket).length;
     $('workers-meta').textContent = workers + (workers === 1 ? ' worker' : ' workers') + ' on ' + ticketed + (ticketed === 1 ? ' ticket' : ' tickets') + ' · ' + reviewers + (reviewers === 1 ? ' reviewer' : ' reviewers') + ' · ' + free + (free === 1 ? ' desk' : ' desks') + ' free';
     const sig = JSON.stringify([cards.map((c) => [c.key, c.header, c.state, c.slot.live && c.slot.live.terminal, c.slot.none, c.slot.hint, c.rounds, c.dev.name, c.dev.desk.doing, c.dev.desk.status, c.slot.live && c.slot.live.desk.doing]), extras.map((x) => [x.key, x.header, x.state, x.row.name, x.row.desk.doing]), free, selected, board && board.store, slug(), floor.sessions.map((r) => namedOf(r.terminal).full)]);

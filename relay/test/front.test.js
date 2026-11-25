@@ -58,14 +58,16 @@ test('a card waits on you only when Needs you names it, with the reason first, a
   assert.strictEqual(stuck.header, 'Stuck: told 27 min ago, did not start · Ticket 5 · PR not started · building');
 });
 
-test('the PM seat shows its rung and next sort, and waits on you while a proposal waits', () => {
+test('the PM seat shows its rung, next sort and a waiting proposal, and waits on you only when Needs you says so', () => {
   const pm = { terminal: 'p1', name: 'Priya', role: 'PM', seat: 'pm', desk: desk({ doing: { state: 'idle', words: 'idle 3 min' }, next: { text: 'Waiting on you: talk', owner: 'you' } }) };
   const tickets = [{ id: '215', status: 'ready', proposal: { action: 'close', ids: ['214'], why: 'same' } }];
   const seat = F.seatOf('pm', [pm], [], tickets, { trust: 2, trustName: 'Hold and propose', sortHours: 4, nextSortAt: new Date(1000 + 220 * 60000).toISOString(), now: 1000 });
   assert.strictEqual(seat.rung, 'trust: 2 Hold and propose');
   assert.strictEqual(seat.sort, 'Next sort in 3 h 40 min.');
-  assert.strictEqual(seat.state, 'wait');
-  assert.strictEqual(seat.reason.text, 'Waits on you: close 215?');
+  assert.strictEqual(seat.state, '', 'a proposal alone is not a wait');
+  assert.strictEqual(seat.proposal, 'Proposal: close 215?');
+  const named = F.seatOf('pm', [pm], [{ kind: 'question', terminal: 'p1', line: 'x' }], [], null);
+  assert.strictEqual(named.reason.text, 'Waits on you: a question');
   assert.strictEqual(F.seatOf('pm', [], [], [], null).row, null, 'a PM that is not running still has its seat');
 });
 
@@ -87,7 +89,7 @@ test('Up next lists the next 5 Ready tickets in Autopilot\'s order with the PM\'
 });
 
 test('Today uses the numbers the COO counts, and free desks are 7 minus the workers', () => {
-  const rows = [{ seat: 'lead' }, { seat: 'pm' }, { seat: null }, { seat: null }];
+  const rows = [{ seat: 'lead' }, { seat: 'pm' }, { seat: null }, { seat: null }, { seat: null, role: 'PM' }];
   assert.deepStrictEqual(JSON.parse(JSON.stringify(F.todayOf({ numbers: { merged: 5, medianMinutes: 290 } }, 2, rows))), { merged: 5, median: '4 h 50 min', waiting: 2, free: 5, desks: 7 });
   assert.strictEqual(F.todayOf(null, 0, []).merged, null);
 });

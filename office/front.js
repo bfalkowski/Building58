@@ -21,14 +21,13 @@
   function needsOf(row, needs) {
     return (needs || []).filter((i) => i && ((row.terminal && i.terminal === row.terminal) || (row.role === 'Dev' && row.ticket && i.ticket === row.ticket && !i.terminal)));
   }
-  function reasonOf(row, needs, proposals) {
+  function reasonOf(row, needs) {
     const d = row.desk || {}, doing = d.doing || {};
     const mine = needsOf(row, needs);
     const stuck = mine.find((i) => STUCK_KINDS.includes(i.kind));
     if (doing.state === 'stuck') return { kind: 'stuck', text: 'Stuck: ' + String(doing.words || 'stuck').replace(/^stuck:\s*/i, '') };
     if (stuck) return { kind: 'stuck', text: 'Stuck: ' + cut(stuck.line, 90) };
     if (mine.length) return { kind: 'wait', text: 'Waits on you: ' + (SHORT[mine[0].kind] || cut(mine[0].line, 50)) };
-    if (row.seat === 'pm' && proposals && proposals.length) return { kind: 'wait', text: 'Waits on you: ' + proposals[0] };
     return null;
   }
   function reviewerSlot(dev, reviewers) {
@@ -90,12 +89,12 @@
     const proposals = kind === 'pm' ? proposalsOf(tickets) : [];
     if (!row) return { kind, role: kind === 'pm' ? 'PM' : 'Lead', row: null, state: '', dot: 'idle', name: '', doing: 'Not running. The room starts it.', next: '', reason: null };
     const d = row.desk || {}, doing = (d.doing || {}).state;
-    const reason = reasonOf(row, needs, proposals);
+    const reason = reasonOf(row, needs);
     const seat = {
       kind, role: row.role, row, name: row.name, terminal: row.terminal, reason, state: reason ? reason.kind : '',
       dot: reason && reason.kind === 'stuck' ? 'err' : doing === 'working' ? 'work' : doing === 'waiting' || (reason && reason.kind === 'wait') ? 'wait' : 'idle',
       doing: cut((d.doing && d.doing.words ? sentence(d.doing.words) : 'Idle') + (row.title && row.title !== row.role ? '. ' + row.title : ''), 140),
-      next: d.next ? d.next.text : '', tickets: []
+      next: d.next ? d.next.text : '', proposal: proposals.length ? 'Proposal: ' + proposals[0] + (proposals.length > 1 ? ' (+' + (proposals.length - 1) + ' more)' : '') : ''
     };
     if (kind === 'pm' && pm) {
       seat.rung = pm.trustName ? 'trust: ' + pm.trust + ' ' + pm.trustName : '';
@@ -123,7 +122,7 @@
   }
   function todayOf(metrics, needsCount, rows) {
     const n = metrics && metrics.numbers ? metrics.numbers : null;
-    const workers = (rows || []).filter((r) => !r.seat).length;
+    const workers = (rows || []).filter((r) => !r.seat && r.role !== 'PM').length;
     return { merged: n ? n.merged : null, median: n && n.medianMinutes ? minutesWords(n.medianMinutes) : null, waiting: needsCount, free: Math.max(0, WORKER_DESKS - workers), desks: WORKER_DESKS };
   }
   const SLUG = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/\d+/;
