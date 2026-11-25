@@ -383,7 +383,7 @@ function followDev(channel, t, was) {
   if (!task || task.owner.sessionId === t.sessionId) return;
   task.owner.sessionId = t.sessionId; save(); noteDev(channel, task);
 }
-terminal.onSessionMoved(followDev);
+if (terminal.onSessionMoved) terminal.onSessionMoved(followDev);
 function workOf(channel, t) {
   const work = (role, task, pr, label) => ({ role, ticket: task ? task.ticket : null, ticketAt: task ? task.ticketAt : null, pr, label });
   if (t.role === 'pm') return work('pm', null, null, t.title);
