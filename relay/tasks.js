@@ -218,7 +218,7 @@ async function createTask(channel, body, ctx) {
   }
   tasksOf(channel).push(task);
   save();
-  if (task.ticket) history.add(channel, task, { stage: 'started', by, task: id }, body.lead || null);
+  if (task.ticket) history.add(channel, task, { stage: 'started', by, task: id, title: task.title }, body.lead || null);
   noteDev(channel, task);
   events.emit('created', channel, task);
   deliver(channel, task, started.body.id, ctx);
@@ -323,7 +323,6 @@ async function clean(channel, task, body) {
   }
   store[channel] = tasksOf(channel).filter((t) => t !== task); save();
   delivery.drop(channel, BRIEF_KEY(task));
-  if (task.ticket && task.pr) cleanedOf(channel).push({ ticket: task.ticket, ticketAt: task.ticketAt, title: task.title, pr: task.pr, history: task.history.filter((h) => h.type === 'pr') });
   return [200, { ok: true, removed: task.id, branch: task.branch }];
 }
 const AFTER_BUILDING = ['in_review', 'waiting_on_you'];
@@ -378,20 +377,13 @@ async function findPrs() {
     }
   } finally { finding = false; }
 }
-function followSessions(channel) {
-  let changed = false;
-  for (const task of tasksOf(channel)) {
-    const t = terminal.find(channel, task.owner && task.owner.terminal);
-    if (t && t.sessionId !== task.owner.sessionId && t.sessionId.length === 36) { task.owner.sessionId = t.sessionId; changed = true; noteDev(channel, task); }
-  }
-  if (changed) save();
+function followDev(channel, t, was) {
+  if (!was || t.sessionId.length !== 36) return;
+  const task = tasksOf(channel).find((x) => x.owner && x.owner.terminal === t.id);
+  if (!task || task.owner.sessionId === t.sessionId) return;
+  task.owner.sessionId = t.sessionId; save(); noteDev(channel, task);
 }
-
-const cleaned = new Map();
-function cleanedOf(channel) {
-  if (!cleaned.has(channel)) cleaned.set(channel, []);
-  return cleaned.get(channel);
-}
+if (terminal.onSessionMoved) terminal.onSessionMoved(followDev);
 function workOf(channel, t) {
   const work = (role, task, pr, label) => ({ role, ticket: task ? task.ticket : null, ticketAt: task ? task.ticketAt : null, pr, label });
   if (t.role === 'pm') return work('pm', null, null, t.title);
@@ -399,8 +391,10 @@ function workOf(channel, t) {
   if (t.role === 'security') return work('security', null, null, 'Security · report on access');
   if (t.lead) return work('lead', null, null, t.title ? 'The Lead · ' + t.title : 'The Lead');
   if (t.role === 'reviewer') {
-    const task = t.pr && tasksOf(channel).concat(cleanedOf(channel)).find((x) => x.ticket && (x.pr === t.pr || x.history.some((h) => h.type === 'pr' && h.pr === t.pr)));
-    return work('reviewer', task, t.pr, task ? 'reviewing ' + task.ticket + ' · ' + task.title : t.title);
+    const live = t.pr && tasksOf(channel).find((x) => x.ticket && (x.pr === t.pr || x.history.some((h) => h.type === 'pr' && h.pr === t.pr)));
+    const task = live || (t.pr && history.ticketOfPr(channel, t.pr));
+    const ticket = live ? live.ticket : task && task.id, title = live ? live.title : task && task.title;
+    return work('reviewer', task && { ticket, ticketAt: live ? live.ticketAt : task.createdAt }, t.pr, task ? 'reviewing ' + ticket + (title ? ' · ' + title : '') : t.title);
   }
   const task = t.task && tasksOf(channel).find((x) => x.id === t.task);
   return task && task.ticket ? work('dev', task, task.pr, task.ticket + ' · ' + task.title) : null;
@@ -416,7 +410,6 @@ async function handle(req, res, channel, rest, ctx) {
   const [, id, verb] = route;
   let out;
   if (!id && req.method === 'GET') {
-    followSessions(channel);
     out = [200, { ok: true, states: STATES, tasks: tasksOf(channel).map((t) => (ctx.agent ? { id: t.id, state: t.state, title: t.title, branch: t.branch, pr: t.pr } : view(channel, t))) }];
   } else if (!id && req.method === 'POST') out = await create(channel, await ctx.readJson(req), ctx);
   else if (id) {

@@ -83,11 +83,11 @@ function add(channel, ticket, entry, session) {
 function ticketOfPr(channel, pr) {
   let found = null;
   for (const [key, list] of Object.entries(chOf(channel).tickets)) {
-    for (const e of list) if (e.pr === pr && (!found || e.at > found.e.at)) found = { key, e };
+    for (const e of list) if (e.pr === pr && (!found || e.at > found.e.at)) found = { key, e, list };
   }
   if (!found) return null;
-  const space = found.key.indexOf(' ');
-  return { id: found.key.slice(0, space), createdAt: found.key.slice(space + 1) || null, task: found.e.task || null };
+  const space = found.key.indexOf(' '), list = found.list;
+  return { id: found.key.slice(0, space), createdAt: found.key.slice(space + 1) || null, task: found.e.task || null, title: (list.find((e) => e.title) || {}).title || null };
 }
 function followReviewer(channel, t, was) {
   if (!was || roleOf(t) !== 'reviewer') return;
