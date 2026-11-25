@@ -22,7 +22,7 @@
 //
 // Like the terminal, this answers only while RELAY_TERMINAL=1.
 'use strict';
-const { oneLine } = require('./clean.js');
+const { oneLine, noHidden } = require('./clean.js');
 const gh = require('./gh.js');
 const fs = require('fs');
 const os = require('os');
@@ -45,7 +45,7 @@ const FUN_NAME = /^[a-z][a-z0-9-]{0,23}$/;
 const CLI = path.join(__dirname, 'ticket.js');
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
-const clean = (v, n) => oneLine(v == null ? '' : String(v).replace(/[«»]/g, '"'), n);
+const clean = (v, n) => oneLine(noHidden(v).replace(/[«»]/g, '"'), n);
 
 const ownsFile = claim(FILE);
 let store = {};
