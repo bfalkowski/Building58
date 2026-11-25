@@ -10,11 +10,13 @@ const fake = (name, exports) => { require.cache[require.resolve(name)] = { id: n
 fake('../terminal.js', { leadOf: () => ({ id: 'lead' }), onEnd() {} });
 fake('../tasks.js', { channels: () => ['t'], list: () => [], events: new (require('events'))() });
 fake('../delivery.js', { pending: () => pending, save: (c, d) => { saved.push(d); pending.splice(0, pending.length, d); }, drop: (c, k) => { const i = pending.findIndex((d) => d.key === k); if (i >= 0) pending.splice(i, 1); }, onStuck() {} });
-fake('../config.js', { get: (n) => (n === 'leadCheckMinutes' ? 60 : false), every() {}, onChange() {} });
+let channelOpen = false;
+fake('../failures.js', { rooms: () => (channelOpen ? [{}] : []), leadLines: () => (channelOpen ? ['#failure-browser (browser): blocks PR #1.'] : []) });
+fake('../config.js', { get: (n) => (n === 'leadCheckMinutes' ? 60 : n === 'leadUnstick' ? channelOpen : false), every() {}, onChange() {} });
 const stuck = require('../stuck.js');
 const lead = require('../lead-check.js');
 
-test.beforeEach(() => { stuck.reset(); saved.length = 0; pending.length = 0; });
+test.beforeEach(() => { channelOpen = false; stuck.reset(); saved.length = 0; pending.length = 0; });
 
 test('every jam kind has one owner', () => {
   for (const kind of Object.keys(JAM_KINDS)) assert.ok(['autopilot', 'lead', 'person'].includes(stuck.OWNERS[kind]), kind);
@@ -70,4 +72,17 @@ test('a second new item prompts about itself, not the first one again', () => {
   stuck.raise('t', { kind: 'handed-over', id: 'pr 2', text: 'second-item' });
   assert.match(pending[0].text, /second-item/);
   assert.doesNotMatch(pending[0].text, /first-item/);
+});
+
+test('an open failure channel with no stuck item prompts on the heartbeat and is kept by the sweep', () => {
+  channelOpen = true;
+  lead.heartbeat();
+  assert.strictEqual(saved.length, 1);
+  assert.match(saved[0].text, /A failure channel is open\./);
+  assert.match(saved[0].text, /Failure channels open now: #failure-browser/);
+  lead.sweep();
+  assert.strictEqual(pending.length, 1, 'the sweep keeps it');
+  channelOpen = false;
+  lead.sweep();
+  assert.strictEqual(pending.length, 0, 'taken back when the channel closes');
 });

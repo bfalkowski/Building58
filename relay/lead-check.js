@@ -4,9 +4,9 @@
 // when notSafeToType says the Lead is idle, with nothing in its prompt and no question up.
 //
 // A slow heartbeat (leadCheckMinutes, Settings, Work group; 0 is off) prompts again about items still open.
-// With nothing open that the Lead or the person owns, the relay sends nothing. A prompt
+// With nothing open that the Lead or the person owns, and no failure channel open while Let the Lead unstick the board is on, the relay sends nothing. A prompt
 // that is due while the last one still waits replaces it, so a busy Lead gets one, with every open item. When
-// no item is open any more, a prompt still waiting is taken back at once, and at startup too.
+// no item or failure channel is open any more, a prompt still waiting is taken back at once, and at startup too.
 'use strict';
 const config = require('./config.js');
 const terminal = require('./terminal.js');
@@ -60,4 +60,4 @@ function begin() {
   tasks.events.on('state', () => sweep());
 }
 
-module.exports = { begin, prompt, wake, heartbeat, every, KEY };
+module.exports = { begin, prompt, wake, heartbeat, sweep, every, KEY };
