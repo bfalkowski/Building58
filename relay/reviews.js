@@ -61,6 +61,7 @@ const reviewHistory = require('./review-history.js');
 const prComments = require('./pr-comments.js');
 const { keepLines } = require('./clean.js');
 const door = require('./gh.js');
+const conflictText = require('./conflict-text.js');
 const { PR_URL, prBrief, followBrief, followUps, followUpOwed } = require('../office/reviews.js');
 const config = require('./config.js');
 const pipeline = require('./pipeline.js');
@@ -217,15 +218,17 @@ function passes(channel, pr, rec, held, lastHead) {
   rec.why = g.go ? null : g.why;
   if (g.gone) { gone(channel, pr, rec, g.why); return false; }
   if (g.go) {
+    if (rec.conflictAt) { rec.conflictAt = null; delivery.drop(channel, 'conflict ' + pr); save(); }
     if (rec.red) { rec.red = null; delivery.drop(channel, 'pipeline ' + pr); save(); }
     if (g.why) say(channel, 'PR ' + number(pr) + ': ' + g.why);
     return true;
   }
+  if (g.conflict) { if (rec.conflictAt !== p.head) conflicted(channel, pr, rec, held, p.head); return false; }
   if (g.red && rec.red !== p.head) failed(channel, pr, rec, held, p.head);
   return false;
 }
 function gone(channel, pr, rec, why) {
-  delivery.drop(channel, 'pipeline ' + pr);
+  delivery.drop(channel, 'pipeline ' + pr); delivery.drop(channel, 'conflict ' + pr);
   if (rec.first && !rec.count && !rec.head) delete chOf(channel).prs[pr];
   else { delete rec.first; rec.pending = null; rec.why = null; }
   save();
@@ -239,6 +242,18 @@ function failed(channel, pr, rec, held, head) {
   delivery.save(channel, { key: 'pipeline ' + pr, terminal: dev.id, sessionId: dev.sessionId, expiresAt: Date.now() + LEAD_KEEP,
     text: 'The pipeline failed on ' + pr + ', so its review has not started. Run gh pr checks ' + pr + ' to see which check failed, fix it on your branch and push. The review starts once the checks pass.' });
   say(channel, 'The pipeline failed on PR ' + number(pr) + ', so no review started. Its Dev was told.' + after, 'off', dev.id);
+}
+function conflicted(channel, pr, rec, held, head) {
+  const was = rec.conflictAt;
+  rec.conflictAt = head; save();
+  const dev = held.dev && terminal.find(channel, held.dev);
+  const after = ' The review starts once a push clears the conflict and the pipeline is green.';
+  if (!dev) { say(channel, 'PR ' + number(pr) + ' conflicts with main, so no review started, and nobody could be told: its Dev\'s session has ended.' + after, 'off'); return; }
+  const send = (files) => {
+    delivery.save(channel, { key: 'conflict ' + pr, terminal: dev.id, sessionId: dev.sessionId, expiresAt: Date.now() + LEAD_KEEP, text: was ? conflictText.again(pr, head, files) : conflictText.first(pr) });
+    say(channel, 'PR ' + number(pr) + (was ? ' still' : '') + ' conflicts with main, so no review started. Its Dev was told' + (was && files.length ? ' which files conflict' : '') + '.' + after, 'off', dev.id);
+  };
+  if (was) conflictText.conflictFiles(held.from || dev.cwd).then(send); else send([]);
 }
 const watched = (channel, r) => r.first || r.pending || (r.head && !r.closed && followsPushes(channel));
 pipeline.watch(() => Object.entries(store).flatMap(([channel, c]) => Object.entries((c && c.prs) || {}).filter(([, r]) => watched(channel, r)).map(([pr, r]) => ({ pr, cwd: (r.first || r.pending || r).from || null }))));

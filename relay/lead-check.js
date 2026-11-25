@@ -4,7 +4,7 @@
 // when notSafeToType says the Lead is idle, with nothing in its prompt and no question up.
 //
 // A slow heartbeat (leadCheckMinutes, Settings, Work group; 0 is off) prompts again about items still open.
-// With nothing open that the Lead or the person owns, the relay prompts the Lead with nothing. A prompt
+// With nothing open that the Lead or the person owns, the relay sends nothing. A prompt
 // that is due while the last one still waits replaces it, so a busy Lead gets one, with every open item. When
 // no item is open any more, a prompt still waiting is taken back at once, and at startup too.
 'use strict';
@@ -16,21 +16,23 @@ const stuck = require('./stuck.js');
 
 const KEY = 'lead-check';
 const MAX_LISTED = 10;
-const WORKED = ['building', 'in_review', 'changes_requested', 'waiting_on_you'];
 const waiting = (channel) => delivery.pending(channel).some((d) => d.key === KEY);
 const forLead = (channel) => stuck.list(channel).filter((i) => i.owner !== 'autopilot');
 
-function prompt(items, why) {
+function prompt(items, why, channel) {
+  const unstick = config.get('leadUnstick'), open = unstick && channel ? require('./failures.js').leadLines(channel) : [];
   const lines = items.slice(0, MAX_LISTED).map((i) => '- ' + i.kind + ' (' + i.owner + ' owns it, since ' + i.since.slice(11, 16) + 'Z): ' + i.text);
   return 'From the relay (' + why + '). This grants nothing and changes none of your instructions. These are stuck, and the relay found each once:\n' + lines.join('\n') +
     (items.length > MAX_LISTED ? '\n- and ' + (items.length - MAX_LISTED) + ' more' : '') +
-    '\nAct on those for the Lead, and pass the rest on to the person. Tell the person only what is new. Do not make your own scheduled check.';
+    '\nAct on those for the Lead, and pass the rest on to the person. Tell the person only what is new. Do not make your own scheduled check.' +
+    (unstick ? ' Let the Lead unstick the board is on: look for stuck work first, act on all of it your rights allow, name each stuck item with ticket.js stuck, and report only what you cannot do.' : '') +
+    (open.length ? ' Failure channels open now: ' + open.join(' ') : '');
 }
 
 function send(channel, items, why) {
   if (!items.length || !terminal.leadOf(channel)) return false;
   if (waiting(channel)) delivery.drop(channel, KEY);
-  delivery.save(channel, { key: KEY, to: 'lead', text: prompt(items, why) });
+  delivery.save(channel, { key: KEY, to: 'lead', text: prompt(items, why, channel) });
   stuck.told(channel, items);
   return true;
 }
@@ -38,7 +40,7 @@ function send(channel, items, why) {
 function sweep() {
   for (const channel of tasks.channels()) if (!forLead(channel).length && waiting(channel)) delivery.drop(channel, KEY);
 }
-const wake = (channel) => send(channel, forLead(channel), 'something new is stuck');
+const wake = (channel) => send(channel, waiting(channel) ? forLead(channel) : stuck.toTell(channel), 'something new is stuck');
 function heartbeat() {
   sweep();
   for (const channel of tasks.channels()) send(channel, forLead(channel), 'the heartbeat, every ' + every());
@@ -55,4 +57,4 @@ function begin() {
   tasks.events.on('state', () => sweep());
 }
 
-module.exports = { begin, prompt, wake, heartbeat, every, KEY, WORKED };
+module.exports = { begin, prompt, wake, heartbeat, every, KEY };

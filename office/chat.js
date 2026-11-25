@@ -17,7 +17,7 @@
     return fetch(url(p), opt).then((r) => r.text().then((t) => { try { return JSON.parse(t); } catch (e) { return { ok: false, message: 'The relay answered with a page, not JSON (' + r.status + '). On the public page your sign-in may have run out: reload it.' }; } }), () => ({ ok: false, message: 'The relay did not answer.' }));
   }
   const say = (words, bad) => { note.textContent = words || ''; note.dataset.bad = bad ? '1' : ''; };
-  const KIND = { office: 'the relay\'s news', ticket: 'a ticket', fun: 'fun' };
+  const KIND = { office: 'the relay\'s news', ticket: 'a ticket', failure: 'a failure that blocks PRs', fun: 'fun' };
   const BY = { relay: 'the relay', person: 'you', session: 'a session' };
 
   let current = 'office';

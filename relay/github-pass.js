@@ -11,11 +11,17 @@ const gh = require('./gh.js');
 const PR_URL = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)$/;
 const PAGE = 100;
 const MAX_PAGES = 5;
-const QUERY = 'query($owner:String!,$name:String!,$after:String){repository(owner:$owner,name:$name){pullRequests(states:OPEN,first:' + PAGE + ',after:$after){pageInfo{hasNextPage endCursor}nodes{url state headRefOid mergeable mergeStateStatus updatedAt mergedAt commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{__typename ... on CheckRun{name status conclusion} ... on StatusContext{context state}}}}}}}}}}}';
+const QUERY = 'query($owner:String!,$name:String!,$after:String){repository(owner:$owner,name:$name){pullRequests(states:OPEN,first:' + PAGE + ',after:$after){pageInfo{hasNextPage endCursor}nodes{url state headRefOid mergeable mergeStateStatus updatedAt mergedAt commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){pageInfo{hasNextPage}nodes{__typename ... on CheckRun{name status conclusion} ... on StatusContext{context state}}}}}}}}}}}';
 
 const last = new Map();
+const seenIn = new Map();
 let running = null, ranAt = 0;
 
+const truncated = (node) => {
+  const commit = (((node.commits || {}).nodes || [])[0] || {}).commit;
+  const c = commit && commit.statusCheckRollup && commit.statusCheckRollup.contexts;
+  return !!(c && c.pageInfo && c.pageInfo.hasNextPage);
+};
 function valueOf(node) {
   const commit = (((node.commits || {}).nodes || [])[0] || {}).commit;
   const rollup = commit && commit.statusCheckRollup;
@@ -38,7 +44,7 @@ async function readRepo(slug, cwd) {
   const [owner, name] = slug.split('/'), nodes = [];
   let after = null;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const args = ['api', 'graphql', '-f', 'query=' + QUERY, '-F', 'owner=' + owner, '-F', 'name=' + name].concat(after ? ['-F', 'after=' + after] : []);
+    const args = ['api', 'graphql', '-f', 'query=' + QUERY, '-f', 'owner=' + owner, '-f', 'name=' + name].concat(after ? ['-f', 'after=' + after] : []);
     const out = await gh.run(args, { cwd, timeout: 30000 });
     const prs = (((JSON.parse(out).data || {}).repository || {}).pullRequests) || {};
     nodes.push(...(prs.nodes || []));
@@ -56,8 +62,12 @@ async function once(repos) {
   for (const [slug, cwd] of repos || reposWanted()) {
     let nodes;
     try { nodes = await readRepo(slug, cwd); } catch (e) { console.error('GitHub pass: could not read ' + slug + ': ' + e.message); continue; }
+    const now = new Set(nodes.filter((n) => n && n.url).map((n) => n.url));
+    for (const url of seenIn.get(slug) || []) if (!now.has(url)) { gh.forget(url); last.delete(url); }
+    seenIn.set(slug, now);
     for (const node of nodes) {
       if (!node || !node.url) continue;
+      if (truncated(node)) { gh.forget(node.url); last.delete(node.url); continue; }
       const key = node.updatedAt + ' ' + node.headRefOid, have = last.get(node.url);
       const value = have && have.key === key ? have.value : valueOf(node);
       last.set(node.url, { key, value });
@@ -78,4 +88,4 @@ function begin() {
   tasks.events.on('state', () => { if (Date.now() - ranAt > 5000) pass().catch(() => {}); });
 }
 
-module.exports = { begin, pass, once, valueOf, reposWanted, QUERY };
+module.exports = { begin, pass, once, truncated, valueOf, reposWanted, QUERY };

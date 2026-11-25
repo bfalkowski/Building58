@@ -396,7 +396,7 @@ async function lookAt(channel, task) {
   } else if (d.act === 'person') handOver(channel, task, rec, d.why, d.reason, (v && v.commit) || pr.headRefOid);
 }
 const CONFLICT_KEY = (task) => 'autopilot-conflict ' + task.pr;
-const MERGE_MAIN = ' Merge origin/main into your branch with a merge commit, keep both sides of each conflict, run npm test, and push only that merge, not fixes for the review\'s follow-up findings. A follow-up review checks how you resolved it.';
+const MERGE_MAIN = ' ' + require('./conflict-text.js').STEPS + ' A follow-up review checks how you resolved it.';
 function conflictAsk(channel, task, rec, pr) {
   const again = rec.conflictAsks > 1;
   const text = (again ? 'Your PR ' + task.pr + ' still conflicts with main at ' + pr.headRefOid.slice(0, 7) + ', and your last turn ended without a merge of main.'
