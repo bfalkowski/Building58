@@ -32,7 +32,8 @@
   .page-theme .btn:last-of-type { border-radius: 0 4px 4px 0; }
   .page-theme .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
 
-  .bench { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto auto auto; min-height: calc(100vh - 32px); gap: 16px; align-items: start; }
+  .bench { display: flex; flex-direction: column; gap: 16px; }
+  .bench-top { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto auto; min-height: calc(100vh - 32px); gap: 16px; align-items: start; }
   .stage { grid-column: 1; grid-row: 1; }
   .floor { grid-column: 1; grid-row: 2; align-self: stretch; }
   /* the terminal stays on screen beside the office, so clicking a person shows their session */
@@ -139,7 +140,7 @@
   .lnk, .needs-ref { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
   .needs-ref { font-size: 11.5px; white-space: nowrap; }
   /* The workers row: one card for each ticket, its Dev on the left and the reviewer of its PR on the right, then the free desks. */
-  .workers { grid-column: 1 / -1; grid-row: 3; min-width: 0; border-radius: 8px; background: var(--pane); color: var(--pane-fg); font: 12.5px/1.45 var(--mono); box-shadow: inset 0 0 0 1px var(--pane-edge); }
+  .workers { min-width: 0; border-radius: 8px; background: var(--pane); color: var(--pane-fg); font: 12.5px/1.45 var(--mono); box-shadow: inset 0 0 0 1px var(--pane-edge); }
   .workers header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 10px; padding: 10px 12px 8px; border-bottom: 1px solid var(--pane-line); }
   .workers h2 { margin: 0; font: 500 13px/1.3 var(--mono); color: var(--pane-strong); letter-spacing: 0.04em; }
   .workers-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
@@ -514,15 +515,13 @@
     #org-stamp { top: 12px; right: 14px; font-size: 12px; }
   }
   @media (max-width: 1100px) {
-    .bench { grid-template-columns: minmax(0, 1fr); }
-    .bench { grid-template-rows: none; min-height: 0; }
+    .bench-top { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; min-height: 0; }
     .stage, .floor, .cc { grid-column: 1; grid-row: auto; }
     .pair { grid-column: span 1; grid-template-columns: minmax(0, 1fr); }
     .pair .link { flex-direction: row; gap: 6px; padding: 4px 0; }
     .pair .link .line { width: 0; height: 14px; border-top: 0; border-left: 2px solid var(--accent); margin: 0 4px; }
     .seats { grid-template-columns: minmax(0, 1fr); }
     .floor { align-self: start; }
-    .workers { grid-column: 1; grid-row: auto; }
     .cc { position: static; height: 520px; }
   }
   @media (max-width: 640px) {
@@ -582,6 +581,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
   </div>
 
   <div class="bench">
+    <div class="bench-top">
     <div class="stage" id="stage">
       <canvas id="world" aria-label="A loft with developers at desks."></canvas>
       <div id="tags" aria-hidden="true"></div>
@@ -659,6 +659,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
       <p class="cc-note" id="cc-note" hidden></p>
       <div id="cc-term" aria-label="Claude Code terminal"></div>
     </section>
+    </div>
 
     <section class="workers" id="workers" aria-labelledby="workers-title">
       <header>
