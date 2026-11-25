@@ -8,6 +8,9 @@
 //   ticket     one per ticket, such as #T-39, made when the ticket is filed. It is archived when its
 //              PR merges, its task moves to Done, or the ticket is done or rejected: kept to read, with
 //              no new posts. When the person deletes it, a short summary goes on the ticket first.
+//   failure    one per failure that blocks two or more PRs, such as #failure-browser, made by the relay
+//              (relay/failures.js). The blocked Devs and the Lead post in it. It is archived when the fix has merged
+//              and every PR it blocked is done with the failure, or after 24 hours with no post.
 //   fun        made and deleted by the person, such as #random. A session may post once a minute.
 //
 // The rules, which the tests in relay/test/chat.test.js hold it to:
@@ -38,7 +41,7 @@ const FILE = state.file('chat.json', 'RELAY_CHAT_FILE');
 const config = require('./config.js');
 const KEEP = () => config.get('chatKeep');
 const MAX_TEXT = 500, MAX_FUN = 10, CLOSED_EVERY = 10;
-const GAP = { ticket: 5 * 1000, fun: 60 * 1000 };
+const GAP = { ticket: 5 * 1000, failure: 5 * 1000, fun: 60 * 1000 };
 const MENTION_KEEP = 60 * 60 * 1000;
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/(\d+)$/;
 const FUN_NAME = /^[a-z][a-z0-9-]{0,23}$/;
@@ -118,6 +121,34 @@ function archiveTicketRoom(channel, ticket, ticketAt, why) {
   add(room, { from: 'office', by: 'relay', text: 'Archived because ' + why + '. It is kept to read, with no new posts.' });
   room.archived = { at: new Date().toISOString(), why };
   delete room.closeWhy; delete room.closeTries;
+  announce(channel, 'Archived #' + room.name + ' because ' + why + '. It is kept to read.');
+  log('Archived chat #' + room.name + ': ' + why + '.');
+  return true;
+}
+const failureRooms = (channel, all) => boardOf(channel).rooms.filter((r) => r.kind === 'failure' && (all || !r.archived));
+function openFailureRoom(channel, name, failure, text) {
+  const old = roomOf(channel, name);
+  if (old && old.kind !== 'failure') return null;
+  const board = boardOf(channel);
+  if (old) board.rooms = board.rooms.filter((r) => r !== old);
+  const room = newRoom(name, 'failure', 'relay', { failure, archived: null });
+  board.rooms.push(room);
+  add(room, { from: 'office', by: 'relay', text: clean(text, MAX_TEXT) });
+  save();
+  return room;
+}
+function sayIn(channel, name, text) {
+  const room = roomOf(channel, name);
+  if (!room || room.archived) return false;
+  add(room, { from: 'office', by: 'relay', text: clean(text, MAX_TEXT) });
+  save();
+  return true;
+}
+function archiveFailureRoom(channel, name, why) {
+  const room = roomOf(channel, name);
+  if (!room || room.kind !== 'failure' || room.archived) return false;
+  add(room, { from: 'office', by: 'relay', text: 'Archived because ' + why + '. It is kept to read, with no new posts.' });
+  room.archived = { at: new Date().toISOString(), why };
   announce(channel, 'Archived #' + room.name + ' because ' + why + '. It is kept to read.');
   log('Archived chat #' + room.name + ': ' + why + '.');
   return true;
@@ -227,7 +258,7 @@ async function remove(channel, name) {
   return [200, { ok: true, removed: room.name }];
 }
 
-const KIND_WORDS = { office: 'the relay\'s news', ticket: 'one ticket', fun: 'fun' };
+const KIND_WORDS = { office: 'the relay\'s news', ticket: 'one ticket', failure: 'one failure that blocks PRs', fun: 'fun' };
 function roomView(room) {
   const last = room.posts[room.posts.length - 1];
   return { name: room.name, kind: room.kind, about: room.kind === 'ticket' ? room.ticket + ' · ' + room.title : KIND_WORDS[room.kind], ticket: room.ticket, title: room.title, archived: room.archived || null, createdAt: room.createdAt, posts: room.posts.length, last: last ? last.n : 0, lastAt: last ? last.at : null };
@@ -359,4 +390,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, noteHook, reviewNews, onTicketSummary, onFindTicket, openTicketRoom, archiveTicketRoom, started, poll, announce, announceAll, prMerged, prClosed, nameOf };
+module.exports = { handle, noteHook, failureRooms, openFailureRoom, sayIn, archiveFailureRoom, roomOf, reviewNews, onTicketSummary, onFindTicket, openTicketRoom, archiveTicketRoom, started, poll, announce, announceAll, prMerged, prClosed, nameOf };

@@ -69,6 +69,7 @@ terminal](../docs/manual/running.html#own-terminal) and [What the hook sends](..
   Settings (rung 1 by default), the PM can run `ticket.js priority T-5 high` and `ticket.js order T-5 --before T-4`
   on tickets in Triage or Ready.
 - [The Lead sets priority](../docs/manual/roles.html#lead-order): **Let the Lead set priority** (off by
+- [The Lead unsticks the board](../docs/manual/roles.html#unstick): **Let the Lead unstick the board** (off by default, in Settings). [Shared failure channels](../docs/manual/roles.html#failures) are the relay's own.
   default) lets the Lead run the same two commands, on tickets in Triage or Ready.
 - [The Lead starts a review](../docs/manual/roles.html#lead-review): **Let the Lead start reviews** (off by
   default) lets the Lead run `ticket.js review <PR link>` for a task's PR. The relay starts the reviewer Get a

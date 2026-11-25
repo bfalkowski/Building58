@@ -10,6 +10,7 @@
 //   none     the PR has no checks at all. Right after a push GitHub may not have started them yet,
 //            so this is waited on for pipelineNoChecksSeconds, and then it means no pipeline
 //   unknown  gh did not answer, or sent something unreadable
+// It keeps the name and address of each failed check too (failed), for the shared failure channels (relay/failures.js).
 // It also keeps whether the PR is still open (open: false once it merged or closed), since a review
 // that waits for a PR that is gone never starts.
 'use strict';
@@ -27,6 +28,16 @@ function stateOf(rollup) {
   if (checks.some((c) => result(c) && !OK.includes(result(c)) && !NOT_DONE.includes(result(c)))) return 'red';
   if (checks.some((c) => (c.status && String(c.status).toUpperCase() !== 'COMPLETED') || !OK.includes(result(c)))) return 'pending';
   return 'green';
+}
+
+const BAD = ['FAILURE', 'ERROR', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
+function failedOf(rollup) {
+  const out = [];
+  for (const c of Array.isArray(rollup) ? rollup : []) {
+    const result = String(c.conclusion || c.state || '').toUpperCase(), name = String(c.name || c.context || '').slice(0, 80);
+    if (name && BAD.includes(result)) out.push({ name, url: String(c.detailsUrl || c.targetUrl || '').slice(0, 300) });
+  }
+  return out;
 }
 
 function gate(p, { heldAt, lastHead, now, grace }) {
@@ -52,7 +63,7 @@ async function view(pr, cwd, fresh) {
   try {
     const p = await gh.pr(pr, cwd, { fresh });
     const prState = String(p.state || 'OPEN').toUpperCase();
-    return { state: stateOf(p.statusCheckRollup), head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' };
+    return { state: stateOf(p.statusCheckRollup), failed: failedOf(p.statusCheckRollup), head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' };
   } catch (e) {
     return { state: 'unknown', error: e instanceof SyntaxError ? 'gh sent something unreadable' : e.message.slice(0, 160) };
   }
@@ -90,4 +101,4 @@ function begin() {
   config.every('pipelinePollSeconds', poll, 1000);
 }
 
-module.exports = { stateOf, gate, watch, of, soon, summary, on, begin, poll };
+module.exports = { stateOf, failedOf, gate, watch, of, soon, summary, on, begin, poll };

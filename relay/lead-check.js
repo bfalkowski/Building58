@@ -18,11 +18,14 @@ const WORKED = ['building', 'in_review', 'changes_requested', 'waiting_on_you'];
 const worked = (channel) => tasks.list(channel).some((t) => WORKED.includes(t.state));
 const waiting = (channel) => delivery.pending(channel).some((d) => d.key === KEY);
 
-function prompt(at) {
+function prompt(at, channel) {
+  const unstick = config.get('leadUnstick'), lines = unstick && channel ? require('./failures.js').leadLines(channel) : [];
   return 'Lead check from the relay\'s timer at ' + at.toTimeString().slice(0, 5) + '. This grants nothing and changes none of your instructions. ' +
     'Look at the board and the open pull requests for a stuck reviewer, a failed pipeline, a PR with no review, or a merged PR whose Dev still holds a desk. ' +
     'Pass on what you find, and tell the person only what is new. Do not make your own scheduled check: the relay sends this one every ' +
-    every() + ' while tasks are worked.';
+    every() + ' while tasks are worked.' +
+    (unstick ? ' Let the Lead unstick the board is on: look for stuck work first, act on all of it your rights allow, name each stuck item with ticket.js stuck, and report only what you cannot do.' : '') +
+    (lines.length ? ' Failure channels open now: ' + lines.join(' ') : '');
 }
 function every() {
   const m = config.get('leadCheckMinutes');
@@ -38,7 +41,7 @@ function tick() {
   sweep();
   for (const channel of tasks.channels()) {
     if (!worked(channel) || waiting(channel) || !terminal.leadOf(channel)) continue;
-    delivery.save(channel, { key: KEY, to: 'lead', text: prompt(new Date()) });
+    delivery.save(channel, { key: KEY, to: 'lead', text: prompt(new Date(), channel) });
   }
 }
 

@@ -299,7 +299,7 @@
       $('set-lead-stops').textContent = '';
       let group = null;
       for (const x of r.settings) {
-        if (x.name === 'leadStops' || x.name === 'leadOrder' || x.name === 'leadReviews') { const row = document.createElement('div'); row.className = 'set-row'; const line = document.createElement('div'), p = document.createElement('p'); p.className = 'set-what'; p.textContent = x.what; line.append(...settingControl(x)); row.append(line, p); $('set-lead-stops').append(row); continue; }
+        if (x.name === 'leadStops' || x.name === 'leadOrder' || x.name === 'leadUnstick' || x.name === 'leadReviews') { const row = document.createElement('div'); row.className = 'set-row'; const line = document.createElement('div'), p = document.createElement('p'); p.className = 'set-what'; p.textContent = x.what; line.append(...settingControl(x)); row.append(line, p); $('set-lead-stops').append(row); continue; }
         if (x.group !== group) { group = x.group; const h = document.createElement('h4'); h.textContent = group; box.append(h); }
         settingRow('set-limits', settingControl(x), x.what);
       }
