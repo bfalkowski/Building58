@@ -31,7 +31,8 @@ let state = {};
 try { state = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { /* first call */ }
 let out, status = 200;
 try { out = handle(); } finally {
-  fs.writeFileSync(file, JSON.stringify(state));
+  fs.writeFileSync(file + '.' + process.pid, JSON.stringify(state));
+  fs.renameSync(file + '.' + process.pid, file);
   fs.rmdirSync(lock);
 }
 if (status >= 400) stop(status, out);

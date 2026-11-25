@@ -48,7 +48,7 @@ function labelsFrom(value, all, agent) {
   const labels = [...new Set(list.map((l) => clean(l).toLowerCase()).filter(Boolean))];
   if (labels.some((l) => !KIND.test(l))) return { error: [400, { ok: false, error: 'bad_label', message: 'A label is one short word: a lowercase letter, then letters, digits or dashes, up to 24 in all, such as flaky or follow-up.' }] };
   if (labels.length > MAX_LABELS) return { error: [400, { ok: false, error: 'bad_label', message: 'A ticket has at most ' + MAX_LABELS + ' labels.' }] };
-  const known = labelsOf(all), unknown = labels.filter((l) => !known.includes(l));
+  const known = labelsOf(all), unknown = labels.filter((l) => !known.includes(l) && !(agent && agent.role === 'manager' && l === 'manager'));
   if (agent && unknown.length) return { error: [400, { ok: false, error: 'bad_label', message: 'No ticket has the label ' + unknown.join(', ') + ' yet. ' + (known.length ? 'Labels are: ' + known.join(', ') + '. ' : '') + 'Only the person adds a new label.' }] };
   return { labels };
 }
@@ -153,6 +153,11 @@ async function create(channel, body, agent) {
   if (unusable) return [400, { ok: false, error: 'bad_base', message: unusable }];
   return inTurn(channel, () => file(channel, { title, text, priority, repo, base, blockedBy: body.blockedBy, shapes: body.shapes, kind: body.kind, labels: body.labels }, agent));
 }
+async function fileAsManager(channel, { title, body, repo }) {
+  const main = await tasks.mainCheckout(repo);
+  const base = await tasks.defaultBranch(main);
+  return inTurn(channel, () => file(channel, { title: clean(title).replace(/\s+/g, ' ').slice(0, MAX_TITLE), text: clean(body).slice(0, MAX_BODY), priority: 'normal', repo: main, base, labels: ['manager'] }, { role: 'manager', cwd: main }));
+}
 async function file(channel, { title, text, priority, repo, base, blockedBy: asked, shapes: askedShapes, kind: askedKind, labels: askedLabels }, agent) {
   const all = await listAll(channel);
   const { kind, error } = kindFrom(askedKind, all, agent);
@@ -182,7 +187,7 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   filed(channel, ticket, agent, ticket.createdAt);
   return [201, { ok: true, ticket: await view(channel, ticket, all.concat(ticket)), likely: likelyTwins(ticket, live) }];
 }
-const agentName = (t) => (t.role === 'pm' ? 'PM' : t.role === 'coo' ? 'COO' : t.lead ? 'Lead' : t.title ? 'Worker on ' + t.title : 'Session ' + t.sessionId.slice(0, 8)).slice(0, 60);
+const agentName = (t) => (t.role === 'manager' ? 'Manager' : t.role === 'pm' ? 'PM' : t.role === 'coo' ? 'COO' : t.lead ? 'Lead' : t.title ? 'Worker on ' + t.title : 'Session ' + t.sessionId.slice(0, 8)).slice(0, 60);
 
 async function move(channel, ticket, body, agent) {
   const to = String(body.to || '');
@@ -771,4 +776,4 @@ async function handle(req, res, channel, rest, ctx) {
 const startingNow = (channel) => leadStarting.has(channel) || [...starting].some((k) => k.startsWith(channel + '/'));
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { closeForFailure, seatPm, handle, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { closeForFailure, seatPm, handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };

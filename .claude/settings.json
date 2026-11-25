@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": { "source": { "source": "github", "repo": "anthropics/claude-plugins-official" } },
+    "cursor-plugins": { "source": { "source": "github", "repo": "cursor/plugins" } }
+  },
+  "enabledPlugins": {
+    "mattpocock-skills@claude-plugins-official": true,
+    "pstack@cursor-plugins": true
+  }
+}

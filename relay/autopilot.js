@@ -792,7 +792,12 @@ function verdictOf(channel, pr) {
   return v ? { kind: v.kind, commit: v.commit, posted: postOf(channel, v) } : null;
 }
 const movesIt = (channel, task) => isOn(channel) && mineTask(task);
+function endedRuns(channel) {
+  const end = (r) => (r.mergedAt ? { at: r.mergedAt, outcome: 'merged' } : r.handed && r.handed.reason !== 'merged-by-person' ? { at: r.handed.at, outcome: 'handed' } : r.blocked ? { at: r.blocked.at, outcome: 'handed' } : null);
+  return Object.values(runsOf(channel)).map((r) => ({ r, e: end(r) })).filter((x) => x.e)
+    .map(({ r, e }) => ({ task: r.task, ticket: r.ticket, at: Date.parse(e.at), outcome: e.outcome })).sort((a, b) => a.at - b.at);
+}
 
 const runsKept = (channel) => (store[channel] && store[channel].runs) || {};
 
-module.exports = { runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };
+module.exports = { runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };

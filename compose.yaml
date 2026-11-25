@@ -10,6 +10,7 @@ services:
     env_file: .env
     environment:
       PORT: ${ROOM_PORT:-8787}
+      RELAY_IN_CONTAINER: "1"
     # Only this computer: the room page can run any command in the container.
     ports:
       - "127.0.0.1:${ROOM_PORT:-8787}:8800"

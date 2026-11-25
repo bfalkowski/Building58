@@ -1,0 +1,10 @@
+{
+  "marketplaces": {
+    "claude-plugins-official": "anthropics/claude-plugins-official",
+    "cursor-plugins": "cursor/plugins"
+  },
+  "plugins": [
+    { "name": "mattpocock-skills", "marketplace": "claude-plugins-official", "version": "1.3.1", "commit": "49dd158d1076134a641b33efb035946536778336" },
+    { "name": "pstack", "marketplace": "cursor-plugins", "version": "0.15.48", "commit": "41e400932eca14f289e7db717a70455256b6d388" }
+  ]
+}
