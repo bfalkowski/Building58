@@ -30,11 +30,15 @@ const { livenessOf } = require('./liveness.js');
 const { claim } = require('./lockfile.js');
 const plan = require('./manager-watch-plan.js');
 const brake = require('./trust-brake.js');
+const brakePlan = require('./trust-brake-plan.js');
+const jamReview = require('./manager-jams.js');
 
 const FILE = state.file('manager-watch.json', 'RELAY_MANAGER_WATCH_FILE');
 const NOTES_KEPT = 30;
 const FILE_PER_LOOK = 3;
 const MAX_FAILED_HEADS = 20;
+const EXPLAIN_MS = 24 * 3600 * 1000;
+const MAX_EXPLAINS = 5;
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 const BUILDING = ['building', 'changes_requested'];
 const ON = () => config.get('managerWatchSeconds') > 0;
@@ -58,7 +62,7 @@ function save() {
 }
 const chOf = (channel) => {
   const c = store[channel] || (store[channel] = {});
-  return Object.assign(c, { open: c.open || {}, notes: c.notes || [], seq: c.seq || 0, checks: c.checks || {}, skipSince: c.skipSince || {}, lowered: c.lowered || [] });
+  return Object.assign(c, { open: c.open || {}, notes: c.notes || [], seq: c.seq || 0, checks: c.checks || {}, skipSince: c.skipSince || {}, lowered: c.lowered || [], explains: c.explains || [] });
 };
 let ctx = null;
 const log = (text) => { if (ctx) ctx.log('Manager: ' + text); };
@@ -180,8 +184,10 @@ async function look(channel, now) {
       }
     }
   }
+  c.explains = c.explains.filter((x) => now - x.at < EXPLAIN_MS && (!x.tied || c.open[x.key]));
   looked.set(channel, { at: now, count: ((looked.get(channel) || {}).count || 0) + 1 });
   save();
+  try { await jamReview.review(channel, now, log); } catch (e) { log('The jam review failed: ' + e.message); }
 }
 async function tick() {
   if (looking || !ctx || !ON()) return;
@@ -196,15 +202,65 @@ function viewOf(channel) {
   const l = looked.get(channel);
   return { ok: true, on: ON(), every: config.get('managerWatchSeconds'), looks: l ? l.count : 0, lastLook: l ? new Date(l.at).toISOString() : null, limits: { buildingMinutes: config.get('managerBuildingMinutes'), checkFails: config.get('managerCheckFails'), briefMinutes: config.get('managerBriefMinutes'), slotMinutes: config.get('managerSlotMinutes'), handoffs: config.get('managerHandoffs'), skipMinutes: config.get('managerSkipMinutes') },
     checks: Object.entries(c.checks).flatMap(([pr, mine]) => Object.entries(mine).map(([name, heads]) => ({ pr, name, commits: heads.length }))),
-    lowersTrust: !!config.get('managerLowersTrust'), lowered: c.lowered.map((x) => Object.assign({}, x)), open: Object.entries(c.open).map(([key, r]) => ({ key, since: new Date(r.at).toISOString(), ticket: r.ticket })), notes: c.notes.map((n) => Object.assign({ filed: null }, n)) };
+    level: brake.levelNow(channel), levelName: levelWords(channel).name, lowersTrust: !!config.get('managerLowersTrust'), lowered: c.lowered.map((x) => Object.assign({}, x)), open: Object.entries(c.open).map(([key, r]) => ({ key, since: new Date(r.at).toISOString(), ticket: r.ticket })), notes: c.notes.map((n) => Object.assign({ filed: null }, n)) };
+}
+
+function levelWords(channel) {
+  const level = brake.levelNow(channel);
+  return { level, name: level === null ? null : brakePlan.NAMES[level] };
+}
+function seatView(channel, now) {
+  const c = chOf(channel), { level, name } = levelWords(channel), last = c.lowered[c.lowered.length - 1] || null, coo = require('./coo.js');
+  return {
+    level, levelName: name, lowersTrust: !!config.get('managerLowersTrust'),
+    lastLowered: last ? { at: last.at, from: last.from, to: last.to } : null,
+    watching: jamReview.watching(channel, now),
+    coo: { running: !!coo.running(channel), last: (coo.lastReport(channel) || {}).at || null }
+  };
+}
+function needsItems(channel) {
+  return chOf(channel).explains.map((x) => ({ at: x.at, text: x.text, key: x.key || null, ticket: x.ticket || null }));
+}
+
+function explain(channel, body) {
+  const text = oneLine(body && body.text, 600);
+  if (!text) return [400, { ok: false, error: 'bad_note', message: 'A note needs words: what you saw, and what the person can do.' }];
+  const c = chOf(channel), key = body && typeof body.key === 'string' ? oneLine(body.key, 80) : '';
+  c.explains = c.explains.filter((x) => !key || x.key !== key);
+  c.explains.push({ at: Date.now(), text, key: key || null, tied: !!(key && c.open[key]) });
+  c.explains = c.explains.slice(-MAX_EXPLAINS);
+  save();
+  log('Put a note on Needs you: ' + text);
+  return [200, { ok: true, message: 'The note is on Needs you. It leaves after a day, or when the stall it names is gone.' }];
+}
+function lowerNow(channel, body) {
+  if (!config.get('managerLowersTrust')) return [403, { ok: false, error: 'forbidden', message: 'The person has not let the manager lower the trust level. They turn it on with Let the manager lower the trust level in Settings.' }];
+  const c = chOf(channel), now = Date.now(), why = oneLine(body && body.why, 300);
+  if (!why) return [400, { ok: false, error: 'bad_param', message: 'Say why: what work cannot get past.' }];
+  const out = brake.lower(channel, { kind: 'judged', key: 'judged:' + now, ticket: null, task: null, terminal: null, reason: why, say: oneLine(why, 100) }, c.lowered, now);
+  if (!out) return [409, { ok: false, error: 'no_step', message: 'The room is at level 0, or its switches match no level, so there is no step to lower.' }];
+  if (out.limit) return [429, { ok: false, error: 'limit', message: 'The trust level was lowered ' + brake.PER_DAY + ' times in the last day already. The rest is the person\'s.' }];
+  c.notes.push({ seq: ++c.seq, at: new Date(now).toISOString(), key: 'judged:' + now, kind: 'brake', ticket: null, task: null, terminal: null, reason: out.entry.said, say: out.entry.say, filed: null });
+  c.notes = c.notes.slice(-NOTES_KEPT);
+  save();
+  log(out.entry.said);
+  return [200, { ok: true, from: out.entry.from, to: out.entry.to, message: out.entry.said }];
 }
 
 async function handle(req, res, channel, rest, rctx) {
-  if (rest !== '/manager') return false;
+  if (!/^\/manager(\/(lower|note))?$/.test(rest)) return false;
   const deny = terminal.localOnly(req, rctx.port);
   if (deny) { rctx.problem(res, 403, 'local_only', deny); return true; }
-  if (req.method !== 'GET') { rctx.problem(res, 404, 'not_found', 'The manager\'s watch answers GET. Change its limits in Settings.'); return true; }
-  if (rctx.agent) { rctx.problem(res, 401, 'unauthorized', 'Only the person reads the manager\'s notes.'); return true; }
+  const verb = rest.slice('/manager/'.length);
+  const mine = !!rctx.agent && rctx.agent.role === 'manager';
+  if (rctx.agent && !mine) { rctx.problem(res, 401, 'unauthorized', 'Only the person and the manager read the manager\'s notes.'); return true; }
+  if (verb && req.method === 'POST') {
+    if (!mine) { rctx.problem(res, 403, 'forbidden', 'Only the manager\'s session lowers the trust level or puts a note on Needs you. The person sets the level on the page.'); return true; }
+    const out = verb === 'lower' ? lowerNow(channel, await rctx.readJson(req)) : explain(channel, await rctx.readJson(req));
+    rctx.send(res, out[0], out[1]);
+    return true;
+  }
+  if (verb || req.method !== 'GET') { rctx.problem(res, 404, 'not_found', 'The manager\'s watch answers GET. Change its limits in Settings.'); return true; }
   rctx.send(res, 200, viewOf(channel));
   return true;
 }
@@ -214,4 +270,4 @@ function begin(relayCtx) {
   config.every('managerWatchSeconds', tick, 5000);
 }
 
-module.exports = { handle, begin, tick };
+module.exports = { handle, begin, tick, seatView, needsItems };

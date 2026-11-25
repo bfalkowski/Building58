@@ -90,7 +90,7 @@
   .feed-scroll::-webkit-scrollbar-track { background: var(--pane-tint); }
   .feed-scroll::-webkit-scrollbar-thumb { background: var(--pane-dim); border: 2px solid transparent; border-radius: 5px; background-clip: padding-box; }
   @supports not selector(::-webkit-scrollbar) { .feed-scroll { scrollbar-width: thin; scrollbar-color: var(--pane-dim) transparent; } }
-  /* The front office (office/front-view.js): the Lead and the PM in two fixed seats, then Needs you, Today and Up next. A third seat is one more child of #seats. */
+  /* The front office (office/front-view.js): the Lead, the PM and the manager in three fixed seats, then Needs you, Today and Up next. */
   .seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; padding: 10px; }
   .seat { position: relative; border: 1px solid var(--pane-line); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .seat > :not(.hit) { pointer-events: none; }
@@ -105,6 +105,8 @@
   .seat .doing { color: var(--pane-fg); overflow-wrap: anywhere; }
   .seat .always { font-size: 11px; color: var(--pane-dim); border: 1px solid var(--pane-line); border-radius: 10px; padding: 0 7px; }
   .seat .rung { color: var(--wait); font-size: 11.5px; }
+  .seat .mline, .seat .coo { color: var(--pane-dim); overflow-wrap: anywhere; }
+  .seat .coo button { pointer-events: auto; position: relative; z-index: 1; }
   .seat .tired { color: var(--ok); }
   .seat .tired[data-level="tired"] { color: var(--wait); }
   .seat .tired[data-level="refresh"] { color: var(--err); }
@@ -629,7 +631,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
             <p class="huddle-what" id="huddle-what">One short report on everyone, with what needs you first. Asking idle workers adds a one-line answer from each.</p>
           </div>
         </div>
-        <div id="seats" class="seats" role="group" aria-label="The Lead and the PM, always on"></div>
+        <div id="seats" class="seats" role="group" aria-label="The Lead, the PM and the manager, always on"></div>
         <section id="needs-you" aria-labelledby="needs-you-title" hidden>
           <h3><span id="needs-you-title">Needs you</span><span id="needs-you-count" role="status">0</span></h3>
           <p id="needs-you-empty">Nothing needs you now.</p>

@@ -38,7 +38,7 @@
       const next = {};
       for (const s of r.sessions) if (s.desk) next[s.terminal] = Object.assign({ name: s.name, lead: s.role === 'Lead', tired: s.tired || null }, s.desk);
       desks = next;
-      window.dispatchEvent(new CustomEvent('office:floor', { detail: { sessions: r.sessions, pm: r.pm || null } }));
+      window.dispatchEvent(new CustomEvent('office:floor', { detail: { sessions: r.sessions, pm: r.pm || null, manager: r.manager || null } }));
       drawGone(r.leadEnded || null);
       publish();
     } catch (e) { return; }

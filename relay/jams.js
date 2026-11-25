@@ -3,7 +3,7 @@
 // lists them, and Stalls by kind on the Metrics page counts them next to the stalls the room detected
 // (relay/metrics-plan.js). The relay writes one itself for each push the push hold refuses (relay/autopilot.js),
 // and one for each conflict hand-over of Autopilot, by 'autopilot': those are listed but not counted.
-// Only the person's key writes or reads over HTTP: a session's token gets 403, except the Lead's, which may write
+// Only the person's key writes or reads over HTTP: a session's token gets 403, except the manager's, which may read, and the Lead's, which may write
 // a jam while Let the Lead unstick the board is on, always by: Lead, and the shared failure channels write one
 // each by: room (relay/failures.js). A Lead jam says whether the Lead fixed it, passed it to the person or saw it
 // and never acted (outcome), which the Metrics page's Lead section counts (relay/metrics-plan.js). They are kept
@@ -84,7 +84,8 @@ async function handle(req, res, channel, rest, ctx) {
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   const leadWrites = ctx.agent && ctx.agent.lead && req.method === 'POST';
-  if (ctx.agent && !leadWrites) { ctx.problem(res, 403, 'person_only', 'Only the person writes or reads the jam log.'); return true; }
+  const managerReads = ctx.agent && ctx.agent.role === 'manager' && req.method === 'GET';
+  if (ctx.agent && !leadWrites && !managerReads) { ctx.problem(res, 403, 'person_only', 'Only the person writes or reads the jam log.'); return true; }
   if (leadWrites && !config.get('leadUnstick')) { ctx.problem(res, 403, 'forbidden', 'The person has not let the Lead unstick the board, so only the person writes the jam log. They turn it on with Let the Lead unstick the board in Settings.'); return true; }
   const now = Date.now();
   if (req.method === 'POST') {

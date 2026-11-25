@@ -116,7 +116,7 @@ async function handle(req, res, channel, rest, ctx) {
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (req.method !== 'GET') { ctx.problem(res, 404, 'not_found', 'Metrics answers GET only.'); return true; }
-  if (ctx.agent) { ctx.problem(res, 401, 'unauthorized', 'Only the person reads the metrics.'); return true; }
+  if (ctx.agent && ctx.agent.role !== 'manager') { ctx.problem(res, 401, 'unauthorized', 'Only the person and the manager read the metrics.'); return true; }
   const params = new URL(req.url, 'http://local').searchParams;
   const range = plan.rangeOf(params.get('range') || '7d'), format = params.get('format') || 'json';
   if (!range) { ctx.problem(res, 400, 'bad_param', 'range is 1d, 7d or 30d.'); return true; }

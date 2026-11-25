@@ -158,6 +158,8 @@ async function fileAsManager(channel, { title, body, repo }) {
   const base = await tasks.defaultBranch(main);
   return inTurn(channel, () => file(channel, { title: clean(title).replace(/\s+/g, ' ').slice(0, MAX_TITLE), text: clean(body).slice(0, MAX_BODY), priority: 'normal', repo: main, base, labels: ['manager'] }, { role: 'manager', cwd: main }));
 }
+const MANAGER = { role: 'manager', cwd: '' };
+const noteAsManager = (channel, id, text) => addNote(channel, { id }, { text }, MANAGER);
 async function file(channel, { title, text, priority, repo, base, blockedBy: asked, shapes: askedShapes, kind: askedKind, labels: askedLabels }, agent) {
   const all = await listAll(channel);
   const { kind, error } = kindFrom(askedKind, all, agent);
@@ -776,4 +778,4 @@ async function handle(req, res, channel, rest, ctx) {
 const startingNow = (channel) => leadStarting.has(channel) || [...starting].some((k) => k.startsWith(channel + '/'));
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { closeForFailure, seatPm, handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { closeForFailure, seatPm, handle, fileAsManager, noteAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };

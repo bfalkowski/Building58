@@ -5,7 +5,7 @@
 // stuck when its desk says stuck. See docs/manual/how-it-works.html#front-office.
 (function (root) {
   'use strict';
-  const WORKER_DESKS = 7;
+  const WORKER_DESKS = 6;
   const STUCK_KINDS = ['stuck', 'undelivered', 'prompt', 'gone'];
   const SHORT = { merge: 'merge', question: 'a question', permission: 'a permission', 'handed-over': 'handed over', review: 'a review', waiting: 'a look', merged: 'merged', closed: 'closed', desks: 'a free desk', main: 'main is red', claude: 'Claude Code', relay: 'the relay' };
   const VERDICT = {
@@ -85,10 +85,27 @@
       return (p.action === 'close' ? 'close ' + t.id + '?' : p.action === 'merge' ? 'merge ' + t.id + ' into ' + ids + '?' : p.action === 'replace' ? 'replace ' + t.id + ' with ' + ids + '?' : 'change the blockers of ' + t.id + '?');
     });
   }
-  function seatOf(kind, rows, needs, tickets, pm) {
+  const SEAT_ROLE = { lead: 'Lead', pm: 'PM', manager: 'Manager' };
+  const clock = (iso) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  function managerOf(m) {
+    if (!m) return { rung: '', lines: [] };
+    const lines = [];
+    lines.push(m.lastLowered ? 'Lowered the trust level from ' + m.lastLowered.from + (m.lastLowered.to === null ? '' : ' to ' + m.lastLowered.to) + ' at ' + clock(m.lastLowered.at) + '.' : m.lowersTrust ? 'It has not lowered the trust level.' : 'It may not lower the trust level.');
+    if (m.watching) lines.push('Watching: ' + m.watching.label + ' jams, ticket ' + m.watching.ticket + '. ' + (m.watching.outcome ? m.watching.outcome.words : m.watching.fixed ? 'The fix merged.' : 'No fix has merged yet.'));
+    return { rung: m.level === null || m.level === undefined ? 'trust: no level' : 'trust: ' + m.level + (m.levelName ? ' ' + m.levelName : ''), lines };
+  }
+  function cooOf(m) {
+    const coo = m && m.coo;
+    return { running: !!(coo && coo.running), last: coo && coo.last ? 'Last COO report ' + clock(coo.last) + '.' : 'No COO report yet.' };
+  }
+  function seatOf(kind, rows, needs, tickets, pm, manager) {
     const row = (rows || []).find((r) => r.seat === kind) || null;
     const proposals = kind === 'pm' ? proposalsOf(tickets) : [];
-    if (!row) return { kind, role: kind === 'pm' ? 'PM' : 'Lead', row: null, state: '', dot: 'idle', name: '', doing: 'Not running. The room starts it.', next: '', reason: null };
+    if (!row) {
+      const empty = { kind, role: SEAT_ROLE[kind] || 'Lead', row: null, state: '', dot: 'idle', name: '', doing: 'Not running. The room starts it.', next: '', reason: null };
+      if (kind === 'manager') { const m = managerOf(manager); Object.assign(empty, { rung: m.rung, lines: m.lines, coo: cooOf(manager) }); }
+      return empty;
+    }
     const d = row.desk || {}, doing = (d.doing || {}).state;
     const reason = reasonOf(row, needs);
     const seat = {
@@ -97,6 +114,10 @@
       doing: cut((d.doing && d.doing.words ? sentence(d.doing.words) : 'Idle') + (row.title && row.title !== row.role ? '. ' + row.title : ''), 140),
       next: d.next ? d.next.text : '', proposal: proposals.length ? 'Proposal: ' + proposals[0] + (proposals.length > 1 ? ' (+' + (proposals.length - 1) + ' more)' : '') : ''
     };
+    if (kind === 'manager') {
+      const m = managerOf(manager);
+      seat.rung = m.rung; seat.lines = m.lines; seat.coo = cooOf(manager);
+    }
     if (kind === 'pm' && pm) {
       seat.rung = pm.trustName ? 'trust: ' + pm.trust + ' ' + pm.trustName : '';
       seat.sort = pm.sortHours > 0 && pm.trust > 0 ? (pm.nextSortAt ? 'Next sort in ' + minutesWords(Math.max(1, (Date.parse(pm.nextSortAt) - pm.now) / 60000)) + '.' : 'Sorts every ' + pm.sortHours + ' h.') : 'It does not sort the Board.';
@@ -123,7 +144,7 @@
   }
   function todayOf(metrics, needsCount, rows) {
     const n = metrics && metrics.numbers ? metrics.numbers : null;
-    const workers = (rows || []).filter((r) => !r.seat && r.role !== 'PM').length;
+    const workers = (rows || []).filter((r) => !r.seat && r.role !== 'PM' && r.role !== 'Manager').length;
     return { merged: n ? n.merged : null, median: n && n.medianMinutes ? minutesWords(n.medianMinutes) : null, waiting: needsCount, free: Math.max(0, WORKER_DESKS - workers), desks: WORKER_DESKS };
   }
   const SLUG = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/\d+/;
@@ -136,6 +157,6 @@
     return 'board.html?channel=' + encodeURIComponent(channel) + '&ticket=' + encodeURIComponent(id);
   }
 
-  const api = { cardsOf, seatOf, upNext, todayOf, verdictOf, proposalsOf, reasonOf, headerOf, stageOf, ticketHref, repoSlug, minutesWords, WORKER_DESKS };
+  const api = { cardsOf, seatOf, managerOf, cooOf, upNext, todayOf, verdictOf, proposalsOf, reasonOf, headerOf, stageOf, ticketHref, repoSlug, minutesWords, WORKER_DESKS };
   root.OfficeFront = api;
 })(window);

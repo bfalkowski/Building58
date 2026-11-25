@@ -50,6 +50,7 @@ function leadMayStop(t, task, merged) {
   }
   if (t.role === 'pm') return no('it is the PM');
   if (t.role === 'coo') return no('it is the COO');
+  if (t.role === 'manager') return no('it is the manager');
   return no('it is not a reviewer or a Dev');
 }
 

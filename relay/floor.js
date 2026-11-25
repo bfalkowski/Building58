@@ -44,6 +44,7 @@ function stateOf(t, now) {
 function roleOf(t) {
   if (t.lead) return 'Lead';
   if (t.role === 'pm') return 'PM';
+  if (t.role === 'manager') return 'Manager';
   if (t.role === 'coo') return 'COO';
   if (t.role === 'security') return 'Security';
   if (t.role === 'reviewer') return 'reviewer';
@@ -94,7 +95,7 @@ function rowOf(channel, t, task, now, needs) {
   const verdict = leadVerdict(channel, t, task, now);
   const seat = seatOf(t, task);
   return {
-    terminal: t.id, name: seat.name, named: seat.named, seat: t.lead ? 'lead' : t.standing ? 'pm' : null,
+    terminal: t.id, name: seat.name, named: seat.named, seat: t.lead ? 'lead' : t.standing ? 'pm' : t.role === 'manager' ? 'manager' : null,
     role: seat.role, ticket: seat.ticket, title: (task && task.title) || t.title || null,
     pr: work.pr || (task && task.pr) || t.pr || null, state: stateOf(t, now), stuck: t.stuck && t.state === 'idle' ? { minutesAgo: minutes(now - t.stuck.at), why: t.stuck.why } : null, message: t.message || null,
     reviewWaits: !!work.reviewWaits, minutesSinceHook: t.hooked ? minutes(now - t.lastActAt) : null, safe: verdict.safe, canStop: verdict.canStop, why: verdict.reason,
@@ -222,7 +223,7 @@ async function handle(req, res, channel, rest, ctx) {
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'The floor needs the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
-  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()), pm: pmOf(Date.now()), leadEnded: terminal.leadEndedOf(channel), mainRed: mainCi.redOf(channel).map((m) => ({ branch: m.branch, repo: m.name, url: m.run.url || null, says: 'Red: ' + redMain(m) })) }); return true; }
+  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()), pm: pmOf(Date.now()), manager: require('./manager-watch.js').seatView(channel, Date.now()), leadEnded: terminal.leadEndedOf(channel), mainRed: mainCi.redOf(channel).map((m) => ({ branch: m.branch, repo: m.name, url: m.run.url || null, says: 'Red: ' + redMain(m) })) }); return true; }
   const body = await ctx.readJson(req);
   const [status, out] = ctx.agent ? stopOne(channel, body.who, ctx, Date.now()) : personStop(channel, body, ctx, Date.now());
   ctx.send(res, status, out);

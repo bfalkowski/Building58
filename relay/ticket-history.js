@@ -44,7 +44,7 @@ const entriesOf = (channel, id, at) => chOf(channel).tickets[keyOf(id, at)] || [
 function roleOf(t) {
   if (!t) return null;
   if (t.lead) return 'lead';
-  if (t.role === 'pm' || t.role === 'coo') return t.role;
+  if (t.role === 'pm' || t.role === 'coo' || t.role === 'manager') return t.role;
   if (t.role === 'reviewer' || t.reviewOf) return 'reviewer';
   return t.task ? 'dev' : null;
 }

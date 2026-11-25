@@ -30,6 +30,13 @@
 // Any session can read the person's standing rules: what holds for a while, with its reason and end date.
 // They are already in the brief. Only the person adds, changes or removes one:
 //   node relay/ticket.js rules
+// The manager's session reads what its watch saw, lowers the trust level one step (never raises it), puts a short
+// note on Needs you, and reads the jam log and the day's numbers (docs/manual/roles.html#manager-session):
+//   node relay/ticket.js manager
+//   node relay/ticket.js manager lower --why 'what work cannot get past'
+//   node relay/ticket.js manager note --body - <<'EOF'   (what it saw, and what the person can do; a last line of only EOF)
+//   node relay/ticket.js jams [1d|7d|30d]
+//   node relay/ticket.js metrics [1d|7d|30d]
 // The Lead asks the relay how tired it is: how full its context is, from its status line (relay/lead-tired.js):
 //   node relay/ticket.js tired
 // Only a session you made the Lead can also move things on the board:
@@ -281,6 +288,31 @@ async function main() {
     for (const m of r.mainRed || []) console.log(m.says);
     if (!r.sessions.length) console.log('No sessions are running.');
     for (const s of r.sessions) console.log(floorLine(s));
+    return 0;
+  }
+  if (cmd === 'manager') {
+    const at = URL_.replace(/\/tickets$/, '/manager');
+    if (args[0] === 'lower' || args[0] === 'note') {
+      const f = flags(args.slice(1));
+      if (args[0] === 'note' && !(await readBody(f))) return 1;
+      const text = args[0] === 'note' ? f.body : f.why;
+      if (!text) { console.error(args[0] === 'note' ? 'Use: ticket.js manager note --body - (the words on the lines below, then EOF)' : 'Use: ticket.js manager lower --why \'what work cannot get past\''); return 1; }
+      const r = await (await fetch(at + '/' + args[0], { method: 'POST', headers, body: JSON.stringify(args[0] === 'note' ? { text } : { why: text }) })).json();
+      if (!r.ok) { console.error(r.message); return 1; }
+      console.log(r.message);
+      return 0;
+    }
+    const r = await (await fetch(at, { headers })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log('Trust level ' + r.level + (r.levelName ? ', ' + r.levelName : '') + '. ' + (r.lowersTrust ? 'You may lower it.' : 'The person has not let you lower it.'));
+    for (const n of r.notes) console.log(n.seq + '  ' + n.kind + '  ' + n.reason);
+    if (!r.notes.length) console.log('The watch has seen no stall.');
+    return 0;
+  }
+  if (cmd === 'jams' || cmd === 'metrics') {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/' + cmd) + '?range=' + encodeURIComponent(args[0] || (cmd === 'jams' ? '7d' : '1d')), { headers })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log(JSON.stringify(cmd === 'jams' ? r.jams : r, null, 1));
     return 0;
   }
   if (cmd === 'rules') {
