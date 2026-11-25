@@ -1,13 +1,13 @@
 // Connects the world to a relay so outside callers can send commands. Uses only window.run.
-// Off unless the page is opened with ?channel=<name> (and ?relay=<url> if the
-// relay is somewhere other than this page's own server). See docs/manual/relay.html.
+// Off unless the page is opened with ?channel=<name>. It always talks to the relay that served
+// the page. See docs/manual/relay.html.
 (function () {
   'use strict';
   const params = new URLSearchParams(location.search);
   const channel = params.get('channel');
   if (!channel || !window.run || !window.EventSource) return;
   const run = window.run;
-  const base = (params.get('relay') || location.origin).replace(/\/+$/, '');
+  const base = location.origin.replace(/\/+$/, '');
   const url = (p) => base + '/channels/' + encodeURIComponent(channel) + p;
   const badge = document.getElementById('relay-status');
 
