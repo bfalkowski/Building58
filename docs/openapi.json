@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.14.0",
+    "version": "2.15.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -1393,7 +1393,7 @@
           "Manager watch"
         ],
         "summary": "Get manager",
-        "description": "Only with the relay key. What the manager's watch found: on, how often it looks (every, seconds), how many times it has looked (looks) and when (lastLook), its limits, the checks it counts (pr, name and the commits that check failed on), the problems that open now (key, since and the ticket it filed), and its last notes: seq, at, kind, ticket, task, terminal, reason, say and the ticket it filed.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key. What the manager's watch found: on, how often it looks (every, seconds), how many times it has looked (looks) and when (lastLook), its limits, the checks it counts (pr, name and the commits that check failed on), the problems that open now (key, since and the ticket it filed), whether lowersTrust (Let the manager lower the trust level) is on, the trust levels he has lowered in the last notes (lowered: at, key, from, to (or null for no level), saw, said, say), and its last notes: seq, at, kind (brake for a lowering), ticket, task, terminal, reason, say and the ticket it filed.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getManager",
         "x-tokens": [],
         "responses": {
