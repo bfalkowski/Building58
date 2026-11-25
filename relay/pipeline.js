@@ -31,11 +31,12 @@ function stateOf(rollup) {
 }
 
 const BAD = ['FAILURE', 'ERROR', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
+const AGGREGATE = 'pipeline';
 function failedOf(rollup) {
   const out = [];
   for (const c of Array.isArray(rollup) ? rollup : []) {
     const result = String(c.conclusion || c.state || '').toUpperCase(), name = String(c.name || c.context || '').slice(0, 80);
-    if (name && BAD.includes(result)) out.push({ name, url: String(c.detailsUrl || c.targetUrl || '').slice(0, 300) });
+    if (name && name !== AGGREGATE && BAD.includes(result)) out.push({ name, url: String(c.detailsUrl || c.targetUrl || '').slice(0, 300) });
   }
   return out;
 }

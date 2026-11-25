@@ -130,7 +130,11 @@ function openFailureRoom(channel, name, failure, text) {
   const old = roomOf(channel, name);
   if (old && old.kind !== 'failure') return null;
   const board = boardOf(channel);
-  if (old) board.rooms = board.rooms.filter((r) => r !== old);
+  if (old) {
+    let n = 2;
+    while (roomOf(channel, name + '-' + n)) n++;
+    old.name = name + '-' + n;
+  }
   const room = newRoom(name, 'failure', 'relay', { failure, archived: null });
   board.rooms.push(room);
   add(room, { from: 'office', by: 'relay', text: clean(text, MAX_TEXT) });

@@ -128,4 +128,20 @@ test('a failure on two PRs: one channel, both Devs told, the fix tells the other
     const post = await R.call('POST', '/chat/failure-browser', { text: 'late' });
     assert.strictEqual(post.status, 409);
   });
+
+  await t.test('the same check failing again opens a new channel and keeps the archived one with its history', async () => {
+    const again = await R.call('POST', '/failures', { check: 'browser', prs: [url(1), url(2)] });
+    assert.strictEqual(again.status, 201, JSON.stringify(again.body));
+    const rooms = (await chats()).filter((r) => r.kind === 'failure');
+    const old = rooms.find((r) => r.name === 'failure-browser-2');
+    assert.ok(old && old.archived, JSON.stringify(rooms.map((r) => [r.name, r.archived])));
+    assert.match(await posts('failure-browser-2'), /Summary: the check "browser" blocked 2 PRs/);
+  });
+
+  await t.test('PRs that fail the aggregate pipeline check and different jobs share no channel on pipeline', async () => {
+    const AGGREGATE = { __typename: 'CheckRun', name: 'pipeline', status: 'COMPLETED', conclusion: 'FAILURE' };
+    answers({ ...rollup(1, [AGGREGATE, { ...FAILED, name: 'lint and npm test' }]), ...rollup(2, [AGGREGATE, { ...FAILED, name: 'the room in a container' }]) });
+    await sleep(3000);
+    assert.ok(!(await chats()).some((r) => r.name === 'failure-pipeline'), 'no channel named for the aggregate');
+  });
 });

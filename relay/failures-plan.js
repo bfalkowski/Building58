@@ -10,7 +10,7 @@
 //   open     no channel for that failure yet, and two or more open PRs show it
 //   join     a channel is open and another open PR shows the same failure
 //   fixed    a PR of an open channel merged, and the channel has no fix yet: its first merge is the fix
-//   archive  the fix merged and every PR the failure blocked has merged, closed or passed the check, or the
+//   archive  every blocked PR passed the check with no merge, or the fix merged and every PR the failure blocked has merged, closed or passed the check, or the
 //            channel has had no post for QUIET_MS
 'use strict';
 
@@ -50,7 +50,9 @@ function plan({ rooms, prs, now }) {
       if (merged) { fixedBy = merged; out.push({ do: 'fixed', key: room.key, pr: merged }); }
     }
     const done = fixedBy && room.prs.every((pr) => cleared(by.get(pr), room.key));
-    if (done) out.push({ do: 'archive', key: room.key, why: 'the fix merged and every PR it blocked has merged, closed or passed the check' });
+    const passed = !fixedBy && room.prs.every((pr) => cleared(by.get(pr), room.key) && !(by.get(pr) || {}).merged);
+    if (passed) out.push({ do: 'archive', key: room.key, why: 'every PR it blocked passed the check and no fix merged, so it was likely a flaky run' });
+    else if (done) out.push({ do: 'archive', key: room.key, why: 'the fix merged and every PR it blocked has merged, closed or passed the check' });
     else if (now - room.lastAt >= QUIET_MS) out.push({ do: 'archive', key: room.key, why: 'it had no post for 24 hours' });
   }
   return out;

@@ -47,7 +47,13 @@ test('the channel is archived once the fix merged and every blocked PR merged, c
   assert.strictEqual(archive([pr(1, { open: false, merged: true }), pr(2, { failed: ['browser'] })]), 0, 'still failing');
   assert.strictEqual(archive([pr(1, { open: false, merged: true }), pr(2, { failed: ['lint'] })]), 0, 'failing another check is not passing this one');
   assert.strictEqual(archive([pr(1, { open: false, merged: true })]), 1, 'a PR the relay no longer sees is done');
-  assert.strictEqual(plan({ rooms: [room()], prs: [pr(1, { green: true }), pr(2, { green: true })], now: NOW }).filter((a) => a.do === 'archive').length, 0, 'no fix merged: passing alone does not close it');
+  assert.strictEqual(plan({ rooms: [room()], prs: [pr(1, { green: true }), pr(2, { failed: ['browser'] })], now: NOW }).filter((a) => a.do === 'archive').length, 0, 'one still fails');
+});
+
+test('a channel whose blocked PRs all pass with no merge, as after a rerun, is archived at once', () => {
+  const out = plan({ rooms: [room()], prs: [pr(1, { green: true }), pr(2, { green: true })], now: NOW });
+  assert.deepStrictEqual(out.map((a) => a.do), ['archive']);
+  assert.match(out[0].why, /no fix merged/);
 });
 
 test('a channel with no post for 24 hours is archived, fixed or not', () => {
