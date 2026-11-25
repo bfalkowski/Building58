@@ -6,8 +6,9 @@
 // board_empty, board_b, board_c. The API is an edd-platform with its suite gate, started with a live
 // model key. In it this makes an agent with the kit's three tests, a version with the brief last judged
 // (relay/pm-brief-eval.json) and one with the brief now, runs each version's suite live, and compares
-// the two suites. If any test passed before and fails now, it exits 1 and the file stays as it was, so
-// npm test keeps failing. Otherwise it writes the new brief and the result into the file. With no file
+// the two suites. If any test passed before and fails now, or any test's score drops, it exits 1 and the
+// file stays as it was, so npm test keeps failing (a lower total always has a test that dropped). Otherwise
+// it writes the new brief and the result into the file. With no file
 // yet, it runs the brief now alone and writes the first one. Exit 2 means the eval could not run.
 'use strict';
 const fs = require('fs');
@@ -94,6 +95,24 @@ async function suite(call, agentId, label, instructions, status) {
   return { id: v.id, result };
 }
 
+function failing(t) {
+  const list = t.eval_result.check_results || t.eval_result.checks || [];
+  return list.filter((c) => c && c.passed === false).map((c) => ({ rule: oneLine(String(c.id || c.name || c.rule || 'check'), 80), why: oneLine(String(c.reason || c.explanation || c.message || ''), 300) }));
+}
+
+function worse(before, now, outcome) {
+  const prior = new Map(before.result.tests.map((t) => [t.scenario_id, t.eval_result]));
+  const reasons = [];
+  for (const t of now.result.tests) {
+    const b = prior.get(t.scenario_id);
+    if (!b) continue;
+    const key = outcome.names[t.scenario_id] || t.scenario_id;
+    if (b.passed && !t.eval_result.passed) reasons.push(key + ' passed before and fails now (score ' + b.score + ' to ' + t.eval_result.score + ')');
+    else if ((t.eval_result.score || 0) < (b.score || 0)) reasons.push(key + ' score dropped from ' + b.score + ' to ' + t.eval_result.score);
+  }
+  return reasons;
+}
+
 async function evaluate(o, log) {
   const stamp = fs.existsSync(o.stamp) ? JSON.parse(fs.readFileSync(o.stamp, 'utf8')) : null;
   const brief = forEval();
@@ -106,13 +125,22 @@ async function evaluate(o, log) {
   const cmp = before && await call('POST', '/comparisons/suite', { baseline_version_id: before.id, candidate_version_id: now.id });
   const outcome = new Map(((cmp && cmp.tests) || []).map((r) => [r.scenario_id, r.outcome]));
   const tests = now.result.tests.map((t) => ({ test: names[t.scenario_id] || t.scenario_id, passed: !!t.eval_result.passed, score: t.eval_result.score, ...(cmp ? { outcome: outcome.get(t.scenario_id) } : {}) }));
-  for (const t of tests) log(t.test + ': ' + (t.passed ? 'passed' : 'failed') + ', score ' + t.score + (t.outcome ? ', ' + t.outcome.replace('_', ' ') : ''));
+  const prior = before && new Map(before.result.tests.map((t) => [t.scenario_id, t.eval_result.score]));
+  for (const t of now.result.tests) {
+    const test = tests.find((x) => x.test === (names[t.scenario_id] || t.scenario_id));
+    const was = prior && prior.get(t.scenario_id);
+    log(test.test + ': ' + (test.passed ? 'passed' : 'failed') + ', score ' + test.score + (was === undefined ? '' : ' (was ' + was + ')') + (test.outcome ? ', ' + test.outcome.replace('_', ' ') : ''));
+    test.failing = failing(t);
+    for (const f of test.failing) log('  failed ' + f.rule + (f.why ? ': ' + f.why : ''));
+  }
   log('Passed ' + now.result.passed + ' of ' + now.result.total + (before ? ', was ' + before.result.passed + ' of ' + before.result.total : '') + '.');
-  if (cmp && cmp.totals.regressed > 0) {
-    log('The eval got worse: ' + cmp.totals.regressed + ' test(s) passed with the brief last judged and fail now. ' + path.basename(o.stamp) + ' stays as it was, so npm test still fails.');
+  const reasons = before ? worse(before, now, { names }) : [];
+  if (cmp && cmp.totals.regressed > 0 && !reasons.length) reasons.push(cmp.totals.regressed + ' test(s) passed with the brief last judged and fail now');
+  if (reasons.length) {
+    log('The eval got worse: ' + reasons.join('; ') + '. ' + path.basename(o.stamp) + ' stays as it was, so npm test still fails.');
     return 1;
   }
-  const judged = { on: new Date().toISOString().slice(0, 10), passed: now.result.passed, total: now.result.total, tests };
+  const judged = { on: new Date().toISOString().slice(0, 10), passed: now.result.passed, total: now.result.total, score: tests.reduce((n, t) => n + (t.score || 0), 0), tests };
   if (cmp) Object.assign(judged, { before: before.result.passed, comparison: cmp.id, totals: cmp.totals });
   fs.writeFileSync(o.stamp, JSON.stringify({ brief, judged }, null, 2) + '\n');
   log('The eval did not get worse. Wrote the brief and the result to ' + path.basename(o.stamp) + '; commit it with the change.');
