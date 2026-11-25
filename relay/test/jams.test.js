@@ -79,3 +79,16 @@ test('a jam posted with the person\'s key is kept and listed, a session\'s token
   const file = JSON.parse(fs.readFileSync(path.join(home, '.office-world', 'jams.json'), 'utf8'));
   assert.strictEqual(file.t.length, 2, 'kept in jams.json in the state folder');
 });
+
+test('each jam kind from the stall analysis is kept, and Stalls by kind counts it under its own name', async (t) => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-jams-')));
+  const R = await relay({}, home);
+  t.after(async () => { await R.kill(); await R.remove(); });
+  const kinds = ['stuck-job', 'stale-cache', 'out-of-rounds', 'permission-prompt', 'news-behind-menu', 'dev-asks', 'not-needed', 'handover-starts-new', 'flake-blocks', 'push-hold-red-ci', 'update-waits'];
+  for (const kind of kinds) assert.strictEqual((await R.call('POST', '/jams', { kind, fix: 'Fixed by hand.' })).status, 201, kind);
+  assert.deepStrictEqual((await R.call('GET', '/jams?range=1d')).body.jams.map((j) => j.kind), kinds);
+  const m = (await R.call('GET', '/metrics?range=7d')).body;
+  const by = Object.fromEntries(m.stalls.kinds.map((k) => [k.kind, k]));
+  for (const kind of kinds) assert.strictEqual(by[kind].hand.count, 1, kind);
+  assert.strictEqual(m.numbers.jamsFixedByHand, kinds.length);
+});
