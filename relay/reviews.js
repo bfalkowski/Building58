@@ -59,6 +59,7 @@ const delivery = require('./delivery.js');
 const { claim } = require('./lockfile.js');
 const reviewHistory = require('./review-history.js');
 const prComments = require('./pr-comments.js');
+const { keepLines } = require('./clean.js');
 const door = require('./gh.js');
 const { PR_URL, prBrief, followBrief, followUps, followUpOwed } = require('../office/reviews.js');
 const config = require('./config.js');
@@ -91,7 +92,7 @@ function save() {
   } catch (e) { console.error('Could not save reviews to ' + FILE + ': ' + e.message); }
 }
 const chOf = (channel) => store[channel] || (store[channel] = { prs: {} });
-let autopilot = { follows: () => false, ask: () => '', since: () => null, freed: () => {} };
+let autopilot = { follows: () => false, ask: () => '', since: () => null, freed: () => {}, verdictOf: () => null };
 const useAutopilot = (a) => { autopilot = a; checkouts.useAsk((channel) => a.ask(channel)); };
 const followsPushes = (channel) => switchesOf(channel).again || autopilot.follows(channel);
 const switchesOf = (channel) => { const c = chOf(channel); return { auto: c.auto !== false, again: c.again === true }; };
@@ -168,13 +169,22 @@ async function history(channel, pr, used) {
     return reviewHistory.text(got.items, { earlier: await reviewHistory.earlierOf(tasks.list(channel).find((t) => t.pr === pr), pr, door.pr), budget: Math.min(5500, 7800 - used) });
   } catch (e) { return ''; }
 }
+async function replyBrief(pr) {
+  let reply = '';
+  try {
+    const got = await prComments.itemsOf(pr);
+    const mine = got.failed ? [] : got.items.filter((i) => i.body.startsWith(prComments.DEV_MARK)).sort((a, b) => (a.at || 0) - (b.at || 0));
+    if (mine.length) reply = keepLines(mine[mine.length - 1].body.replace(prComments.DEV_MARK, '').trim(), 3000);
+  } catch (e) { reply = ''; }
+  return prBrief(pr) + ' The review of this commit asked for fixes. Its Dev answered with a reply on the PR and pushed no new commit, so read the same commit again. Check the Dev\'s reply (gh pr view ' + pr + ' --comments): if it fixes a finding that is not in the code, such as the PR description, say whether that finding is now fixed; if it gives a reason a finding is not a bug, say whether the reason holds. A finding the reply does not answer keeps its kind.' + (reply ? ' The Dev\'s reply:\n' + reply : '');
+}
 async function followUp(channel, pr, from) {
   const rec = recOf(channel, pr), p = rec.pending;
   rec.pending = null;
   if (!p.again) rec.count += 1;
   save();
-  const base = followBrief(pr, autopilot.since(channel, pr)) + autopilot.ask(channel);
-  const out = await startReview(channel, { from, pr, prompt: base + await history(channel, pr, base.length), unlessAt: p.again ? undefined : rec.head });
+  const base = (p.same ? await replyBrief(pr) : followBrief(pr, autopilot.since(channel, pr))) + autopilot.ask(channel);
+  const out = await startReview(channel, { from, pr, prompt: base + await history(channel, pr, base.length), unlessAt: p.again || p.same ? undefined : rec.head });
   if (out.ok && !out.unchanged) { startedNews(channel, out, 'a follow-up review of PR ' + number(pr)); return; }
   if (!p.again) rec.count = Math.max(0, rec.count - 1);
   if (out.ok) { save(); say(channel, 'PR ' + number(pr) + ' has no new commits since its last review, so no follow-up review started.'); return; }
@@ -358,11 +368,26 @@ function tick() {
     for (const pr of full) waitOnPerson(channel, pr);
     for (const s of start) {
       const rec = c.prs[s.pr];
-      if (!passes(channel, s.pr, rec, rec.pending, rec.head) || !rec.pending) continue;
+      if (!passes(channel, s.pr, rec, rec.pending, rec.pending.same ? null : rec.head) || !rec.pending) continue;
       if (deskFree(channel)) followUp(channel, s.pr, s.from); else needsDesk(channel, s.pr, rec, rec.pending);
     }
   }
   for (const channel of Object.keys(store)) makeRoom(channel, Date.now());
+}
+
+function oweReply(channel, t) {
+  const pr = prOf(channel, t), rec = pr && recOf(channel, pr);
+  if (!rec || !rec.replied || !terminal.ENABLED || !ctx) return;
+  const v = autopilot.verdictOf(channel, pr), seen = pipeline.on() ? pipeline.of(pr) : null;
+  if (rec.replied !== rec.head || !v || v.kind !== 'fix' || v.commit !== rec.head) { delete rec.replied; save(); return; }
+  if (seen && seen.head && seen.head !== rec.head) return;
+  delete rec.replied;
+  if (reviewing(channel, pr) || !switchesOf(channel).auto || rec.first || rec.pending || rec.waits || rec.failed) { save(); return; }
+  if ((rec.count || 0) >= MAX_AUTO_REVIEWS()) { waitOnPerson(channel, pr); return; }
+  rec.pending = { from: t.cwd || rec.from, dev: t.id, session: t.sessionId, at: Date.now(), tries: 0, watch: true, same: true };
+  rec.queued = rec.head; rec.why = null;
+  save();
+  say(channel, 'The Dev of PR ' + number(pr) + ' answered the review with a reply and no push. A follow-up review of the same commit is owed.', 'wait');
 }
 
 function noteHook(channel, ev) {
@@ -381,8 +406,14 @@ function noteHook(channel, ev) {
       }).catch((e) => ctx.log('No review of ' + pr + ': ' + e.message));
     }
   }
+  if (t && ev.posted && ev.posted.kind === 'comment' && ev.posted.url) {
+    const pr = prOf(channel, t), rec = pr && recOf(channel, pr);
+    if (rec && rec.head && ev.posted.url.startsWith(pr + '#')) { rec.replied = rec.head; save(); }
+  }
+  if (t && ev.hook_event_name === 'Stop') oweReply(channel, t);
   if (ev.pushed && t) {
     const pr = prOf(channel, t), rec = pr && recOf(channel, pr);
+    if (rec) delete rec.replied;
     if (rec && rec.first) { rec.first.dev = t.id; save(); pipeline.soon(pr, t.cwd); }
     else if (rec && followsPushes(channel) && pipeline.on()) { rec.from = t.cwd; save(); pipeline.soon(pr, t.cwd); }
     else if (rec && followsPushes(channel)) { rec.from = t.cwd; rec.pending = { from: t.cwd, dev: t.id, session: t.sessionId, at: Date.now(), tries: 0 }; rec.why = null; save(); }
@@ -491,6 +522,10 @@ function stateOf(channel, pr) {
 function owesFirst(channel, pr) {
   return !!ctx && terminal.ENABLED && PR_URL.test(pr) && switchesOf(channel).auto && !reviewing(channel, pr) && !recOf(channel, pr);
 }
+function owesFollowUp(channel, pr, head) {
+  const rec = recOf(channel, pr);
+  return !!ctx && terminal.ENABLED && PR_URL.test(pr) && switchesOf(channel).auto && !reviewing(channel, pr) && !!rec && !!rec.head && !!head && rec.head !== head && !rec.first && !rec.pending && !rec.waits && !rec.failed;
+}
 function owe(channel, pr, { from, dev, head }) {
   if (!terminal.ENABLED || !ctx || !PR_URL.test(pr) || !from) return 'no review: nothing to make its checkout from';
   if (reviewing(channel, pr)) return 'a review runs';
@@ -520,7 +555,7 @@ tasks.events.on('found', (channel, task) => {
 function deskOf(channel, pr) {
   const r = pr && recOf(channel, pr);
   const desk = !!(r && deskWaitOf(r)), retry = !desk && !!(r && r.first && r.first.tries);
-  return r ? { count: r.count || 0, waits: !!r.waits, held: !desk && !retry && !!(r.first || (r.pending && r.why)), desk, retry, failed: !!r.failed } : null;
+  return r ? { followUp: !!(r.head && r.pending && !r.failed && !r.waits), count: r.count || 0, waits: !!r.waits, held: !desk && !retry && !!(r.first || (r.pending && r.why)), desk, retry, failed: !!r.failed } : null;
 }
 
 function reviewCounted(channel, pr) {
@@ -544,4 +579,4 @@ function reviewEmpty(channel, pr) {
 
 const failedOf = (channel, pr) => { const r = pr && recOf(channel, pr); return (r && r.failed) || null; };
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };
+module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };

@@ -27,7 +27,7 @@
     const stuck = mine.find((i) => STUCK_KINDS.includes(i.kind));
     if (doing.state === 'stuck') return { kind: 'stuck', text: 'Stuck: ' + String(doing.words || 'stuck').replace(/^stuck:\s*/i, '') };
     if (stuck) return { kind: 'stuck', text: 'Stuck: ' + cut(stuck.line, 90) };
-    if (mine.length) return { kind: 'wait', text: 'Waits on you: ' + (SHORT[mine[0].kind] || cut(mine[0].line, 50)) };
+    if (mine.length && !(d.review && d.review.followUp)) return { kind: 'wait', text: 'Waits on you: ' + (SHORT[mine[0].kind] || cut(mine[0].line, 50)) };
     return null;
   }
   function reviewerSlot(dev, reviewers) {
@@ -41,6 +41,7 @@
   function stageOf(dev, reason) {
     const d = dev.desk || {}, col = d.column && d.column.id, k = d.status && d.status.key, rounds = d.rounds || 0;
     if (k === 'merged' || k === 'done' || col === 'done') return 'merged';
+    if (d.review && d.review.followUp) return 'waiting for a follow-up review';
     if (col === 'changes_requested' || k === 'fix') return 'changes requested, round ' + (rounds + 1) + ' next';
     if (reason && reason.kind === 'wait') return 'waits on you';
     if (col === 'waiting_on_you') return 'waits on you';

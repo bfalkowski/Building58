@@ -42,6 +42,7 @@ function reviewWords(review, autopilot, reviewing) {
   if (review && review.failed) return 'automatic review could not start';
   if (autopilot && autopilot.verdict === 'merge') return 'review says merge';
   if (autopilot && autopilot.verdict === 'fix') return 'review asks for fixes';
+  if (review && review.followUp) return 'waiting for a follow-up review';
   if (review && review.held) return 'review waits on CI';
   if (review && review.desk) return 'review waits for a desk';
   if (review && review.retry) return 'review tries again';
@@ -54,6 +55,7 @@ function prStep(d, pr) {
   if (d.ci === 'red') return ['The Dev fixes the failed CI on PR ' + n, 'Dev'];
   if (d.review && d.review.waits) return ['Waiting on you: review PR ' + n + ', its automatic reviews are used up', 'you'];
   if (d.review && d.review.failed) return ['Waiting on you: review PR ' + n + ', its automatic review could not start', 'you'];
+  if (d.review && d.review.followUp) return ['Waiting for a follow-up review of PR ' + n, 'reviewer'];
   if (d.reviewing) return ['The reviewer reviews PR ' + n, 'reviewer'];
   if (d.autopilot && d.autopilot.on && d.autopilot.mine) {
     const a = d.autopilot;

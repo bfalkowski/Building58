@@ -129,7 +129,7 @@ const verdictAsk = () => ' Mark each finding blocking, fix now or follow-up. Blo
   'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post. ' +
   'Post one comment that starts with the line ## Review of <the commit you read>, says what you checked, and has a line Verdict: merge or Verdict: fix that matches the command. ' +
   'Post it with gh pr comment <PR> --body-file - and the text in a quoted heredoc (<<\'EOF\'), never with --body -, which posts a dash. A comment with no verdict line or no words does not count as a review, and the room starts the review again.';
-reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(),
+reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(), verdictOf: (channel, pr) => verdictOf(channel, pr),
   since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; },
   freed: (channel, pr, text) => {
     const task = tasks.list(channel).find((x) => x.pr === pr);
