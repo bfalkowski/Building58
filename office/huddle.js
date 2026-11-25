@@ -1,7 +1,7 @@
 // The Huddle buttons on the Floor: one short report on everyone. The relay builds it (relay/huddles.js).
 // Status report reads what is already known and asks nobody. Asking sends idle workers a question,
 // which spends tokens, so it is a separate button that says so. Whether each report also goes to the
-// Lead is a switch in Settings, under Huddle, kept in this browser.
+// Lead is a switch in Settings, on the Chat tab, kept in this browser.
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -50,7 +50,7 @@
     last = s;
     const lead = !!s.lead && leadBox.checked;
     freeBtn.textContent = lead ? 'Status report (tells the Lead: one Lead turn)' : 'Status report';
-    freeBtn.title = 'Reads what the relay, git and gh already know. Asks no session.' + (lead ? ' It is also typed into the Lead\'s session, which spends one Lead turn. Turn that off in Settings, under Huddle.' : '');
+    freeBtn.title = 'Reads what the relay, git and gh already know. Asks no session.' + (lead ? ' It is also typed into the Lead\'s session, which spends one Lead turn. Turn that off in Settings, on the Chat tab.' : '');
     freeBtn.disabled = pressing || s.open;
     askBtn.disabled = pressing || s.open || !s.askable;
     askBtn.textContent = s.open ? 'Asking idle workers' : s.askable ? 'Ask idle workers too (' + s.askable + ', one turn each' + (lead ? ', plus one Lead turn' : '') + ')' : 'Ask idle workers too (nobody is idle)';

@@ -16,10 +16,10 @@ pageTest('Let the Lead start reviews shows under The Lead, starts off, and turns
   const page = p.page;
   await page.click('#cc-settings');
   await page.locator('#settings[open]').waitFor();
-  const box = page.locator('#set-lead-stops label', { hasText: 'Let the Lead start reviews' }).locator('input[type="checkbox"]');
+  const box = page.locator('#set-cfg-trust label', { hasText: 'Let the Lead start reviews' }).locator('input[type="checkbox"]');
   await box.waitFor();
   assert.strictEqual(await box.isChecked(), false, 'off by default');
-  assert.match(await page.locator('#set-lead-stops .set-row', { hasText: 'Let the Lead start reviews' }).innerText(), /ticket\.js review/);
+  assert.match(await page.locator('#set-cfg-trust .set-row', { hasText: 'Let the Lead start reviews' }).innerText(), /ticket\.js review/);
   await box.check();
   await page.locator('#settings-said', { hasText: 'Saved.' }).waitFor();
   assert.strictEqual(await value(), true);
