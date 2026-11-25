@@ -47,6 +47,7 @@ function waitForPort(url, child) {
   const { hostname, port, protocol } = new URL(url);
   return new Promise((done, fail) => {
     let gone = false;
+    child.once('error', (e) => { gone = true; fail(new Stop('edd-platform did not start: ' + e.message)); });
     child.once('exit', (code) => { gone = true; fail(new Stop('edd-platform stopped with ' + code + ' before it answered.')); });
     const knock = () => {
       if (gone) return;
@@ -103,6 +104,7 @@ function isUp(url) {
 
 async function main(argv, env, here) {
   const o = options(argv, env);
+  if (!fs.existsSync(o.edd) || !fs.statSync(o.edd).isDirectory()) throw new Stop('The edd-platform folder ' + o.edd + ' does not exist.');
   if (await isUp(o.api)) throw new Stop('Something already answers at ' + o.api + '. Stop it, or give another --api.');
   const work = checkout(o, here);
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'edd-platform-'));

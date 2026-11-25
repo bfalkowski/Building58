@@ -113,3 +113,12 @@ test('an API port that already answers is refused before anything starts', async
   t.after(() => busy.close());
   await assert.rejects(main(f.args, f.env, f.clone), /already answers/);
 });
+
+test('an edd-platform folder that does not exist stops before anything is made', async (t) => {
+  const f = await fixture(t);
+  const args = f.args.slice();
+  args[args.indexOf('--edd') + 1] = path.join(f.dir, 'missing');
+  await assert.rejects(main([...args, '--branch', 'feature'], f.env, f.clone), /does not exist/);
+  assert.ok(!sh(f.clone, 'worktree', 'list').includes('pm-brief-eval-'), 'no temporary checkout is left');
+  assert.ok(await isDown(f.port));
+});
