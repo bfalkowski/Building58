@@ -355,8 +355,11 @@ async function lookAt(channel, task) {
   if (files) { rec.apiFiles = plan.touchesApi(files); if (rec.apiSeq === undefined) rec.apiSeq = chOf(channel).apiSeq || 0; }
   if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
   const v = latest(rec);
-  const ex = await exhibitOf(task, pr);
-  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex));
+  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
+  if (d.act === 'merge') {
+    const ex = await exhibitOf(task, pr);
+    if (ex !== undefined) d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex));
+  }
   rec.why = d.why; rec.act = d.act;
   if (d.act === 'wait') rec.why = reviews.deskLine(channel, task.pr) || rec.why;
   if (d.act === 'done') markDone(channel, task);

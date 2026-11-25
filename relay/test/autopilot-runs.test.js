@@ -68,6 +68,10 @@ test('manual: handed to the person by rule, such as a constitution change, or me
   runs.verdict(r, { kind: 'fix', commit: 'a'.repeat(40), at: at(20) });
   assert.strictEqual(runs.hand(r, 'protected-file', at(30)), true);
   assert.strictEqual(runs.hand(r, 'ci-red', at(40)), false, 'the first hand-over is the one kept');
+  const e = fresh();
+  runs.verdict(e, { kind: 'merge', commit: 'a'.repeat(40), at: at(20) });
+  assert.strictEqual(runs.hand(e, 'exhibit', at(30)), true, 'Exhibit not passing is a hand-over by rule');
+  assert.strictEqual(runs.outcomeOf(e), 'manual');
   assert.deepStrictEqual(r.handed, { reason: 'protected-file', at: at(30) });
   assert.strictEqual(runs.outcomeOf(r), 'manual');
   const p = fresh();
