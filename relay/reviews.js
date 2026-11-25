@@ -208,7 +208,7 @@ function passes(channel, pr, rec, held, lastHead) {
   rec.why = g.go ? null : g.why;
   if (g.gone) { gone(channel, pr, rec, g.why); return false; }
   if (g.go) {
-    if (rec.conflictAt) { rec.conflictAt = null; save(); }
+    if (rec.conflictAt) { rec.conflictAt = null; delivery.drop(channel, 'conflict ' + pr); save(); }
     if (rec.red) { rec.red = null; delivery.drop(channel, 'pipeline ' + pr); save(); }
     if (g.why) say(channel, 'PR ' + number(pr) + ': ' + g.why);
     return true;
@@ -218,7 +218,7 @@ function passes(channel, pr, rec, held, lastHead) {
   return false;
 }
 function gone(channel, pr, rec, why) {
-  delivery.drop(channel, 'pipeline ' + pr);
+  delivery.drop(channel, 'pipeline ' + pr); delivery.drop(channel, 'conflict ' + pr);
   if (rec.first && !rec.count && !rec.head) delete chOf(channel).prs[pr];
   else { delete rec.first; rec.pending = null; rec.why = null; }
   save();
@@ -240,7 +240,7 @@ function conflicted(channel, pr, rec, held, head) {
   const after = ' The review starts once a push clears the conflict and the pipeline is green.';
   if (!dev) { say(channel, 'PR ' + number(pr) + ' conflicts with main, so no review started, and nobody could be told: its Dev\'s session has ended.' + after, 'off'); return; }
   const send = (files) => {
-    delivery.save(channel, { key: 'pr-watch ' + pr, terminal: dev.id, sessionId: dev.sessionId, expiresAt: Date.now() + LEAD_KEEP, text: was ? conflictText.again(pr, head, files) : conflictText.first(pr) });
+    delivery.save(channel, { key: 'conflict ' + pr, terminal: dev.id, sessionId: dev.sessionId, expiresAt: Date.now() + LEAD_KEEP, text: was ? conflictText.again(pr, head, files) : conflictText.first(pr) });
     say(channel, 'PR ' + number(pr) + (was ? ' still' : '') + ' conflicts with main, so no review started. Its Dev was told' + (was && files.length ? ' which files conflict' : '') + '.' + after, 'off', dev.id);
   };
   if (was) conflictText.conflictFiles(held.from || dev.cwd).then(send); else send([]);
