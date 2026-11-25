@@ -1,0 +1,343 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 478,
+  "base": "4890c96ec2fbb3bec0aaf1f051bac97335c90a64",
+  "head": "68b8921be5c91bea8ea13df6dd4ef18a3833765c",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "needs-you",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code",
+        "needs-you"
+      ],
+      "status": "failed",
+      "details": {
+        "base": {
+          "passed": 1621,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1611,
+          "failed": 1,
+          "skipped": 0,
+          "flaky": 0
+        },
+        "failed_on_head": [
+          "relay/test/games.test.js > test > relay/test/games.test.js ran past its time limit of 600 seconds"
+        ]
+      },
+      "author": "builder",
+      "duration_ms": 1461812
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 980
+    },
+    {
+      "type": "failing-before",
+      "params": {},
+      "kinds": [
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "test_files": [
+          "relay/test/browser/metrics.test.js",
+          "relay/test/failures-plan.test.js",
+          "relay/test/failures.test.js",
+          "relay/test/fake-gh.js",
+          "relay/test/lead-scorecard.test.js",
+          "relay/test/lead-unstick.test.js",
+          "relay/test/needs-you-plan.test.js",
+          "relay/test/pipeline.test.js"
+        ],
+        "tests": [
+          {
+            "name": "relay/test/comment-paths.test.js > test > each repo file a code comment names exists",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/failures-plan.test.js > test > a channel whose blocked PRs all pass with no merge, as after a rerun, is archived at once",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/failures-plan.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/failures-plan.test.js > test > a channel with no post for 24 hours is archived, fixed or not",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/failures-plan.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/failures-plan.test.js > test > a check name becomes a channel name",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/failures-plan.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/failures-plan.test.js > test > a third PR with the same failure joins the open channel, once",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/failures-plan.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/failures-plan.test.js > test > one PR alone, or a PR that is no longer open, opens nothing",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/failures-plan.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/failures-plan.test.js > test > one failing check on two open PRs opens one channel, naming both",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/failures-plan.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/failures-plan.test.js > test > the channel is archived once the fix merged and every blocked PR merged, closed or passed the check",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/failures-plan.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/failures-plan.test.js > test > the first PR of the channel to merge is the fix, and only once",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/failures-plan.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > a channel whose blocked PR passes with no merge is archived with its own reason in the jam",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > a ticket linked to the failure closes when the first fix merges, and the other Dev is told to take main",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > the Lead may rerun a known-flaky job, once for a commit, and only while the person lets it",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > the channel stays while PR 1 still fails, and is archived once it passes the check",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > the same check failing again opens a new channel and keeps the archived one with its history",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > the same failure on two PRs opens one channel and tells both Devs its name",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > when a Dev posts a fix, the Lead's next pass names who posted and the other blocked Dev to tell",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > while a blocked Dev runs, the Lead sets no priority for the failure's ticket and starts no separate fix",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-scorecard.test.js > test > each shared failure channel is one jam by the room, with how many PRs it blocked and the time to the fix",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-scorecard.test.js > test > jams the Lead fixed do not count as fixed by hand, and the range holds",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-scorecard.test.js > test > jams the Lead fixed, passed to the person and never acted on are counted by kind",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-scorecard.test.js > test > the scorecard carries ids, kinds and counts, and the csv has its rows",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-scorecard.test.js > test > time to act is the median and the slowest few, from when the Lead first saw each jam",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-unstick.test.js > test > an item named on three passes in a row with no action goes to Needs you with the Lead's reason, until it acts",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-unstick.test.js > test > off, the Lead only reports: every route it would act through is refused",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-unstick.test.js > test > on, one failing check on two PRs: the Lead merges the duplicate tickets, the one left is high and first, and it starts",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-unstick.test.js > test > the Lead's jam log: by Lead whatever it sends, since from the first time it named the item, and a person's log stays the person's",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-unstick.test.js > test > the rung is in Settings, off by default, and in the Lead's brief only while it is on",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/needs-you-plan.test.js > test > the most urgent kind comes first, and every kind has a rule",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/pipeline.test.js > test > the aggregate pipeline check is not a failure of its own",
+            "on_base": "failed"
+          }
+        ],
+        "passed_on_base": [
+          "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > PRs that fail the aggregate pipeline check and different jobs share no channel on pipeline",
+          "relay/test/failures.test.js > a failure on two PRs: one channel, both Devs told, the fix tells the other and closes the ticket, then it is archived > one PR with the failure opens no channel",
+          "relay/test/needs-you-plan.test.js > test > a Dev that stopped with no PR: prompt it",
+          "relay/test/needs-you-plan.test.js > test > a GitHub write that failed: one line for the issue, with GitHub's message and the next try, after the desks",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over stays a decision after review news moves its task out of Waiting on you",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over: decide on it, with its reason",
+          "relay/test/needs-you-plan.test.js > test > a PR merged on GitHub gives a Done line, and one closed with no merge gives a line with no Done",
+          "relay/test/needs-you-plan.test.js > test > a PR only the person may merge: merge it",
+          "relay/test/needs-you-plan.test.js > test > a PR whose automatic review could not start: get a review, with the reason (T-350)",
+          "relay/test/needs-you-plan.test.js > test > a hand-over whose Dev says a finding is a bug offers Fix it, and no other hand-over does",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev running: move the card, the Dev fixes it",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev stopped: bring the Dev back to fix it",
+          "relay/test/needs-you-plan.test.js > test > a posted merge verdict after the hand-over: merge the PR, unless newer commits need a review",
+          "relay/test/needs-you-plan.test.js > test > a push the push hold refused: look at the PR, with a Fix it that lifts the hold, ahead of the hand-over",
+          "relay/test/needs-you-plan.test.js > test > a saved message that has waited long for a running session: open that session, with why",
+          "relay/test/needs-you-plan.test.js > test > a session that asks for permission: approve it, at its seat",
+          "relay/test/needs-you-plan.test.js > test > a session that waits on an answer, or shows a question on its screen: answer it",
+          "relay/test/needs-you-plan.test.js > test > a session the relay told something that did not start: open it",
+          "relay/test/needs-you-plan.test.js > test > a task in Waiting on you: look at it, with the note that put it there",
+          "relay/test/needs-you-plan.test.js > test > a task whose session ended before a PR: bring it back",
+          "relay/test/needs-you-plan.test.js > test > another relay on the room's state folder: stop it, with its Stop button, before anything else",
+          "relay/test/needs-you-plan.test.js > test > no item twice for the same cause",
+          "relay/test/needs-you-plan.test.js > test > notes signed with another key give one line that names the fix",
+          "relay/test/needs-you-plan.test.js > test > nothing needs the person: the list is empty",
+          "relay/test/needs-you-plan.test.js > test > reviews wait for a desk and the relay may stop no session: one line names the wait, after the questions",
+          "relay/test/needs-you-plan.test.js > test > text from a session is cleaned to one line",
+          "relay/test/needs-you-plan.test.js > test > with no review after the hand-over, the line keeps Autopilot's reason",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > a PR merged or closed while its review waits gets none",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > a PR whose head moved with no push hook gets its follow-up",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > a follow-up after a push waits for the pipeline too",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > a person's Get a review while the first review waits is its first review",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > conflict: no review, the Dev gets the steps, then the files after a push that did not clear it",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > green: the review starts",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > no checks configured: a short wait for them to appear, then the review starts",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > pending: no reviewer, and no desk, until the checks pass",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > red then green after a push: no review until the push, and the Dev is told once",
+          "relay/test/pipeline.test.js > automatic reviews wait for a green pipeline > red with the Dev gone: the panel says nobody could be told",
+          "relay/test/pipeline.test.js > test > the Board shows a task in review with a running or failed pipeline as waiting on it",
+          "relay/test/pipeline.test.js > test > what the checks on a commit say",
+          "relay/test/pipeline.test.js > test > when a waiting review may start"
+        ],
+        "did_not_load_on_base": [
+          "relay/test/failures-plan.test.js"
+        ]
+      },
+      "author": "builder",
+      "duration_ms": 832998
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 92
+    }
+  ],
+  "verdict": "needs_person",
+  "gaps": [
+    {
+      "type": "tests-before-after",
+      "status": "failed",
+      "how_to_fix": "1 test fails on the head, also when run again: relay/test/games.test.js > test > relay/test/games.test.js ran past its time limit of 600 seconds. Fix the change so that it passes, and run exhibit check again."
+    }
+  ],
+  "checks_by_author": {
+    "builder": 4,
+    "hidden": 0
+  },
+  "flaky_tests": [],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-25T20:20:12.048Z"
+}
