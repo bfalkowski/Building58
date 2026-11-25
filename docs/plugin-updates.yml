@@ -1,0 +1,57 @@
+name: Plugin updates
+
+# Once a week, and when someone presses Run workflow: look in each pinned plugin's marketplace (plugins.json)
+# for a newer version, and open one pull request for each plugin that has one. A pull request for a plugin
+# that is open already is updated, not opened twice. This runs once for the repo, whether or not any room is
+# running. The person merges it, and every room and machine installs the new pin at its next start.
+# Copy this file to .github/workflows/plugin-updates.yml: the room's GitHub App cannot change that folder.
+# relay/test/plugin-updates.test.js checks that this file runs relay/plugin-updates.js each week.
+on:
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  updates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Find the newer versions
+        run: node relay/plugin-updates.js > updates.json
+      - name: Open or update one pull request for each plugin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for name in $(node -e "for (const u of require('./updates.json')) console.log(u.name)"); do
+            field() { node -e "const u = require('./updates.json').find((x) => x.name === '$name'); const l = require('./plugins.json'); const repo = l.marketplaces[u.marketplace]; console.log($1)"; }
+            to=$(field "u.to.version")
+            from=$(field "u.from.version")
+            look=$(field "'https://github.com/' + repo + '/compare/' + u.from.commit + '...' + u.to.commit")
+            branch="plugin-updates/$name"
+            git checkout -q -B "$branch" origin/main
+            node relay/plugin-updates.js --write "$name" > /dev/null
+            npm ci --silent
+            if npm test > test.log 2>&1; then tests="npm test passed with the new pin."; else tests="npm test failed with the new pin: see this run's log."; tail -n 40 test.log; fi
+            git add plugins.json
+            git commit -q -m "Move $name to $to (pinned $from)"
+            git push -q --force origin "$branch"
+            title="Move $name to $to (pinned $from)"
+            body="Moves the pin of $name in plugins.json from $from to $to. What changed: $look . Read it before you merge: a skill is a playbook that sessions follow. $tests After the merge, each room and machine installs this version at its next start."
+            if gh pr view "$branch" --json state --jq '.state' 2>/dev/null | grep -q '^OPEN$'; then
+              gh pr edit "$branch" --title "$title" --body "$body"
+            else
+              gh pr create --base main --head "$branch" --title "$title" --body "$body"
+            fi
+          done

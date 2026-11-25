@@ -16,6 +16,10 @@
 //
 // Repos: each owner/name in ROOM_REPOS that is not in ~/repos yet is cloned there, into the repos
 // volume. One already there is left as it is: the room fetches what it needs.
+//
+// Skills: with ROOM_PLUGINS (plugin@marketplace, by spaces or commas), each plugin not installed yet is installed
+// into the claude volume, once the person has listed it, since a plugin is code every session runs. The line
+// says what was installed, what was there, what failed and any plugin at another version than plugins.json.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -123,6 +127,35 @@ function repos(env, home) {
   return lines;
 }
 
+function skills(env, run) {
+  const pl = require('./plugins.js'), dir = pl.claudeDir(env), want = pl.ids(env.ROOM_PLUGINS), pins = pl.list();
+  const lines = want.bad.map((b) => 'Skills: ' + b + ' is not plugin@marketplace or owner/repo, so it is left out.');
+  if (!want.plugins.length && !want.sources.length) return lines.concat('Skills: none in ROOM_PLUGINS, so briefs name no skills. Add plugin@marketplace for each plugin to install.');
+  const did = [], had = [], failed = [];
+  const attempt = (what, args) => { try { run('claude', args, 300000); return true; } catch (e) { failed.push(what + ' (' + said(e) + ')'); return false; } };
+  const markets = new Set(pl.knownMarkets(dir));
+  for (const source of want.sources) attempt('marketplace ' + source, ['plugin', 'marketplace', 'add', source]);
+  for (const id of want.plugins) {
+    const have = pl.installedIn(dir).get(id);
+    if (have) { had.push(id); continue; }
+    const market = id.split('@')[1], repo = pins.marketplaces[market];
+    if (!markets.has(market) && market !== pl.BUILT_IN) {
+      if (!repo) { failed.push(id + ' (no marketplace ' + market + ' in plugins.json: add its owner/repo to ROOM_PLUGINS)'); continue; }
+      if (!attempt('marketplace ' + repo, ['plugin', 'marketplace', 'add', repo])) continue;
+      markets.add(market);
+    }
+    if (attempt(id, ['plugin', 'install', id])) did.push(id);
+  }
+  const now = pl.installedIn(dir);
+  const off = pl.differs(now).filter((d) => want.plugins.includes(d.id));
+  const parts = [];
+  if (did.length) parts.push('installed ' + did.join(', '));
+  if (had.length) parts.push('already there ' + had.join(', '));
+  if (failed.length) parts.push('failed ' + failed.join('; ') + ', so the next start tries again');
+  if (off.length) parts.push('at another version than plugins.json: ' + off.map((d) => d.id + ' is ' + pl.label(d.have) + ', the list says ' + pl.label(d.want)).join('; '));
+  return lines.concat('Skills: ' + parts.join('. ') + '.');
+}
+
 async function main(env) {
   const home = os.homedir();
   const trusted = [path.join(home, 'building58')].concat(repoList(env.ROOM_REPOS).ok.map((r) => path.join(home, 'repos', r.name)));
@@ -130,7 +163,8 @@ async function main(env) {
   console.log(claudeSignIn());
   console.log(env.GITHUB_APP_ID ? await gitHubApp(env) : gitHub(env));
   for (const line of repos(env, home)) console.log(line);
+  try { for (const line of skills(env, run)) console.log(line); } catch (e) { console.log('Skills: could not check the plugins: ' + said(e)); }
 }
 
 if (require.main === module) main(process.env).catch((e) => console.log('Setup: ' + said(e)));
-module.exports = { claudeConfig, repoList };
+module.exports = { claudeConfig, repoList, skills };

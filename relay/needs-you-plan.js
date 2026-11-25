@@ -4,7 +4,7 @@
 // list, so all three agree. A plain function with no side effects, so the tests run it without a relay.
 // See docs/manual/roles.html#needs-you.
 //
-//   listOf({ seats, tasks, waits, relays, desks, mains, writes, claude }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
+//   listOf({ seats, tasks, waits, relays, desks, mains, writes, claude, skills }) -> [{ kind, who, terminal, task, ticket, pr, line, link }]
 //   writeLine(write) -> the line for one GitHub write that failed, which the ticket's card shows too
 //
 // A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh, continuing },
@@ -23,6 +23,9 @@
 // A relay is another relay on this room's state folder (relay/old-relays.js): { pid, file, port, started, paused, worker }.
 // desks is reviews that wait for a desk while the relay may stop no session: { prs, taken }, the longest wait first.
 // claude is the Claude Code the sessions run, from relay/claude-version.js: { version, oldest, newest, ok }.
+// skills is what relay/skills.js lacking() gives, or null: { roles: [{ role, names }], commands, differs: [{ id, want, have }] }, where
+// roles are the roles whose skills are not installed, commands install them (with docker compose exec in a container), and differs
+// are plugins installed at another version or commit than plugins.json pins, each side as { version, commit }.
 // A main is one base branch whose latest CI run failed (relay/main-ci.js): { name, branch, run: { workflow, sha, url, conclusion } }.
 // A write is one ticket whose last write to the GitHub ticket store failed (relay/ticket-stores/github.js):
 // { id, what, message, inMs }, where message is what GitHub said and inMs is the time to the next try.
@@ -35,6 +38,8 @@
 //   question     a session waits on the person for anything else, or a question is on its screen
 //   desks        reviews wait for a desk, and the relay may stop none of the sessions that hold them all
 //   main         the latest push run of CI on main failed, so Autopilot starts no new ticket on that branch
+//   skills       a skill named in a role's settings is not installed, or a pinned plugin is installed at another version
+//                or commit: one line with the roles, the install commands and the versions, until it is put right
 //   ticket-write the last write to a ticket's GitHub issue failed, until a write goes through, GitHub shows what it
 //                wanted, or a read comes after the wait
 //   merged       a task's PR merged on GitHub, whoever merged it, and its task is not Done: the line has a Done button
@@ -61,7 +66,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -180,6 +185,8 @@ function listOf(input) {
   }
   const claude = claudeItem(input && input.claude);
   if (claude) items.push(claude);
+  const skills = skillsItem(input && input.skills);
+  if (skills) items.push(skills);
   for (const w of (input && input.writes) || []) {
     if (!w || !/^[\w.-]{1,20}$/.test(String(w.id))) continue;
     items.push({ kind: 'ticket-write', who: 'the relay', terminal: null, task: null, ticket: String(w.id), pr: null, line: writeLine(w), link: { ticket: String(w.id) } });
@@ -195,6 +202,24 @@ function claudeItem(c) {
   if (!v) return null;
   const which = oldest === newest ? 'version ' + newest : 'versions ' + oldest + ' to ' + newest;
   return { kind: 'claude', who: 'Claude Code', terminal: null, task: null, ticket: null, pr: null, line: 'Check the sessions: they run Claude Code ' + v + ', and the room was tested with ' + which + '. Safe typing reads Claude Code\'s screens and hooks, which a new version can change, so watch the first turns.', link: {} };
+}
+
+const ROLE_NAME = { lead: 'Lead', dev: 'Devs', reviewer: 'Reviewers', pm: 'PM', coo: 'COO', security: 'Security' };
+const versionOf = (v) => oneLine(v && v.version, 20) + (v && v.commit ? ' (' + oneLine(v.commit, 40).slice(0, 7) + ')' : '');
+
+function skillsItem(s) {
+  if (!s) return null;
+  const roles = (s.roles || []).filter((r) => r && Array.isArray(r.names) && r.names.length);
+  const differs = (s.differs || []).filter((d) => d && d.id && d.want && d.have);
+  if (!roles.length && !differs.length) return null;
+  const parts = [];
+  if (roles.length) {
+    const cmds = (s.commands || []).map((c) => oneLine(c, 160));
+    parts.push('Install the skills the briefs use. Not installed, by role: ' + roles.map((r) => (ROLE_NAME[r.role] || oneLine(r.role, 20)) + ': ' + r.names.map((n) => oneLine(n, 80)).join(', ')).join('; ') +
+      '. Their briefs go out without them.' + (cmds.length ? ' Run: ' + cmds.join('; ') + '.' : ' Their plugins are installed, so update them or turn them on.'));
+  }
+  if (differs.length) parts.push('Installed plugins differ from plugins.json: ' + differs.map((d) => oneLine(d.id, 80) + ' is ' + versionOf(d.have) + ' here and ' + versionOf(d.want) + ' in the list').join('; ') + '.');
+  return { kind: 'skills', who: 'Skills', terminal: null, task: null, ticket: null, pr: null, line: parts.join(' '), link: {} };
 }
 
 module.exports = { listOf, redMain, writeLine, KINDS };

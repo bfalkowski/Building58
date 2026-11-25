@@ -33,7 +33,9 @@ Then, in a clone of this repo:
 ./setup.sh
 ```
 
-It asks only for what it cannot make itself (the Claude sign-in and the repos), makes the room's GitHub App, starts the room, and opens its page. It is safe to run again. See [In a container](docs/manual/running.html#container) and the [quickstart](https://docs.building58.ai/quickstart).
+It asks only for what it cannot make itself (the Claude sign-in, the repos, and whether to install the Claude Code plugins the briefs use), makes the room's GitHub App, starts the room, and opens its page. It is safe to run again. See [In a container](docs/manual/running.html#container) and the [quickstart](https://docs.building58.ai/quickstart).
+
+**Skills.** The briefs name skills from Claude Code plugins, which are installed per machine, not in the repo. `plugins.json` pins the plugins (version and commit), `.claude/settings.json` makes Claude Code offer them when you trust a clone of this repo, and a container installs the ones in `ROOM_PLUGINS`. A missing skill leaves the brief without it, and Needs you says so. See [Skills](docs/manual/running.html#container-plugins).
 
 ### On a server
 
