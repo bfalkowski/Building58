@@ -214,7 +214,7 @@ test('a merge verdict on a red PR has no mark, and the Dev push goes through', (
   assert.ok(s.push().ok);
   const mark = path.join(hold.gitDirOf(s.wt), hold.MARK);
   const verdict = { kind: 'merge', commit: reviewed, posted: PR + '#issuecomment-1' };
-  assert.strictEqual(hold.sync(s.task, verdict, { state: 'red', open: true }), true, 'the lift is written');
+  assert.strictEqual(hold.sync(s.task, verdict, { state: 'red', failing: true, open: true }), true, 'the lift is written');
   assert.ok(!fs.existsSync(mark));
   assert.strictEqual(hold.untoldLift(s.task).commit, reviewed, 'the lift is kept for the relay to tell the Dev and log the jam');
   s.commit(s.wt);
@@ -247,4 +247,21 @@ test('a merge verdict on a green, pending or unread pipeline still has the hold'
 test('the Dev is told CI is red, not that a finding must be fixed', () => {
   assert.strictEqual(hold.RED_CI_TEXT, 'CI is red on your PR. Fix the failure in this PR, run the tests, and push. A follow-up review checks the fix.');
   assert.doesNotMatch(hold.RED_CI_TEXT, /finding/);
+});
+
+test('a cancelled run reads as red but lifts nothing, and a failed one lifts', () => {
+  const pipeline = require('../pipeline.js');
+  const cancelled = [{ conclusion: 'CANCELLED', status: 'COMPLETED' }], failed = [{ conclusion: 'FAILURE', status: 'COMPLETED' }];
+  assert.strictEqual(pipeline.failingOf(cancelled), false);
+  assert.strictEqual(pipeline.failingOf(failed), true);
+  const s = setup();
+  const reviewed = s.commit(s.wt);
+  const verdict = { kind: 'merge', commit: reviewed, posted: PR + '#issuecomment-1' };
+  const seen = (rollup) => ({ state: pipeline.stateOf(rollup), failing: pipeline.failingOf(rollup), open: true });
+  assert.strictEqual(hold.sync(s.task, verdict, seen(cancelled)), true);
+  assert.ok(fs.existsSync(path.join(hold.gitDirOf(s.wt), hold.MARK)), 'the hold stays');
+  assert.strictEqual(hold.untoldLift(s.task), null);
+  hold.sync(s.task, verdict, seen(failed));
+  assert.ok(!fs.existsSync(path.join(hold.gitDirOf(s.wt), hold.MARK)), 'the hold lifts');
+  s.done();
 });

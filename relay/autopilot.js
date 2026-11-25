@@ -803,4 +803,4 @@ const movesIt = (channel, task) => isOn(channel) && mineTask(task);
 
 const runsKept = (channel) => (store[channel] && store[channel].runs) || {};
 
-module.exports = { runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };
+module.exports = { tellRedCi, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };
