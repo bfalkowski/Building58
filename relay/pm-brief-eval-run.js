@@ -30,6 +30,8 @@ function options(argv, env) {
     if (!key || argv[i + 1] === undefined) throw new Stop('Usage: npm run pm-brief-eval -- [--branch NAME] [--kit DIR] [--edd DIR] [--start CMD] [--api URL] [--push]');
     o[key] = argv[++i];
   }
+  if (o.kit) o.kit = path.resolve(o.kit);
+  if (o.edd) o.edd = path.resolve(o.edd);
   if (!o.kit) throw new Stop('Name the eval kit with --kit DIR or PM_BRIEF_KIT.');
   if (!o.start || !o.edd) throw new Stop('Say how to start edd-platform with --edd DIR and --start CMD, or EDD_DIR and EDD_START.');
   if (o.push && !o.branch) throw new Stop('--push needs --branch NAME.');
@@ -90,20 +92,33 @@ function runEval(o, dir, env) {
   });
 }
 
+function isUp(url) {
+  const { hostname, port, protocol } = new URL(url);
+  return new Promise((done) => {
+    const s = net.connect({ host: hostname, port: Number(port) || (protocol === 'https:' ? 443 : 80) });
+    s.once('connect', () => { s.destroy(); done(true); });
+    s.once('error', () => { s.destroy(); done(false); });
+  });
+}
+
 async function main(argv, env, here) {
   const o = options(argv, env);
-  const logFile = path.join(os.tmpdir(), 'edd-platform-' + process.pid + '.log');
-  const log = fs.openSync(logFile, 'w', 0o600);
-  const api = spawn(o.start, { cwd: o.edd, env, shell: true, stdio: ['ignore', log, log], detached: true });
-  const ended = new Promise((done) => api.once('exit', done));
+  if (await isUp(o.api)) throw new Stop('Something already answers at ' + o.api + '. Stop it, or give another --api.');
+  const work = checkout(o, here);
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'edd-platform-'));
+  const logFile = path.join(folder, 'output.log');
+  const log = fs.openSync(logFile, 'wx', 0o600);
+  let api = null, ended = null;
   const stopApi = () => {
-    if (api.exitCode !== null || api.signalCode !== null) return Promise.resolve();
+    if (!api || api.exitCode !== null || api.signalCode !== null) return Promise.resolve();
     try { process.kill(-api.pid); } catch (e) { api.kill(); }
     return ended.then(() => waitForDown(o.api));
   };
-  const work = checkout(o, here);
+  let keep = false;
   try {
-    await waitForPort(o.api, api).catch((e) => { throw new Stop(e.message + ' Its output is in ' + logFile + ', which may hold more than you want to share.'); });
+    api = spawn(o.start, { cwd: o.edd, env, shell: true, stdio: ['ignore', log, log], detached: true });
+    ended = new Promise((done) => api.once('exit', done));
+    await waitForPort(o.api, api).catch((e) => { keep = true; throw new Stop(e.message + ' Its output is in ' + logFile + ', which may hold more than you want to share.'); });
     const code = await runEval(o, work.dir, env);
     if (code === 0 && o.branch) {
       const file = 'relay/pm-brief-eval.json';
@@ -118,6 +133,7 @@ async function main(argv, env, here) {
   } finally {
     await stopApi();
     fs.closeSync(log);
+    if (!keep) fs.rmSync(folder, { recursive: true, force: true });
     work.drop();
   }
 }

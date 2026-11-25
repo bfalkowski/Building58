@@ -26,7 +26,7 @@ function nextMove(s) {
   if (pr.mergeable === 'CONFLICTING' || pr.mergeStateStatus === 'DIRTY') return forDev('conflict', 'It conflicts with main.');
   const ci = ciOf(pr.statusCheckRollup);
   const touched = s.files || [];
-  if (ci === 'red' && touched.includes(BRIEF) && !touched.includes(BRIEF_EVAL)) return at('you', 'eval', null, 'It changes the PM\'s brief and the PM-brief eval has not run on it, so npm test fails. Run the PM-brief eval: npm run pm-brief-eval -- --branch NAME, with its branch for NAME (docs/manual/roles.html#pm-brief-eval).');
+  if (ci === 'red' && touched.includes(BRIEF) && !touched.includes(BRIEF_EVAL)) return at('you', 'eval', null, 'It changes the PM\'s brief and the PM-brief eval has not run on it, so npm test fails. Other failed checks show only after the eval is done. Run the PM-brief eval: npm run pm-brief-eval -- --branch NAME, with its branch for NAME (docs/manual/roles.html#pm-brief-eval).');
   if (ci === 'red') return forDev('red', 'A check failed on ' + short(head) + '.');
   if (ci === 'pending') return at('CI', 'ci', null, 'Its checks run on ' + short(head) + '.');
   const r = s.review;
