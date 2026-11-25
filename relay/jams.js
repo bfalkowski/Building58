@@ -1,7 +1,8 @@
 // The jam log: a jam is a stall the room did not see, which the person (or their tools) fixed by hand, such
 // as a PR with no first review or a task left in review after its PR merged. POST /jams writes one, GET /jams
 // lists them, and Stalls by kind on the Metrics page counts them next to the stalls the room detected
-// (relay/metrics-plan.js). Only the person's key writes or reads: a session's token gets 403. They are kept
+// (relay/metrics-plan.js). The relay writes one itself for each push the push hold refuses (relay/autopilot.js).
+// Only the person's key writes or reads over HTTP: a session's token gets 403. They are kept
 // 90 days in RELAY_JAMS_FILE (jams.json in the state folder). Text goes through oneLine, and a jam holds only
 // a kind from KINDS, ids, times and one line about the fix. See docs/manual/how-it-works.html#metrics.
 'use strict';
@@ -58,6 +59,13 @@ function prune(list, now) {
   const from = now - KEEP_DAYS * DAY;
   return list.filter((j) => Date.parse(j.at) >= from).slice(-MAX_JAMS);
 }
+function record(channel, body) {
+  const made = make(body, Date.now());
+  if (made.error) return null;
+  store[channel] = prune((store[channel] || []).concat(made.jam), Date.now());
+  save();
+  return made.jam;
+}
 const listOf = (channel) => prune(store[channel] || [], Date.now());
 const sinceRange = (range, now) => now - RANGES[range].days * DAY;
 
@@ -83,4 +91,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, listOf, make, prune, KINDS, KEEP_DAYS };
+module.exports = { handle, listOf, record, make, prune, KINDS, KEEP_DAYS };
