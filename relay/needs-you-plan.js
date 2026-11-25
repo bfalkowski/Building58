@@ -12,7 +12,7 @@
 // spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
 // says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, prMerged, prClosed, owner, note, reviewRuns, pipelineWaits,
-// handedOver, devSaysBug, reviewedSince, onlyYouMerge, reviewFailed }, where owner is the terminal of its Dev while
+// handedOver, devSaysBug, pushRefused, reviewedSince, onlyYouMerge, reviewFailed }, where pushRefused is { why } when the push hold refused its Dev's push, and owner is the terminal of its Dev while
 // that session runs, pipelineWaits says its open PR's pipeline is running or failing, devSaysBug says Autopilot handed
 // it over because its Dev says a finding the merge review marked non-blocking is a bug, reviewedSince is the last
 // review posted after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current
@@ -39,6 +39,8 @@
 //   merged       a task's PR merged on GitHub, whoever merged it, and its task is not Done: the line has a Done button
 //   closed       a task's PR was closed on GitHub without a merge: the line has no Done button
 //   merge        an open PR that only the person may merge
+//   push-refused an open PR whose Dev's push the push hold refused after a merge verdict, with the reason and
+//                a Fix it button that lifts the hold, unless the hand-over for a Dev's bug claim has that button
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
 //                with the next step a review posted after it gives
 //   review       an open PR whose automatic review could not start, with the reason, unless a review of it runs
@@ -56,7 +58,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -94,12 +96,13 @@ function taskItem(t, dev) {
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
   if (pr && t.prMerged) return item('merged', 'PR ' + numberOf(pr) + onPr + ' merged on GitHub. Move its task to Done.', { url: pr, done: t.id });
   if (pr && t.prClosed) return item('closed', 'PR ' + numberOf(pr) + onPr + ' was closed on GitHub without a merge. Look at it. This line stays until the PR is reopened, its task gets a new PR, or its task is Done.', { url: pr });
+  if (pr && t.prOpen !== false && t.pushRefused && !(t.handedOver && t.devSaysBug)) return item('push-refused', 'Look at PR ' + numberOf(pr) + onPr + ': the push hold refused its Dev\'s push. ' + oneLine(t.pushRefused.why, 300) + ' Press Fix it to lift the hold, so its Dev can push and a follow-up review checks it.', { url: pr, fix: t.id });
   if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns && /came back empty/.test(t.reviewFailed)) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': the review came back empty, twice, with no verdict or no words on what was checked.', dev ? { terminal: dev.terminal } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
   if (t.state === 'waiting_on_you') {
-    if (t.reviewRuns || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;
+    if (t.reviewRuns || t.reviewOwed || t.pipelineWaits || (dev && BUSY.includes(dev.live))) return null;
     const note = oneLine(t.handedOver || t.note, 300);
     return item('waiting', 'Look at ' + nameOf(t) + ': its task is in Waiting on you.' + (note ? ' ' + note : ''), pr ? { url: pr } : dev ? { terminal: dev.terminal } : { ticket: t.ticket || t.id });
   }

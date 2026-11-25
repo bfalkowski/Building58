@@ -63,7 +63,9 @@ const { oneLine } = require('./clean.js');
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const ghDoor = require('./gh.js');
 const config = require('./config.js');
+const exhibit = require('./exhibit.js');
 const pmCheck = require('./pm-check.js');
+const jams = require('./jams.js');
 const AT_ONCE = () => config.get('autopilotAtOnce');
 const MAX_ROUNDS = () => config.get('autopilotRounds'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges'), MAIN_MERGES = () => config.get('autopilotMainMerges');
 const NOTES_KEPT = 30;
@@ -128,7 +130,7 @@ const verdictAsk = () => ' Mark each finding blocking, fix now or follow-up. Blo
   'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post. ' +
   'Post one comment that starts with the line ## Review of <the commit you read>, says what you checked, and has a line Verdict: merge or Verdict: fix that matches the command. ' +
   'Post it with gh pr comment <PR> --body-file - and the text in a quoted heredoc (<<\'EOF\'), never with --body -, which posts a dash. A comment with no verdict line or no words does not count as a review, and the room starts the review again.';
-reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(),
+reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(), verdictOf: (channel, pr) => verdictOf(channel, pr),
   since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; },
   freed: (channel, pr, text) => {
     const task = tasks.list(channel).find((x) => x.pr === pr);
@@ -286,6 +288,7 @@ async function tick() {
   if (ticking || !ctx) return;
   ticking = true;
   try {
+    logRefusals();
     for (const channel of Object.keys(store)) if (isOn(channel)) await look(channel);
   } catch (e) { if (ctx) ctx.log('Autopilot: ' + e.message); } finally { ticking = false; }
 }
@@ -343,6 +346,7 @@ function readyNow(channel, task, rec, f) {
   rec.readyTold = f.ready; save();
   note(channel, (task.ticket || 'Task ' + task.id) + ', PR ' + number(task.pr) + ': ' + f.why);
 }
+const exhibitOf = (task, pr) => (config.get('autopilotExhibit') && pr.state === 'OPEN' ? exhibit.read(task.pr, task.repo) : Promise.resolve(undefined));
 async function lookAt(channel, task) {
   const rec = recOf(channel, task.pr);
   const got = await readPr(task, rec);
@@ -352,6 +356,10 @@ async function lookAt(channel, task) {
   if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
   const v = latest(rec);
   let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
+  if (d.act === 'merge') {
+    const ex = await exhibitOf(task, pr);
+    if (ex !== undefined) d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex));
+  }
   rec.why = d.why; rec.act = d.act;
   if (d.act === 'wait') rec.why = reviews.deskLine(channel, task.pr) || rec.why;
   if (d.act === 'done') markDone(channel, task);
@@ -367,7 +375,8 @@ async function lookAt(channel, task) {
     if (task.reviews && task.reviews.pending) { rec.why = 'New review news came in as it was about to merge, so its Dev hears it first.'; rec.act = 'wait'; return; }
     const again = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch((e) => ({ failed: e.message }));
     if (again.failed) { rec.why = 'Ready to merge, but gh could not read the PR again just before: ' + again.failed; rec.act = 'wait'; return; }
-    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
+    const lastEx = await exhibitOf(task, again);
+    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone, lastEx));
     if (last.act !== 'merge') { rec.why = last.why; rec.act = last.act; return; }
     try { await gh(['pr', 'merge', task.pr, '--merge', '--match-head-commit', pr.headRefOid], task.repo); } catch (e) {
       const now = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch(() => null);
@@ -479,6 +488,10 @@ async function mergedYet(channel, task) {
 function handOver(channel, task, rec, why, reason, head) {
   rec.handedOver = why; rec.handedOverAt = new Date().toISOString(); rec.handedReason = reason; rec.handedOverHead = head || null; save();
   handRun(channel, task, reason);
+  if (reason === 'main-kept-moving' || reason === 'conflict-dropped') {
+    const fix = reason === 'main-kept-moving' ? 'Main kept moving: the Dev merged main as asked and the PR conflicted again.' : 'Conflict dropped: the Dev did not merge main after two asks.';
+    jams.record(channel, { kind: 'handed-over', fix: fix + ' Reason ' + reason + '.', ticket: task.ticket, pr: task.pr, by: 'autopilot' });
+  }
   tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why);
   note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why);
 }
@@ -728,6 +741,19 @@ function holdPushes(channel, only) {
     try { pushHold.sync(task, verdictOf(channel, task.pr), pipeline.of(task.pr)); } catch (e) { if (ctx) ctx.log('Could not mark the push hold of ' + task.worktree + ': ' + e.message); }
   }
 }
+function logRefusals() {
+  for (const channel of tasks.channels()) {
+    for (const task of tasks.list(channel)) {
+      if (!task.pr || !task.worktree || task.state === 'done') continue;
+      let got;
+      try { got = pushHold.refusalsOf(task); } catch (e) { continue; }
+      if (got.list.length <= got.seen) continue;
+      const logged = got.list.slice(got.seen).filter((x) => !x.allowed).every((r) => jams.record(channel, { kind: 'push-refused', ticket: task.ticket || undefined, pr: task.pr, since: r.at, fix: oneLine('Push refused: ' + r.why, 200), by: 'the relay' }));
+      if (!logged) continue;
+      try { pushHold.markSeen(task, got.list.length); } catch (e) { if (ctx) ctx.log('Could not note the refused pushes of ' + task.worktree + ': ' + e.message); }
+    }
+  }
+}
 tasks.events.on('state', (channel, task) => holdPushes(channel, task));
 tasks.events.on('pr', (channel, task) => holdPushes(channel, task));
 
@@ -743,7 +769,15 @@ function deskOf(channel, task) {
   const handed = r && r.handedOver && !handedBack(task, r) ? r.handedOver : null;
   const since = handed && handedReasonOf(r) === 'stalled' && r.verdicts.filter((x) => Date.parse(x.at) > Date.parse(r.handedOverAt) && postOf(channel, x)).pop();
   const reviewedSince = since ? { kind: since.kind, commit: since.commit, url: postOf(channel, since) } : null;
-  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', reviewedSince };
+  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', reviewedSince, pushRefused: refusedOf(task, v) };
+}
+
+function refusedOf(task, v) {
+  if (!task || !task.pr || !v || !v.posted || v.kind !== 'merge') return null;
+  let got;
+  try { got = pushHold.refusalsOf(task); } catch (e) { return null; }
+  const last = got.list[got.list.length - 1];
+  return last && !last.allowed ? { at: last.at, why: last.why } : null;
 }
 
 const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';

@@ -24,6 +24,25 @@ test('make keeps a jam, refuses a bad one, and keeps nothing older than 90 days'
   assert.deepStrictEqual(jams.prune(old, now), [old[1]]);
 });
 
+test('record keeps a hand-over by autopilot for each reason, and keeps the jam without a bad ticket or pr', () => {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-jams-record-')));
+  const saved = process.env.RELAY_JAMS_FILE;
+  process.env.RELAY_JAMS_FILE = path.join(home, 'jams.json');
+  delete require.cache[require.resolve('../jams.js')];
+  const fresh = require('../jams.js');
+  try {
+    const a = fresh.record('c', { kind: 'handed-over', fix: 'Main kept moving. Reason main-kept-moving.', ticket: 'T-1', pr: 'https://github.com/o/r/pull/1', by: 'autopilot' });
+    assert.deepStrictEqual([a.kind, a.by, a.ticket, a.pr], ['handed-over', 'autopilot', 'T-1', 'https://github.com/o/r/pull/1']);
+    const b = fresh.record('c', { kind: 'handed-over', fix: 'Reason conflict-dropped.', ticket: 'has space', pr: 'bad pr', by: 'autopilot' });
+    assert.deepStrictEqual([b.ticket, b.pr, b.fix], [null, null, 'Reason conflict-dropped.']);
+    assert.strictEqual(fresh.listOf('c').length, 2);
+  } finally {
+    if (saved === undefined) delete process.env.RELAY_JAMS_FILE; else process.env.RELAY_JAMS_FILE = saved;
+    delete require.cache[require.resolve('../jams.js')];
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('a jam posted with the person\'s key is kept and listed, a session\'s token gets 403, an unknown kind gets 400, and Stalls by kind counts it', async (t) => {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-jams-')));
   const R = await relay({}, home);

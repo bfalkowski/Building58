@@ -47,3 +47,25 @@ pageTest('level 5 shows with the board and stop switches on, and not as custom',
   const stops = (await R.call('GET', '/settings')).body.settings.find((x) => x.name === 'leadStops').value;
   assert.deepStrictEqual([t.board, t.merge, t.starts, stops], [true, false, 0, true], 'the board and stops on, merge and starts off');
 });
+
+pageTest('level 6 is level 5 with Merge only when Exhibit passes, and level 5 turns it off again', get, async (p) => {
+  const R = o.R;
+  const exhibit = async () => (await R.call('GET', '/settings')).body.settings.find((x) => x.name === 'autopilotExhibit').value;
+  assert.strictEqual(await exhibit(), false, 'off by default');
+  await p.open();
+  const page = p.page;
+  const note = page.locator('#set-levels > p.set-what').last();
+  await page.click('#cc-settings');
+  await page.locator('#settings[open]').waitFor();
+  await note.filter({ hasText: /^Now: level 5, Autopilot\./ }).waitFor();
+  await page.check('input[name="trust-level"][value="6"]');
+  await note.filter({ hasText: /Set level 6 will turn on Merge only when Exhibit passes\.$/ }).waitFor();
+  await page.click('#set-level-apply');
+  await note.filter({ hasText: /^Now: level 6, Autopilot with evidence\./ }).waitFor();
+  assert.strictEqual(await exhibit(), true);
+  await page.check('input[name="trust-level"][value="5"]');
+  await note.filter({ hasText: /Set level 5 will turn off Merge only when Exhibit passes\.$/ }).waitFor();
+  await page.click('#set-level-apply');
+  await note.filter({ hasText: /^Now: level 5, Autopilot\./ }).waitFor();
+  assert.strictEqual(await exhibit(), false);
+});
