@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.13.0",
+    "version": "2.14.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -3736,7 +3736,7 @@
           "Tickets"
         ],
         "summary": "Create ticket",
-        "description": "File a ticket. The body needs a title, and can have body, priority, repo, kind, labels, blockedBy and shapes. The answer has the new ticket. When the same repo already has an open ticket with the same title, the answer is that ticket, with duplicate: true, and nothing new is filed. For a session's token, a rejected ticket counts too.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "File a ticket. The body needs a title, and can have body, priority, repo, kind, labels, blockedBy and shapes. The answer has the new ticket. A ticket of kind jam is filed at high priority, first among the high ones, whatever priority says (Kind). When the same repo already has an open ticket with the same title, the answer is that ticket, with duplicate: true, and nothing new is filed. For a session's token, a rejected ticket counts too.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "createTicket",
         "x-tokens": [
           "any session"
@@ -3895,7 +3895,7 @@
           "Tickets"
         ],
         "summary": "Edit ticket",
-        "description": "Changes any of a ticket's fields, saved together, or none when one is refused: title (1 to 80 characters) and body (up to 8000) of a Triage or Ready ticket; priority, high, normal or low, which puts it last in that priority; kind, a word, or \"\" to take it away (Kind); labels, up to 5, at any status, the list replacing the one there (Labels); mark, \"hold\", \"replaced\" with an optional replacedBy, or null to clear it (On hold, replaced, and design tickets); shapes, the tickets this design ticket shapes, while it is in Triage, Ready or Started; and base, another local branch to start from. Each field keeps its own error code, such as bad_title, bad_priority, bad_kind, bad_label, bad_mark, bad_shapes, bad_base or no_base. A field the ticket's state does not allow gets 409 not_ready, or 403 for a session's token, and a title or base another open ticket in the repo has on that branch gets 409 duplicate. For the PM and the Lead, a ticket you rejected counts too, as in filing. Only the fields that differ are written: the answer's edited lists them, and has unchanged when none do. The PM and the Lead send only title, body and priority, and priority only while you let them set the order (The PM sets the order, The Lead sets priority); anything else gets 403. Any other session's token gets 403. See Editing a ticket.\n\nTokens: the relay key, and the token of a PM, the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Changes any of a ticket's fields, saved together, or none when one is refused: title (1 to 80 characters) and body (up to 8000) of a Triage or Ready ticket; priority, high, normal or low, which puts it last in that priority; kind, a word, or \"\" to take it away (Kind); labels, up to 5, at any status, the list replacing the one there (Labels); mark, \"hold\", \"replaced\" with an optional replacedBy, or null to clear it (On hold, replaced, and design tickets); shapes, the tickets this design ticket shapes, while it is in Triage, Ready or Started; and base, another local branch to start from. Each field keeps its own error code, such as bad_title, bad_priority, bad_kind, bad_label, bad_mark, bad_shapes, bad_base or no_base. A jam ticket refuses any priority but high with 409 jam_priority, and giving a ticket that kind raises it to high. A field the ticket's state does not allow gets 409 not_ready, or 403 for a session's token, and a title or base another open ticket in the repo has on that branch gets 409 duplicate. For the PM and the Lead, a ticket you rejected counts too, as in filing. Only the fields that differ are written: the answer's edited lists them, and has unchanged when none do. The PM and the Lead send only title, body and priority, and priority only while you let them set the order (The PM sets the order, The Lead sets priority); anything else gets 403. Any other session's token gets 403. See Editing a ticket.\n\nTokens: the relay key, and the token of a PM, the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "editTicket",
         "x-tokens": [
           "a PM",

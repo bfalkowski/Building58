@@ -33,6 +33,10 @@ function lastRank(list, priority, now) {
 }
 
 const STEP = 1000;
+function firstRank(list, priority, now) {
+  const places = groupOf(list, priority).map(placeOf).filter(Number.isFinite);
+  return places.length ? Math.min(...places) - STEP : now;
+}
 function placeNear(list, moving, target, after, movable) {
   const group = groupOf(list, moving.priority || 'normal').filter((t) => t.id !== moving.id && (!movable || movable(t)));
   const at = group.findIndex((t) => t.id === target.id) + (after ? 1 : 0);
@@ -48,4 +52,4 @@ function placeNear(list, moving, target, after, movable) {
   return order.map((t, i) => [t.id, start + i * STEP]).filter(([id, r]) => { const t = order.find((x) => x.id === id); return t.rank !== r; });
 }
 
-module.exports = { boardOrder, groupOf, lastRank, placeNear };
+module.exports = { boardOrder, firstRank, groupOf, lastRank, placeNear };

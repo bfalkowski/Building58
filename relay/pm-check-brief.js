@@ -10,6 +10,7 @@ const ANSWERS = ['start', 'first', 'not-needed', 'duplicate', 'part-of'];
 const MAX_BOARD = 60;
 
 const IMPORTANT = 'What matters most, in this order: what keeps the room working (stalls, lost work, broken setup), security, what the person marked high, then the rest. ' +
+  'A ticket of kind jam (stuck work: a jam, a stall, a flaky test, a red main, anything that holds other PRs) is among the highest-priority fixes: put it ahead of other high tickets. ' +
   'Prefer one bigger, focused ticket over two small ones on the same files. A low priority ticket at the top of Ready is the first thing to question. ';
 
 function boardLines(all, except) {
