@@ -252,8 +252,8 @@
     drawSettings(r.ok ? r : await api('', undefined, '/settings'));
   }
   function skillsText(x) {
-    const list = x.skills || [], missing = list.filter((s) => !s.installed), manual = list.filter((s) => s.manual);
-    return (list.length ? ' · ' + (missing.length ? 'not found: ' + missing.map((s) => s.name).join(', ') : 'all installed') : '') +
+    const list = x.skills || [], missing = list.filter((s) => !s.installed), have = list.filter((s) => s.installed), manual = list.filter((s) => s.manual);
+    return (have.length ? ' · installed: ' + have.map((s) => s.name).join(', ') : '') + (missing.length ? ' · missing: ' + missing.map((s) => s.name).join(', ') + ' (the brief leaves them out)' : '') +
       (manual.length ? ' · read from its file: ' + manual.map((s) => s.name).join(', ') : '');
   }
   function fromText(x) { return x.from === 'page' ? 'set here' + (x.env ? ' (replaces ' + x.env + ')' : '') : x.from === 'env' ? 'from ' + x.env + ' at startup' : 'default'; }

@@ -2,15 +2,17 @@
 // a model box saves what you type, and a skills list says which skills are not found here.
 'use strict';
 const assert = require('node:assert');
+const os = require('os');
+const path = require('path');
 const test = require('node:test');
 const { office, pageTest } = require('./page.js');
 
 let o;
-test.before(async () => { o = await office(); });
+test.before(async () => { o = await office({ env: { CLAUDE_CONFIG_DIR: path.join(os.tmpdir(), 'no-claude-' + process.pid) } }); });
 test.after(() => o && o.stop());
 const get = () => o;
 
-pageTest('a role\'s model saves from Settings, and its skills say which are not found', get, async (p) => {
+pageTest('a role\'s model saves from Settings, and its skills say which are missing', get, async (p) => {
   await p.open();
   const page = p.page;
   await page.click('#cc-settings');
@@ -23,10 +25,10 @@ pageTest('a role\'s model saves from Settings, and its skills say which are not 
   await page.locator('#settings-said', { hasText: 'Saved.' }).waitFor();
   const pm = (await o.R.call('GET', '/settings')).body.settings.find((s) => s.name === 'pmModel');
   assert.deepStrictEqual([pm.value, pm.from], ['sonnet', 'page']);
-  // The test's home has no plugins, so every skill on the Dev's list is not found.
+  // The test's Claude Code folder has no plugins, so every skill on the Dev's list is not found.
   const skills = page.locator('#set-limits input[aria-label="Devs: skills"]');
   assert.match(await skills.inputValue(), /^mattpocock-skills:tdd, /);
   const row = page.locator('#set-limits .set-row', { has: page.locator('input[aria-label="Devs: skills"]') });
-  assert.match(await row.locator('.set-from').innerText(), /not found: mattpocock-skills:tdd, .*pstack:blast-radius/);
+  assert.match(await row.locator('.set-from').innerText(), /missing: mattpocock-skills:tdd, .*pstack:blast-radius/);
   assert.deepStrictEqual(p.errors, []);
 });

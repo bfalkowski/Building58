@@ -25,10 +25,6 @@ const ROLES = ['lead', 'dev', 'reviewer', 'pm', 'coo', 'security'];
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9.[\]-]{0,63}$/;
 const SKILL = /^[A-Za-z0-9][\w.-]{0,63}(:[A-Za-z0-9][\w.-]{0,63})?$/;
 const MAX_SKILLS = 12, MAX_SKILLS_TEXT = 400;
-const KNOWN = {
-  'mattpocock-skills': { market: 'claude-plugins-official' },
-  pstack: { market: 'cursor-plugins', add: 'cursor/plugins' }
-};
 const FOR = { tdd: 'new behavior, or a bug a test can catch', 'diagnosing-bugs': 'a bug', 'codebase-design': 'a change of structure' };
 
 const modelOk = (v) => typeof v === 'string' && (v === '' || MODEL.test(v));
@@ -103,16 +99,32 @@ function missingText() {
   const { skills, plugins } = installed();
   const missing = [...new Set(ROLES.flatMap((r) => names(config.get(r + 'Skills')) || []))].filter((n) => !skills.has(n)).sort();
   if (!missing.length) return '';
+  const pins = require('./plugins.js').list();
   const how = [...new Set(missing.map((n) => n.includes(':') ? n.split(':')[0] : null).filter((p) => p && !plugins.has(p)))].map((p) => {
-    const k = KNOWN[p];
+    const k = pins.plugins.find((x) => x.name === p);
     if (!k) return '/plugin install ' + p;
-    return (k.add ? '/plugin marketplace add ' + k.add + ', then ' : '') + '/plugin install ' + p + '@' + k.market;
+    const add = k.marketplace !== 'claude-plugins-official' && pins.marketplaces[k.marketplace];
+    return (add ? '/plugin marketplace add ' + add + ', then ' : '') + '/plugin install ' + p + '@' + k.marketplace;
   });
   const fix = how.length ? ' To install, type in Claude Code: ' + how.join('; ') + '.' : ' Their plugins are installed, so update them, or take the names off the list.';
   const head = 'Skills in Settings that are not installed, so briefs leave them out and sessions carry on without them.' + fix + ' Missing: ';
   let shown = missing.join(', ');
   for (let n = missing.length - 1; head.length + shown.length > 490 && n > 0; n--) shown = missing.slice(0, n).join(', ') + ' and ' + (missing.length - n) + ' more';
   return head + shown + '.';
+}
+const inContainer = () => (process.env.RELAY_IN_CONTAINER ? process.env.RELAY_IN_CONTAINER === '1' : fs.existsSync('/.dockerenv'));
+
+function lacking() {
+  if (process.env.RELAY_NEEDS_SKILLS === '0') return null;
+  const config = require('./config.js'), pl = require('./plugins.js');
+  const { skills: have, plugins } = installed(), dir = claudeDir();
+  const roles = ROLES.map((role) => ({ role, names: (names(config.get(role + 'Skills')) || []).filter((n) => !have.has(n)) })).filter((r) => r.names.length);
+  const pins = pl.list().plugins;
+  const need = [...new Set(roles.flatMap((r) => r.names.map((n) => (n.includes(':') ? n.split(':')[0] : null))).filter((p) => p && !plugins.has(p)))]
+    .map((p) => { const k = pins.find((x) => x.name === p); return k ? pl.idOf(k) : p; });
+  const differs = pl.differs(pl.installedIn(dir));
+  if (!roles.length && !differs.length) return null;
+  return { roles, commands: pl.commands(need, pl.knownMarkets(dir), inContainer()), differs };
 }
 const said = new Map();
 function notice(channel) {
@@ -134,4 +146,4 @@ function modelArgs(role) {
   return m && MODEL.test(m) ? ['--model', m] : [];
 }
 
-module.exports = { ROLES, MODEL, modelOk, skillsOk, names, installed, about, brief, missingText, notice, roleOf, modelArgs };
+module.exports = { ROLES, MODEL, modelOk, skillsOk, names, installed, about, brief, missingText, lacking, notice, roleOf, modelArgs };

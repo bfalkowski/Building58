@@ -14,7 +14,7 @@
 // each other relay on this room's state folder (relay/old-relays.js); and each base branch whose latest CI run
 // failed, from the last answer relay/main-ci.js kept; and the GitHub tickets whose notes are signed with another key (relay/tickets.js); and each ticket whose last write to the
 // GitHub ticket store failed (relay/tickets.js); and the Claude Code the sessions run, when the room was not
-// tested with it (relay/claude-version.js). The
+// tested with it (relay/claude-version.js); and the skills the briefs use that are not installed, or plugins installed at another version than plugins.json pins (relay/skills.js). The
 // huddle counts its headline from the same list, and boardOf gives the Board each task's item, so its Waiting
 // on you column holds the tickets the list names.
 //
@@ -89,7 +89,7 @@ function stateOf(channel, now, lastReport) {
     .filter((d) => d.target && !d.typed && d.blocked && !NOT_STUCK.has(d.blocked) && d.savedAt && now - d.savedAt > UNDELIVERED)
     .sort((a, b) => a.savedAt - b.savedAt)
     .map((d) => ({ terminal: d.target, who: chat.nameOf(terminal.find(channel, d.target)), minutes: Math.floor((now - d.savedAt) / 60000), why: delivery.whyWaits(d.blocked) }));
-  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), mains: mainCi.redOf(channel), writes: require('./tickets.js').writeErrors(channel, now), unread: require('./tickets.js').unreadNotes(channel), claude: claudeVersion.current() };
+  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), mains: mainCi.redOf(channel), writes: require('./tickets.js').writeErrors(channel, now), unread: require('./tickets.js').unreadNotes(channel), claude: claudeVersion.current(), skills: require('./skills.js').lacking() };
 }
 
 async function handle(req, res, channel, rest, ctx) {

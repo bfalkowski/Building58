@@ -55,6 +55,25 @@ async function relay(extraEnv, existingHome, options) {
     }
   }
 }
+// A Claude Code folder with every plugin in plugins.json installed at its pinned version and every skill the
+// settings name. A test relay's Needs you has no skills line unless the test sets RELAY_NEEDS_SKILLS: '1'.
+function skillsHome(home) {
+  const dir = path.join(home, '.claude-fixture');
+  if (fs.existsSync(dir)) return dir;
+  const { plugins } = require('../../plugins.json'), config = require('../config.js');
+  const named = config.SETTINGS.filter((x) => x.kind === 'skills').flatMap((x) => String(x.def).split(/[\s,]+/)).filter(Boolean);
+  const list = {};
+  for (const p of plugins) {
+    const at = path.join(dir, 'plugins', 'cache', p.marketplace, p.name, p.version);
+    for (const n of named.filter((x) => x.startsWith(p.name + ':'))) {
+      fs.mkdirSync(path.join(at, 'skills', n.split(':')[1]), { recursive: true });
+      fs.writeFileSync(path.join(at, 'skills', n.split(':')[1], 'SKILL.md'), '---\nname: ' + n.split(':')[1] + '\n---\n');
+    }
+    list[p.name + '@' + p.marketplace] = [{ scope: 'user', installPath: at, version: p.version, gitCommitSha: p.commit }];
+  }
+  fs.writeFileSync(path.join(dir, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: list }));
+  return dir;
+}
 async function relayOn(port, home, extraEnv, existingHome, options) {
   const base = 'http://127.0.0.1:' + port + '/channels/t';  // not localhost: Node 18's fetch tries ::1 and stops there
   // Tests that restart a relay check what Bring back does, so the next relay brings nothing back by
@@ -72,7 +91,7 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   // (relay/test/rollback.test.js), as an office session's shell does.
   // HOST is set here, so a HOST of your own (0.0.0.0, say) cannot move it off the address the test checks.
   // Nor does the room of the shell that runs the test reach the relay: see withoutRoom.
-  const env = { ...withoutRoom(process.env), HOME: home, HOST: '127.0.0.1', PORT: String(port), RELAY_KEY: 'test-key', RELAY_TERMINAL: '1', RELAY_RESUME: '0', RELAY_LEAD: '0', RELAY_PM_SEAT: '0', RELAY_ROLLBACK: '0', RELAY_REVIEW_POLL_SECONDS: '0', RELAY_CHAT_POLL_SECONDS: '0', RELAY_MAIN_POLL_SECONDS: '0', RELAY_MAIN_CI_POLL_SECONDS: '0', RELAY_PIPELINE_POLL_SECONDS: '0', RELAY_GH_FRESH_MS: '0', RELAY_LEAD_CHECK_MS: '0', RELAY_TOLD_CHECK_MS: '3600000', RELAY_TOLD_HOLD_MS: '1', CLAUDE_CMD: path.join(__dirname, 'fake-claude.sh'), ...(extraEnv || {}) };
+  const env = { ...withoutRoom(process.env), HOME: home, HOST: '127.0.0.1', PORT: String(port), RELAY_KEY: 'test-key', RELAY_TERMINAL: '1', RELAY_RESUME: '0', RELAY_LEAD: '0', RELAY_PM_SEAT: '0', RELAY_ROLLBACK: '0', RELAY_REVIEW_POLL_SECONDS: '0', RELAY_CHAT_POLL_SECONDS: '0', RELAY_MAIN_POLL_SECONDS: '0', RELAY_MAIN_CI_POLL_SECONDS: '0', RELAY_PIPELINE_POLL_SECONDS: '0', RELAY_GH_FRESH_MS: '0', RELAY_LEAD_CHECK_MS: '0', RELAY_TOLD_CHECK_MS: '3600000', RELAY_TOLD_HOLD_MS: '1', CLAUDE_CMD: path.join(__dirname, 'fake-claude.sh'), RELAY_NEEDS_SKILLS: '0', ...(extraEnv || {}) };
   let output = '', stopping = false;
   // options.root runs a copy of the relay from another folder (relay/test/rollback.test.js).
   const child = spawn('node', ['relay/server.js'], { cwd: (options && options.root) || ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -162,4 +181,4 @@ function sessionToken(sessionId) {
   if (!token) throw new Error('No token found for session ' + sessionId);
   return token;
 }
-module.exports = { relay, withoutRoom, makeRepo, removeDir, sleep, until, sessionToken, sessionTokens, ROOT };
+module.exports = { relay, skillsHome, withoutRoom, makeRepo, removeDir, sleep, until, sessionToken, sessionTokens, ROOT };
