@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.12.0",
+    "version": "2.13.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -61,6 +61,10 @@
     {
       "name": "Huddle",
       "description": "A question to the idle sessions, and the report of their answers."
+    },
+    {
+      "name": "Manager watch",
+      "description": "What the manager notices about stuck work, and the limits he uses."
     },
     {
       "name": "Jams",
@@ -1361,6 +1365,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JamList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/channels/{channel}/manager": {
+      "get": {
+        "tags": [
+          "Manager watch"
+        ],
+        "summary": "Get manager",
+        "description": "Only with the relay key. What the manager's watch found: on, how often it looks (every, seconds), how many times it has looked (looks) and when (lastLook), its limits, the checks it counts (pr, name and the commits that check failed on), the problems that open now (key, since and the ticket it filed), and its last notes: seq, at, kind, ticket, task, terminal, reason, say and the ticket it filed.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "getManager",
+        "x-tokens": [],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
                 }
               }
             }

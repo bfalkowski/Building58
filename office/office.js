@@ -1025,17 +1025,28 @@
     const line = bossDeck.pop();
     bubble(boss, line, Math.min(6, 2 + line.length / 15));
   }
+  const bossNotes = [];
+  function deskOfNote(n) {
+    const w = n.terminal && people.find((p) => p.present && p.sessionId && (sessions.get(p.sessionId) || {}).terminal === n.terminal);
+    return w ? w.desk : null;
+  }
+  function bossSays(text) {
+    const secs = Math.min(9, 3 + text.length / 12);
+    return { secs, say: () => bubble(boss, text, secs) };
+  }
   function bossVisit(src) {
     boss.present = true; boss.step = null; boss.phone.visible = false; release(boss);
-    const desks = people.filter((p) => p.present).map((p) => p.desk).sort(() => Math.random() - 0.5).slice(0, 2 + Math.floor(Math.random() * 2));
-    const looks = bossSpots.slice().sort(() => Math.random() - 0.5);
+    const note = bossNotes.shift(), said = note ? bossSays(note.say) : null, noteDesk = note ? deskOfNote(note) : null;
+    const desks = note ? (noteDesk ? [noteDesk] : []) : people.filter((p) => p.present).map((p) => p.desk).sort(() => Math.random() - 0.5).slice(0, 2 + Math.floor(Math.random() * 2));
+    const looks = note && !noteDesk ? ['boss-board', 'boss-aisle'] : bossSpots.slice().sort(() => Math.random() - 0.5);
     boss.steps = [
       ...(boss.seated ? [{ t: 'stand' }, act({ dur: 0.6, pose: 'stand' })] : []),
       { t: 'walk', key: 'boss-in' }, { t: 'face', key: 'boss-in' }, act({ dur: 0.9, pose: 'stand', label: 'Opening the door' }),
       { t: 'walk', key: 'boss-door' },
-      ...bossStop(looks[0], 'behindBack', rand(3, 6), { scan: true })
+      ...(note && !noteDesk ? [] : bossStop(looks[0], 'behindBack', rand(3, 6), { scan: true }))
     ];
-    for (const k of desks) boss.steps.push({ t: 'walk', key: 'boss-behind-' + k }, { t: 'face', key: 'boss-behind-' + k }, { t: 'call', fn: bossRemark }, act({ dur: rand(4, 8), pose: 'lookOver' }));
+    for (const k of desks) boss.steps.push({ t: 'walk', key: 'boss-behind-' + k }, { t: 'face', key: 'boss-behind-' + k }, { t: 'call', fn: note ? said.say : bossRemark }, act({ dur: note ? said.secs + 1 : rand(4, 8), pose: 'lookOver' }));
+    if (note && !noteDesk) boss.steps.push({ t: 'walk', key: looks[0] }, { t: 'face', key: looks[0] }, { t: 'call', fn: said.say }, act({ dur: said.secs + 1, pose: 'behindBack', scan: true }));
     boss.steps.push(...bossStop(looks[1], 'behindBack', rand(3, 6), { scan: true }), { t: 'walk', key: 'boss-door' }, { t: 'face', key: 'boss-door-in' }, act({ dur: 0.7, pose: 'stand', label: 'Opening the door' }), { t: 'walk', key: 'boss-in' }, { t: 'call', fn: bossLeft },
       ...backToDesk());
     const startled = people.filter(looksBusy);
@@ -1096,7 +1107,7 @@
     door.rotation.y += (open - door.rotation.y) * Math.min(1, dt * 4);
     if (!boss.present) {
       if (!boss.step && !boss.steps.length) managerIdle(boss);
-      if (worldT >= bossDue && !party.on && !directed && !boss.moving) bossVisit('world');
+      if ((worldT >= bossDue || bossNotes.length) && !party.on && !directed && !boss.moving) bossVisit('world');
     }
     tickWorker(boss, dt);
   }
@@ -1882,6 +1893,8 @@
       } },
     say: { desc: 'Shows a speech bubble.', params: { who: 'a person', text: 'what they say' }, run: (c) => { const w = findWorker(c) || lead; bubble(w, String(c.text || '').slice(0, 60), 3); return { ok: true, who: w.id }; } },
     leadVisit: { desc: "Sends the Lead to the manager's office for a moment, if the Lead has no real work.", params: {}, run: (c, src) => leadVisit(src) ? { ok: true } : fail('busy', 'The Lead is working, or the guest chairs are taken.') },
+    managerNote: { desc: 'The manager reports a sign of stuck work: it goes in Activity, and he walks to the desk of the session "terminal" names, or to the board when no desk is named, and says "say" in his bubble. It is said on his next walk out, which starts at once unless a party is on.', params: { text: 'the reason, for Activity', say: 'optional: the short line he says, "text" if left out', terminal: 'optional: the id of the session at the desk it is about', ticket: 'optional: the ticket it is about' },
+      run: (c, src) => { const text = String(c.text || '').replace(/\s+/g, ' ').trim().slice(0, 300); if (!text) return fail('bad_param', 'Send "text".'); const say = String(c.say || text).replace(/\s+/g, ' ').trim().slice(0, 140); bossNotes.push({ say, terminal: c.terminal ? String(c.terminal).slice(0, 64) : null, ticket: c.ticket ? String(c.ticket).slice(0, 40) : null }); if (bossNotes.length > 5) bossNotes.shift(); emit('manager.note', { text, ticket: c.ticket ? String(c.ticket).slice(0, 40) : null }, src); return { ok: true, queued: bossNotes.length }; } },
     manager: { desc: 'Sends the manager through now, instead of waiting for the next visit.', params: {}, run: (c, src) => { if (boss.present) return fail('busy', 'The manager is already here.'); bossVisit(src); return { ok: true }; } },
     reset: { desc: 'Ends all work and clears the board.', params: {}, run: (c, src) => { people.forEach((p) => { finish(p, 'reset', src); if (p.waiting) setWaiting(p, null); }); done.length = 0; [...sessions.values()].forEach(unseat); boardDirty = true; return { ok: true }; } },
     speed: { desc: 'How fast the room moves: 0 to 8, 1 is normal. Work state does not depend on it.', params: { value: '0 to 8' }, run: (c) => { const v = Number(c.value); if (!(v >= 0 && v <= 8)) return fail('bad_param', '"value" is 0 to 8.'); speed = v; return { ok: true, speed }; } },
