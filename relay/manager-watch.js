@@ -169,9 +169,9 @@ async function look(channel, now) {
       c.notes = c.notes.slice(-NOTES_KEPT);
       log(f.reason);
     }
-    if (!rec.braked && brake.STALLS.has(f.kind) && config.get('managerLowersTrust')) {
+    if (!rec.braked && brake.STALLS.has(f.kind)) {
       rec.braked = true;
-      const out = brake.lower(channel, f, c.lowered, now);
+      const out = config.get('managerLowersTrust') ? brake.lower(channel, f, c.lowered, now) : null;
       if (out && out.limit) log('Not lowering the trust level for ' + f.key + ': it was lowered ' + brake.PER_DAY + ' times in the last day already. The rest is yours.');
       else if (out) {
         c.notes.push({ seq: ++c.seq, at: new Date(now).toISOString(), key: f.key, kind: 'brake', ticket: f.ticket, task: f.task, terminal: f.terminal, reason: out.entry.said, say: out.entry.say, filed: null });

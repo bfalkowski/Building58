@@ -82,6 +82,10 @@ test('the brake does nothing while the switch is off, and never raises the level
   assert.strictEqual((await W.notes('brake')).length, 0);
 
   await call('POST', '/settings', { values: { managerLowersTrust: true } });
+  const looks = (await call('GET', '/manager')).body.looks;
+  await until(async () => (await call('GET', '/manager')).body.looks >= looks + 2, 'two looks after the switch went on');
+  assert.deepStrictEqual(await W.level(), { auto: true, again: true }, 'a stall that began while it was off is not braked when it goes on');
+  assert.strictEqual((await W.notes('brake')).length, 0);
   await call('POST', '/reviews', { auto: true, again: false });
   await W.fail('lint', 3);
   await until(async () => (await W.notes('check')).length === 2, 'the note about the second check');

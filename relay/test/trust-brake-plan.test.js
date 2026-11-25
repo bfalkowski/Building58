@@ -34,3 +34,12 @@ test('the levels are the page\'s levels', () => {
   assert.strictEqual(wants.length, LEVELS.length);
   wants.forEach((w, n) => { assert.deepStrictEqual(Object.keys(w), KEYS, 'level ' + n); assert.deepStrictEqual(w, LEVELS[n], 'level ' + n); });
 });
+
+test('the brake acts on kinds the watch really finds, handoffs included', () => {
+  const { STALLS } = require('../trust-brake.js');
+  const { findings } = require('../manager-watch-plan.js');
+  const limits = { buildingMs: 1, checkFails: 2, briefMs: 1, slotMs: 1, handoffs: 2, skipMs: 1 };
+  const found = findings({ now: 1e12, limits, tasks: [{ id: 't1', ticket: 'T-1', state: 'building', slot: false, dev: 'live', movedAt: 1e12, since: 1e12, checks: [{ name: 'pipeline', heads: 2 }] }], seats: [], runs: [{ task: 't1', ticket: 'T-1', outcome: 'handed' }, { task: 't2', ticket: 'T-2', outcome: 'handed' }], ready: [] });
+  for (const kind of STALLS) assert.ok(found.some((f) => f.kind === kind), kind);
+  assert.deepStrictEqual([...STALLS].sort(), ['check', 'handoffs']);
+});
