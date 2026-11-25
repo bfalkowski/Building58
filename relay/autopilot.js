@@ -63,6 +63,7 @@ const { oneLine } = require('./clean.js');
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const ghDoor = require('./gh.js');
 const config = require('./config.js');
+const exhibit = require('./exhibit.js');
 const pmCheck = require('./pm-check.js');
 const jams = require('./jams.js');
 const AT_ONCE = () => config.get('autopilotAtOnce');
@@ -345,6 +346,7 @@ function readyNow(channel, task, rec, f) {
   rec.readyTold = f.ready; save();
   note(channel, (task.ticket || 'Task ' + task.id) + ', PR ' + number(task.pr) + ': ' + f.why);
 }
+const exhibitOf = (task, pr) => (config.get('autopilotExhibit') && pr.state === 'OPEN' ? exhibit.read(task.pr, task.repo) : Promise.resolve(undefined));
 async function lookAt(channel, task) {
   const rec = recOf(channel, task.pr);
   const got = await readPr(task, rec);
@@ -353,7 +355,8 @@ async function lookAt(channel, task) {
   if (files) { rec.apiFiles = plan.touchesApi(files); if (rec.apiSeq === undefined) rec.apiSeq = chOf(channel).apiSeq || 0; }
   if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
   const v = latest(rec);
-  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
+  const ex = await exhibitOf(task, pr);
+  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex));
   rec.why = d.why; rec.act = d.act;
   if (d.act === 'wait') rec.why = reviews.deskLine(channel, task.pr) || rec.why;
   if (d.act === 'done') markDone(channel, task);
@@ -369,7 +372,8 @@ async function lookAt(channel, task) {
     if (task.reviews && task.reviews.pending) { rec.why = 'New review news came in as it was about to merge, so its Dev hears it first.'; rec.act = 'wait'; return; }
     const again = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch((e) => ({ failed: e.message }));
     if (again.failed) { rec.why = 'Ready to merge, but gh could not read the PR again just before: ' + again.failed; rec.act = 'wait'; return; }
-    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
+    const lastEx = await exhibitOf(task, again);
+    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone, lastEx));
     if (last.act !== 'merge') { rec.why = last.why; rec.act = last.act; return; }
     try { await gh(['pr', 'merge', task.pr, '--merge', '--match-head-commit', pr.headRefOid], task.repo); } catch (e) {
       const now = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch(() => null);

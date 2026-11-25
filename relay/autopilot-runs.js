@@ -21,6 +21,7 @@ const MANUAL = {
   'pr-closed': 'the PR was closed without merging',
   rounds: 'review rounds still asked for fixes at the limit',
   'ci-red': 'CI failed on the reviewed commit',
+  exhibit: 'Exhibit\'s evidence did not pass',
   'merge-failed': 'gh pr merge failed',
   'work-left-out': 'its Dev left work out of the PR',
   'news-untold': 'its Dev never heard the latest review',

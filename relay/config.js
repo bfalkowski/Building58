@@ -45,6 +45,8 @@ const SETTINGS = [
     what: 'If a follow-up review cannot start, for example because all desks are full, the relay waits this long and tries again. It tries 3 times. A first review tries 3 times this way too, but when only a desk is missing it waits for a free desk instead.' },
   { name: 'reviewGraceSeconds', group: 'Reviews', label: 'A reviewer leaves after', unit: 'seconds', env: 'RELAY_REVIEW_GRACE_MS', scale: 1 / 1000, def: 30, min: 1, max: 600,
     what: 'After an automatic reviewer posts and its turn ends, the relay waits this long, then ends the session and frees its desk.' },
+  { name: 'autopilotExhibit', group: 'Autopilot', label: 'Merge only when Exhibit passes', kind: 'bool', def: false,
+    what: 'Level 6. Autopilot also needs the Exhibit summary comment on the PR to say meets_policy at the PR\'s head commit before it merges. It waits while there is no summary, or one for an older commit, and hands the PR to you when Exhibit says needs_person or error. Exhibit must run on the repo\'s PRs, or Autopilot never merges. Off by default.' },
   { name: 'autopilotRounds', group: 'Autopilot', label: 'Review rounds', unit: 'rounds', def: 2, min: 1, max: 5,
     what: 'If this many reviews in a row still ask for fixes, Autopilot stops and puts the task in Waiting on you.' },
   { name: 'autopilotMerges', group: 'Autopilot', label: 'Merges a day', unit: 'merges', def: 10, min: 1, max: 50,
