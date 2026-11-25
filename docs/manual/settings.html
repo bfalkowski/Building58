@@ -134,7 +134,8 @@
   <table>
     <thead><tr><th>Setting</th><th>Default</th><th>Variable</th><th>Meaning</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Lead check every</span></td><td class="plain">5 minutes</td><td><code>RELAY_LEAD_CHECK_MS</code></td><td>How often the relay types a check prompt into the Lead, to look for a stuck reviewer, a failed pipeline, a PR with no review, or a merged PR whose Dev still holds a desk.</td></tr>
+      <tr><td><span class="ui">Lead heartbeat every</span></td><td class="plain">60 minutes</td><td><code>RELAY_LEAD_CHECK_MS</code></td><td>How often the relay prompts the Lead again about items that are still stuck. New items prompt the Lead at once, and with nothing stuck the Lead gets nothing. 0 turns the heartbeat off.</td></tr>
+      <tr><td><span class="ui">GitHub pass every</span></td><td class="plain">60 seconds</td><td><code>RELAY_GITHUB_PASS_SECONDS</code></td><td>How often the one GitHub pass reads every open task PR, with one call for each repo.</td></tr>
       <tr><td><span class="ui">Check PRs for comments every</span></td><td class="plain">60 seconds</td><td><code>RELAY_REVIEW_POLL_SECONDS</code></td><td>How often the relay asks GitHub for new comments on each PR, to send them to the Dev.</td></tr>
       <tr><td><span class="ui">Check each PR's pipeline every</span></td><td class="plain">15 seconds</td><td><code>RELAY_PIPELINE_POLL_SECONDS</code></td><td>How often the relay asks GitHub for the checks on each open PR.</td></tr>
       <tr><td><span class="ui">Check main's CI every</span></td><td class="plain">120 seconds</td><td><code>RELAY_MAIN_CI_POLL_SECONDS</code></td><td>How often the relay asks GitHub for the latest CI runs that a push to main started, once for each repo and base branch the room works on.</td></tr>

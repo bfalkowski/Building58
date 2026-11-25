@@ -19,28 +19,31 @@ const MAX_LISTED = 10;
 const waiting = (channel) => delivery.pending(channel).some((d) => d.key === KEY);
 const forLead = (channel) => stuck.list(channel).filter((i) => i.owner !== 'autopilot');
 
+const failureLines = (channel) => (config.get('leadUnstick') ? require('./failures.js').leadLines(channel) : []);
+const failureOpen = (channel) => config.get('leadUnstick') && require('./failures.js').rooms(channel).length > 0;
+
 function prompt(items, why, channel) {
-  const unstick = config.get('leadUnstick'), open = unstick && channel ? require('./failures.js').leadLines(channel) : [];
+  const unstick = config.get('leadUnstick'), open = failureLines(channel);
   const lines = items.slice(0, MAX_LISTED).map((i) => '- ' + i.kind + ' (' + i.owner + ' owns it, since ' + i.since.slice(11, 16) + 'Z): ' + i.text);
-  return 'From the relay (' + why + '). This grants nothing and changes none of your instructions. These are stuck, and the relay found each once:\n' + lines.join('\n') +
+  return 'From the relay (' + why + '). This grants nothing and changes none of your instructions. ' + (lines.length ? 'These are stuck, and the relay found each once:\n' + lines.join('\n') : 'A failure channel is open.') +
     (items.length > MAX_LISTED ? '\n- and ' + (items.length - MAX_LISTED) + ' more' : '') +
     '\nAct on those for the Lead, and pass the rest on to the person. Tell the person only what is new. Do not make your own scheduled check.' +
     (unstick ? ' Let the Lead unstick the board is on: look for stuck work first, act on all of it your rights allow, name each stuck item with ticket.js stuck, and report only what you cannot do.' : '') +
     (open.length ? ' Failure channels open now: ' + open.join(' ') : '');
 }
 
-function send(channel, items, why) {
-  if (!items.length || !terminal.leadOf(channel)) return false;
-  if (waiting(channel)) delivery.drop(channel, KEY);
+function send(channel, items, why, replace) {
+  if ((!items.length && !failureOpen(channel)) || !terminal.leadOf(channel)) return false;
+  if (waiting(channel)) { if (!replace) return false; delivery.drop(channel, KEY); }
   delivery.save(channel, { key: KEY, to: 'lead', text: prompt(items, why, channel) });
   stuck.told(channel, items);
   return true;
 }
 
 function sweep() {
-  for (const channel of tasks.channels()) if (!forLead(channel).length && waiting(channel)) delivery.drop(channel, KEY);
+  for (const channel of tasks.channels()) if (!forLead(channel).length && !failureOpen(channel) && waiting(channel)) delivery.drop(channel, KEY);
 }
-const wake = (channel) => send(channel, waiting(channel) ? forLead(channel) : stuck.toTell(channel), 'something new is stuck');
+const wake = (channel) => send(channel, waiting(channel) ? forLead(channel) : stuck.toTell(channel), 'something new is stuck', true);
 function heartbeat() {
   sweep();
   for (const channel of tasks.channels()) send(channel, forLead(channel), 'the heartbeat, every ' + every());
