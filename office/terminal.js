@@ -214,7 +214,7 @@
     input.addEventListener('change', () => { trust.pick = L.n; drawLevels(); });
     return input;
   });
-  const monitor = document.createElement('p'); monitor.className = 'set-what'; monitor.textContent = 'Rung 5 is not built yet. It is a monitor that watches what shipped and files tickets. Level 6, Autopilot with evidence, is not built either. It would be level 5 with one more check: the relay merges only when Exhibit\'s evidence for the PR passes. Exhibit does not run on this repo\'s PRs yet, and the relay does not read its verdict.';
+  const monitor = document.createElement('p'); monitor.className = 'set-what'; monitor.textContent = 'Rung 5 is not built yet. It is a monitor that watches what shipped and files tickets. Level 6, Autopilot with evidence, is not built either. It would be level 5 with one more check: the relay merges only when Exhibit\'s evidence for the PR passes. Exhibit now runs on this repo\'s PRs once a night, in shadow mode, and the relay does not read its verdict.';
   $('set-levels').append(levelsBox, monitor, levelsApply, levelsNote);
   function switchesNow() {
     if (!trust.reviews || !trust.autopilot || !trust.settings) return null;

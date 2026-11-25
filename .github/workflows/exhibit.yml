@@ -1,0 +1,222 @@
+# Exhibit on this repo's PRs, once a night, in shadow mode (docs/manual/roles.html, Exhibit in shadow mode).
+# It is not on pull_request: a comment on each PR would wake each PR's Dev, for a verdict that needs no
+# action, and the tests would run twice for each PR. Each night it checks the PRs of this repo that were
+# merged or updated since the last run, with `exhibit check --shadow`, writes each verdict to the job
+# summary, and stores each exhibit on the exhibit-data branch. It posts no comment on any PR. Nothing waits
+# on it: it is not a required check, and the relay does not read it.
+#
+# Exhibit's GitHub Action reads github.event.pull_request, which a scheduled run does not have. So this
+# workflow runs the Exhibit CLI directly, from a checkout of the Exhibit repo at the commit below. The commit
+# is the release v0.1.0 (2250e99a09f73305f674c6dcdda04f6397f361bc). The workflow checks that it got that
+# commit and no other. A tag can move and a commit cannot, and the publish job runs this code with a write
+# token. To move to a newer release, change EXHIBIT_COMMIT and this comment in a PR of its own.
+name: Exhibit
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: Check the PRs merged or updated in this many hours, as a whole number
+        required: false
+        default: '48'
+
+# No job gets a permission that it does not name below. No job has a secret.
+permissions: {}
+
+# One run at a time. A run that is still going when the next one starts is never cancelled, so no night's
+# exhibits are lost.
+concurrency:
+  group: exhibit-nightly
+  cancel-in-progress: false
+
+env:
+  EXHIBIT_COMMIT: 2250e99a09f73305f674c6dcdda04f6397f361bc
+
+jobs:
+  plan:
+    name: Exhibit plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      prs: ${{ steps.pick.outputs.prs }}
+      count: ${{ steps.pick.outputs.count }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The PRs of this repo updated in the window, minus those whose head already has an exhibit on the
+      # data branch, so a night that was missed is made up and a PR is never checked twice for one head.
+      # The choice is relay/exhibit-nightly-plan.js, and relay/test/exhibit-nightly-plan.test.js tests it.
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOURS: ${{ inputs.hours || '48' }}
+        run: |
+          set -euo pipefail
+          case "$HOURS" in ''|*[!0-9]*) echo "::error::hours must be a whole number, not \"$HOURS\"."; exit 2 ;; esac
+          since="$(date -u -d "$HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)"
+          if git fetch -q --no-tags origin exhibit-data 2>/dev/null; then
+            git ls-tree -r --name-only origin/exhibit-data prs/ > "$RUNNER_TEMP/stored.txt"
+          else
+            : > "$RUNNER_TEMP/stored.txt"
+          fi
+          gh pr list --state all --limit 100 --search "updated:>=$since" \
+            --json number,headRefOid,state,isCrossRepository,updatedAt \
+            | node relay/exhibit-nightly-plan.js --hours "$HOURS" --max 30 --stored "$RUNNER_TEMP/stored.txt" > "$RUNNER_TEMP/prs.json"
+          prs="$(cat "$RUNNER_TEMP/prs.json")"
+          count="$(node -e 'console.log(JSON.parse(process.argv[1]).length)' "$prs")"
+          echo "prs=$prs" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Exhibit checks $count PRs tonight: $prs" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # One job for each PR, so the tests of one PR cannot run into the time of another. The job runs the PR's
+  # code, so its token can only read, and it has no secret.
+  check:
+    name: Exhibit check PR ${{ matrix.pr }}
+    needs: plan
+    if: ${{ needs.plan.outputs.count != '0' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.prs) }}
+    steps:
+      # The whole history, so the PR's base commit is in the clone.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The Node that this repo's CI tests with. Exhibit needs Node 20 or later.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      - name: Get Exhibit at the pinned commit
+        run: |
+          set -euo pipefail
+          git init -q "$RUNNER_TEMP/exhibit"
+          cd "$RUNNER_TEMP/exhibit"
+          git fetch -q --depth 1 https://github.com/bfalkowski/exhibit.git "$EXHIBIT_COMMIT"
+          git checkout -q FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$EXHIBIT_COMMIT"
+          npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+      # A merged PR's head commit is no longer on a branch, but GitHub keeps it at refs/pull/N/head.
+      - name: Get the PR's head commit
+        env:
+          PR: ${{ matrix.pr }}
+          HEAD_SHA: ${{ matrix.head }}
+        run: |
+          set -euo pipefail
+          git fetch -q --no-tags origin "+refs/pull/$PR/head:refs/remotes/pr/$PR"
+          git cat-file -e "$HEAD_SHA^{commit}"
+
+      # --shadow: the step succeeds whatever the verdict. GITHUB_TOKEN here reads the PR and can do no more
+      # (contents: read), and it lasts only as long as this job.
+      - name: Exhibit check
+        env:
+          PR: ${{ matrix.pr }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node "$RUNNER_TEMP/exhibit/bin/exhibit.js" check --pr "$PR" --repo "$GITHUB_REPOSITORY" --shadow
+
+      # summary.md is there for every verdict, and for a run that failed before it had one.
+      - name: Show the summary
+        if: ${{ !cancelled() }}
+        env:
+          PR: ${{ matrix.pr }}
+        run: |
+          { echo "## PR $PR"; cat .exhibit/summary.md; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: exhibit-${{ matrix.pr }}
+          path: |
+            .exhibit/evidence.json
+            .exhibit/summary.md
+            .exhibit/probes/
+            .exhibit/tests/
+            .exhibit/mutation/
+          include-hidden-files: true
+          if-no-files-found: warn
+          overwrite: true
+
+  # Stores each exhibit on the exhibit-data branch. It never runs a PR's code, only the pinned Exhibit.
+  # No --comment, so nothing is posted on any PR. The check job runs a PR's code, which can rewrite the
+  # exhibit it uploads. The release v0.1.0 has no --pr, --repo or --head on publish, so this job checks
+  # that the exhibit's PR, repo and head are the ones the plan named, and stores nothing when they are not.
+  # Like Exhibit's own check, that stops an exhibit from landing under another PR or head, and no more: it
+  # cannot tell a made-up verdict from a true one, so read the data branch with that in mind.
+  publish:
+    name: Exhibit publish
+    needs: [plan, check]
+    if: ${{ !cancelled() && needs.plan.outputs.count != '0' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      # Push the exhibits to the exhibit-data branch. The first run makes the branch.
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      - name: Get Exhibit at the pinned commit
+        run: |
+          set -euo pipefail
+          git init -q "$RUNNER_TEMP/exhibit"
+          cd "$RUNNER_TEMP/exhibit"
+          git fetch -q --depth 1 https://github.com/bfalkowski/exhibit.git "$EXHIBIT_COMMIT"
+          git checkout -q FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$EXHIBIT_COMMIT"
+          npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: exhibit-*
+          path: ${{ runner.temp }}/exhibits
+
+      - name: Store the exhibits
+        env:
+          PRS: ${{ needs.plan.outputs.prs }}
+        run: |
+          set -uo pipefail
+          failed=0
+          {
+            echo "## Exhibit, one night's verdicts"
+            echo
+            echo "Shadow mode: nothing waits on these."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          while read -r pr head; do
+            dir="$RUNNER_TEMP/exhibits/exhibit-$pr"
+            if verdict="$(node -e '
+              let e;
+              try { e = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch { console.error("The check wrote no exhibit."); process.exit(1); }
+              const [, , pr, head, repo] = process.argv;
+              const ok = e.pr === Number(pr) && e.head === head && String(e.repo).toLowerCase() === repo.toLowerCase();
+              if (!ok) { console.error("The exhibit is for another PR, commit or repo than the plan named."); process.exit(1); }
+              console.log(String(e.verdict).replace(/[^a-z_]/g, ""));
+            ' "$dir/evidence.json" "$pr" "$head" "$GITHUB_REPOSITORY")" \
+              && node "$RUNNER_TEMP/exhibit/bin/exhibit.js" publish --evidence "$dir/evidence.json"; then
+              echo "- PR $pr at ${head:0:12}: $verdict" >> "$GITHUB_STEP_SUMMARY"
+            else
+              failed=1
+              echo "- PR $pr at ${head:0:12}: nothing stored. Read the check job's summary." >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::Exhibit stored nothing for PR $pr."
+            fi
+          done < <(node -e 'for (const p of JSON.parse(process.env.PRS)) console.log(p.pr + " " + p.head)')
+          exit "$failed"
