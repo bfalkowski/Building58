@@ -82,6 +82,24 @@ test('office:hooks run inside a panel session does not pin that session channel'
   // A session an older relay started has OFFICE_TERMINAL_ID but no OFFICE_PANEL_CHANNEL.
   got = install({ OFFICE_CHANNEL: 'my-project', OFFICE_TERMINAL_ID: 'x' });
   assert.doesNotMatch(got.command, /OFFICE_CHANNEL/);
+  // Older relay: --channel still works, and a value set by hand is dropped too.
+  got = install({ OFFICE_CHANNEL: 'by-hand', OFFICE_TERMINAL_ID: 'x' });
+  assert.doesNotMatch(got.command, /OFFICE_CHANNEL/);
+  got = install({ OFFICE_CHANNEL: 'my-project', OFFICE_TERMINAL_ID: 'x' }, ['--channel', 'mine']);
+  assert.match(got.command, /OFFICE_CHANNEL=mine /);
+  // --channel with no name, or a flag as its name, is refused and nothing is installed.
+  const raw = (args) => spawnSync('node', [path.join(ROOT, 'relay', 'office-hook.js')].concat(args), { env: Object.assign({}, process.env, { HOME: home, OFFICE_RELAY_KEY: 'k' }), encoding: 'utf8' });
+  fs.rmSync(settings, { force: true });
+  for (const args of [['--install', '--channel', '--foo'], ['--install', '--channel'], ['--install', '--channel='], ['--install', '--channel=-x']]) {
+    const bad = raw(args);
+    assert.strictEqual(bad.status, 1, args.join(' '));
+    assert.match(bad.stderr, /--channel needs a channel name/);
+    assert.ok(!fs.existsSync(settings), 'nothing is installed');
+  }
+  // The mode can come after --channel.
+  const late = raw(['--channel', 'late', '--install']);
+  assert.strictEqual(late.status, 0, late.stderr);
+  assert.match(JSON.parse(fs.readFileSync(settings, 'utf8')).hooks.Stop[0].hooks[0].command, /OFFICE_CHANNEL=late /);
   // --settings prints the same, and says how to pick a channel.
   const p = spawnSync('node', [path.join(ROOT, 'relay', 'office-hook.js'), '--settings', '--channel', 'b c'], { env: Object.assign({}, process.env, inherited, { OFFICE_RELAY_KEY: 'k' }), encoding: 'utf8' });
   assert.match(JSON.parse(p.stdout).hooks.Stop[0].hooks[0].command, /OFFICE_CHANNEL='b c' /);
