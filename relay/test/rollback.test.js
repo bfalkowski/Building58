@@ -17,6 +17,7 @@ const waitFor = async (fn, what, ms) => {
   while (Date.now() < end) { let v = null; try { v = await fn(); } catch (e) { /* between two relays */ } if (v) return v; await sleep(200); }
   throw new Error('Timed out waiting for ' + what);
 };
+const updateEnded = (R) => waitFor(async () => (await R.call('GET', '/update')).body.update === null, 'the earlier update to end');
 const talk = (R, sid) => R.hook({ hook_event_name: 'UserPromptSubmit', session_id: sid.slice(0, 12) });
 const idle = (R, sid) => R.hook({ hook_event_name: 'Stop', session_id: sid.slice(0, 12) });
 
@@ -70,6 +71,7 @@ test('Update goes back to the last good commit when the new relay fails its chec
     assert.strictEqual(sh(dir, 'symbolic-ref', '--short', 'HEAD'), 'main');
     assert.strictEqual((await R.call('GET', '/update')).body.rollback, null);
     assert.strictEqual(R.child.exitCode, null, 'the supervisor kept running');
+    await updateEnded(R);
   });
 
   await t.test('a fail: the new relay does not start, so Update checks out the last good commit and restarts on it', async () => {
@@ -89,6 +91,7 @@ test('Update goes back to the last good commit when the new relay fails its chec
     await waitFor(() => /passed its check[\s\S]*passed its check[\s\S]*passed its check/.test(R.output()), 'the old commit to pass again');
     assert.strictEqual(good().commit, second);
     assert.strictEqual(good().rollback.failed, broken);
+    await updateEnded(R);
   });
 
   await t.test('and Update pulls nothing more until a person checks out main, and says why', async () => {
