@@ -30,7 +30,7 @@ pageTest('Ask security starts its session, and its report shows on the Floor', g
   await page.locator('#security-report:not([hidden])').waitFor();
   assert.match(await page.locator('#security-text').innerText(), /inherits the gh login/);
   assert.match(await page.locator('#security-title').innerText(), /^Security report · /);
-  assert.strictEqual(await page.locator('#people').isVisible(), true, 'the people stay on the Floor next to the report');
+  assert.strictEqual(await page.locator('#seats').isVisible(), true, 'the seats stay in the front office next to the report');
 
   // The COO's report and this one take turns: one shows at a time.
   assert.strictEqual((await o.R.call('POST', '/officers/coo/report', { text: 'The room ran alone.' })).status, 201);

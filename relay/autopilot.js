@@ -528,8 +528,8 @@ async function maybeStart(channel) {
     }
     if (out.error === 'wip_limit') { waitWip(out.message); return; }
     if (out.error === 'full') {
-      const taken = terminal.all(channel).filter((t) => !t.exited).length;
-      c.idle = 'Waiting for a free desk: ' + taken + ' of ' + terminal.DESKS + ' taken, ' + why + '.';
+      const taken = terminal.workersOf(channel);
+      c.idle = 'Waiting for a free desk: ' + taken + ' of ' + terminal.WORKER_DESKS + ' taken, ' + why + '.';
       if (!wasWaiting) note(channel, c.idle + ' ' + next.id + ' starts once one is free.');
       return;
     }

@@ -242,7 +242,7 @@ function queueFirst(channel, pr, from, t) {
   if (pipeline.on()) holdFirst(channel, pr, from, t); else firstReview(channel, pr, { from, dev: t ? t.id : null, at: Date.now() });
 }
 const startingIn = (channel) => [...starting].filter((k) => k.startsWith(channel + ' ')).length;
-const deskFree = (channel) => terminal.all(channel).filter((t) => !t.exited).length + startingIn(channel) < terminal.DESKS;
+const deskFree = (channel) => terminal.workersOf(channel) + startingIn(channel) < terminal.WORKER_DESKS;
 const byWait = ([, a], [, b]) => ((a.first && a.first.at) || 0) - ((b.first && b.first.at) || 0);
 function firstReviews(channel, c) {
   for (const [pr, r] of Object.entries(c.prs).sort(byWait)) {
@@ -290,7 +290,7 @@ function makeRoom(channel, now) {
     return;
   }
   if (!deadlocks.has(channel) || deadlocks.get(channel).prs[0] !== pr) say(channel, 'No desk is free for the review of PR ' + number(pr) + ', and the relay may stop no session for it. Stop one yourself.', 'off');
-  deadlocks.set(channel, { prs: queue, taken: terminal.all(channel).filter((t) => !t.exited).length });
+  deadlocks.set(channel, { prs: queue, taken: terminal.workersOf(channel) });
 }
 function deadlockOf(channel) {
   const d = deadlocks.get(channel);

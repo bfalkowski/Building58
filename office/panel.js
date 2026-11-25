@@ -1,11 +1,11 @@
-// The floor board beside the scene: who is busy, on what, for how long, and a feed of what
-// happened. Also the controls under the scene. Uses the public API in window.run, and what each
-// desk says from office/desks.js (the office:desks event).
+// The busy count beside the scene, the feed of what happened, and the controls under the scene. Which
+// session is picked for the Claude Code panel is kept here (office:pick). The seats and the workers row
+// are office/front-view.js. Uses the public API in window.run.
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
   const run = window.run;
-  const list = $('people'), feed = $('feed'), busyEl = $('busy'), hudBusy = $('hud-busy');
+  const feed = $('feed'), busyEl = $('busy'), hudBusy = $('hud-busy');
   if (!run) {
     busyEl.textContent = 'unavailable';
     document.querySelectorAll('.toolbar button:not(#radio-btn, #radio-next), .toolbar select').forEach((b) => { b.disabled = true; });
@@ -21,109 +21,14 @@
   const fmt = (s) => s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
   let selected = null;
 
-  const rows = {};
-  function row(w) {
-    if (rows[w.id]) return rows[w.id];
-    const li = document.createElement('li');
-    li.innerHTML = '<button type="button" class="person" aria-pressed="false"></button><i></i><span class="who"><b></b><em></em><small><span></span><button type="button" class="ticket" hidden></button><span></span></small></span><time></time><span class="doing"></span>' +
-      '<span class="desk" hidden><span class="desk-tired" hidden><span aria-hidden="true"></span><span></span></span><span class="desk-status" hidden><span aria-hidden="true"></span><span></span></span><span class="desk-pair" hidden></span><span class="desk-now"></span><a class="desk-pr" target="_blank" rel="noopener" hidden></a><span class="desk-state"></span><span class="desk-next"></span><span class="desk-stop" hidden><span></span><button type="button" class="btn">Stop</button></span></span>';
-    li.style.setProperty('--c', w.color);
-    const b = li.querySelector('.person'), link = li.querySelector('.ticket'), [before, after] = li.querySelectorAll('small > span');
-    link.addEventListener('click', () => { if (link.ticket) window.dispatchEvent(new CustomEvent('office:ticket', { detail: link.ticket })); });
-    b.addEventListener('click', () => window.dispatchEvent(new CustomEvent('office:pick', { detail: { who: w.id } })));
-    li.querySelector('b').textContent = w.name;
-    const q = (sel) => li.querySelector(sel);
-    const r = { id: w.id, li, btn: b, name: li.querySelector('b'), named: li.querySelector('.who > em'), link, before, after, time: q('time'), doing: q('.doing'), desk: q('.desk'), status: q('.desk-status'), statusIcon: q('.desk-status > span'), statusLabel: q('.desk-status > span + span'), pair: q('.desk-pair'), now: q('.desk-now'), pr: q('.desk-pr'), state: q('.desk-state'), next: q('.desk-next'), stop: q('.desk-stop'), stopWhy: q('.desk-stop > span'), stopBtn: q('.desk-stop button'), tired: q('.desk-tired'), tiredIcon: q('.desk-tired > span'), tiredLabel: q('.desk-tired > span + span') };
-    r.stopBtn.addEventListener('click', () => { if (r.terminal) window.dispatchEvent(new CustomEvent('office:stop-desk', { detail: r.terminal })); });
-    rows[w.id] = r; return r;
-  }
-  const put = (el, text) => { if (el.textContent !== text) el.textContent = text; };
-  function fillWork(r, w) {
-    const work = w.session && w.session.work, elsewhere = (w.session && !w.session.terminal ? ' · other terminal' : '') + (work && work.reviewWaits ? ' · PR waits on your review' : '');
-    const label = !w.session ? 'free' : (work && work.label) || w.session.title || w.session.project || w.session.id;
-    const text = w.session && w.session.customTitle && label === w.session.customTitle ? w.session.project || w.session.id : label;
-    const at = work && work.ticket ? text.indexOf(work.ticket) : -1;
-    const ticketed = at >= 0;
-    put(r.before, ticketed ? text.slice(0, at) : text + elsewhere);
-    put(r.link, ticketed ? work.ticket : '');
-    put(r.after, ticketed ? text.slice(at + work.ticket.length) + (work.pr ? ' · PR #' + work.pr.split('/').pop() : '') + elsewhere : '');
-    r.link.hidden = !ticketed;
-    r.link.ticket = ticketed ? { id: work.ticket, at: work.ticketAt } : null;
-    r.link.title = ticketed ? 'Show ' + work.ticket + ' on the Board' : '';
-    return r.before.textContent + r.link.textContent + r.after.textContent;
-  }
-  let desks = window.OFFICE_DESKS || {};
-  window.addEventListener('office:desks', (ev) => { desks = ev.detail || {}; render(); });
-  function pairText(d, under) {
-    if (d.reviewing) return 'reviewing PR ' + d.reviewing.prNumber + (under && d.reviewing.dev ? ' for ' + d.reviewing.dev.name : '');
-    const by = (d.reviewedBy || []).map((x) => x.name);
-    return by.length ? 'reviewed by ' + (by.length > 1 ? by.slice(0, -1).join(', ') + ' and ' + by[by.length - 1] : by[0]) : '';
-  }
-  function fillDesk(r, w, under) {
-    const d = w.session && w.session.terminal ? desks[w.session.terminal] : null;
-    r.terminal = d ? w.session.terminal : null;
-    r.desk.hidden = !d;
-    if (!d) return '';
-    r.li.dataset.next = d.next && /^Waiting on you/.test(d.next.text) ? 'you' : '';
-    const tired = d.lead ? d.tired : null;
-    r.tired.hidden = !d.lead;
-    r.tired.dataset.level = tired ? tired.key : '';
-    put(r.tiredIcon, tired ? tired.icon : '?');
-    put(r.tiredLabel, tired ? tired.label[0].toUpperCase() + tired.label.slice(1) : 'Context use not known yet');
-    const tiredSays = tired ? 'Context ' + tired.percent + '% used since its last /clear or refresh: ' + tired.label : 'Its status line has not said how full its context is yet';
-    if (r.tired.title !== tiredSays) r.tired.title = tiredSays;
-    r.status.hidden = !d.status;
-    r.status.dataset.status = d.status ? d.status.key : '';
-    put(r.statusIcon, d.status ? d.status.icon : '');
-    put(r.statusLabel, d.status ? d.status.label : '');
-    put(r.pair, pairText(d, under));
-    r.pair.hidden = !r.pair.textContent;
-    put(r.now, [d.doing.words, d.column && d.column.label].filter(Boolean).join(' · '));
-    put(r.pr, d.prNumber ? 'PR ' + d.prNumber : '');
-    r.pr.hidden = !d.pr;
-    if (d.pr && r.pr.getAttribute('href') !== d.pr) r.pr.setAttribute('href', d.pr);
-    put(r.state, [d.ciWords, d.review].filter(Boolean).join(' · '));
-    put(r.next, d.next ? 'Next: ' + d.next.text + (d.next.owner === 'you' || /^(Done|Waiting on you)/.test(d.next.text) ? '' : ' (' + d.next.owner + ')') : '');
-    r.stop.hidden = !d.stop.safe;
-    put(r.stopWhy, d.stop.safe ? 'Safe to stop: ' + d.stop.reason : '');
-    r.stopBtn.setAttribute('aria-label', 'Stop ' + w.name);
-    return ' ' + [d.lead ? tiredSays : '', d.status ? 'Status: ' + d.status.label : '', r.pair.textContent, r.now.textContent, r.pr.textContent, r.state.textContent, r.next.textContent, r.stopWhy.textContent].filter(Boolean).join('. ');
-  }
   window.addEventListener('office:pick', (ev) => {
     const { who, keep } = ev.detail;
     selected = selected === who && !keep ? null : who;
     run.focus(selected);
-    Object.values(rows).forEach((r) => r.btn.setAttribute('aria-pressed', String(r.id === selected)));
+    window.dispatchEvent(new CustomEvent('office:selected', { detail: selected }));
   });
-  const rank = (w) => ({ waiting: 0, working: 1 })[w.status] ?? (w.session ? 2 : 3);
   function render() {
     const s = run.state();
-    Object.values(rows).forEach((r) => { if (!s.workers.some((w) => w.id === r.id && w.present)) r.li.remove(); });
-    const termOf = (w) => (w.session && w.session.terminal) || null;
-    const isLead = (w) => !!(termOf(w) && desks[termOf(w)] && desks[termOf(w)].lead);
-    const sorted = s.workers.filter((w) => w.present).sort((a, b) => isLead(b) - isLead(a) || rank(a) - rank(b) || (b.task ? b.task.seconds : 0) - (a.task ? a.task.seconds : 0));
-    const here = new Set(sorted.map(termOf).filter(Boolean));
-    const devOf = (w) => { const d = termOf(w) && desks[termOf(w)], dev = d && d.reviewing && d.reviewing.dev; return dev && dev.terminal !== termOf(w) && here.has(dev.terminal) ? dev.terminal : null; };
-    const people = [];
-    sorted.filter((w) => !devOf(w)).forEach((w) => { people.push(w); if (termOf(w)) people.push(...sorted.filter((x) => devOf(x) === termOf(w))); });
-    people.forEach((w, i) => {
-      const r = row(w), under = !!devOf(w);
-      if (list.children[i] !== r.li) list.insertBefore(r.li, list.children[i] || null);
-      r.li.dataset.state = w.status;
-      r.li.dataset.under = under ? '1' : '';
-      r.li.dataset.lead = isLead(w) ? '1' : '';
-      put(r.name, w.name);
-      const named = window.OfficeSeats.titleBeside(w.session && w.session.customTitle), titled = w.name + (named.full ? ' · ' + named.full : '');
-      put(r.named, named.text);
-      if (r.named.title !== named.full) r.named.title = named.full;
-      const said = fillWork(r, w), ticketed = w.session && w.session.work && w.session.work.ticket;
-      r.time.textContent = w.task ? fmt(w.task.seconds) : '';
-      const doing = w.status === 'waiting' ? w.doing : w.task ? (ticketed ? w.task.last || 'Working' : w.task.label + (w.task.last ? '  ' + w.task.last : '')) : w.session ? (ticketed ? 'Ready for a prompt' : 'Ready for a prompt · ' + (w.session.title || w.doing)) : w.doing;
-      put(r.doing, doing);
-      const desk = fillDesk(r, w, under);
-      r.btn.title = titled + (w.session ? ', session ' + w.session.id : '') + (w.recent.length ? '. Recent: ' + w.recent.map((h) => h.label + ' (' + fmt(h.seconds) + ')').join(', ') : '');
-      r.btn.setAttribute('aria-label', titled + ': ' + said + '. ' + doing + '.' + desk);
-    });
     const waiting = s.waitingOnYou.length;
     const text = s.busy + ' of ' + s.people + ' busy' + (waiting ? ', ' + waiting + ' waiting on you' : '');
     busyEl.textContent = text; hudBusy.textContent = text;

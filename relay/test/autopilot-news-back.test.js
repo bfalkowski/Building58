@@ -85,7 +85,7 @@ test('review news its Dev was never told, and no free desk: the PR waits for a d
   for (let i = 0; i < 12 && (await o.R.call('POST', '/terminals', { cwd: o.repo })).status < 400; i++);
   assert.ok((await o.R.call('POST', '/terminals', { cwd: o.repo })).status >= 400, 'every desk is taken');
   await o.R.call('POST', '/autopilot', { on: true, only: o.ticket });
-  await until(async () => (await o.ap()).prs.some((p) => /All \d+ desks are taken/.test(p.why || '')), 'the wait for a desk');
+  await until(async () => (await o.ap()).prs.some((p) => /All \d+ worker desks are taken/.test(p.why || '')), 'the wait for a desk');
   const waiting = await o.task();
   assert.notStrictEqual(waiting.state, 'waiting_on_you', 'not handed over');
   assert.ok(!waiting.history.some((h) => h.type === 'resumed'), 'no Dev yet');

@@ -64,7 +64,7 @@ function restoreOne(channel, s, ctx, still) {
   }
   const body = Object.assign({ cwd: s.cwd, from: s.from, title: s.title, role: s.role, pr: s.pr, resume }, size);
   const r = terminal.start(channel, body, ctx, checkouts.onExitFor(channel, s.cwd, ctx.log),
-    { kept: { lead: s.lead, board: s.board, merge: s.merge, starts: s.starts, startsLeft: s.startsLeft, owesBrief: s.owesBrief, posted: s.posted || null }, reviewOf: s.reviewOf || null });
+    { kept: { lead: s.lead, standing: s.standing, board: s.board, merge: s.merge, starts: s.starts, startsLeft: s.startsLeft, owesBrief: s.owesBrief, posted: s.posted || null }, reviewOf: s.reviewOf || null });
   if (r.status >= 400) return r.body.message;
   if (typeof s.owesPrompt === 'string' && s.owesPrompt) {
     delivery.promptOnce(channel, r.body.id, s.owesPrompt, (problem) => { if (problem) ctx.log((s.title || 'A session') + ' did not get its first prompt: ' + problem); }, s.terminal);

@@ -323,7 +323,7 @@ test('a linked PR in Waiting on you with a protected file gets its first review'
 test('a linked PR with no review record and all desks full waits in the desk queue', async (t) => {
   const o = await office(t);
   await linkedUnreviewed(o);
-  while ((await o.terminals()).length < 9) assert.ok((await o.R.call('POST', '/terminals', { cwd: o.repo })).status < 300);
+  while ((await o.terminals()).length < 7) assert.ok((await o.R.call('POST', '/terminals', { cwd: o.repo })).status < 300);
   assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
   await until(async () => ((await o.R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR) || {}).desk === true, 'the review to wait for a desk');
   assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer'), 'no reviewer yet');

@@ -42,7 +42,7 @@ pageTest('Add worker starts a session in its own checkout, and the terminal show
   // The session has a person on the Floor, and the panel is titled with their name.
   const name = (await p.page.innerText('#cc-title')).replace(/^Claude Code · /, '');
   assert.ok(name && name !== 'Claude Code', 'the panel names the person');
-  await p.page.locator('#people li', { hasText: name }).waitFor();
+  await p.page.locator('#cards .desk', { hasText: name }).waitFor();
   // What you type goes to that session.
   await p.page.click('#cc-term');
   await p.page.keyboard.type('hello there');
@@ -140,7 +140,7 @@ pageTest('the page draws the person the relay gives each session, whatever this 
   const drawn = await p.page.evaluate(() => window.run.state().workers.filter((w) => w.session && w.session.terminal).map((w) => [w.session.terminal, w.id, w.name]));
   assert.deepStrictEqual(byTerminal(drawn), byTerminal(relayRows));
   assert.notStrictEqual(t.who, free[0].name, 'a name from the pool, not the desk\'s own');
-  await p.page.locator('#people li', { hasText: t.who }).waitFor();
+  await p.page.locator('#cards .desk', { hasText: t.who }).waitFor();
   assert.strictEqual(await p.page.evaluate(() => localStorage.getItem('office.seats')), null, 'the page keeps no seats of its own');
   assert.deepStrictEqual(p.errors, []);
 });
