@@ -10,6 +10,7 @@
 //   { "runs": [...] }                     what `gh run list` prints. Without it, `gh run list` prints [].
 //   { "lists": { "<branch>": [...] } }  what `gh pr list --head <branch>` prints. Anything else is [].
 // `gh pr comment <link> --body-file -` appends its link and body to posted.log, and prints a comment link.
+// `gh run rerun <id> ...` appends its arguments to rerun.log.
 // `gh pr merge <link> --merge` appends `<link> --merge` to merged.log.
 // `gh pr edit <link> ...` appends its arguments to edited.log, and adds or removes the label on that PR in answers.json. With "labels": [...] in answers.json, adding a
 // label not in the list fails as gh does, and `gh label create <name>` adds it to the list, or fails with "failLabel".
@@ -31,6 +32,10 @@ if (verb === 'api') {
   while (gate && !fs.existsSync(gate)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
   const value = (answers.api || {})[at];
   console.log(JSON.stringify(process.argv.includes('--slurp') ? [value || []] : value || {}));
+  process.exit(0);
+}
+if (verb === 'run' && sub === 'rerun') {  // appends its arguments to rerun.log
+  fs.appendFileSync(path.join(dir, 'rerun.log'), process.argv.slice(4).join(' ') + '\n');
   process.exit(0);
 }
 if (verb === 'run' && sub === 'list') {

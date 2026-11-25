@@ -39,6 +39,7 @@ const TAGS = {
   autopilot: ['Autopilot', 'Autopilot, which starts and merges work by itself, and the verdicts and fixes it asks for.'],
   chat: ['Chat', 'The chat channels: #office, one for each ticket, and fun ones.'],
   checkouts: ['Checkouts', 'Sessions that start in a new checkout of their own, and cleaning a checkout up.'],
+  failures: ['Failures', 'The shared channel for a failure that blocks two or more PRs, and the Lead\'s rerun and stuck items.'],
   floor: ['Floor', 'What the Lead sees of each session at work, and the Lead stopping one.'],
   games: ['Games', 'The games there are, their rounds, and each seat\'s actions.'],
   huddle: ['Huddle', 'A question to the idle sessions, and the report of their answers.'],
@@ -58,7 +59,7 @@ const TAGS = {
   tickets: ['Tickets', 'The Board: file, edit, move, order, approve and start tickets, and proposals and questions about them.'],
   update: ['Update', 'Updating the relay\'s own folder, and rolling a bad update back.']
 };
-const SEGMENT_TAG = { rounds: 'games', play: 'games' };
+const SEGMENT_TAG = { rounds: 'games', play: 'games', rerun: 'failures', stuck: 'failures' };
 function tagOf(r) {
   const part = r.section === 'calls' ? 'calls' : r.path.split('/')[3];
   const key = SEGMENT_TAG[part] || part;

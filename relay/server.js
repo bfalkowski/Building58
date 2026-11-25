@@ -42,7 +42,7 @@ const office = SESSIONS ? {
   terminal: require('./terminal.js'), tasks: require('./tasks.js'), checkouts: require('./checkouts.js'), tickets: require('./tickets.js'),
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
-  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), metrics: require('./metrics.js'), jams: require('./jams.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), pmSort: require('./pm-sort.js'),
+  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), metrics: require('./metrics.js'), jams: require('./jams.js'), failures: require('./failures.js'), leadStuck: require('./lead-stuck.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), pmSort: require('./pm-sort.js'),
   mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), managerWatch: require('./manager-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js'), awake: require('./awake.js')
 } : null;
 if (office) {
@@ -52,7 +52,7 @@ if (office) {
   }
 }
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
-const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'metrics', 'jams', 'security', 'prWatch', 'managerWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
+const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'metrics', 'jams', 'failures', 'leadStuck', 'security', 'prWatch', 'managerWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -453,6 +453,8 @@ server.listen(PORT, HOST, async () => {
     office.managerWatch.begin({ log });
     office.tasks.begin({ log });
     office.ready.begin({ log });
+    office.failures.begin();
+    office.leadStuck.begin();
     office.awake.begin({ log });
     // Replayed after reviews.begin, or reviews would ignore a queued PR or push.
     hooksOpen = true;

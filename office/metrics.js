@@ -313,12 +313,28 @@
     table(c, ['Day', 'Checked'].concat(names, ['Hours saved']), days.map(function (x) { return [x.day, x.checked].concat(keys.map(function (k) { return x[k]; }), [x.hoursSaved]); }));
   }
 
+  function drawLead(d) {
+    var c = card('lead', 'The Lead', 'How fast the Lead acts on stuck work, what it fixed itself, and what it passed to you or never acted on.', true);
+    var l = d.lead;
+    if (!l.available) return empty(c, 'No data yet. This fills in once the Lead writes the jam log, with Let the Lead unstick the board on.');
+    var list = document.createElement('ul');
+    list.className = 'reasons';
+    var kinds = function (x) { return x.kinds.length ? ' (' + x.kinds.map(function (k) { return esc(k.label) + ' ' + esc(k.count); }).join(', ') + ')' : ''; };
+    list.innerHTML = '<li><b>Time to act</b>: ' + (l.timeToAct.count ? 'median ' + minutesText(l.timeToAct.medianMinutes) + ' over ' + l.timeToAct.count + ' jams. Slowest: ' + l.timeToAct.slowest.map(function (x) { return esc(x.pr || x.ticket || x.kind) + ' ' + minutesText(x.minutes); }).join(', ') : 'none yet') + '</li>' +
+      '<li><b>Fixed by the Lead</b>: ' + l.fixed.total + kinds(l.fixed) + '</li>' +
+      '<li><b>Passed to you</b>: ' + l.passed.total + kinds(l.passed) + '</li>' +
+      '<li><b>Seen and never acted on</b>: ' + l.neverActed.total + kinds(l.neverActed) + '</li>' +
+      '<li><b>Shared failure channels</b>: ' + l.failures.channels + ', blocking ' + l.failures.prsBlocked + ' PRs' + (l.failures.medianHours === null ? '' : ', median ' + hoursText(l.failures.medianHours) + ' to the fix') + '</li>';
+    c.appendChild(list);
+    table(c, ['Measure', 'Count'], [['Fixed by the Lead', l.fixed.total], ['Passed to you', l.passed.total], ['Seen and never acted on', l.neverActed.total], ['Median minutes to act', l.timeToAct.medianMinutes === null ? '' : l.timeToAct.medianMinutes], ['Shared failure channels', l.failures.channels], ['PRs they blocked', l.failures.prsBlocked]]);
+  }
+
   function draw() {
     grid.innerHTML = '';
     hideTip();
     if (!data) return;
     drawTiles(data);
-    [drawMerged, drawPerTicket, drawWhere, drawOutcomes, drawStalls, drawWaits, drawRounds, drawDesks, drawLoad, drawPm].forEach(function (f) { f(data); });
+    [drawMerged, drawPerTicket, drawWhere, drawOutcomes, drawStalls, drawWaits, drawRounds, drawDesks, drawLoad, drawLead, drawPm].forEach(function (f) { f(data); });
     document.body.dataset.drawn = range;
   }
 
