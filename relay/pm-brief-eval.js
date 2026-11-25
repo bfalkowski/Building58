@@ -6,8 +6,9 @@
 // board_empty, board_b, board_c. The API is an edd-platform with its suite gate, started with a live
 // model key. In it this makes an agent with the kit's three tests, a version with the brief last judged
 // (relay/pm-brief-eval.json) and one with the brief now, runs each version's suite live, and compares
-// the two suites. If any test passed before and fails now, or any test's score drops, or the total score
-// drops, it exits 1 and the file stays as it was, so npm test keeps failing. Otherwise it writes the new brief and the result into the file. With no file
+// the two suites. If any test passed before and fails now, or any test's score drops, it exits 1 and the
+// file stays as it was, so npm test keeps failing (a lower total always has a test that dropped). Otherwise
+// it writes the new brief and the result into the file. With no file
 // yet, it runs the brief now alone and writes the first one. Exit 2 means the eval could not run.
 'use strict';
 const fs = require('fs');
@@ -102,17 +103,13 @@ function failing(t) {
 function worse(before, now, outcome) {
   const prior = new Map(before.result.tests.map((t) => [t.scenario_id, t.eval_result]));
   const reasons = [];
-  let was = 0, is = 0;
   for (const t of now.result.tests) {
     const b = prior.get(t.scenario_id);
     if (!b) continue;
     const key = outcome.names[t.scenario_id] || t.scenario_id;
-    was += b.score || 0;
-    is += t.eval_result.score || 0;
     if (b.passed && !t.eval_result.passed) reasons.push(key + ' passed before and fails now (score ' + b.score + ' to ' + t.eval_result.score + ')');
     else if ((t.eval_result.score || 0) < (b.score || 0)) reasons.push(key + ' score dropped from ' + b.score + ' to ' + t.eval_result.score);
   }
-  if (is < was) reasons.push('the total score dropped from ' + was + ' to ' + is);
   return reasons;
 }
 

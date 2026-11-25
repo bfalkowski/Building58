@@ -54,7 +54,7 @@ function fakeEdd(passes) {
       const run = /\/versions\/([^/]+)\/suite-runs$/.exec(route);
       const suiteOf = (vid) => {
         const pass = passes[versions[vid].label];
-        const tests = scenarios.map((s, i) => ({ scenario_id: s, eval_result: { passed: pass[i] === true || pass[i] >= 8, score: typeof pass[i] === 'number' ? pass[i] : pass[i] ? 8 : 5, ...(passes.rules && !(pass[i] === true || pass[i] >= 8) ? { check_results: passes.rules } : {}) } }));
+        const tests = scenarios.map((s, i) => ({ scenario_id: s, eval_result: { passed: pass[i] === true || pass[i] >= 8, score: typeof pass[i] === 'number' ? pass[i] : pass[i] ? 8 : 5, ...(passes.rules && !(pass[i] === true || pass[i] >= 8) ? { [passes.key || 'check_results']: passes.rules } : {}) } }));
         return { passed: tests.filter((t) => t.eval_result.passed).length, total: tests.length, tests };
       };
       if (run) return send(suiteOf(run[1]));
@@ -157,11 +157,11 @@ test('a score drop in one scenario, with no pass turning to fail, is worse: exit
   assert.strictEqual(s.read(), before);
   const out = s.lines.join('\n');
   assert.match(out, /C score dropped from 5 to 3/);
-  assert.match(out, /the total score dropped from 14 to 13/);
+  assert.doesNotMatch(out, /total score/);
   assert.doesNotMatch(out, /A score dropped/);
 });
 
-test('a total score that drops with every scenario the same or up cannot happen, but a rise in one and a drop in another is worse', async (t) => {
+test('a rise in one scenario does not hide a drop in another', async (t) => {
   const s = setup(t, { brief: 'the old brief' });
   const edd = await fakeEdd({ judged: [4, 5, 5], changed: [6, 5, 4] });
   t.after(edd.stop);
@@ -184,6 +184,21 @@ test('the output names the failing rules in each scenario', async (t) => {
   t.after(edd.stop);
   await evaluate({ kit: s.kit, api: edd.api, project: 'project_default', stamp: s.file }, s.log);
   const out = s.lines.join('\n');
-  for (const k of ['A', 'B', 'C']) assert.match(out, new RegExp(k + ': failed, score 5 \\(was 4\\)[^\\n]*\\n  failed R3: Acceptance criteria name no seam\\.'));
+  for (const k of ['A', 'B', 'C']) assert.match(out, new RegExp(k + ': failed, score 5 \\(was 4\\)[^\\n]*\\n {2}failed R3: Acceptance criteria name no seam\\.'));
   assert.doesNotMatch(out, /failed R1/);
+});
+
+test('failing rules are read from the checks key too, and an answer with neither key prints none', async (t) => {
+  const rules = [{ id: 'R2', passed: false, reason: 'No blocked by line.' }];
+  const a = setup(t, { brief: 'the old brief' });
+  const edd = await fakeEdd({ judged: [4, 4, 4], changed: [5, 5, 5], rules, key: 'checks' });
+  t.after(edd.stop);
+  await evaluate({ kit: a.kit, api: edd.api, project: 'project_default', stamp: a.file }, a.log);
+  assert.match(a.lines.join('\n'), /A: failed, score 5 \(was 4\)[^\n]*\n {2}failed R2: No blocked by line\./);
+  const b = setup(t, { brief: 'the old brief' });
+  const bare = await fakeEdd({ judged: [4, 4, 4], changed: [5, 5, 5] });
+  t.after(bare.stop);
+  await evaluate({ kit: b.kit, api: bare.api, project: 'project_default', stamp: b.file }, b.log);
+  assert.doesNotMatch(b.lines.join('\n'), /\n {2}failed /);
+  assert.deepStrictEqual(JSON.parse(b.read()).judged.tests.map((x) => x.failing), [[], [], []]);
 });
