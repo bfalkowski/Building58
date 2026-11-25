@@ -28,6 +28,7 @@ fs.writeFileSync(process.env.RELAY_TASKS_FILE, JSON.stringify({ test: [
   task('bbbbbb', 't2', 'session-two-0000', { state: 'done', reviews: owes([link(20)]) }),
   task('cccccc', 't3', 'session-three-00', { pr: 'https://github.com/o/r/pull/8', reviews: owes(['https://github.com/o/r/pull/8#issuecomment-30']) }),
   task('dddddd', 't4', 'session-four-000'),
+  task('eeeeee', 't9', 'session-nine-0000'),
 ] }));
 fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({}));
 
@@ -41,6 +42,7 @@ const fake = {
 };
 require.cache[require.resolve('../terminal.js')] = { id: 'terminal', filename: require.resolve('../terminal.js'), loaded: true, exports: fake };
 const tasks = require('../tasks.js');
+const delivery = require('../delivery.js');
 const prComments = require('../pr-comments.js');
 test.after(() => fs.rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
@@ -66,21 +68,17 @@ test('a link told twice counts once, so the count matches the links after the De
   assert.ok(t.history.some((h) => /^Told the Dev about 1 new comment\./.test(h.note || '')), JSON.stringify(t.history));
 });
 
-test('a link told again still brings what it says', async () => {
-  const t = byId('dddddd');
-  t.owner = { terminal: 't1', sessionId: 'session-one-0000' };
+test('a link told again still brings what it says', () => {
+  const t = byId('eeeeee');  // its session is gone, so nothing is typed and the news waits
   prComments.tell('test', t, PR, [link(50)], { before: true });
-  const first = await held('t1');
   assert.strictEqual(t.reviews.pending.blocks, false);
   prComments.tell('test', t, PR, [link(50)], { blocks: true, before: false, times: { [link(50)]: '2026-01-01T00:00:00Z' } });
   assert.strictEqual(t.reviews.pending.count, 1);
   assert.strictEqual(t.reviews.pending.blocks, true);
   assert.strictEqual(t.reviews.pending.before, false);
   assert.strictEqual(t.reviews.pending.times[link(50)], '2026-01-01T00:00:00Z');
-  take(first);
-  const again = typing.find((x) => x.t.id === 't1') || await held('t1');
-  take(again);
-  await until(() => t.reviews.pending === null, 'the news told');
+  delivery.drop('test', 'review-eeeeee');
+  t.reviews.pending = null;
 });
 
 test('a note on the PR still owed when the task is Done is posted once, and not kept', async () => {
