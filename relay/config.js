@@ -86,7 +86,7 @@ const SETTINGS = [
   { name: 'managerBriefMinutes', group: 'The manager', tab: 'roles', label: 'A session never got its first prompt after', unit: 'minutes', env: 'RELAY_MANAGER_BRIEF_MS', scale: 1 / 60000, def: 10, min: 1, max: 240,
     what: 'A Dev that has not got its brief, or a reviewer that has not got its first prompt, this long after the session started.' },
   { name: 'managerSlotMinutes', group: 'The manager', tab: 'roles', label: 'A building slot with no Dev is stuck after', unit: 'minutes', env: 'RELAY_MANAGER_SLOT_MS', scale: 1 / 60000, def: 10, min: 1, max: 240,
-    what: 'A task that counts toward the WIP limit while no Dev is running for it, for this long.' },
+    what: 'A task that holds a building slot while no Dev is running for it, for this long.' },
   { name: 'managerHandoffs', group: 'The manager', tab: 'roles', label: 'Autopilot hands you tasks in a row after', unit: 'tasks', env: 'RELAY_MANAGER_HANDOFFS', def: 3, min: 2, max: 20,
     what: 'Autopilot has put this many tasks in a row into Waiting on you, with no merge between them.' },
   { name: 'managerSkipMinutes', group: 'The manager', tab: 'roles', label: 'A Ready ticket is skipped for a rejected blocker after', unit: 'minutes', env: 'RELAY_MANAGER_SKIP_MS', scale: 1 / 60000, def: 30, min: 1, max: 1440,
