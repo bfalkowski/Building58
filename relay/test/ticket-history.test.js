@@ -126,6 +126,7 @@ test('a ticket\'s history', async (t) => {
     const revs = steps(await ticketOf(ticket.id), 'reviewer');
     assert.strictEqual(revs.length, 3);
     assert.deepStrictEqual([revs[2].task, revs[2].pr, revs[2].by, revs[2].session.sessionId, revs[2].session.running], [task.id, PR, 'you', again.body.sessionId, true]);
+    assert.strictEqual((await terminals()).find((x) => x.id === again.body.id).work.label, 'reviewing ' + ticket.id + ' · Show the history', 'still reviewing its ticket after Clean up and a restart');
     await stop(again.body.id);
     // A PR that was never reviewed before its Clean up: the task's moves after it opened carry the PR.
     const other = (await R.call('POST', '/tickets', { title: 'Reviewed late', body: 'Do it.', repo })).body.ticket;
@@ -164,5 +165,16 @@ test('a ticket\'s history', async (t) => {
     const bare = await ticketOf(none.id);
     assert.deepStrictEqual(bare.history.map((x) => x.stage), ['filed', 'approved']);
     assert.strictEqual(bare.assignee, null);
+  });
+
+  await t.test('a Dev who clears their session shows a new dev step at once', async () => {
+    const fresh = (await R.call('POST', '/tickets', { title: 'Cleared at once', body: 'Do it.', repo })).body.ticket;
+    const started = (await R.call('POST', '/tickets/' + fresh.id + '/start', {})).body.task;
+    const worker = (await terminals()).find((x) => x.id === started.worker.terminal);
+    const next = require('crypto').randomUUID();
+    await R.hook({ hook_event_name: 'SessionStart', source: 'clear', session_id: next.slice(0, 12), full_session_id: next, terminal: worker.id });
+    const devs = steps(await ticketOf(fresh.id), 'dev');
+    assert.deepStrictEqual(devs.map((x) => x.session.sessionId), [worker.sessionId, next]);
+    assert.strictEqual((await R.call('GET', '/tasks/' + started.id)).body.task.owner.sessionId, next);
   });
 });
