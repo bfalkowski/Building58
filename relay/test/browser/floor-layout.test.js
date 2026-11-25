@@ -44,6 +44,18 @@ pageTest('the front office is under the 3D office, Claude Code is beside them, a
   assert.deepStrictEqual(p.errors, []);
 });
 
+pageTest('scrolled down to the workers row, the Claude Code panel does not cover it', () => o, async (p) => {
+  await p.open();
+  const { page } = p;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => document.getElementById('workers').scrollIntoView({ block: 'start' }));
+  const seen = (sel) => page.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }; }, sel);
+  const [cc, workers] = [await seen('.cc'), await seen('#workers')];
+  const overlap = cc.bottom > workers.top + 1 && cc.top < workers.bottom - 1 && cc.right > workers.left + 1 && cc.left < workers.right - 1;
+  assert.ok(!overlap, 'the panel ends above the workers row: panel ' + JSON.stringify(cc) + ', row ' + JSON.stringify(workers));
+  assert.deepStrictEqual(p.errors, []);
+});
+
 pageTest('a long Needs you list scrolls inside itself, and the huddle report keeps room to show', () => o, async (p) => {
   await p.open();
   const { page } = p;
