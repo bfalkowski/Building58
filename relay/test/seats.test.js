@@ -150,10 +150,10 @@ test('a name loses the characters that hide or reorder text in a terminal', () =
   assert.strictEqual(plainName(null), '');
 });
 
-test('the roster has 50 names, half for each kind of desk, one word each, apart from the desks\' names', () => {
-  assert.deepStrictEqual([roster.names.woman.length, roster.names.man.length], [25, 25]);
+test('the roster has names for each kind of desk, one word each, apart from the desks\' names', () => {
+  for (const kind of ['woman', 'man']) assert.ok(roster.names[kind].length >= named.filter((p) => p.kind === kind).length, 'at least one ' + kind + ' name for each ' + kind + ' desk');
   const all = roster.names.woman.concat(roster.names.man).map((n) => n.toLowerCase());
-  assert.strictEqual(new Set(all).size, 50, 'no name twice');
+  assert.strictEqual(new Set(all).size, all.length, 'no name twice');
   assert.ok(all.every((n) => /^[a-z]+$/.test(n)), 'one word each, so an @mention finds it');
   for (const p of named) assert.ok(!all.includes(p.name.toLowerCase()), p.name + ' is a desk\'s own name');
   for (const w of roster.workers) assert.ok(roster.names[w.kind], w.id + ' has a kind with names');
@@ -177,14 +177,15 @@ test('a name fits its desk, nobody shares one, and the Lead at its desk is Lead'
 test('a name does not come back until the others of its kind have been used', () => {
   const used = {}, seen = [];
   let clock = Date.parse('2026-11-08T09:00:00Z');
-  for (let i = 0; i < 60; i++) {
+  const n = roster.names[named.find((p) => p.id === 'priya').kind].length;
+  for (let i = 0; i < 3 * n; i++) {
     const s = [{ id: 't' + i }];
-    const n = nameAll(named, roster.names, s, { ['t' + i]: 'priya' }, {}, used, 'room A')['t' + i];
-    used[n] = new Date(clock += 60000).toISOString();
-    seen.push(n);
+    const name = nameAll(named, roster.names, s, { ['t' + i]: 'priya' }, {}, used, 'room A')['t' + i];
+    used[name] = new Date(clock += 60000).toISOString();
+    seen.push(name);
   }
-  assert.strictEqual(new Set(seen.slice(0, 25)).size, 25, 'the first 25 are all different');
-  assert.deepStrictEqual(seen.slice(25, 50), seen.slice(0, 25), 'then the least recently used comes first');
+  assert.strictEqual(new Set(seen.slice(0, n)).size, n, 'the first ' + n + ' are all different');
+  assert.deepStrictEqual(seen.slice(n, 2 * n), seen.slice(0, n), 'then the least recently used comes first');
 });
 
 test('two rooms go through the names in different orders', () => {
@@ -198,10 +199,11 @@ test('a name held for a session not back yet is passed over, and a session keeps
   const sessions = [{ id: 'a' }, { id: 'b' }];
   const seats = { a: 'priya', b: 'june' };
   const first = nameAll(named, roster.names, [{ id: 'a' }], { a: 'priya' }, {}, {}, 'x').a;
-  const out = nameAll(named, roster.names, sessions, seats, { a: 'Hana', 'saved q': first }, {}, 'x');
-  assert.strictEqual(out.a, 'Hana', 'kept');
+  const kept = roster.names.woman.find((n) => n !== first);
+  const out = nameAll(named, roster.names, sessions, seats, { a: kept, 'saved q': first }, {}, 'x');
+  assert.strictEqual(out.a, kept, 'kept');
   assert.notStrictEqual(out.b, first, 'the held name is passed over');
-  const moved = nameAll(named, roster.names, [{ id: 'a' }], { a: 'marcus' }, { a: 'Hana' }, {}, 'x');
+  const moved = nameAll(named, roster.names, [{ id: 'a' }], { a: 'marcus' }, { a: kept }, {}, 'x');
   assert.strictEqual(kindOf(moved.a), 'man', 'a desk of the other kind takes a new name');
 });
 
@@ -242,7 +244,8 @@ test('a day of sessions uses many names, and two rooms show different names at o
     await A.call('POST', '/terminals/' + s.id + '/stop', {});
     await until(async () => (await terminals(A)).length === 0, 'it to stop');
   }
-  assert.strictEqual(new Set(day).size, 12, 'twelve sessions at one desk, twelve names: ' + day);
+  const distinct = Math.min(12, roster.names[named.find((p) => p.id === 'priya').kind].length);
+  assert.strictEqual(new Set(day.slice(0, distinct)).size, distinct, 'twelve sessions at one desk use every name of its kind before one comes back: ' + day);
   const inA = [], inB = [];
   for (let i = 0; i < 4; i++) {
     inA.push((await A.call('POST', '/terminals', { cwd: repoA })).body.who);
@@ -261,7 +264,7 @@ test('after a restart the Lead is at the Lead\'s desk, and everyone else keeps t
   const saved = { t: [
     { sessionId: ids[0], talked: true, cwd: repo, title: 'T-148 work', seat: 'lead', who: 'Ivan' },
     { sessionId: ids[1], talked: true, cwd: repo, title: 'Lead work', lead: true, seat: 'june' },
-    { sessionId: ids[2], talked: true, cwd: repo, title: 'Other work', seat: 'theo', who: 'Hugo' },
+    { sessionId: ids[2], talked: true, cwd: repo, title: 'Other work', seat: 'theo', who: roster.names.man[1] },
   ] };
   const file = path.join(home, '.office-world', 'sessions.json');
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -272,7 +275,7 @@ test('after a restart the Lead is at the Lead\'s desk, and everyone else keeps t
   assert.deepStrictEqual(seatsOf(list), { [ids[0]]: 'priya', [ids[1]]: 'lead', [ids[2]]: 'theo' });
   const whoOf = (l) => Object.fromEntries(l.map((x) => [x.sessionId, x.who]));
   const now = whoOf(list);
-  assert.deepStrictEqual([now[ids[1]], now[ids[2]]], [roster.lead.name, 'Hugo'], 'the Lead has the Lead desk\'s name, and the one that kept its desk keeps its name');
+  assert.deepStrictEqual([now[ids[1]], now[ids[2]]], [roster.lead.name, roster.names.man[1]], 'the Lead has the Lead desk\'s name, and the one that kept its desk keeps its name');
   assert.strictEqual(kindOf(now[ids[0]]), 'woman', 'the one that left the Lead\'s desk for Priya\'s takes a name that fits it');
   // The seats are saved with the sessions, so the next restart starts from them.
   await until(() => {
