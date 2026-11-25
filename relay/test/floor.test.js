@@ -100,20 +100,20 @@ test('the floor', async (t) => {
 
   const lead = await start(), working = await start(), waiting = await start(), drafting = await start(), fresh = await start();
   const pm = await start({ role: 'pm', title: 'PM: an idea' }), reviewer = await start({ role: 'reviewer', pr: PR, title: 'Review' });
-  const task = (await R.call('POST', '/tasks', { title: 'A task', repo })).body.task;
-  const dev = (await terminals()).find((x) => x.id === task.owner.terminal);
 
   await t.test('the relay gives each session a person of its own, and GET /terminals returns it', async () => {
     const list = await terminals(), names = list.map((x) => x.who);
-    assert.strictEqual(list.length, 8);
+    assert.strictEqual(list.length, 7);
     assert.ok(names.every((n) => typeof n === 'string' && n), names.join(', '));
-    assert.strictEqual(new Set(names).size, 8, 'nobody twice');
+    assert.strictEqual(new Set(names).size, 7, 'nobody twice');
     assert.ok(!names.includes(LEAD_DESK), 'nobody is at the Lead\'s desk while there is no Lead and other desks are free');
     assert.strictEqual((await R.call('POST', '/terminals/names', { names: { [working.id]: 'Nobody' } })).status, 404, 'no page names a session');
   });
 
   await finish(lead);
   assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: lead.id })).status, 200);
+  const task = (await R.call('POST', '/tasks', { title: 'A task', repo })).body.task;
+  const dev = (await terminals()).find((x) => x.id === task.owner.terminal);
   await hook(working, { hook_event_name: 'UserPromptSubmit', title: '' });
   await finish(waiting); await hook(waiting, { hook_event_name: 'Notification', message: 'Claude needs your permission to use Bash' });
   await finish(drafting); await R.call('POST', '/terminals/' + drafting.id + '/input', { data: 'half a thought' });

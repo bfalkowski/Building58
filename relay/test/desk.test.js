@@ -69,6 +69,14 @@ test('a Dev in review: its column, CI and review, and who moves it next', async 
     const d = deskOf(Object.assign({}, base, { pipeline: { state: 'pending' }, review: { count: 1, waits: false, held: true } }));
     assert.deepStrictEqual([d.review, d.next], ['review waits on CI', { text: 'CI runs on PR #31, then the review', owner: 'CI' }]);
   });
+  await t.test('an owed follow-up review says so, unless it waits on CI, a desk or a retry', () => {
+    const rev = (extra) => deskOf(Object.assign({}, base, { pipeline: { state: 'green' }, review: Object.assign({ count: 1, waits: false, followUp: true }, extra) }));
+    assert.strictEqual(rev({}).review, 'waiting for a follow-up review');
+    assert.strictEqual(rev({ held: true }).review, 'review waits on CI');
+    assert.strictEqual(rev({ desk: true }).review, 'review waits for a desk');
+    assert.strictEqual(rev({ retry: true }).review, 'review tries again');
+    assert.deepStrictEqual(rev({ held: true }).next, { text: 'CI runs on PR #31, then the review', owner: 'CI' });
+  });
   await t.test('a first review waits for a desk', () => {
     const d = deskOf(Object.assign({}, base, { pipeline: { state: 'green' }, review: { count: 0, waits: false, held: false, desk: true } }));
     assert.deepStrictEqual([d.review, d.next], ['review waits for a desk', { text: 'The review of PR #31 starts when a desk is free', owner: 'reviewer' }]);

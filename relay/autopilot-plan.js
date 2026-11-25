@@ -12,19 +12,28 @@ function ciOf(rollup) {
   return state === 'none' ? 'pending' : state;
 }
 
-function forPr(pr, files, verdict, rounds, maxRounds, devGone) {
+function forPr(pr, files, verdict, rounds, maxRounds, devGone, exhibit) {
   if (!pr) return { act: 'wait', why: 'GitHub has not answered about the PR yet.' };
   if (pr.state === 'MERGED') return { act: 'done', why: 'The PR merged.' };
   if (pr.state === 'CLOSED') return { act: 'person', reason: 'pr-closed', why: 'The PR was closed without merging.' };
   if (!files) return { act: 'wait', why: 'Waiting for the list of files the PR changes.' };
   const locked = lockedOf(files);
   if (locked.length) return { act: 'person', reason: 'protected-file', why: onlyAPerson(locked) };
-  return forReviewed(pr, verdict, rounds, maxRounds, devGone);
+  return forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit);
 }
 const lockedOf = (files) => [...new Set((files || []).filter((f) => PROTECTED.includes(f)))];
 const onlyAPerson = (locked) => 'It changes ' + locked.join(' and ') + ', which only a person merges.';
 const WAITS_FOR_REVIEW = 'Waiting for the review.';
-function forReviewed(pr, verdict, rounds, maxRounds, devGone) {
+function exhibitStep(pr, exhibit) {
+  if (exhibit === undefined) return null;
+  if (exhibit && exhibit.failed) return { act: 'wait', why: 'Level 6 needs Exhibit\'s verdict, and ' + exhibit.failed + '.' };
+  if (!exhibit) return { act: 'wait', why: 'Level 6 waits for Exhibit\'s summary comment on the PR.' };
+  const head = String(pr.headRefOid || '');
+  if (!head.startsWith(exhibit.commit)) return { act: 'wait', why: 'Exhibit\'s summary is for ' + exhibit.commit.slice(0, 7) + ', not the head ' + head.slice(0, 7) + ', so Autopilot waits for its next run.' };
+  if (exhibit.verdict === 'meets_policy') return null;
+  return { act: 'person', reason: 'exhibit', why: 'Exhibit says ' + exhibit.verdict + ' at ' + exhibit.commit.slice(0, 7) + ', so its evidence does not pass. Level 6 leaves the merge to a person.' };
+}
+function forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit) {
   if (!verdict) return { act: 'wait', why: WAITS_FOR_REVIEW };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
@@ -39,7 +48,9 @@ function forReviewed(pr, verdict, rounds, maxRounds, devGone) {
   if (ci === 'red') return { act: 'person', reason: 'ci-red', why: 'CI failed on the reviewed commit.' };
   if (ci === 'pending') return { act: 'wait', why: 'Waiting for CI.' };
   if (!['CLEAN', 'BEHIND', 'HAS_HOOKS'].includes(pr.mergeStateStatus)) return { act: 'wait', why: 'GitHub says the PR is ' + String(pr.mergeStateStatus || 'not ready').toLowerCase() + '.' };
-  return { act: 'merge', why: 'Reviewed with no blocking findings, CI is green, and GitHub can merge it.' };
+  const held = exhibitStep(pr, exhibit);
+  if (held) return held;
+  return { act: 'merge', why: 'Reviewed with no blocking findings, CI is green, and GitHub can merge it' + (exhibit ? ', and Exhibit says meets_policy.' : '.') };
 }
 
 function forPersonMerge(pr, locked, verdict, d) {
@@ -124,16 +135,26 @@ function whyNoneAllowed(all, hasTask, only) {
 
 const HEADING = /^#{1,6}[ \t]+review of[ \t]+`?(?:[0-9a-f]{7,40}\.\.\.?)?([0-9a-f]{7,40})\b/i;
 const COMMENT_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+#issuecomment-\d+$/;
-function reviewPostFor(comments, { login, since, commit }) {
+const VERDICT = /verdict\W+(merge|fix)\b/i;
+const MIN_CHECKED = 20;
+function countsAsReview(body, kind) {
+  const text = String(body || '');
+  const said = text.match(VERDICT);
+  if (!said || (kind && said[1].toLowerCase() !== kind)) return false;
+  const checked = text.replace(new RegExp(VERDICT.source, 'gi'), '').replace(/^#{1,6}[ \t]+review of\b.*$/gim, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return checked.length >= MIN_CHECKED;
+}
+
+function reviewPostFor(comments, { login, since, commit, kind }) {
   let found = null, foundAt = -Infinity;
   for (const c of comments || []) {
     if (!c || !c.user || !login || String(c.user.login).toLowerCase() !== String(login).toLowerCase()) continue;
     const at = Date.parse(c.created_at);
     if (!(at >= since) || at < foundAt || !COMMENT_URL.test(String(c.html_url))) continue;
     const named = String(c.body || '').trimStart().match(HEADING);
-    if (named && String(commit).toLowerCase().startsWith(named[1].toLowerCase())) { found = c.html_url; foundAt = at; }
+    if (named && countsAsReview(c.body, kind) && String(commit).toLowerCase().startsWith(named[1].toLowerCase())) { found = c.html_url; foundAt = at; }
   }
   return found;
 }
 
-module.exports = { API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, countsAsReview, PROTECTED, WORDING_TICKET };

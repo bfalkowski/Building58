@@ -122,9 +122,10 @@ const SCHEMAS = {
     safe: B,
     canStop: B,
     why: S(),
+    seat: orNull(S({ description: 'lead for the Lead, pm for the PM the room keeps running, or null.' })),
     desk: { type: 'object' }
   }, ['terminal', 'name', 'role', 'state', 'safe', 'canStop', 'why']),
-  Floor: okWith({ sessions: list(ref('FloorRow')), leadEnded: { type: ['object', 'null'] }, mainRed: list(obj({ branch: S(), repo: S(), says: S() })) }, ['sessions']),
+  Floor: okWith({ sessions: list(ref('FloorRow')), pm: obj({ trust: N(), trustName: S(), sortHours: N(), nextSortAt: orNull(S()) }), leadEnded: { type: ['object', 'null'] }, mainRed: list(obj({ branch: S(), repo: S(), says: S() })) }, ['sessions']),
   NewJam: obj({
     kind: S({ enum: Object.keys(require('./metrics-plan.js').JAM_KINDS) }),
     ticket: S({ maxLength: 300, description: 'Optional: the ticket, such as T-5.' }),

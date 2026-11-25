@@ -40,6 +40,7 @@ function reviewWords(review, autopilot, reviewing) {
   if (reviewing) return 'review running';
   if (review && review.waits) return 'automatic reviews used up';
   if (review && review.failed) return 'automatic review could not start';
+  if (review && review.followUp && !review.held && !review.desk && !review.retry) return 'waiting for a follow-up review';
   if (autopilot && autopilot.verdict === 'merge') return 'review says merge';
   if (autopilot && autopilot.verdict === 'fix') return 'review asks for fixes';
   if (review && review.held) return 'review waits on CI';
@@ -54,6 +55,7 @@ function prStep(d, pr) {
   if (d.ci === 'red') return ['The Dev fixes the failed CI on PR ' + n, 'Dev'];
   if (d.review && d.review.waits) return ['Waiting on you: review PR ' + n + ', its automatic reviews are used up', 'you'];
   if (d.review && d.review.failed) return ['Waiting on you: review PR ' + n + ', its automatic review could not start', 'you'];
+  if (d.review && d.review.followUp && !d.review.held && !d.review.desk && !d.review.retry) return ['Waiting for a follow-up review of PR ' + n, 'reviewer'];
   if (d.reviewing) return ['The reviewer reviews PR ' + n, 'reviewer'];
   if (d.autopilot && d.autopilot.on && d.autopilot.mine) {
     const a = d.autopilot;
@@ -105,6 +107,7 @@ function deskOf(d) {
     column: columnOfTask(task),
     pr, prNumber: numberOf(pr),
     ci, ciWords: ci ? CI_WORDS[ci] || ci : null,
+    rounds: pr && !isReviewer && d.review ? d.review.count || 0 : 0,
     review: pr ? (isReviewer ? (t.posted ? 'review posted' : 'review running') : reviewWords(d.review, d.autopilot, d.reviewing)) : null,
     doing: doingOf(t, now, lv),
     status: role === 'Dev' && task ? statusOf(d, task, pr, ci, p) : null,

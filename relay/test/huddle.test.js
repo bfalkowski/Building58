@@ -248,7 +248,7 @@ test('asking idle sessions', async (t) => {
   });
   // It answers from the real hook, reading what Claude Code passes it at the end of a turn.
   const answer = spawnSync(process.execPath, [path.join(ROOT, 'relay', 'office-hook.js')], {
-    input: JSON.stringify({ hook_event_name: 'Stop', session_id: speaker.sessionId, last_assistant_message: 'Fine.\nHUDDLE-' + marker + ': on the parser, next the tests, waiting on nothing\nSecret other words' }),
+    input: JSON.stringify({ hook_event_name: 'Stop', session_id: speaker.sessionId, last_assistant_message: 'Fine.\nHUDDLE-' + marker + ': on the pa\u202Erser, next\u200B the tests, waiting on nothing\nSecret other words' }),
     env: { ...withoutRoom(process.env), OFFICE_RELAY_KEY: 'test-key', OFFICE_RELAY_URL: 'http://127.0.0.1:' + R.port, OFFICE_CHANNEL: 't', OFFICE_SHOW_TITLES: '0' }, encoding: 'utf8'
   });
   assert.strictEqual(answer.status, 0);
@@ -263,6 +263,7 @@ test('asking idle sessions', async (t) => {
   await t.test('an idle session that answers is in the report, and only its line left the hook', () => {
     const r = rowOf(s, speaker);
     assert.match(r.line, /says: on the parser, next the tests, waiting on nothing/);
+    assert.doesNotMatch(r.line, /[\u200b-\u200f\u202a-\u202e\u2066-\u2069]/);
     assert.doesNotMatch(JSON.stringify(s), /Secret other words/);
   });
   await t.test('one that does not answer is reported, and the huddle still finishes', () => {

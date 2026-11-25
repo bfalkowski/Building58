@@ -31,7 +31,9 @@ test('tasks', async (t) => {
     // T-239: a change to CLAUDE.md or the constitution makes the whole PR wait on the person, so it goes elsewhere.
     assert.match(out, /leave CLAUDE\.md and docs\/constitution\.md out of this pull request/, 'the code PR stays free of the two files');
     assert.match(out, /create "CLAUDE\.md and constitution updates"/, 'the wording goes to the grouped ticket');
-    assert.match(out, /If it says Already filed with \(triage\) or \(ready\), that open ticket gathers these changes and you cannot edit it, so say so in the PR/, 'with no ticket, no chat channel to ask the Lead in');
+    assert.match(out, /ticket\.js list first\. If a ticket in Triage or Ready has a title that starts with "CLAUDE\.md and constitution updates", that open ticket gathers these changes and you cannot edit it, so run node \S+ticket\.js post with its id/, 'it posts on any open grouped ticket\'s own channel, a dated one or another Dev\'s too');
+    assert.match(out, /If none is open, run node \S+ticket\.js create "CLAUDE\.md and constitution updates"/, 'it files one only if none is open');
+    assert.match(out, /starts with @Lead and names your branch and the PR/, 'it mentions the Lead, so a running Lead is told');
     assert.match(out, /cannot ship without the wording/, 'unless the code cannot ship without it');
     // Review of T-239: Already filed also answers for a started or rejected ticket, which nobody can edit.
     assert.match(out, /If it says \(started\) or \(rejected\), file the change as its own ticket titled "CLAUDE\.md and constitution updates for /, 'a started or rejected wording ticket gets a ticket of its own');

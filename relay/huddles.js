@@ -7,7 +7,7 @@
 //
 // Like the terminal, this answers only the room page on this machine, while RELAY_TERMINAL=1.
 'use strict';
-const { oneLine } = require('./clean.js');
+const { oneLine, noHidden } = require('./clean.js');
 const { execFile } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -27,7 +27,7 @@ const MAX_TO_LEAD = 6000;
 const LEAD_KEY = 'huddle-lead', QUESTION_KEY = /^huddle-[0-9a-f]{6}-/;
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 
-const clean = oneLine;
+const clean = (v, n) => oneLine(noHidden(v), n);
 const ago = (s) => s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
 
 function run(cmd, args, cwd, timeout) {

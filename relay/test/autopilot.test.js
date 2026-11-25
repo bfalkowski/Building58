@@ -251,7 +251,7 @@ test('Get a review asks for a verdict, and its merge verdict merges, while one w
   await t.test('a Get a review with no verdict does not count', async () => {
     const r1 = await getAReview();
     await post(r1);
-    await until(async () => (await ap()).notes.some((n) => /PR #7 was posted without a verdict, so it does not count/.test(n.text)), 'the note that it does not count');
+    await until(async () => (await ap()).notes.some((n) => /PR #7 came back empty/.test(n.text)), 'the note that it does not count');
     await sleep(1000);
     assert.strictEqual(merged(), '', 'no merge without a verdict');
   });
@@ -268,7 +268,20 @@ test('Get a review asks for a verdict, and its merge verdict merges, while one w
     await post(r2);
     await until(() => merged().includes(PR + ' --merge --match-head-commit ' + head), 'the merge');
     const reviews = (await R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR);
-    assert.strictEqual(reviews.count, 0, 'Get a review is not counted toward the automatic review limit');
+    assert.strictEqual(reviews.count, 0, 'Get a review is not counted toward the automatic review limit, and nor is the new review after one with no verdict');
+  });
+
+  await t.test('a review whose comment says only a dash gives a merge verdict that does not count, and no merge follows', async () => {
+    const answers = JSON.parse(fs.readFileSync(path.join(ghDir, 'answers.json'), 'utf8'));
+    answers.api['repos/acme/widgets/issues/comments/101'] = { body: '-' };
+    fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify(answers));
+    const before = merged();
+    const r0 = await getAReview();
+    assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, await token(r0))).status, 200);
+    await post(r0);
+    await until(async () => (await ap()).notes.some((n) => /PR #7 came back empty/.test(n.text)), 'the note that the review came back empty');
+    await sleep(1000);
+    assert.strictEqual(merged(), before, 'a dash is not a merge verdict');
   });
 
   await t.test('the brief and the ask do not count toward the prompt limit, which is only for what the page sends', async () => {
@@ -371,6 +384,62 @@ test('Autopilot reads the PR again just before it merges, so a check that went r
   await sleep(1500);
   assert.strictEqual(log('merged.log'), '', 'the kept answer said green, the fresh one said red, and nothing merged');
 });
+
+for (const [name, after, merged] of [['a meets_policy summary lets level 6 merge', 'meets_policy', true], ['a summary that turns needs_person before the re-read stops the merge and hands the PR over', 'needs_person', false]]) {
+  test('level 6: ' + name, async (t) => {
+    const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
+    const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '0' });
+    t.after(async () => { await R.stop(); removeDir(ghDir); });
+    const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
+    sh(R.home, 'init', '-q', '--bare', origin);
+    fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + origin + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
+    sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+    sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/' + sh(repo, 'symbolic-ref', '--short', 'HEAD'));
+    const log = (n) => { try { return fs.readFileSync(path.join(ghDir, n), 'utf8'); } catch (e) { return ''; } };
+    const COMMENTS = 'repos/acme/widgets/issues/7/comments', gate = path.join(ghDir, 'gate');
+    const reads = () => log('calls.log').split('\n').filter((l) => l.includes(COMMENTS)).length;
+    const say = (s, event, extra) => R.hook(Object.assign({ hook_event_name: event, session_id: s.sessionId.slice(0, 12) }, extra));
+    const ap = async () => (await R.call('GET', '/autopilot')).body;
+    const task = async () => (await R.call('GET', '/tasks')).body.tasks[0];
+    assert.strictEqual((await R.call('POST', '/settings', { values: { autopilotExhibit: true } })).body.ok, true);
+    const ticket = (await R.call('POST', '/tickets', { title: 'Make a.txt say hello', repo })).body.ticket;
+    await R.call('POST', '/autopilot', { on: true, only: ticket.id });
+    const x = await until(task, 'the task'), wt = x.worktree;
+    const dev = (await R.call('GET', '/terminals')).body.terminals.find((y) => y.id === x.worker.terminal);
+    fs.writeFileSync(path.join(wt, 'a.txt'), 'hello\n');
+    sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'hello');
+    pushPr(wt, origin);
+    const head = sh(wt, 'rev-parse', 'HEAD');
+    const summary = (verdict) => [{ user: { login: 'github-actions[bot]', type: 'Bot' }, updated_at: '2026-11-25T01:00:00Z', body: require('../exhibit.js').MARK + '\nVerdict: **' + verdict + '** at head commit `' + head.slice(0, 7) + '`.\n' }];
+    const answer = (verdict, gated) => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: head, mergeStateStatus: 'CLEAN', statusCheckRollup: GREEN } },
+      api: { 'repos/acme/widgets/pulls/7/files': [{ filename: 'a.txt' }], [COMMENTS]: summary(verdict) }, gateApi: gated ? { [COMMENTS]: gate } : {} }));
+    answer('meets_policy', false);
+    await say(dev, 'PostToolUse', { pr_url: PR, cwd: wt });
+    await say(dev, 'UserPromptSubmit');
+    const r = (await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: prBrief(PR) })).body;
+    const token = { 'X-Office-Token': await until(() => { try { return sessionToken(r.sessionId); } catch (e) { return null; } }, 'its token') };
+    assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'merge' }, token)).status, 200);
+    await say(r, 'UserPromptSubmit');
+    await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-101' } });
+    await say(r, 'Stop');
+    await until(async () => (await ap()).prs.some((p) => p.verdict === 'merge' && /^Its Dev is working/.test(p.why || '')), 'Autopilot to wait for the Dev');
+    assert.strictEqual(reads(), 0, 'while the plan still waits, it does not list the comments');
+    const before = reads();
+    if (!merged) answer('meets_policy', true);
+    await say(dev, 'Stop');
+    if (!merged) {
+      await until(() => reads() > before, 'the first read of the summary, held at the gate');
+      answer(after, false);
+      fs.writeFileSync(gate, '');
+    }
+    if (merged) await until(() => log('merged.log'), 'the merge');
+    else {
+      await until(async () => (await ap()).prs.some((p) => /Exhibit says needs_person/.test(p.why || '')), 'the hand-over for Exhibit');
+      await sleep(1000);
+      assert.strictEqual(log('merged.log'), '', 'the re-read saw needs_person, so nothing merged');
+    }
+  });
+}
 
 // T-226: after a merge verdict the Dev does not push. If it thinks a finding marked non-blocking is a bug, its
 // reply has <!-- office:hold -->, and the PR goes to the person. Autopilot reads the comments once more just
@@ -970,4 +1039,6 @@ test('a Dev whose turn ends without merging main is asked once more, then the pe
   assert.strictEqual(asks(await R.screen(dev.id)), 2, 'no third ask');
   assert.strictEqual((await ap()).runs.recent.find((y) => y.ticket === ticket.id).blocked.reason, 'conflict-dropped');
   assert.strictEqual(require('../autopilot-runs.js').REASONS['conflict-dropped'], 'its Dev did not merge main after two asks');
+  const jam = (await R.call('GET', '/jams?range=1d')).body.jams.filter((j) => j.ticket === ticket.id);
+  assert.deepStrictEqual(jam.map((j) => [j.kind, j.by, /Reason conflict-dropped\./.test(j.fix)]), [['handed-over', 'autopilot', true]]);
 });

@@ -63,7 +63,9 @@ const { oneLine } = require('./clean.js');
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const ghDoor = require('./gh.js');
 const config = require('./config.js');
+const exhibit = require('./exhibit.js');
 const pmCheck = require('./pm-check.js');
+const jams = require('./jams.js');
 const AT_ONCE = () => config.get('autopilotAtOnce');
 const MAX_ROUNDS = () => config.get('autopilotRounds'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges'), MAIN_MERGES = () => config.get('autopilotMainMerges');
 const NOTES_KEPT = 30;
@@ -125,8 +127,10 @@ const git = (cwd, args) => new Promise((resolve, reject) => execFile('git', args
 
 const verdictAsk = () => ' Mark each finding blocking, fix now or follow-up. Blocking: a bug, or something that does not do what the PR says. ' +
   'Fix now: small and safe to fix in this PR, such as a wording fix, a missing test case, a named const or a doc line. Follow-up: real work outside this PR. ' +
-  'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post.';
-reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(),
+  'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post. ' +
+  'Post one comment that starts with the line ## Review of <the commit you read>, says what you checked, and has a line Verdict: merge or Verdict: fix that matches the command. ' +
+  'Post it with gh pr comment <PR> --body-file - and the text in a quoted heredoc (<<\'EOF\'), never with --body -, which posts a dash. A comment with no verdict line or no words does not count as a review, and the room starts the review again.';
+reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(), verdictOf: (channel, pr) => verdictOf(channel, pr),
   since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; },
   freed: (channel, pr, text) => {
     const task = tasks.list(channel).find((x) => x.pr === pr);
@@ -155,14 +159,35 @@ async function giveVerdict(channel, agent, kind) {
   return [200, { ok: true, pr, kind, commit, message: 'Verdict kept: ' + kind + ' for ' + commit.slice(0, 7) + '. Now post your review.' }];
 }
 const unposted = (rec, t) => rec && rec.verdicts.find((x) => x.sessionId === t.sessionId && !x.posted);
-terminal.onReviewPosted((channel, t) => {
+const COMMENT_ID = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/\d+#issuecomment-(\d+)$/;
+const checking = new Map();
+async function bodyCounts(url, kind) {
+  const m = String(url).match(COMMENT_ID);
+  if (!m) return true;
+  try {
+    const comment = JSON.parse(await gh(['api', 'repos/' + m[1] + '/issues/comments/' + m[2]]));
+    return typeof comment.body !== 'string' || plan.countsAsReview(comment.body, kind);
+  } catch (e) {
+    console.error('Could not read the review at ' + url + ', so it counts as posted: ' + e.message);
+    return true;
+  }
+}
+async function judgePost(channel, t) {
   const v = unposted(chOf(channel).prs[t.reviewOf], t);
-  if (v) { v.posted = t.posted.url; save(); holdPushes(channel); prComments.reviewPosted(channel, t.reviewOf, t.posted.url); }
-});
-terminal.onReviewDone((channel, t) => {
+  if (!v) return;
+  if (!(await bodyCounts(t.posted.url, v.kind))) { console.log('The review of ' + t.reviewOf + ' at ' + t.posted.url + ' has no verdict or no words, so it does not count.'); return; }
+  if (v.posted) return;
+  v.posted = t.posted.url; save(); holdPushes(channel); prComments.reviewPosted(channel, t.reviewOf, t.posted.url);
+  reviews.reviewCounted(channel, t.reviewOf);
+}
+terminal.onReviewPosted((channel, t) => { checking.set(t.sessionId, judgePost(channel, t).finally(() => checking.delete(t.sessionId))); });
+terminal.onReviewDone(async (channel, t) => {
+  await checking.get(t.sessionId);
   const rec = chOf(channel).prs[t.reviewOf];
   if (rec && rec.verdicts.some((x) => x.sessionId === t.sessionId && x.posted)) return;
-  if (isOn(channel) && t.reviewOf) note(channel, 'The review of PR ' + number(t.reviewOf) + ' was posted without a verdict, so it does not count. The next push brings another review.');
+  if (!isOn(channel) || !t.reviewOf) return;
+  const again = reviews.reviewEmpty(channel, t.reviewOf);
+  note(channel, 'The review of PR ' + number(t.reviewOf) + ' came back empty: it has no verdict line or no words on what was checked, so it does not count. ' + (again ? 'A new review starts.' : 'The person decides.'));
 });
 const looking = new Set();
 const CLOCK_SKEW_MS = 60 * 1000;
@@ -175,9 +200,10 @@ terminal.onReviewTurnEnd(async (channel, t) => {
     const login = JSON.parse(await gh(['api', 'user'])).login || null;
     const comments = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/issues/' + m[2] + '/comments?per_page=100'])).flat();
     const since = Math.min(Date.parse(t.startedAt) || Infinity, Date.parse(v.at) || Infinity) - CLOCK_SKEW_MS;
-    const url = plan.reviewPostFor(comments, { login, since, commit: v.commit });
+    const url = plan.reviewPostFor(comments, { login, since, commit: v.commit, kind: v.kind });
     if (!url || v.posted || rec.verdicts.some((x) => x.posted === url)) return;
     v.posted = url; save(); holdPushes(channel);
+    reviews.reviewCounted(channel, t.reviewOf);
     terminal.reviewFound(channel, t, url);
     prComments.reviewPosted(channel, t.reviewOf, url);
     note(channel, 'The review of PR ' + number(t.reviewOf) + ' at ' + v.commit.slice(0, 7) + ' is on the PR, though its post was not seen, so its verdict counts: ' + url);
@@ -262,6 +288,7 @@ async function tick() {
   if (ticking || !ctx) return;
   ticking = true;
   try {
+    logRefusals();
     for (const channel of Object.keys(store)) if (isOn(channel)) await look(channel);
   } catch (e) { if (ctx) ctx.log('Autopilot: ' + e.message); } finally { ticking = false; }
 }
@@ -319,6 +346,7 @@ function readyNow(channel, task, rec, f) {
   rec.readyTold = f.ready; save();
   note(channel, (task.ticket || 'Task ' + task.id) + ', PR ' + number(task.pr) + ': ' + f.why);
 }
+const exhibitOf = (task, pr) => (config.get('autopilotExhibit') && pr.state === 'OPEN' ? exhibit.read(task.pr, task.repo) : Promise.resolve(undefined));
 async function lookAt(channel, task) {
   const rec = recOf(channel, task.pr);
   const got = await readPr(task, rec);
@@ -328,6 +356,10 @@ async function lookAt(channel, task) {
   if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
   const v = latest(rec);
   let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
+  if (d.act === 'merge') {
+    const ex = await exhibitOf(task, pr);
+    if (ex !== undefined) d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex));
+  }
   rec.why = d.why; rec.act = d.act;
   if (d.act === 'wait') rec.why = reviews.deskLine(channel, task.pr) || rec.why;
   if (d.act === 'done') markDone(channel, task);
@@ -343,7 +375,8 @@ async function lookAt(channel, task) {
     if (task.reviews && task.reviews.pending) { rec.why = 'New review news came in as it was about to merge, so its Dev hears it first.'; rec.act = 'wait'; return; }
     const again = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch((e) => ({ failed: e.message }));
     if (again.failed) { rec.why = 'Ready to merge, but gh could not read the PR again just before: ' + again.failed; rec.act = 'wait'; return; }
-    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
+    const lastEx = await exhibitOf(task, again);
+    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone, lastEx));
     if (last.act !== 'merge') { rec.why = last.why; rec.act = last.act; return; }
     try { await gh(['pr', 'merge', task.pr, '--merge', '--match-head-commit', pr.headRefOid], task.repo); } catch (e) {
       const now = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch(() => null);
@@ -455,6 +488,10 @@ async function mergedYet(channel, task) {
 function handOver(channel, task, rec, why, reason, head) {
   rec.handedOver = why; rec.handedOverAt = new Date().toISOString(); rec.handedReason = reason; rec.handedOverHead = head || null; save();
   handRun(channel, task, reason);
+  if (reason === 'main-kept-moving' || reason === 'conflict-dropped') {
+    const fix = reason === 'main-kept-moving' ? 'Main kept moving: the Dev merged main as asked and the PR conflicted again.' : 'Conflict dropped: the Dev did not merge main after two asks.';
+    jams.record(channel, { kind: 'handed-over', fix: fix + ' Reason ' + reason + '.', ticket: task.ticket, pr: task.pr, by: 'autopilot' });
+  }
   tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why);
   note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why);
 }
@@ -504,8 +541,8 @@ async function maybeStart(channel) {
     }
     if (out.error === 'wip_limit') { waitWip(out.message); return; }
     if (out.error === 'full') {
-      const taken = terminal.all(channel).filter((t) => !t.exited).length;
-      c.idle = 'Waiting for a free desk: ' + taken + ' of ' + terminal.DESKS + ' taken, ' + why + '.';
+      const taken = terminal.workersOf(channel);
+      c.idle = 'Waiting for a free desk: ' + taken + ' of ' + terminal.WORKER_DESKS + ' taken, ' + why + '.';
       if (!wasWaiting) note(channel, c.idle + ' ' + next.id + ' starts once one is free.');
       return;
     }
@@ -704,6 +741,19 @@ function holdPushes(channel, only) {
     try { pushHold.sync(task, verdictOf(channel, task.pr), pipeline.of(task.pr)); } catch (e) { if (ctx) ctx.log('Could not mark the push hold of ' + task.worktree + ': ' + e.message); }
   }
 }
+function logRefusals() {
+  for (const channel of tasks.channels()) {
+    for (const task of tasks.list(channel)) {
+      if (!task.pr || !task.worktree || task.state === 'done') continue;
+      let got;
+      try { got = pushHold.refusalsOf(task); } catch (e) { continue; }
+      if (got.list.length <= got.seen) continue;
+      const logged = got.list.slice(got.seen).filter((x) => !x.allowed).every((r) => jams.record(channel, { kind: 'push-refused', ticket: task.ticket || undefined, pr: task.pr, since: r.at, fix: oneLine('Push refused: ' + r.why, 200), by: 'the relay' }));
+      if (!logged) continue;
+      try { pushHold.markSeen(task, got.list.length); } catch (e) { if (ctx) ctx.log('Could not note the refused pushes of ' + task.worktree + ': ' + e.message); }
+    }
+  }
+}
 tasks.events.on('state', (channel, task) => holdPushes(channel, task));
 tasks.events.on('pr', (channel, task) => holdPushes(channel, task));
 
@@ -719,7 +769,15 @@ function deskOf(channel, task) {
   const handed = r && r.handedOver && !handedBack(task, r) ? r.handedOver : null;
   const since = handed && handedReasonOf(r) === 'stalled' && r.verdicts.filter((x) => Date.parse(x.at) > Date.parse(r.handedOverAt) && postOf(channel, x)).pop();
   const reviewedSince = since ? { kind: since.kind, commit: since.commit, url: postOf(channel, since) } : null;
-  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', reviewedSince };
+  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', reviewedSince, pushRefused: refusedOf(task, v) };
+}
+
+function refusedOf(task, v) {
+  if (!task || !task.pr || !v || !v.posted || v.kind !== 'merge') return null;
+  let got;
+  try { got = pushHold.refusalsOf(task); } catch (e) { return null; }
+  const last = got.list[got.list.length - 1];
+  return last && !last.allowed ? { at: last.at, why: last.why } : null;
 }
 
 const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';

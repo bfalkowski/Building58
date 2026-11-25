@@ -218,3 +218,19 @@ test('a card moved back after main kept moving starts the count of merges of mai
   assert.deepStrictEqual(rec, { mainMerges: 0, conflictAsks: 1 });
   assert.strictEqual(planOf.conflictStep({ ...asked, mainMerges: rec.mainMerges }).act, 'ask', 'the next merge of main is the first, not a hand-over');
 });
+
+test('level 6: with Exhibit read, a merge also needs meets_policy at the head', () => {
+  const at = (ex) => forPr(pr(), FILES, merge, 1, 2, false, ex);
+  const short = HEAD.slice(0, 7);
+  assert.strictEqual(at(undefined).act, 'merge', 'the switch off reads nothing and changes nothing');
+  assert.strictEqual(at({ verdict: 'meets_policy', commit: short }).act, 'merge');
+  assert.match(at({ verdict: 'meets_policy', commit: short }).why, /meets_policy/);
+  assert.strictEqual(at(null).act, 'wait', 'no summary comment yet');
+  assert.strictEqual(at({ failed: 'gh could not list the PR\'s comments' }).act, 'wait');
+  assert.strictEqual(at({ verdict: 'meets_policy', commit: 'bbbbbbb' }).act, 'wait', 'a summary for an older commit');
+  for (const verdict of ['needs_person', 'error']) {
+    const d = at({ verdict, commit: short });
+    assert.deepStrictEqual([d.act, d.reason], ['person', 'exhibit']);
+  }
+  assert.strictEqual(forPr(pr({ statusCheckRollup: [] }), FILES, merge, 1, 2, false, null).why, 'Waiting for CI.', 'CI is asked first');
+});

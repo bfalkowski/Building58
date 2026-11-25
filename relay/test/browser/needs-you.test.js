@@ -24,7 +24,8 @@ pageTest('Needs you shows the count and the list, and opens the session', () => 
   assert.strictEqual(await page.innerText('#needs-you-count'), '0');
   assert.strictEqual(await page.innerText('#needs-you-empty'), 'Nothing needs you now.');
   assert.strictEqual(await page.locator('#needs-you-list li').count(), 0);
-  assert.ok(await page.evaluate(() => document.getElementById('needs-you').compareDocumentPosition(document.getElementById('people')) & Node.DOCUMENT_POSITION_FOLLOWING), 'the panel sits above the people on the Floor');
+  assert.ok(await page.evaluate(() => document.getElementById('seats').compareDocumentPosition(document.getElementById('needs-you')) & Node.DOCUMENT_POSITION_FOLLOWING), 'Needs you sits under the seats');
+  assert.ok(await page.evaluate(() => document.getElementById('needs-you').compareDocumentPosition(document.getElementById('today')) & Node.DOCUMENT_POSITION_FOLLOWING), 'and above Today');
 
   const asker = await start(), other = await start();
   await finish(asker); await finish(other);

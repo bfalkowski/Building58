@@ -323,7 +323,7 @@ test('a linked PR in Waiting on you with a protected file gets its first review'
 test('a linked PR with no review record and all desks full waits in the desk queue', async (t) => {
   const o = await office(t);
   await linkedUnreviewed(o);
-  while ((await o.terminals()).length < 9) assert.ok((await o.R.call('POST', '/terminals', { cwd: o.repo })).status < 300);
+  while ((await o.terminals()).length < 7) assert.ok((await o.R.call('POST', '/terminals', { cwd: o.repo })).status < 300);
   assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
   await until(async () => ((await o.R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR) || {}).desk === true, 'the review to wait for a desk');
   assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer'), 'no reviewer yet');
@@ -335,4 +335,53 @@ test('a linked PR with no review record gets its first review while a check runs
   o.answer({ headRefOid: sh(o.wt, 'rev-parse', 'HEAD'), statusCheckRollup: RUNNING });
   assert.strictEqual((await o.R.call('POST', '/reviews', { auto: true })).status, 200);
   await reviewerOf(o);
+});
+
+async function fixReviewed(o) {
+  const R = o.R;
+  await linkedUnreviewed(o);
+  assert.strictEqual((await R.call('POST', '/reviews', { auto: true })).status, 200);
+  const r1 = await reviewerOf(o);
+  const token = { 'X-Office-Token': await until(() => { try { return sessionToken(r1.sessionId); } catch (e) { return null; } }, 'its token') };
+  assert.strictEqual((await R.call('POST', '/autopilot/verdict', { kind: 'fix' }, token)).status, 200);
+  await o.say(r1, 'UserPromptSubmit');
+  await o.say(r1, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-100' } });
+  await o.say(r1, 'Stop');
+  await until(async () => !(await o.terminals()).some((x) => x.id === r1.id), 'the reviewer to leave');
+  return r1;
+}
+
+test('a fix review, then a Dev reply on the PR and no push, starts a follow-up review of the same commit with the reply in its brief', async (t) => {
+  const o = await office(t);
+  const r1 = await fixReviewed(o);
+  const head = sh(o.wt, 'rev-parse', 'HEAD');
+  const reply = 'The description now says what the change does.';
+  o.answer({ headRefOid: head });
+  const answers = JSON.parse(fs.readFileSync(path.join(o.ghDir, 'answers.json'), 'utf8'));
+  answers.api['repos/acme/widgets/issues/7/comments'] = [{ id: 7, html_url: PR + '#issuecomment-7', body: '<!-- office:dev -->\n' + reply, created_at: new Date().toISOString(), user: { login: 'dev' } }];
+  fs.writeFileSync(path.join(o.ghDir, 'answers.json'), JSON.stringify(answers));
+  await sleep(1500);
+  assert.ok(!(await o.terminals()).some((x) => x.role === 'reviewer' && x.pr === PR), 'no review starts before the Dev answers');
+  await o.say(o.dev, 'UserPromptSubmit');
+  await o.say(o.dev, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-7' } });
+  await o.say(o.dev, 'Stop');
+  const r2 = await until(async () => (await o.terminals()).find((x) => x.role === 'reviewer' && x.pr === PR && x.id !== r1.id), 'a follow-up reviewer');
+  await until(async () => (await o.R.screen(r2.id)).includes(reply), 'the Dev\'s reply in its brief');
+  const brief = await o.R.screen(r2.id);
+  assert.match(brief, /pushed no new commit/);
+  assert.strictEqual((await o.R.call('GET', '/reviews')).body.prs.find((p) => p.pr === PR).count, 2, 'it counts toward the limit');
+  assert.strictEqual(sh(o.wt, 'rev-parse', 'HEAD'), head);
+});
+
+test('a relay that starts with a PR head newer than its last reviewed commit starts the follow-up review within one PR watch pass', async (t) => {
+  const o = await office(t);
+  const r1 = await fixReviewed(o);
+  const R = o.R;
+  await R.kill();
+  const h2 = o.commit(true);
+  o.answer({ headRefOid: h2 });
+  o.R = await relay(Object.assign({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: o.ghDir }, ENV), R.home, { autoReview: true });
+  const r2 = await until(async () => (await o.terminals()).find((x) => x.role === 'reviewer' && x.pr === PR && x.id !== r1.id), 'a follow-up reviewer');
+  assert.ok(r2);
+  assert.match(o.R.output(), /PR watch: PR #7 had no review of [0-9a-f]{7}: a follow-up review\./);
 });

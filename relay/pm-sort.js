@@ -16,7 +16,7 @@ const UNIT_MS = Number(process.env.RELAY_PM_SORT_UNIT_MS) >= 1 ? Number(process.
 const RETRY_MS = Number(process.env.RELAY_PM_SORT_RETRY_MS) >= 1 ? Number(process.env.RELAY_PM_SORT_RETRY_MS) : 5000;
 const KEY = 'pm-sort';
 const due = new Set();
-let timer = null;
+let timer = null, ticked = Date.now();
 
 const startInProgress = (channel) => require('./tickets.js').startingNow(channel) || require('./autopilot.js').starting() || pmCheck.waiting(channel);
 
@@ -42,6 +42,7 @@ async function flush() {
 }
 
 function tick() {
+  ticked = Date.now();
   if (!(config.get('pmSortHours') > 0)) return;
   for (const t of terminal.everyone()) if (t.role === 'pm') due.add(t.channel);
   if (!due.size) return;
@@ -49,6 +50,11 @@ function tick() {
   flush();
 }
 
-function begin() { config.every('pmSortHours', tick, 0, UNIT_MS); }
+function begin() {
+  ticked = Date.now();
+  config.every('pmSortHours', tick, 0, UNIT_MS);
+  config.onChange((names) => { if (names.includes('pmSortHours')) ticked = Date.now(); });
+}
+const nextAt = () => (config.get('pmSortHours') > 0 ? ticked + config.get('pmSortHours') * UNIT_MS : null);
 
-module.exports = { begin, ask, KEY };
+module.exports = { begin, ask, nextAt, KEY };

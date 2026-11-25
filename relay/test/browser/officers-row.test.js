@@ -24,9 +24,9 @@ pageTest('the Floor bar holds only the huddle buttons, and the org chart holds t
   const page = p.page;
   await page.locator('#huddle-bar:not([hidden])').waitFor();
 
-  // The Floor bar: the status report, asking idle workers and Stop all safe. No officer is asked from there.
+  // The Floor bar: the status report and asking idle workers. No officer is asked from there.
   const bar = await page.$$eval('#huddle-bar button', (els) => els.map((b) => b.id));
-  assert.deepStrictEqual(bar, ['huddle-free', 'huddle-ask', 'stop-safe']);
+  assert.deepStrictEqual(bar, ['huddle-free', 'huddle-ask']);
   assert.strictEqual(await page.locator('#huddle-free').innerText(), 'Status report');
   assert.strictEqual(await page.locator('#huddle-ask').innerText(), 'Ask idle workers too (nobody is idle)');
   assert.strictEqual(await page.locator('#huddle-ask').isDisabled(), true);
@@ -34,7 +34,7 @@ pageTest('the Floor bar holds only the huddle buttons, and the org chart holds t
   // The bar reads as two things: the huddle under its label, and Stop all safe apart from it.
   assert.deepStrictEqual(await page.$$eval('#huddle-bar .huddle-group button', (els) => els.map((b) => b.id)), ['huddle-free', 'huddle-ask']);
   assert.strictEqual(await page.locator('#huddle-label').innerText(), 'Huddle');
-  assert.strictEqual(await page.locator('#huddle-bar .stop-group #stop-safe').count(), 1);
+  assert.strictEqual(await page.locator('#workers .stop-group #stop-safe').count(), 1, 'Stop all safe is in the workers row');
   // Telling the Lead is a switch in Settings, in a Huddle section of its own, with a chip in the room bar.
   assert.strictEqual(await page.locator('#huddle-bar input').count(), 0);
   assert.strictEqual(await page.locator('#settings section[aria-labelledby="set-huddle-title"] #huddle-lead').count(), 1);

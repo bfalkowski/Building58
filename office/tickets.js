@@ -16,6 +16,7 @@
   const readStored = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const writeStored = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
   const full = section.dataset.full === '1';
+  const TICKET_ID = /^[\w.-]{1,20}$/;
   const cols = $('board-cols'), form = $('ticket-form'), note = $('ticket-note'), info = $('board-info'), rejectedBox = $('board-rejected'), rejectedList = rejectedBox.querySelector('ol');
   const status = $('board-status'), waitingLine = $('board-waiting');
   const filterText = $('board-filter-text'), filterRepo = $('board-filter-repo'), filterPriority = $('board-filter-priority'), filterLabel = $('board-filter-label');
@@ -482,6 +483,6 @@
       await new Promise((done) => setTimeout(done, 500));
     }
   });
-  refresh();
+  refresh().then(() => { const want = params.get('ticket'); if (full && want && TICKET_ID.test(want)) showTicket({ id: want }); });
   setInterval(refresh, POLL_MS);
 })();

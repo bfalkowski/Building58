@@ -46,7 +46,7 @@ const ITEM_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+#(?:issueco
 const DEV_MARK = '<!-- office:dev -->', TOLD_MARK = '<!-- office:told-dev -->';
 const HOLD_MARK = '<!-- office:hold -->';
 const READY_MARK = require('./ready-plan.js').MARK;
-const EXHIBIT_MARK = '<!-- exhibit:pr-summary -->';
+const EXHIBIT_MARK = require('./exhibit.js').MARK;
 const KEY = (task) => 'review-' + task.id;
 const KEY_ID = /^review-([0-9a-f]{6}|session-[\w-]+)$/;
 const ENDED = 'Review waiting, Dev session has ended';
@@ -160,7 +160,16 @@ function tell(channel, task, pr, links, opts) {
   const before = !!(opts && opts.before);
   const r = stateOf(task);
   const added = [...new Set(links)].filter((l) => !(r.pending && r.pending.links.includes(l)));
-  if (!added.length) { saveOf(task); return; }
+  if (!added.length) {
+    if (r.pending) {
+      r.pending.before = r.pending.before && before;
+      r.pending.blocks = !!(r.pending.blocks || (opts && opts.blocks));
+      r.pending.times = Object.assign(r.pending.times || {}, (opts && opts.times) || {});
+      saveOf(task);
+      queue(channel, task);
+    } else saveOf(task);
+    return;
+  }
   const p = r.pending || (r.pending = { pr, links: [], count: 0, since: new Date().toISOString(), before });
   p.before = p.before && before;
   p.blocks = !!(p.blocks || (opts && opts.blocks));

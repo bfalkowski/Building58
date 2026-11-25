@@ -59,7 +59,7 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   const base = 'http://127.0.0.1:' + port + '/channels/t';  // not localhost: Node 18's fetch tries ::1 and stops there
   // Tests that restart a relay check what Bring back does, so the next relay brings nothing back by
   // itself unless a test asks with RELAY_RESUME: '1' (relay/test/restart.test.js). Nor does it start its own
-  // Lead on the room's channel unless a test asks with RELAY_LEAD: '1' (relay/test/lead-at-start.test.js). Nothing asks gh about
+  // Lead on the room's channel unless a test asks with RELAY_LEAD: '1' (relay/test/lead-at-start.test.js), nor its PM unless a test asks with RELAY_PM_SEAT: '1' (relay/test/pm-seat.test.js). Nothing asks gh about
   // PR comments unless a test sets RELAY_REVIEW_POLL_SECONDS (relay/test/pr-comments.test.js), nor about
   // PR states for the chat board unless a test sets RELAY_CHAT_POLL_SECONDS (relay/test/chat.test.js), nor git
   // about origin's main unless a test sets RELAY_MAIN_POLL_SECONDS (relay/test/main-moves.test.js), nor about
@@ -72,7 +72,7 @@ async function relayOn(port, home, extraEnv, existingHome, options) {
   // (relay/test/rollback.test.js), as an office session's shell does.
   // HOST is set here, so a HOST of your own (0.0.0.0, say) cannot move it off the address the test checks.
   // Nor does the room of the shell that runs the test reach the relay: see withoutRoom.
-  const env = { ...withoutRoom(process.env), HOME: home, HOST: '127.0.0.1', PORT: String(port), RELAY_KEY: 'test-key', RELAY_TERMINAL: '1', RELAY_RESUME: '0', RELAY_LEAD: '0', RELAY_ROLLBACK: '0', RELAY_REVIEW_POLL_SECONDS: '0', RELAY_CHAT_POLL_SECONDS: '0', RELAY_MAIN_POLL_SECONDS: '0', RELAY_MAIN_CI_POLL_SECONDS: '0', RELAY_PIPELINE_POLL_SECONDS: '0', RELAY_GH_FRESH_MS: '0', RELAY_LEAD_CHECK_MS: '0', RELAY_TOLD_CHECK_MS: '3600000', RELAY_TOLD_HOLD_MS: '1', CLAUDE_CMD: path.join(__dirname, 'fake-claude.sh'), ...(extraEnv || {}) };
+  const env = { ...withoutRoom(process.env), HOME: home, HOST: '127.0.0.1', PORT: String(port), RELAY_KEY: 'test-key', RELAY_TERMINAL: '1', RELAY_RESUME: '0', RELAY_LEAD: '0', RELAY_PM_SEAT: '0', RELAY_ROLLBACK: '0', RELAY_REVIEW_POLL_SECONDS: '0', RELAY_CHAT_POLL_SECONDS: '0', RELAY_MAIN_POLL_SECONDS: '0', RELAY_MAIN_CI_POLL_SECONDS: '0', RELAY_PIPELINE_POLL_SECONDS: '0', RELAY_GH_FRESH_MS: '0', RELAY_LEAD_CHECK_MS: '0', RELAY_TOLD_CHECK_MS: '3600000', RELAY_TOLD_HOLD_MS: '1', CLAUDE_CMD: path.join(__dirname, 'fake-claude.sh'), ...(extraEnv || {}) };
   let output = '', stopping = false;
   // options.root runs a copy of the relay from another folder (relay/test/rollback.test.js).
   const child = spawn('node', ['relay/server.js'], { cwd: (options && options.root) || ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });

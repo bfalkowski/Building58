@@ -197,7 +197,7 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
 });
 
 // T-374: reviews waited for a desk, and every desk was held by a session the relay may not stop.
@@ -262,4 +262,15 @@ test('notes signed with another key give one line that names the fix', () => {
   const items = listOf({ seats: [], tasks: [], unread });
   assert.deepStrictEqual(items, [{ kind: 'ticket-key', who: 'the relay', terminal: null, task: null, ticket: null, pr: null, line: unread.line, link: {} }]);
   assert.deepStrictEqual(listOf({ unread: { count: 0, ids: [], line: null } }), []);
+});
+
+test('a push the push hold refused: look at the PR, with a Fix it that lifts the hold, ahead of the hand-over', () => {
+  const refused = task({ state: 'waiting_on_you', pr: PR, prOpen: true, handedOver: 'Its Dev was asked twice to merge main.', pushRefused: { why: 'commit 1234567 changes a.txt, which the merge did not change.' } });
+  const [item, ...rest] = listOf({ seats: [], tasks: [refused] });
+  assert.deepStrictEqual(rest, [], 'one line for the task, not also the hand-over');
+  assert.strictEqual(item.kind, 'push-refused');
+  assert.deepStrictEqual(item.link, { url: PR, fix: 'k1' });
+  assert.match(item.line, /^Look at PR #12 \(T-5\): the push hold refused its Dev's push\. commit 1234567 changes a\.txt, which the merge did not change\. Press Fix it to lift the hold/);
+  assert.deepStrictEqual(listOf({ seats: [], tasks: [Object.assign({}, refused, { prOpen: false })] }).filter((i) => i.kind === 'push-refused'), [], 'a closed PR has no push to fix');
+  assert.deepStrictEqual(listOf({ seats: [], tasks: [Object.assign({}, refused, { pushRefused: null, handedOver: null, state: 'in_review' })] }), []);
 });
