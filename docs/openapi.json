@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.10.0",
+    "version": "2.11.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -45,6 +45,10 @@
     {
       "name": "Checkouts",
       "description": "Sessions that start in a new checkout of their own, and cleaning a checkout up."
+    },
+    {
+      "name": "Failures",
+      "description": "The shared channel for a failure that blocks two or more PRs, and the Lead's rerun and stuck items."
     },
     {
       "name": "Floor",
@@ -927,6 +931,158 @@
         }
       }
     },
+    "/channels/{channel}/failures": {
+      "get": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "List failures",
+        "description": "The shared failure channels, open and archived: each with name, check, prs, tickets (linked to it), fixedBy (the PR that merged the fix), openedAt and archived (why, or null). The person and any session on this computer read it. See Shared failure channels.\n\nTokens: the relay key, and the token of any session, the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "listFailures",
+        "x-tokens": [
+          "any session",
+          "the COO",
+          "the security officer"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Open failure",
+        "description": "The person, or the Lead while Let the Lead unstick the board is on (403 forbidden otherwise; no other session). {\"check\", \"prs\"}: the failing check and two or more PR links it blocks. Opens #failure-<check> and tells each blocked Dev and the Lead. The room opens one by itself when it sees one check fail on two open PRs, so this is for a failure it did not see. 201 with the failure, 409 open when one is open for that check, 400 bad_param for a missing check or fewer than two PRs.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "openFailure",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/failures/{name}/tickets": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Link failure ticket",
+        "description": "The same callers as POST /failures. {\"ticket\"}: a ticket of this failure, which closes when the fix merges, and which the Lead may then set high and first, and merge with another linked ticket, while no blocked Dev runs. 404 no_failure for a channel that is not an open failure channel, 400 bad_ticket for a ticket the Board does not have.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "linkFailureTicket",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "The chat channel's name.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel}/floor": {
       "get": {
         "tags": [
@@ -1147,9 +1303,11 @@
           "Jams"
         ],
         "summary": "Log jam",
-        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. Writes one jam you fixed by hand, {\"kind\", \"fix\", \"ticket\", \"pr\", \"since\", \"by\"}. kind is one of no-first-review, desks-full, news-untold, handed-over, waits-on-state, person-merge, merged-not-done, no-new-commit, main-red, signing-key, workflows-push, dev-idle, tunnel-down, push-refused, stuck-job, stale-cache, out-of-rounds, permission-prompt, news-behind-menu, dev-asks, not-needed, handover-starts-new, flake-blocks, push-hold-red-ci, update-waits or other, and fix is one line of up to 200 characters. ticket and pr are ids with no spaces, since is when it got stuck (an ISO time, not in the future and not over 90 days ago), and by is you unless given. Anything else is 400 bad_param. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only, except the Lead's, which may write while Let the Lead unstick the board is on (403 forbidden while it is off), and then the jam is always by Lead, outcome fixed, and since is when the Lead first named the item with POST /stuck, if it did. Writes one jam you fixed by hand, {\"kind\", \"fix\", \"ticket\", \"pr\", \"since\", \"by\", \"outcome\", \"blocked\"}. outcome is fixed (the default), passed (passed to the person) or seen (seen and never acted on), and blocked is how many PRs a shared failure channel blocked. kind is one of no-first-review, desks-full, news-untold, handed-over, waits-on-state, person-merge, merged-not-done, no-new-commit, main-red, signing-key, workflows-push, dev-idle, tunnel-down, push-refused, stuck-job, stale-cache, out-of-rounds, permission-prompt, news-behind-menu, dev-asks, not-needed, handover-starts-new, flake-blocks, push-hold-red-ci, update-waits or other, and fix is one line of up to 200 characters. ticket and pr are ids with no spaces, since is when it got stuck (an ISO time, not in the future and not over 90 days ago), and by is you unless given. Anything else is 400 bad_param. See The jam log.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "logJam",
-        "x-tokens": [],
+        "x-tokens": [
+          "the Lead"
+        ],
         "responses": {
           "2XX": {
             "description": "Done.",
@@ -1193,7 +1351,7 @@
           "Jams"
         ],
         "summary": "List jams",
-        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. ?range=1d|7d|30d (7d by default, anything else is 400 bad_param) lists the jams logged in the range, oldest first, each with at (when it was logged), kind, ticket, pr, since, fix and by, and kinds gives each kind's name. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. ?range=1d|7d|30d (7d by default, anything else is 400 bad_param) lists the jams logged in the range, oldest first, each with at (when it was logged), kind, ticket, pr, since, fix and by, and, when not the defaults, outcome and blocked, and kinds gives each kind's name. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listJams",
         "x-tokens": [],
         "responses": {
@@ -1231,7 +1389,7 @@
           "Metrics"
         ],
         "summary": "Get metrics",
-        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load, lead (time to act, what the Lead fixed, passed to the person and never acted on, by kind, and the shared failure channels) and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getMetrics",
         "x-tokens": [],
         "responses": {
@@ -1777,6 +1935,57 @@
         "summary": "Mark ready",
         "description": "{\"pr\", \"head\", \"text\"}: marks a PR ready to merge. Only the Lead's token, or the relay key. The relay checks the PR with gh, posts one comment headed Ready to merge, adds the ready to merge label, and takes the label off when a new commit lands. A PR that fails a check gets 409 and not_ready, a note with a part missing gets 400, and a gh failure gets 502. See Ready to merge.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "markReady",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/rerun": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Rerun failed job",
+        "description": "The person, or the Lead while Let the Lead unstick the board is on. {\"pr\"}: runs gh run rerun --failed for a failed check of the PR of a task, once for each commit and check, and only for a known flaky check: one an open failure channel names. 409 not_known for any other check, already_rerun for a second ask on the same commit, not_open for a PR that is not open.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "rerunFailedJob",
         "x-tokens": [
           "the Lead"
         ],
@@ -2612,6 +2821,57 @@
             }
           }
         ]
+      }
+    },
+    "/channels/{channel}/stuck": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Report stuck",
+        "description": "The Lead only, while Let the Lead unstick the board is on. {\"item\", \"why\", \"kind\"}: names a stuck PR or ticket. The relay counts the passes in a row that name it with no action (a jam written with POST /jams for the same PR or ticket is the action). On the third, it is on Needs you with why, and the jam log gets a jam with outcome passed. Answers with passes and onNeedsYou. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "reportStuck",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
       }
     },
     "/channels/{channel}/tasks": {
@@ -5240,7 +5500,20 @@
           "by": {
             "type": "string",
             "maxLength": 40,
-            "description": "Optional: who fixed it. you by default."
+            "description": "Optional: who fixed it. you by default. The Lead's token always writes Lead."
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "passed",
+              "seen"
+            ],
+            "description": "Optional: fixed by default."
+          },
+          "blocked": {
+            "type": "number",
+            "description": "Optional: how many PRs a shared failure channel blocked."
           }
         },
         "required": [
@@ -5290,6 +5563,17 @@
           },
           "by": {
             "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "passed",
+              "seen"
+            ]
+          },
+          "blocked": {
+            "type": "number"
           }
         },
         "required": [
@@ -5736,6 +6020,200 @@
             ],
             "additionalProperties": true
           },
+          "lead": {
+            "type": "object",
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "timeToAct": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "number"
+                  },
+                  "medianMinutes": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "slowest": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ticket": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "pr": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "minutes": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "minutes"
+                      ],
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "required": [
+                  "count",
+                  "slowest"
+                ],
+                "additionalProperties": true
+              },
+              "fixed": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "number"
+                  },
+                  "kinds": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "count"
+                      ],
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "required": [
+                  "total",
+                  "kinds"
+                ],
+                "additionalProperties": true
+              },
+              "passed": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "number"
+                  },
+                  "kinds": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "count"
+                      ],
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "required": [
+                  "total",
+                  "kinds"
+                ],
+                "additionalProperties": true
+              },
+              "neverActed": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "number"
+                  },
+                  "kinds": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "count": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "count"
+                      ],
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "required": [
+                  "total",
+                  "kinds"
+                ],
+                "additionalProperties": true
+              },
+              "failures": {
+                "type": "object",
+                "properties": {
+                  "channels": {
+                    "type": "number"
+                  },
+                  "prsBlocked": {
+                    "type": "number"
+                  },
+                  "medianHours": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "channels",
+                  "prsBlocked"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "available",
+              "timeToAct",
+              "fixed",
+              "passed",
+              "neverActed",
+              "failures"
+            ],
+            "additionalProperties": true
+          },
           "pm": {
             "type": "object",
             "properties": {
@@ -5769,6 +6247,7 @@
           "rounds",
           "desks",
           "load",
+          "lead",
           "pm"
         ],
         "additionalProperties": true

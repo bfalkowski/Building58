@@ -9,11 +9,17 @@ const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 const { relay, makeRepo, removeDir, until, sleep } = require('./helpers.js');
-const { stateOf, gate } = require('../pipeline.js');
+const { stateOf, gate, failedOf } = require('../pipeline.js');
 
 const PASSED = { __typename: 'CheckRun', name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' };
 const FAILED = { __typename: 'CheckRun', name: 'pipeline', status: 'COMPLETED', conclusion: 'FAILURE' };
 const RUNNING = { __typename: 'CheckRun', name: 'pipeline', status: 'IN_PROGRESS', conclusion: '' };
+
+test('the aggregate pipeline check is not a failure of its own', () => {
+  const lint = { name: 'lint and npm test', status: 'COMPLETED', conclusion: 'FAILURE' };
+  assert.deepStrictEqual(failedOf([FAILED, lint]).map((c) => c.name), ['lint and npm test']);
+  assert.deepStrictEqual(failedOf([FAILED]), []);
+});
 
 test('what the checks on a commit say', () => {
   assert.strictEqual(stateOf([PASSED, { status: 'COMPLETED', conclusion: 'SKIPPED' }]), 'green');
