@@ -124,16 +124,26 @@ function whyNoneAllowed(all, hasTask, only) {
 
 const HEADING = /^#{1,6}[ \t]+review of[ \t]+`?(?:[0-9a-f]{7,40}\.\.\.?)?([0-9a-f]{7,40})\b/i;
 const COMMENT_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+#issuecomment-\d+$/;
-function reviewPostFor(comments, { login, since, commit }) {
+const VERDICT = /verdict\W+(merge|fix)\b/i;
+const MIN_CHECKED = 20;
+function countsAsReview(body, kind) {
+  const text = String(body || '');
+  const said = text.match(VERDICT);
+  if (!said || (kind && said[1].toLowerCase() !== kind)) return false;
+  const checked = text.replace(new RegExp(VERDICT.source, 'gi'), '').replace(/^#{1,6}[ \t]+review of\b.*$/gim, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return checked.length >= MIN_CHECKED;
+}
+
+function reviewPostFor(comments, { login, since, commit, kind }) {
   let found = null, foundAt = -Infinity;
   for (const c of comments || []) {
     if (!c || !c.user || !login || String(c.user.login).toLowerCase() !== String(login).toLowerCase()) continue;
     const at = Date.parse(c.created_at);
     if (!(at >= since) || at < foundAt || !COMMENT_URL.test(String(c.html_url))) continue;
     const named = String(c.body || '').trimStart().match(HEADING);
-    if (named && String(commit).toLowerCase().startsWith(named[1].toLowerCase())) { found = c.html_url; foundAt = at; }
+    if (named && countsAsReview(c.body, kind) && String(commit).toLowerCase().startsWith(named[1].toLowerCase())) { found = c.html_url; foundAt = at; }
   }
   return found;
 }
 
-module.exports = { API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, PROTECTED, WORDING_TICKET };
+module.exports = { API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, countsAsReview, PROTECTED, WORDING_TICKET };

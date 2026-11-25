@@ -125,7 +125,9 @@ const git = (cwd, args) => new Promise((resolve, reject) => execFile('git', args
 
 const verdictAsk = () => ' Mark each finding blocking, fix now or follow-up. Blocking: a bug, or something that does not do what the PR says. ' +
   'Fix now: small and safe to fix in this PR, such as a wording fix, a missing test case, a named const or a doc line. Follow-up: real work outside this PR. ' +
-  'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post.';
+  'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post. ' +
+  'Post one comment that starts with the line ## Review of <the commit you read>, says what you checked, and has a line Verdict: merge or Verdict: fix that matches the command. ' +
+  'Post it with gh pr comment <PR> --body-file - and the text in a quoted heredoc (<<\'EOF\'), never with --body -, which posts a dash. A comment with no verdict line or no words does not count as a review, and the room starts the review again.';
 reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(),
   since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; },
   freed: (channel, pr, text) => {
@@ -155,14 +157,35 @@ async function giveVerdict(channel, agent, kind) {
   return [200, { ok: true, pr, kind, commit, message: 'Verdict kept: ' + kind + ' for ' + commit.slice(0, 7) + '. Now post your review.' }];
 }
 const unposted = (rec, t) => rec && rec.verdicts.find((x) => x.sessionId === t.sessionId && !x.posted);
-terminal.onReviewPosted((channel, t) => {
+const COMMENT_ID = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/\d+#issuecomment-(\d+)$/;
+const checking = new Map();
+async function bodyCounts(url, kind) {
+  const m = String(url).match(COMMENT_ID);
+  if (!m) return true;
+  try {
+    const comment = JSON.parse(await gh(['api', 'repos/' + m[1] + '/issues/comments/' + m[2]]));
+    return typeof comment.body !== 'string' || plan.countsAsReview(comment.body, kind);
+  } catch (e) {
+    console.error('Could not read the review at ' + url + ', so it counts as posted: ' + e.message);
+    return true;
+  }
+}
+async function judgePost(channel, t) {
   const v = unposted(chOf(channel).prs[t.reviewOf], t);
-  if (v) { v.posted = t.posted.url; save(); holdPushes(channel); prComments.reviewPosted(channel, t.reviewOf, t.posted.url); }
-});
-terminal.onReviewDone((channel, t) => {
+  if (!v) return;
+  if (!(await bodyCounts(t.posted.url, v.kind))) { console.log('The review of ' + t.reviewOf + ' at ' + t.posted.url + ' has no verdict or no words, so it does not count.'); return; }
+  if (v.posted) return;
+  v.posted = t.posted.url; save(); holdPushes(channel); prComments.reviewPosted(channel, t.reviewOf, t.posted.url);
+  reviews.reviewCounted(channel, t.reviewOf);
+}
+terminal.onReviewPosted((channel, t) => { checking.set(t.sessionId, judgePost(channel, t).finally(() => checking.delete(t.sessionId))); });
+terminal.onReviewDone(async (channel, t) => {
+  await checking.get(t.sessionId);
   const rec = chOf(channel).prs[t.reviewOf];
   if (rec && rec.verdicts.some((x) => x.sessionId === t.sessionId && x.posted)) return;
-  if (isOn(channel) && t.reviewOf) note(channel, 'The review of PR ' + number(t.reviewOf) + ' was posted without a verdict, so it does not count. The next push brings another review.');
+  if (!isOn(channel) || !t.reviewOf) return;
+  const again = reviews.reviewEmpty(channel, t.reviewOf);
+  note(channel, 'The review of PR ' + number(t.reviewOf) + ' came back empty: it has no verdict line or no words on what was checked, so it does not count. ' + (again ? 'A new review starts.' : 'The person decides.'));
 });
 const looking = new Set();
 const CLOCK_SKEW_MS = 60 * 1000;
@@ -175,9 +198,10 @@ terminal.onReviewTurnEnd(async (channel, t) => {
     const login = JSON.parse(await gh(['api', 'user'])).login || null;
     const comments = JSON.parse(await gh(['api', '--paginate', '--slurp', 'repos/' + m[1] + '/issues/' + m[2] + '/comments?per_page=100'])).flat();
     const since = Math.min(Date.parse(t.startedAt) || Infinity, Date.parse(v.at) || Infinity) - CLOCK_SKEW_MS;
-    const url = plan.reviewPostFor(comments, { login, since, commit: v.commit });
+    const url = plan.reviewPostFor(comments, { login, since, commit: v.commit, kind: v.kind });
     if (!url || v.posted || rec.verdicts.some((x) => x.posted === url)) return;
     v.posted = url; save(); holdPushes(channel);
+    reviews.reviewCounted(channel, t.reviewOf);
     terminal.reviewFound(channel, t, url);
     prComments.reviewPosted(channel, t.reviewOf, url);
     note(channel, 'The review of PR ' + number(t.reviewOf) + ' at ' + v.commit.slice(0, 7) + ' is on the PR, though its post was not seen, so its verdict counts: ' + url);
