@@ -20,7 +20,11 @@ const WAIT_REASONS = { merge: 'Merge', rounds: 'Review rounds', protected: 'Prot
 const JAM_KINDS = {
   'no-first-review': 'No first review', 'desks-full': 'Desks full', 'news-untold': 'Review news untold', 'handed-over': 'Handed over',
   'waits-on-state': 'Waits on state', 'person-merge': 'Waits on a person merge', 'merged-not-done': 'Merged, not done', 'no-new-commit': 'No new commit',
-  'main-red': 'Main red', 'signing-key': 'Signing key', 'workflows-push': 'Workflows push', 'dev-idle': 'Dev idle', 'tunnel-down': 'Tunnel down', 'push-refused': 'Push refused', other: 'Other'
+  'main-red': 'Main red', 'signing-key': 'Signing key', 'workflows-push': 'Workflows push', 'dev-idle': 'Dev idle', 'tunnel-down': 'Tunnel down', 'push-refused': 'Push refused',
+  'stuck-job': 'Job never ends', 'stale-cache': 'Stale GitHub read', 'out-of-rounds': 'Out of review rounds', 'permission-prompt': 'Permission prompt',
+  'news-behind-menu': 'News behind a menu', 'dev-asks': 'Dev asks instead of acting', 'not-needed': 'Ticket not needed', 'handover-starts-new': 'Hand-over starts new work',
+  'flake-blocks': 'Flaky test blocks', 'push-hold-red-ci': 'Push hold on red CI', 'update-waits': 'Update waits',
+  other: 'Other'
 };
 const STALLS = Object.assign({}, JAM_KINDS, { 'dev-stopped': 'Dev stopped with no PR', silent: 'Session silent', 'not-started': 'Not started on its brief', 'brief-lost': 'Brief not delivered' });
 const BLOCKED_KIND = { 'reviewer-not-started': 'no-first-review', 'dev-gone': 'dev-stopped', 'brief-not-delivered': 'brief-lost', 'conflict-dropped': 'other' };

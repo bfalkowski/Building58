@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.10.0",
+    "version": "2.11.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -1303,7 +1303,7 @@
           "Jams"
         ],
         "summary": "Log jam",
-        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only, except the Lead's, which may write while Let the Lead unstick the board is on (403 forbidden while it is off), and then the jam is always by Lead, outcome fixed, and since is when the Lead first named the item with POST /stuck, if it did. Writes one jam you fixed by hand, {\"kind\", \"fix\", \"ticket\", \"pr\", \"since\", \"by\", \"outcome\", \"blocked\"}. outcome is fixed (the default), passed (passed to the person) or seen (seen and never acted on), and blocked is how many PRs a shared failure channel blocked. kind is one of no-first-review, desks-full, news-untold, handed-over, waits-on-state, person-merge, merged-not-done, no-new-commit, main-red, signing-key, workflows-push, dev-idle, tunnel-down, push-refused or other, and fix is one line of up to 200 characters. ticket and pr are ids with no spaces, since is when it got stuck (an ISO time, not in the future and not over 90 days ago), and by is you unless given. Anything else is 400 bad_param. See The jam log.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only, except the Lead's, which may write while Let the Lead unstick the board is on (403 forbidden while it is off), and then the jam is always by Lead, outcome fixed, and since is when the Lead first named the item with POST /stuck, if it did. Writes one jam you fixed by hand, {\"kind\", \"fix\", \"ticket\", \"pr\", \"since\", \"by\", \"outcome\", \"blocked\"}. outcome is fixed (the default), passed (passed to the person) or seen (seen and never acted on), and blocked is how many PRs a shared failure channel blocked. kind is one of no-first-review, desks-full, news-untold, handed-over, waits-on-state, person-merge, merged-not-done, no-new-commit, main-red, signing-key, workflows-push, dev-idle, tunnel-down, push-refused, stuck-job, stale-cache, out-of-rounds, permission-prompt, news-behind-menu, dev-asks, not-needed, handover-starts-new, flake-blocks, push-hold-red-ci, update-waits or other, and fix is one line of up to 200 characters. ticket and pr are ids with no spaces, since is when it got stuck (an ISO time, not in the future and not over 90 days ago), and by is you unless given. Anything else is 400 bad_param. See The jam log.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "logJam",
         "x-tokens": [
           "the Lead"
@@ -5462,6 +5462,17 @@
               "dev-idle",
               "tunnel-down",
               "push-refused",
+              "stuck-job",
+              "stale-cache",
+              "out-of-rounds",
+              "permission-prompt",
+              "news-behind-menu",
+              "dev-asks",
+              "not-needed",
+              "handover-starts-new",
+              "flake-blocks",
+              "push-hold-red-ci",
+              "update-waits",
               "other"
             ]
           },

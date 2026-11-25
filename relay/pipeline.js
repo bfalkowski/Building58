@@ -44,6 +44,7 @@ function gate(p, { heldAt, lastHead, now, grace }) {
   const waited = (since) => now - Math.max(since || 0, heldAt || 0) >= grace;
   if (!p) return { go: false, why: 'Asking GitHub about its checks.' };
   if (p.open === false) return { go: false, gone: true, why: 'It was ' + (p.prState === 'MERGED' ? 'merged' : 'closed') + ' before its review started.' };
+  if (p.conflict) return { go: false, conflict: true, why: 'It conflicts with main.' };
   if (p.state === 'unknown') return waited(p.since) ? { go: true, why: 'gh could not read its checks (' + p.error + '), so the review starts without them.' } : { go: false, why: 'gh could not read its checks: ' + p.error };
   if (lastHead && p.head === lastHead && !waited(0)) return { go: false, why: 'Waiting for GitHub to see the push.' };
   if (p.state === 'green') return { go: true };
@@ -63,7 +64,7 @@ async function view(pr, cwd, fresh) {
   try {
     const p = await gh.pr(pr, cwd, { fresh });
     const prState = String(p.state || 'OPEN').toUpperCase();
-    return { state: stateOf(p.statusCheckRollup), failed: failedOf(p.statusCheckRollup), head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' };
+    return { state: stateOf(p.statusCheckRollup), failed: failedOf(p.statusCheckRollup), conflict: p.mergeStateStatus === 'DIRTY' || p.mergeable === 'CONFLICTING', head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' };
   } catch (e) {
     return { state: 'unknown', error: e instanceof SyntaxError ? 'gh sent something unreadable' : e.message.slice(0, 160) };
   }
