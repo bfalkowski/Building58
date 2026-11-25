@@ -14,7 +14,7 @@
 //
 // Like the terminal, this answers only the room page on this machine, while RELAY_TERMINAL=1.
 'use strict';
-const { keepLines } = require('./clean.js');
+const { keepLines, noHidden } = require('./clean.js');
 const fs = require('fs');
 const path = require('path');
 const state = require('./state.js');
@@ -55,7 +55,7 @@ function of(channel) {
   return s;
 }
 const cap = (list, n) => { if (list.length > n) list.splice(0, list.length - n); };
-const clean = keepLines;
+const clean = (v, n) => keepLines(noHidden(v), n);
 const nameOf = (t) => clean(t.who || (t.role === 'coo' ? 'COO' : t.role === 'pm' ? 'PM' : t.lead ? 'Lead' : t.title) || 'Session ' + String(t.sessionId).slice(0, 8), 80);
 
 const sid = (ev) => String((ev && ev.session_id) || '');

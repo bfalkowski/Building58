@@ -219,10 +219,11 @@ test('Ask the COO: a session with its brief, that saves a report and gives back 
   assert.strictEqual((await R.call('GET', '/officers/coo/measures', null, otherToken)).status, 401);
   assert.strictEqual((await R.call('POST', '/officers/coo/report', { text: 'not mine' }, otherToken)).status, 401);
 
-  const saved = execFileSync('node', [CLI, 'report'], { env, encoding: 'utf8', input: '# The room\n\nShipped: T-1, T-2, T-3.\n' });
+  const saved = execFileSync('node', [CLI, 'report'], { env, encoding: 'utf8', input: '# The room\n\nShip\u202Eped: T-1, T-2\u200B, T-3.\n' });
   assert.match(saved, /Saved the report/);
   const shown = (await R.call('GET', '/officers/coo')).body;
-  assert.match(shown.report.text, /Shipped: T-1/);
+  assert.match(shown.report.text, /Shipped: T-1, T-2, T-3/);
+  assert.doesNotMatch(shown.report.text, /[\u200b-\u200f\u202a-\u202e\u2066-\u2069]/);
   // By the person the relay gave the COO's session (relay/seats.js), as the page shows it.
   assert.strictEqual(shown.report.by, (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === coo.id).who);
   assert.strictEqual(shown.report.measures, undefined, 'the page polls this, so the measures stay out');
