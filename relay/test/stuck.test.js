@@ -10,7 +10,7 @@ const fake = (name, exports) => { require.cache[require.resolve(name)] = { id: n
 fake('../terminal.js', { leadOf: () => ({ id: 'lead' }), onEnd() {} });
 fake('../tasks.js', { channels: () => ['t'], list: () => [], events: new (require('events'))() });
 fake('../delivery.js', { pending: () => pending, save: (c, d) => { saved.push(d); pending.splice(0, pending.length, d); }, drop: (c, k) => { const i = pending.findIndex((d) => d.key === k); if (i >= 0) pending.splice(i, 1); }, onStuck() {} });
-fake('../config.js', { get: () => 60, every() {}, onChange() {} });
+fake('../config.js', { get: (n) => (n === 'leadCheckMinutes' ? 60 : false), every() {}, onChange() {} });
 const stuck = require('../stuck.js');
 const lead = require('../lead-check.js');
 
@@ -62,4 +62,12 @@ test('a prompt that still waits is replaced by one with every open item', () => 
   assert.strictEqual(pending.length, 1);
   assert.match(pending[0].text, /first/);
   assert.match(pending[0].text, /second/);
+});
+
+test('a second new item prompts about itself, not the first one again', () => {
+  stuck.raise('t', { kind: 'main-red', id: 'main 1', text: 'first-item' });
+  pending.length = 0;
+  stuck.raise('t', { kind: 'handed-over', id: 'pr 2', text: 'second-item' });
+  assert.match(pending[0].text, /second-item/);
+  assert.doesNotMatch(pending[0].text, /first-item/);
 });

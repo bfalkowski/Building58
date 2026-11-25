@@ -55,6 +55,32 @@ test('a changed head is read from the next pass, and a fresh ask still goes to G
   assert.ok(log().pop().startsWith('pr view'));
 });
 
+test('a PR that left the open list is forgotten, so the next ask goes to GitHub', async () => {
+  say(ten.filter((n) => n !== 3).map((n) => node(n)));
+  await pass.once(new Map([['o/r', undefined]]));
+  const before = log().length;
+  await door.pr(link(3)).catch(() => {});
+  assert.ok(log().slice(before).some((l) => l.startsWith('pr view')), 'PR 3 was asked of GitHub');
+});
+
+test('a PR with more checks than one page holds is not served from the pass', async () => {
+  const big = node(8);
+  big.commits.nodes[0].commit.statusCheckRollup.contexts.pageInfo = { hasNextPage: true };
+  say(ten.filter((n) => n !== 3).map((n) => (n === 8 ? big : node(n))));
+  await pass.once(new Map([['o/r', undefined]]));
+  const before = log().length;
+  await door.pr(link(8)).catch(() => {});
+  assert.ok(log().slice(before).some((l) => l.startsWith('pr view')));
+});
+
+test('owner and name go as strings, so a repo named 123 or true still reads', async () => {
+  say([]);
+  await pass.once(new Map([['o/123', undefined]]));
+  const call = log().pop();
+  assert.match(call, /-f owner=o -f name=123/);
+  assert.doesNotMatch(call, /-F /);
+});
+
 test('Autopilot, PR comments, the PR watch and chat ask the pass, not their own gh pr view', () => {
   for (const file of ['autopilot.js', 'pr-comments.js', 'pr-watch.js', 'chat.js', 'pipeline.js']) {
     const text = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');

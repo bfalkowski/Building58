@@ -11,9 +11,9 @@ const { oneLine } = require('./clean.js');
 const { JAM_KINDS } = require('./metrics-plan.js');
 
 const OWNERS = {
-  'no-first-review': 'autopilot', 'desks-full': 'autopilot', 'news-untold': 'autopilot', 'merged-not-done': 'autopilot', 'no-new-commit': 'autopilot',
-  'waits-on-state': 'lead', 'dev-idle': 'lead', 'main-red': 'lead', 'tunnel-down': 'lead', 'push-refused': 'lead', other: 'lead',
-  'handed-over': 'person', 'person-merge': 'person', 'signing-key': 'person', 'workflows-push': 'person',
+  'no-first-review': 'autopilot', 'desks-full': 'autopilot', 'news-untold': 'autopilot', 'merged-not-done': 'autopilot', 'no-new-commit': 'autopilot', 'stale-cache': 'autopilot',
+  'waits-on-state': 'lead', 'dev-idle': 'lead', 'main-red': 'lead', 'tunnel-down': 'lead', 'push-refused': 'lead', 'stuck-job': 'lead', 'news-behind-menu': 'lead', 'dev-asks': 'lead', 'not-needed': 'lead', 'handover-starts-new': 'lead', 'flake-blocks': 'lead', 'push-hold-red-ci': 'lead', 'update-waits': 'lead', other: 'lead',
+  'handed-over': 'person', 'person-merge': 'person', 'signing-key': 'person', 'workflows-push': 'person', 'out-of-rounds': 'person', 'permission-prompt': 'person',
 };
 const events = new EventEmitter();
 const open = new Map();
