@@ -25,6 +25,7 @@
 // does not hold.
 'use strict';
 const fs = require('fs');
+const path = require('path');
 const { execFileSync } = require('child_process');
 const { livenessOf, jobWords } = require('./liveness.js');
 const config = require('./config.js');
@@ -52,7 +53,7 @@ function pushHeld(task, head) {
   const dir = task.worktree && pushHold.gitDirOf(task.worktree);
   if (!dir) return false;
   try {
-    const mark = JSON.parse(fs.readFileSync(require('path').join(dir, pushHold.MARK), 'utf8'));
+    const mark = JSON.parse(fs.readFileSync(path.join(dir, pushHold.MARK), 'utf8'));
     const at = head || execFileSync('git', ['-C', task.worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     return !!mark.commit && mark.commit === at;
   } catch (e) { return false; }
