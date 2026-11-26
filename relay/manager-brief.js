@@ -10,7 +10,7 @@ function managerBrief({ cli, skills }) {
     'Watch for stalls, waits on the person and the trust level. Lower the trust level only when work cannot get past a stall and a lower level would stop it; say why. ' +
     'When a stall needs the person, explain it in a short note on Needs you: what you saw, and what they can do. ' +
     'The room tells you when the jam log shows a kind of jam three times in a day, and once a day. Then read the jam log, the metrics and the hand-overs, and ask what keeps causing the jams: a missing check, a rule that makes sessions wait, a test that flakes, a step no one owns. ' +
-    'File one ticket for each cause that fixes the cause and not the symptom, with the jams you saw as evidence, and post a short note on the chat board. If the cause has a ticket, add the new evidence to it with node ' + cli + ' note ID, and do not file a second one. ' +
+    'File one ticket for each cause that fixes the cause and not the symptom, with the jams you saw as evidence, and post a short note on the chat board. If the cause has a ticket, add the new evidence to it with node ' + cli + ' note ID, and do not file a second one. Leave the priority alone: only the person sets it. ' +
     'Then wait. The room types to you when there is something to read. ' + skills).replace(/\s+/g, ' ').trim();
 }
 

@@ -40,7 +40,7 @@ const BOARD = {
 
 pageTest('the front office has the Lead and PM seats, and Up next lists Ready tickets with the PM\'s verdicts', get, async (p) => {
   const page = p.page;
-  await page.route(/\/channels\/t\/floor$/, (route) => route.fulfill({ json: { ok: true, sessions: [LEAD, PM, MANAGER], manager: { level: 3, levelName: 'The Lead starts tickets', lowersTrust: true, lastLowered: { at: '2026-11-25T10:30:00.000Z', from: 4, to: 3 }, watching: { kind: 'flake-blocks', label: 'Flaky test blocks', ticket: '77', fixed: true, outcome: { before: 4, after: 1, down: true, words: 'The fix merged. Jams of this kind: 4 a day before, 1 a day since, so it went down.' } }, coo: { running: false, last: '2026-11-24T09:15:00.000Z' } }, pm: { trust: 2, trustName: 'Hold and propose', sortHours: 4, nextSortAt: new Date(Date.now() + 3 * 3600000 + 40 * 60000).toISOString() }, leadEnded: null, mainRed: [] } }));
+  await page.route(/\/channels\/t\/floor$/, (route) => route.fulfill({ json: { ok: true, sessions: [LEAD, PM, MANAGER], manager: { level: 3, levelName: 'The Lead starts tickets', lowersTrust: true, lastLowered: { at: '2026-11-25T10:30:00.000Z', from: 4, to: 3 }, watching: { kind: 'flake-blocks', label: 'Flaky test blocks', ticket: '77', fixed: true, outcome: { before: 4, after: 1, down: true, words: 'The ticket is done. Jams of this kind: 4 a day before, 1 a day since, so it went down.' } }, coo: { running: false, last: '2026-11-24T09:15:00.000Z' } }, pm: { trust: 2, trustName: 'Hold and propose', sortHours: 4, nextSortAt: new Date(Date.now() + 3 * 3600000 + 40 * 60000).toISOString() }, leadEnded: null, mainRed: [] } }));
   await page.route(/\/channels\/t\/metrics\?range=1d/, (route) => route.fulfill({ json: { ok: true, numbers: { merged: 5, medianMinutes: 290 } } }));
   await p.open();
   const lead = page.locator('#seats .seat[data-seat="lead"]'), pm = page.locator('#seats .seat[data-seat="pm"]');
@@ -56,7 +56,7 @@ pageTest('the front office has the Lead and PM seats, and Up next lists Ready ti
   assert.match(text, /Manager[\s\S]*always on[\s\S]*Mo/);
   assert.match(text, /trust: 3 The Lead starts tickets/, 'the trust level');
   assert.match(text, /Lowered the trust level from 4 to 3 at /, 'the last time it lowered it');
-  assert.match(text, /Watching: Flaky test blocks jams, ticket 77\. The fix merged\. Jams of this kind: 4 a day before, 1 a day since, so it went down\./, 'the cause and whether the count went down');
+  assert.match(text, /Watching: Flaky test blocks jams, ticket 77\. The ticket is done\. Jams of this kind: 4 a day before, 1 a day since, so it went down\./, 'the cause and whether the count went down');
   assert.match(text, /Last COO report /, 'the COO\'s last report');
   assert.strictEqual(await manager.getAttribute('data-state'), '', 'no mark while it is neither stuck nor waiting');
   assert.strictEqual(await manager.locator('button[data-coo="ask"]').innerText(), 'Ask the COO');

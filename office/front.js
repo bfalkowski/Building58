@@ -91,7 +91,7 @@
     if (!m) return { rung: '', lines: [] };
     const lines = [];
     lines.push(m.lastLowered ? 'Lowered the trust level from ' + m.lastLowered.from + (m.lastLowered.to === null ? '' : ' to ' + m.lastLowered.to) + ' at ' + clock(m.lastLowered.at) + '.' : m.lowersTrust ? 'It has not lowered the trust level.' : 'It may not lower the trust level.');
-    if (m.watching) lines.push('Watching: ' + m.watching.label + ' jams, ticket ' + m.watching.ticket + '. ' + (m.watching.outcome ? m.watching.outcome.words : m.watching.fixed ? 'The fix merged.' : 'No fix has merged yet.'));
+    if (m.watching) lines.push('Watching: ' + m.watching.label + ' jams, ticket ' + m.watching.ticket + '. ' + (m.watching.outcome ? m.watching.outcome.words : m.watching.fixed ? 'The ticket is done.' : 'The ticket is not done yet.'));
     return { rung: m.level === null || m.level === undefined ? 'trust: no level' : 'trust: ' + m.level + (m.levelName ? ' ' + m.levelName : ''), lines };
   }
   function cooOf(m) {

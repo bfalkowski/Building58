@@ -1,7 +1,7 @@
 // The manager's reading of the jam log (relay/manager-jams.js), as plain functions the tests can give made-up
 // jams. A cause is a kind of jam logged BURST times or more in one day. Each cause has one ticket: the first look
 // files it with the jams as evidence, and a later look that sees new jams of the kind adds them to that ticket. When
-// the ticket is done, jams of the kind that come back make a new ticket. A rejected ticket is the person's answer,
+// the ticket is done, three or more new jams of the kind make a new ticket. A rejected ticket is the person's answer,
 // so nothing is filed again for it. See docs/manual/roles.html#manager-jams.
 'use strict';
 const { oneLine, keepLines } = require('./clean.js');
@@ -40,7 +40,7 @@ function decide(burst, cause, status) {
   const seen = new Set((cause && cause.seen) || []);
   const fresh = burst.jams.filter((j) => !seen.has(j.at));
   if (!cause || status === 'done' || status === undefined) {
-    if (cause && status === 'done' && !fresh.length) return { act: 'none' };
+    if (cause && status === 'done' && fresh.length < BURST) return { act: 'none' };
     return { act: 'file', earlier: cause && status === 'done' ? cause.ticket : null };
   }
   if (status === 'rejected') return { act: 'none' };
@@ -56,7 +56,7 @@ function outcomeOf(cause, jams, now) {
   const days = Math.max(1, (now - cause.fixedAt) / DAY);
   const after = (jams || []).filter((j) => j.kind === cause.kind && j.by !== 'autopilot' && Date.parse(j.at) >= cause.fixedAt).length;
   const rate = Math.round((after / days) * 10) / 10;
-  return { before: cause.before, after: rate, down: rate < cause.before, words: 'The fix merged. Jams of this kind: ' + cause.before + ' a day before, ' + rate + ' a day since' + (rate < cause.before ? ', so it went down.' : ', so it did not go down.') };
+  return { before: cause.before, after: rate, down: rate < cause.before, words: 'The ticket is done. Jams of this kind: ' + cause.before + ' a day before, ' + rate + ' a day since' + (rate < cause.before ? ', so it went down.' : ', so it did not go down.') };
 }
 
 module.exports = { DAY, BURST, bursts, ticketOf, decide, noteOf, outcomeOf, evidenceOf };

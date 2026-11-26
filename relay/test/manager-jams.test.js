@@ -25,7 +25,9 @@ test('one ticket for a cause: file it, add new jams to it, file again only when 
   const more = plan.bursts([jam('flake-blocks', 1)].concat(burst.jams), NOW)[0];
   assert.strictEqual(plan.decide(more, cause, 'ready', NOW).act, 'add');
   assert.deepStrictEqual(plan.decide(more, cause, 'rejected', NOW), { act: 'none' }, 'the person said no');
-  assert.deepStrictEqual(plan.decide(more, cause, 'done', NOW), { act: 'file', earlier: '9' });
+  assert.deepStrictEqual(plan.decide(more, cause, 'done', NOW), { act: 'none' }, 'one new jam after the fix is not three');
+  const back = plan.bursts([jam('flake-blocks', 1), jam('flake-blocks', 2), jam('flake-blocks', 3)].concat(burst.jams), NOW)[0];
+  assert.deepStrictEqual(plan.decide(back, cause, 'done', NOW), { act: 'file', earlier: '9' });
   assert.deepStrictEqual(plan.decide(burst, cause, 'done', NOW), { act: 'none' }, 'the same jams after the fix are not news');
   const t = plan.ticketOf(more, 'Flaky test blocks', '9');
   assert.match(t.title, /^Find why "Flaky test blocks" jams keep happening$/);
@@ -33,7 +35,7 @@ test('one ticket for a cause: file it, add new jams to it, file again only when 
   assert.match(t.body, /Ticket 9 was meant to stop this kind of jam/);
 });
 
-test('it says whether the jam count went down after the fix merged', () => {
+test('it says whether the jam count went down after the ticket was done', () => {
   const cause = { kind: 'flake-blocks', before: 4, fixedAt: NOW - 2 * 24 * 3600000 };
   assert.strictEqual(plan.outcomeOf(cause, [jam('flake-blocks', 60)], NOW).down, true);
   assert.strictEqual(plan.outcomeOf(cause, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => jam('flake-blocks', n * 10)), NOW).down, false);
@@ -68,6 +70,12 @@ test('with the same jam kind logged three times in a day, the manager files one 
   const chat = (await R.call('GET', '/chat/office')).body;
   assert.match(JSON.stringify(chat), /Filed ticket/);
   assert.strictEqual((await R.call('GET', '/tasks')).body.tasks.length, 0, 'nothing was started');
+
+  assert.strictEqual((await R.call('POST', '/tickets/' + filed.id + '/move', { to: 'rejected' })).status, 200);
+  const before = (await R.call('GET', '/manager')).body.looks;
+  await log('flake-blocks'); await log('flake-blocks'); await log('flake-blocks');
+  await H.until(async () => (await R.call('GET', '/manager')).body.looks >= before + 3, 'looks after the rejection');
+  assert.strictEqual((await mine()).length, 1, 'a rejected ticket files nothing more');
 });
 
 test('the daily text lists causes that have an open ticket, leaves out fixed ones, and keeps the instruction first', () => {
