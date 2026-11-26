@@ -1,0 +1,124 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 446,
+  "base": "e49a3ca7c06236c119b4e6ea39efd1ac584c8297",
+  "head": "8d19718c548ebbb02685c47757ee25727d716c38",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1590,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1599,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 829704
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 1212
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 178
+    }
+  ],
+  "verdict": "meets_policy",
+  "gaps": [],
+  "checks_by_author": {
+    "builder": 3,
+    "hidden": 0
+  },
+  "flaky_tests": [],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-26T14:06:12.140Z"
+}
