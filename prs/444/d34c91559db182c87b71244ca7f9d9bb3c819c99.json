@@ -1,0 +1,216 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 444,
+  "base": "e49a3ca7c06236c119b4e6ea39efd1ac584c8297",
+  "head": "d34c91559db182c87b71244ca7f9d9bb3c819c99",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "needs-you",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code",
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1590,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1591,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 3
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 1198759
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 1029
+    },
+    {
+      "type": "failing-before",
+      "params": {},
+      "kinds": [
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "test_files": [
+          "relay/test/desk.test.js",
+          "relay/test/pr-watch.test.js",
+          "relay/test/review-owed.test.js"
+        ],
+        "tests": [
+          {
+            "name": "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > an owed follow-up review says so, unless it waits on CI, a desk or a retry",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/pr-watch.test.js > test > a fix review, then a Dev reply on the PR and no push, starts a follow-up review of the same commit with the reply in its brief",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/review-owed.test.js > test > an owed follow-up review is owed to Autopilot, the card and Needs you say so, and nothing waits on the person",
+            "on_base": "failed"
+          }
+        ],
+        "passed_on_base": [
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > Autopilot waits for CI",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > a Lead that merges",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > a failed check goes back to the Dev",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > a first review that could not start tries again",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > a first review that could not start waits on the person",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > a first review waits for a desk",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > a follow-up review waits on CI",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > a reviewer is on it",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > automatic reviews used up",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > no Autopilot and no Lead that merges: the person",
+          "relay/test/desk.test.js > a Dev in review: its column, CI and review, and who moves it next > working now",
+          "relay/test/desk.test.js > a Dev's status icon says where its PR stands, with a label to read it by (T-141) > Done and Waiting on you come from the task",
+          "relay/test/desk.test.js > a Dev's status icon says where its PR stands, with a label to read it by (T-141) > a review running wins over CI, and a failed CI over an old verdict",
+          "relay/test/desk.test.js > a Dev's status icon says where its PR stands, with a label to read it by (T-141) > a verdict on an older commit no longer speaks: the push waits for its review",
+          "relay/test/desk.test.js > a Dev's status icon says where its PR stands, with a label to read it by (T-141) > each step, in the order the relay learns of them",
+          "relay/test/desk.test.js > a Dev's status icon says where its PR stands, with a label to read it by (T-141) > every status has an icon",
+          "relay/test/desk.test.js > a Dev's status icon says where its PR stands, with a label to read it by (T-141) > only a Dev with a task has one",
+          "relay/test/desk.test.js > a reviewer is paired with the Dev whose PR it reviews > a reviewer whose PR has no Dev on the Floor names only the PR",
+          "relay/test/desk.test.js > a reviewer is paired with the Dev whose PR it reviews > a row with no desk, or a reviewer with no PR, is left alone",
+          "relay/test/desk.test.js > a reviewer is paired with the Dev whose PR it reviews > the reviewer names the Dev, and the Dev names its reviewers",
+          "relay/test/desk.test.js > a task Waiting on you says why > Autopilot handed it over",
+          "relay/test/desk.test.js > a task Waiting on you says why > a hand-over shows its reason, not a GitHub state, even after the task left Waiting on you (PR 45)",
+          "relay/test/desk.test.js > a task Waiting on you says why > a permission prompt on its screen comes first",
+          "relay/test/desk.test.js > a task Waiting on you says why > the note on the move",
+          "relay/test/desk.test.js > test > a Dev told something that did not start: stuck, how long ago, and why, as a step that waits on you",
+          "relay/test/desk.test.js > test > a Done Dev still working is not safe to stop yet",
+          "relay/test/desk.test.js > test > a Done Dev with work not pushed is not safe to stop, and says why",
+          "relay/test/desk.test.js > test > a Done Dev: Done, safe to stop, with the reason",
+          "relay/test/desk.test.js > test > a posted reviewer: its ticket and column are those of the PR it reviewed",
+          "relay/test/desk.test.js > test > a reviewer still at work",
+          "relay/test/desk.test.js > test > a session the Floor calls safe, but not one of the two kinds, has no Safe to stop",
+          "relay/test/desk.test.js > test > the Lead is never safe to stop",
+          "relay/test/desk.test.js > test > the desk shows its ticket in the same Board column as the Board, from Needs you",
+          "relay/test/desk.test.js > test > the security officer writes its report, then waits for you to read it (review of PR 185)",
+          "relay/test/pr-watch.test.js > test > a PR found by its branch gets its first review, with the PR watch off",
+          "relay/test/pr-watch.test.js > test > a PR found by its branch that already has a review record gets no second review",
+          "relay/test/pr-watch.test.js > test > a PR that waits past the set time goes to the person",
+          "relay/test/pr-watch.test.js > test > a linked PR in Waiting on you with a protected file gets its first review",
+          "relay/test/pr-watch.test.js > test > a linked PR with no review record and all desks full waits in the desk queue",
+          "relay/test/pr-watch.test.js > test > a linked PR with no review record gets its first review while a check runs",
+          "relay/test/pr-watch.test.js > test > a linked PR with no review record gets its first review within one PR watch pass",
+          "relay/test/pr-watch.test.js > test > a relay that starts with a PR head newer than its last reviewed commit starts the follow-up review within one PR watch pass",
+          "relay/test/pr-watch.test.js > test > a task with no PR finds the open PR whose head is its branch, and no other. It asks no more once it has one, with the setting at 0, or with its folder gone",
+          "relay/test/pr-watch.test.js > test > a task with no PR is not looked up while the hourly GitHub budget is used up",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > a restart keeps what was done: the Dev is not told again",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > it is off by default, and does nothing then",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 1 again, then row 4: a new head gets a follow-up, and reviewed, green and clean tells the Lead",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 1: a PR with no review of its head, and no record of one, gets one",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 2: a conflict with main, then a failed check, each told once",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 2: blocking findings are told to the Dev once, and a Dev that does not start shows as stuck",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 3: commits in the Dev's checkout that the PR does not have, with the Dev idle: push",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 5: one line on the Floor, the Board and ticket.js floor"
+        ],
+        "did_not_load_on_base": []
+      },
+      "author": "builder",
+      "duration_ms": 829013
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 131
+    }
+  ],
+  "verdict": "meets_policy",
+  "gaps": [],
+  "checks_by_author": {
+    "builder": 4,
+    "hidden": 0
+  },
+  "flaky_tests": [
+    "relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > a fail while the relay still runs: it is stopped, saves its sessions, and Update goes back",
+    "relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > a fail: the new relay does not start, so Update checks out the last good commit and restarts on it",
+    "relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > and Update pulls nothing more until a person checks out main, and says why"
+  ],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-26T14:27:34.421Z"
+}
