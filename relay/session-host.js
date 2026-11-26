@@ -18,11 +18,12 @@
 // one, raises VERSION, and a new message goes in OPS with the new number.
 //   to the host:   { op: 'list' }, { op: 'spawn', id, cwd, env, cmd, cols, rows, meta },
 //                  { op: 'write', id, data (base64) }, { op: 'resize', id, cols, rows },
-//                  { op: 'hangup', id }, { op: 'kill', id, signal }
+//                  { op: 'hangup', id }, { op: 'kill', id, signal },
+//                  { op: 'end', id, pid }  ends one job of that session (relay/jobs.js), and only a job, never the session
 //   from the host: { op: 'list', version, sessions: [{ id, meta, cols, rows, exited, code, out (base64), jobs }] },
 //                  { op: 'out', id, data (base64) }, { op: 'exit', id, code },
-//                  { op: 'jobs', id, count, since }  when the commands its claude started and that still
-//                  run change (relay/jobs.js). jobs in the list is the last of these, or null.
+//                  { op: 'jobs', id, count, since, stuck: [{ pid, command, since }] }  when the commands its
+//                  claude started and that still run change, or one becomes stuck (relay/jobs.js). jobs in the list is the last of these, or null.
 'use strict';
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -34,8 +35,8 @@ const jobs = require('./jobs.js');
 const KEEP = 256 * 1024;
 const BRIDGE = path.join(__dirname, 'pty-bridge.py');
 const ENDING = 3000;
-const VERSION = 2;
-const OPS = { list: 1, spawn: 1, write: 1, resize: 1, hangup: 1, kill: 1 };
+const VERSION = 3;
+const OPS = { list: 1, spawn: 1, write: 1, resize: 1, hangup: 1, kill: 1, end: 3 };
 
 function serve(socket) {
   const sessions = new Map();
@@ -73,10 +74,11 @@ function serve(socket) {
     else if (m.op === 'write') s.child.stdin.write(Buffer.from(String(m.data), 'base64'));
     else if (m.op === 'resize') { s.cols = m.cols; s.rows = m.rows; s.child.stdio[3].write(m.cols + ' ' + m.rows + '\n'); }
     else if (m.op === 'hangup') s.child.stdin.end();
+    else if (m.op === 'end') jobs.endIn(s, Number(m.pid), () => {});
     else if (m.op === 'kill') { try { s.child.kill(m.signal || 'SIGTERM'); } catch (e) { /* gone */ } }
   }
 
-  jobs.watch(() => [...sessions.values()].filter((s) => !s.exited), (s, j) => { s.jobs = j; send({ op: 'jobs', id: s.id, count: j.count, since: j.since }); });
+  jobs.watch(() => [...sessions.values()].filter((s) => !s.exited), (s, j) => { s.jobs = j; send({ op: 'jobs', id: s.id, count: j.count, since: j.since, stuck: j.stuck }); });
 
   const server = net.createServer((conn) => {
     if (client) client.destroy();

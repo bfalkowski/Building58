@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.15.0",
+    "version": "2.16.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -1125,6 +1125,57 @@
             }
           }
         ]
+      }
+    },
+    "/channels/{channel}/floor/end-job": {
+      "post": {
+        "tags": [
+          "Floor"
+        ],
+        "summary": "End stuck job",
+        "description": "Ends one stuck job of a session, never the session. A job is stuck when its process tree used no CPU and its output file grew not at all for 30 minutes. Body {\"who\", \"pid\"}: pid is a stuck job's process id, and may be left out when the session has one. A job that is not stuck is refused with 409 and not_stuck. With the relay key, as End it on a Needs you line sends it, who is a terminal id. With a session's token, the Lead ends one by name or task id: only the token of a Lead you let move the board, and only while Let the Lead stop sessions is on, with Autopilot on or off. GET /floor lists each session's stuckJobs. See Stuck jobs.\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "endStuckJob",
+        "x-tokens": [
+          "a Lead you let move the board"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndedJob"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
       }
     },
     "/channels/{channel}/floor/stop": {
@@ -5403,6 +5454,29 @@
             ],
             "description": "lead for the Lead, pm for the PM the room keeps running, or null."
           },
+          "stuckJobs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pid": {
+                  "type": "number"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "minutes": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "pid",
+                "command",
+                "minutes"
+              ],
+              "additionalProperties": true
+            }
+          },
           "desk": {
             "type": "object"
           }
@@ -5415,6 +5489,39 @@
           "safe",
           "canStop",
           "why"
+        ],
+        "additionalProperties": true
+      },
+      "EndedJob": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "ended": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "terminal": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "name",
+              "terminal",
+              "pid"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "ok",
+          "ended"
         ],
         "additionalProperties": true
       },
