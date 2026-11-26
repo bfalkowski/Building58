@@ -97,3 +97,18 @@ test('the Lead ends a stuck job only with Let the Lead stop sessions on, and whi
   const again = await R.call('POST', '/floor/end-job', { who: row.name }, token);
   assert.strictEqual(again.status, 409, 'nothing is stuck now');
 });
+
+test('a Dev\'s own token cannot end a stuck job, and the Lead needs the board', async (t) => {
+  const o = await office({ RELAY_STUCK_JOB_SECOND_MS: '3600000', RELAY_LEAD_STOPS: '1' });
+  t.after(o.done);
+  const { R, dev, rowOf } = o;
+  const row = await until(async () => { const r = await rowOf(dev.id); return r.stuckJobs.length && r; }, 'the job to be called stuck');
+  const token = await until(() => { try { return { 'X-Office-Token': sessionToken(dev.sessionId) }; } catch (e) { return null; } }, 'the token');
+  const r = await R.call('POST', '/floor/end-job', { who: row.name }, token);
+  assert.strictEqual(r.status, 401);
+  assert.ok((await rowOf(dev.id)).stuckJobs.length, 'its job still runs');
+  const lead = (await R.call('POST', '/terminals', { cwd: o.repo })).body;
+  await R.call('POST', '/terminals/lead', { terminal: lead.id });
+  const leadToken = await until(() => { try { return { 'X-Office-Token': sessionToken(lead.sessionId) }; } catch (e) { return null; } }, 'the Lead token');
+  assert.strictEqual((await R.call('POST', '/floor/end-job', { who: row.name }, leadToken)).status, 401, 'a Lead without the board');
+});

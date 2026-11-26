@@ -8,7 +8,8 @@
 //      the jam log (relay/jams.js).
 // The person ends a stuck job at any time with End it on its Needs you line, and the Lead with POST
 // /floor/end-job while Let the Lead stop sessions is on, Autopilot on or off. The host ends only a
-// process that is a job of that session. Only a job the host calls stuck can be ended this way.
+// process that is a job of that session. The relay asks only for a job it holds as stuck, and the host checks only
+// that the process is a job of that session.
 // See docs/manual/roles.html#stuck-jobs.
 'use strict';
 const delivery = require('./delivery.js');
