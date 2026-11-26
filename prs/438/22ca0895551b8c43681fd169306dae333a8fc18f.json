@@ -1,0 +1,113 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 438,
+  "base": "b85ef53c4cf2e5ba02bdd84b3100a9d7ecbc2c24",
+  "head": "22ca0895551b8c43681fd169306dae333a8fc18f",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs"
+    ],
+    "risk": "medium",
+    "fix": true,
+    "fix_signal": "branch:fix/",
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1579,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1579,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 795459
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "missing",
+      "details": {
+        "test_files": [
+          "relay/test/browser/floor-layout.test.js"
+        ],
+        "tests": [],
+        "passed_on_base": [],
+        "did_not_load_on_base": []
+      },
+      "author": "builder",
+      "duration_ms": 396235
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 983
+    }
+  ],
+  "verdict": "needs_person",
+  "gaps": [
+    {
+      "type": "failing-before",
+      "status": "missing",
+      "how_to_fix": "No test that the change adds or changes fails on the base and passes on the head. Add a test that fails without the change and passes with it, and run exhibit check again. A flaky test never counts."
+    }
+  ],
+  "checks_by_author": {
+    "builder": 3,
+    "hidden": 0
+  },
+  "flaky_tests": [],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-26T15:15:24.966Z"
+}
