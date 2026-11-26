@@ -43,18 +43,22 @@ function usage(minutes) {
 }
 const top = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => k + ' ' + n).join(', ');
 
+const WRITES = ['merge', 'close', 'reopen', 'comment', 'edit', 'ready', 'review'];
+function dropAfterWrite(args) {
+  if (args[0] !== 'pr' || !WRITES.includes(args[1]) || !args[2]) return;
+  views.delete(args[2]);
+  flights.delete(args[2]);
+}
 function exec(args, { cwd, timeout = 30000, maxBuffer = 16 * 1024 * 1024, input, quiet } = {}) {
   if (!quiet) count(args);
   return new Promise((resolve) => {
-    const child = execFile(GH, args, { cwd: cwd && fs.existsSync(cwd) ? cwd : undefined, timeout, maxBuffer, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => resolve({ err, stdout: String(stdout || ''), stderr: String(stderr || '') }));
+    const child = execFile(GH, args, { cwd: cwd && fs.existsSync(cwd) ? cwd : undefined, timeout, maxBuffer, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => { dropAfterWrite(args); resolve({ err, stdout: String(stdout || ''), stderr: String(stderr || '') }); });
     if (child.stdin) { child.stdin.on('error', () => {}); child.stdin.end(input || ''); }
   });
 }
 const said = (r) => (r.err.code === 'ENOENT' ? 'gh is not installed' : r.err.killed ? 'gh did not answer in time' : String(r.stderr || r.err.message).trim().split('\n')[0].slice(0, 200) || 'gh failed');
-const WRITES = ['merge', 'close', 'reopen', 'comment', 'edit', 'ready', 'review'];
 async function run(args, opts) {
   const r = await exec(args, opts);
-  if (args[0] === 'pr' && WRITES.includes(args[1]) && args[2]) views.delete(args[2]);
   if (r.err) throw new Error(said(r));
   return r.stdout;
 }
@@ -95,7 +99,7 @@ function pr(link, cwd, opts) {
   if (flights.has(link) && !o.fresh) return flights.get(link);
   const p = run(['pr', 'view', link, '--json', FIELDS], { cwd, timeout: 30000 }).then((out) => {
     const value = JSON.parse(out);
-    views.set(link, { at: Date.now(), value });
+    if (flights.get(link) === p) views.set(link, { at: Date.now(), value });
     return value;
   }).finally(() => { if (flights.get(link) === p) flights.delete(link); });
   flights.set(link, p);
