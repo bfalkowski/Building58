@@ -450,6 +450,41 @@ function advise(channel, ticket, body, agent) {
   });
 }
 
+const SHA = /^[0-9a-f]{7,40}$/i;
+async function notNeeded(channel, ticket, body, agent) {
+  const no = (code, error, message) => [code, { ok: false, error, message }];
+  const own = agent && tasks.list(channel).find((x) => x.ticket === ticket.id && x.ticketAt === ticket.createdAt && x.owner && x.owner.terminal === agent.id);
+  if (!own) return no(403, 'forbidden', 'Only the Dev of the task of ' + ticket.id + ' closes it as not needed.');
+  const task = own;
+  if (task.state === 'done') return no(409, 'bad_move', 'This task is already done.');
+  if (task.pr || (task.history || []).some((h) => h.type === 'pr')) return no(409, 'has_pr', 'This task has a PR, so it is done when the PR merges.');
+  const commit = clean(body.commit);
+  const why = oneLine(body.why || '');
+  if (!SHA.test(commit)) return no(400, 'bad_commit', 'Give the commit that did the work, with --commit and its hash (7 to 40 hex digits).');
+  if (!why) return no(400, 'bad_why', 'Give the reason in one line, with --why.');
+  if (why.length > MAX_WHY) return no(400, 'bad_why', 'Keep the reason to ' + MAX_WHY + ' characters.');
+  let full;
+  try {
+    full = await tasks.git(task.repo, ['rev-parse', '--verify', '--quiet', commit + '^{commit}']);
+    await tasks.git(task.repo, ['merge-base', '--is-ancestor', full, task.base]);
+  } catch (e) { return no(409, 'not_on_main', 'The commit ' + commit + ' is not on ' + task.base + ', so the relay cannot take it as the work. Open a PR for the work instead.'); }
+  return inTurn(channel, async () => {
+    const live = task.state !== 'done' && tasks.list(channel).includes(task);
+    if (!live) return no(409, 'bad_move', 'This task is already done.');
+    await store.update(channel, ticket.id, { status: 'done', closedAs: 'not-needed', closedFor: [], notNeeded: { commit: full, why, by: agentName(agent) }, proposal: null });
+    tasks.setState(channel, task, 'done', 'Dev', 'Not needed: the work is on ' + task.base + ' in commit ' + full.slice(0, 10) + '. ' + why);
+    chat.archiveTicketRoom(channel, ticket.id, ticket.createdAt, 'the ticket was closed as not needed');
+    history.add(channel, ticket, { stage: 'not-needed', by: 'Dev', commit: full }, agent);
+    require('./jams.js').record(channel, { kind: 'not-needed', ticket: ticket.id, fix: oneLine('The Dev closed it as not needed: commit ' + full.slice(0, 10) + ' on ' + task.base + '. ' + why, 200), by: 'the relay' });
+    return [200, {}];
+  }).then(async (done) => {
+    if (done[0] !== 200) return done;
+    await addNote(channel, ticket, { text: 'Closed as not needed by its Dev. The work is on ' + task.base + ' in commit ' + full.slice(0, 10) + ': ' + why }, agent);
+    const fresh = await listAll(channel);
+    return [200, { ok: true, message: ticket.id + ' is closed as not needed, and this session ends.', ticket: await view(channel, fresh.find((t) => t.id === ticket.id) || ticket, fresh) }];
+  });
+}
+
 function setPlace(channel, ticket, body, agent) {
   const before = body.before === undefined ? null : String(body.before), after = body.after === undefined ? null : String(body.after);
   if ((before === null) === (after === null)) return [400, { ok: false, error: 'bad_param', message: 'Give one of "before" or "after": the id of the ticket to go next to.' }];
@@ -703,14 +738,14 @@ async function edit(channel, ticket, body, agent) {
 }
 
 async function handle(req, res, channel, rest, ctx) {
-  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|order|edit|propose|proposal|note|advice)|\/([\w-]{1,64}))?$/);
+  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|order|edit|propose|proposal|note|advice|not-needed)|\/([\w-]{1,64}))?$/);
   if (!route) { if (!/^\/tickets(\/|$)/.test(rest)) return false; ctx.problem(res, 404, 'not_found', 'Unknown ticket route.'); return true; }
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'Tickets need the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
   const [, ask, actOn, verb, id] = route;
   const body = req.method === 'POST' ? await ctx.readJson(req) : null;
-  let out;
+  let out, closing = null;
   try {
     if (ask === 'approve-ready' && req.method === 'POST') {
       if (ctx.agent) { ctx.problem(res, 401, 'unauthorized', 'Only the person approves tickets.'); return true; }
@@ -751,6 +786,10 @@ async function handle(req, res, channel, rest, ctx) {
         out = await advise(channel, ticket, body || {}, ctx.agent);
         if (ctx.agent && out[1].ok) ctx.log('The PM advised ' + ticket.id + ': ' + out[1].answer + '. ' + out[1].message);
       }
+      else if (req.method === 'POST' && verb === 'not-needed') {
+        out = await notNeeded(channel, ticket, body || {}, ctx.agent);
+        if (out[1].ok) { ctx.log('The Dev of ' + ticket.id + ' closed it as not needed.'); closing = ctx.agent; }
+      }
       else if (req.method === 'POST' && verb === 'proposal') {
         if (ctx.agent) { ctx.problem(res, 401, 'unauthorized', 'Only the person approves or declines a proposal.'); return true; }
         out = await decide(channel, ticket, body || {});
@@ -770,6 +809,7 @@ async function handle(req, res, channel, rest, ctx) {
   if (!out) { ctx.problem(res, 404, 'not_found', 'Unknown ticket route.'); return true; }
   if (req.method === 'POST' && out[1].ok) changed(channel);
   ctx.send(res, out[0], out[1]);
+  if (closing) terminal.stop(closing);
   return true;
 }
 

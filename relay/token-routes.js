@@ -21,7 +21,7 @@ function tokenReaches(agent, method, rest, seat) {
     ((agent.role === 'pm' || agent.lead) && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/order$/.test(rest)) ||
     ((agent.role === 'pm' || agent.lead) && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(edit|propose)$/.test(rest)) ||
     (agent.role === 'pm' && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/advice$/.test(rest)) ||
-    (!proposer && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/note$/.test(rest)) ||
+    (!proposer && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(note|not-needed)$/.test(rest)) ||
     (agent.lead && method === 'POST' && rest === '/reviews/lead') ||
     (agent.lead && method === 'POST' && rest === '/autopilot/fix') ||
     (method === 'POST' && rest === '/terminals/context') ||

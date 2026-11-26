@@ -162,6 +162,11 @@ test('real answers fit their schemas: tickets, tasks, sessions, the Floor, event
   fit('GET /tickets/{id}', await R.call('GET', '/tickets/' + made.ticket.id));
   fit('POST /tickets/{id}/edit', await R.call('POST', '/tickets/' + made.ticket.id + '/edit', { title: 'A ticket, edited', mark: 'hold' }));
   fit('POST /tickets/{id}/note', await R.call('POST', '/tickets/' + made.ticket.id + '/note', { text: 'A note.' }));
+  const owned = (await R.call('POST', '/tickets', { title: 'Already on main', repo })).body.ticket;
+  const ownedTask = (await R.call('POST', '/tickets/' + owned.id + '/start', {})).body.task;
+  const devT = agentHeaders(await until(() => { try { return sessionToken(ownedTask.owner.sessionId); } catch (e) { return null; } }, 'the Dev\'s token'));
+  const head = require('child_process').execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
+  fit('POST /tickets/{id}/not-needed', await R.call('POST', '/tickets/' + owned.id + '/not-needed', { commit: head, why: 'It is on main.' }, devT));
   const task = fit('POST /tasks', await R.call('POST', '/tasks', { title: 'Some work', repo })).task;
   await until(async () => (await R.screen(task.owner.terminal)).includes('GOT['), 'the task brief');
   fit('GET /tasks', await R.call('GET', '/tasks'));
@@ -189,9 +194,12 @@ test('the relay refuses each request that breaks its schema: a wrong type with b
   const task = (await R.call('POST', '/tasks', { title: 'To move', repo })).body.task;
   const reviewer = (await R.call('POST', '/terminals', { cwd: repo, role: 'reviewer', pr: 'https://github.com/o/r/pull/7', title: 'Review' })).body;
   const reviewerT = agentHeaders(await until(() => { try { return sessionToken(reviewer.sessionId); } catch (e) { return null; } }, 'the reviewer\'s token'));
-  const who = { 'POST /autopilot/verdict': reviewerT };
+  const owned = (await R.call('POST', '/tickets', { title: 'Own task', repo })).body.ticket;
+  const ownedTask = (await R.call('POST', '/tickets/' + owned.id + '/start', {})).body.task;
+  const devT = agentHeaders(await until(() => { try { return sessionToken(ownedTask.owner.sessionId); } catch (e) { return null; } }, 'the Dev\'s token'));
+  const who = { 'POST /autopilot/verdict': reviewerT, 'POST /tickets/{id}/not-needed': devT };
   const routes = { 'POST /tickets': ['/tickets', { title: 'Fine', repo }], 'POST /tickets/{id}/edit': ['/tickets/' + id + '/edit', { title: 'Fine' }],
-    'POST /tickets/{id}/note': ['/tickets/' + id + '/note', { text: 'Fine' }],
+    'POST /tickets/{id}/note': ['/tickets/' + id + '/note', { text: 'Fine' }], 'POST /tickets/{id}/not-needed': ['/tickets/' + owned.id + '/not-needed', { commit: 'abcdef1', why: 'Fine' }],
     'POST /tasks': ['/tasks', { title: 'Fine', repo }], 'POST /tasks/{id}/move': ['/tasks/' + task.id + '/move', { to: 'building' }],
     'POST /commands': ['/commands', { action: 'state', wait: false }], 'POST /autopilot/verdict': ['/autopilot/verdict', { kind: 'merge' }], 'POST /jams': ['/jams', { kind: 'other', fix: 'Fine' }] };
   assert.deepStrictEqual(Object.keys(routes).sort(), Object.keys(api.REQUESTS).sort(), 'each request schema is checked here');

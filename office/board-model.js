@@ -84,7 +84,7 @@
     return (WHO[p.by] || 'A session') + (p.by === 'you' ? ' propose' : ' proposes') + ' to ' + what + '.' + (p.why ? ' Why: ' + p.why : '');
   }
   const CLOSED = { replaced: 'replaced by ', merged: 'merged into ' };
-  const closedText = (t) => (t.closedAs === 'closed' ? 'closed' : CLOSED[t.closedAs] ? CLOSED[t.closedAs] + (t.closedFor || []).join(', ') : '');
+  const closedText = (t) => (t.closedAs === 'closed' ? 'closed' : t.closedAs === 'not-needed' ? 'not needed' : CLOSED[t.closedAs] ? CLOSED[t.closedAs] + (t.closedFor || []).join(', ') : '');
   function noteTime(at) {
     const d = new Date(at);
     if (!at || isNaN(d)) return 'time not recorded';

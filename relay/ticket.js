@@ -89,6 +89,10 @@
 //   node relay/ticket.js advise T-5 not-needed --why 'PR 376 put all of it on main'
 //   node relay/ticket.js advise T-5 duplicate --of T-3 --why 'Same work as T-3'
 //   node relay/ticket.js advise T-5 part-of --of T-8 --why 'It is one step of T-8'
+// Only the Dev of a ticket's own task can close it as not needed, when the work is already on its base and the task has no PR.
+// The relay checks the commit is on the base, notes the reason, moves the task and the ticket to Done (closedAs not-needed),
+// frees the slot, ends the Dev's session, and logs a not-needed jam by the relay:
+//   node relay/ticket.js not-needed T-5 --commit 7db2737 --why 'T-154 fixed it on main'
 // Only a session you made the Lead, while you have turned on Let the Lead unstick the board, can work stuck items.
 // The relay counts passes: an item named on three passes in a row with no action goes on Needs you with your reason:
 //   node relay/ticket.js stuck https://github.com/owner/repo/pull/12 --why 'Green for an hour, and no review is running' [--kind no-first-review]
@@ -133,6 +137,7 @@ function flags(args) {
     else if (args[i] === '--into') out.into = args[++i];
     else if (args[i] === '--why') out.why = args[++i];
     else if (args[i] === '--of') out.of = args[++i];
+    else if (args[i] === '--commit') out.commit = args[++i];
     else if (args[i] === '--fix') out.fix = args[++i];
     else if (args[i] === '--ticket') out.ticket = args[++i];
     else if (args[i] === '--pr') out.pr = args[++i];
@@ -254,6 +259,14 @@ async function main() {
     const f = flags(args.slice(2));
     if (f.rest.length) { console.error('Unknown words: ' + f.rest.join(' ') + '. Put the reason in --why \'One or two sentences\'.'); return 1; }
     const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/advice', { method: 'POST', headers, body: JSON.stringify({ answer: args[1], of: f.of, why: f.why }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log(r.message);
+    return 0;
+  }
+  if (cmd === 'not-needed' && args[0]) {
+    const f = flags(args.slice(1));
+    if (f.rest.length || !f.commit || !f.why) { console.error('Use: ticket.js not-needed T-5 --commit <sha> --why \'One line\''); return 1; }
+    const r = await (await fetch(URL_ + '/' + encodeURIComponent(args[0]) + '/not-needed', { method: 'POST', headers, body: JSON.stringify({ commit: f.commit, why: f.why }) })).json();
     if (!r.ok) { console.error(r.message); return 1; }
     console.log(r.message);
     return 0;

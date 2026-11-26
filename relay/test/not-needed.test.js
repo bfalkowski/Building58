@@ -1,0 +1,75 @@
+// T-490: the Dev of a ticket's own task closes it as not needed, with the commit on main that did the work.
+// The relay checks the commit, notes the reason, moves the task and the ticket to Done, frees the slot, ends
+// the Dev's session and logs a not-needed jam by the relay. Anyone else, and a commit not on main, get a refusal.
+'use strict';
+const { execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const test = require('node:test');
+const assert = require('node:assert');
+const H = require('./helpers.js');
+
+const git = (repo, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo, encoding: 'utf8' }).trim();
+
+test('the task\'s own Dev closes its ticket as not needed', async (t) => {
+  const R = await H.relay({});
+  t.after(R.stop);
+  const repo = H.makeRepo(R.home);
+  fs.writeFileSync(path.join(repo, 'fix.txt'), 'fixed\n');
+  git(repo, 'add', 'fix.txt');
+  git(repo, 'commit', '-qm', 'the fix');
+  const onMain = git(repo, 'rev-parse', 'HEAD');
+  git(repo, 'checkout', '-q', '-b', 'side');
+  fs.writeFileSync(path.join(repo, 'side.txt'), 'side\n');
+  git(repo, 'add', 'side.txt');
+  git(repo, 'commit', '-qm', 'not on main');
+  const offMain = git(repo, 'rev-parse', 'HEAD');
+  git(repo, 'checkout', '-q', 'main');
+
+  const file = async (title) => (await R.call('POST', '/tickets', { title, repo })).body.ticket;
+  const begin = async (ticket) => {
+    const task = (await R.call('POST', '/tickets/' + ticket.id + '/start', {})).body.task;
+    const token = await H.until(() => { try { return { 'X-Office-Token': H.sessionToken(task.owner.sessionId) }; } catch (e) { return null; } }, 'the Dev token');
+    return { task, token };
+  };
+  const close = (ticket, body, who) => R.call('POST', '/tickets/' + ticket.id + '/not-needed', body, who);
+  const mine = await file('Already done'), other = await file('Someone else');
+  const dev = await begin(mine), stranger = await begin(other);
+  const reviewer = (await R.call('POST', '/terminals', { cwd: repo, role: 'reviewer', pr: 'https://github.com/o/r/pull/7', title: 'Review' })).body;
+  const reviewerToken = await H.until(() => { try { return { 'X-Office-Token': H.sessionToken(reviewer.sessionId) }; } catch (e) { return null; } }, 'the reviewer token');
+  const unchanged = async () => {
+    const now = (await R.call('GET', '/tickets/' + mine.id)).body.ticket;
+    assert.strictEqual(now.status, 'started');
+    assert.strictEqual((await R.call('GET', '/tasks/' + dev.task.id)).body.task.state, 'building');
+  };
+
+  await t.test('a session that is not the task\'s Dev is refused', async () => {
+    for (const who of [stranger.token, reviewerToken, undefined]) {
+      const r = await close(mine, { commit: onMain, why: 'on main' }, who);
+      assert.strictEqual(r.status, 403, JSON.stringify(r.body));
+    }
+    await unchanged();
+  });
+  await t.test('a commit that is not on main, or is not a commit, is refused', async () => {
+    assert.strictEqual((await close(mine, { commit: offMain, why: 'x' }, dev.token)).body.error, 'not_on_main');
+    assert.strictEqual((await close(mine, { commit: 'deadbeef', why: 'x' }, dev.token)).body.error, 'not_on_main');
+    assert.strictEqual((await close(mine, { commit: 'nope', why: 'x' }, dev.token)).body.error, 'bad_commit');
+    assert.strictEqual((await close(mine, { commit: onMain, why: '' }, dev.token)).body.error, 'bad_why');
+    await unchanged();
+  });
+  await t.test('a commit on main closes the task and the ticket, frees the slot, ends the session and logs a jam', async () => {
+    const before = (await R.call('GET', '/tasks')).body.tasks.filter((x) => x.state === 'building' && x.worker).length;
+    const r = await close(mine, { commit: onMain.slice(0, 10), why: 'T-154 fixed it' }, dev.token);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const ticket = (await R.call('GET', '/tickets/' + mine.id)).body.ticket;
+    assert.deepStrictEqual([ticket.status, ticket.closedAs], ['done', 'not-needed']);
+    assert.strictEqual(ticket.notNeeded.commit, onMain);
+    assert.match(ticket.notes.at(-1).text, /T-154 fixed it/);
+    assert.strictEqual((await R.call('GET', '/tasks/' + dev.task.id)).body.task.state, 'done');
+    await H.until(async () => (await R.call('GET', '/tasks')).body.tasks.filter((x) => x.state === 'building' && x.worker).length === before - 1, 'the slot free: ' + 1);
+    await H.until(async () => !(await R.call('GET', '/terminals')).body.terminals.some((x) => x.sessionId === dev.task.owner.sessionId && x.running), 'the session ended');
+    const jams = (await R.call('GET', '/jams')).body.jams.filter((j) => j.kind === 'not-needed');
+    assert.deepStrictEqual(jams.map((j) => [j.ticket, j.by]), [[mine.id, 'the relay']]);
+    assert.match(jams[0].fix, /T-154 fixed it/);
+  });
+});

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.15.0",
+    "version": "2.16.0",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -4011,6 +4011,66 @@
         }
       }
     },
+    "/channels/{channel}/tickets/{id}/not-needed": {
+      "post": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Close ticket not needed",
+        "description": "{\"commit\", \"why\"}: the Dev of the ticket's own task closes it when the work is already on the task's base. commit is a hash of 7 to 40 hex digits that must be on the base (git merge-base --is-ancestor in the task's repo), and why is one line of up to 500 characters. The relay adds a note, moves the task and the ticket to Done with closedAs not-needed and notNeeded (the full commit, the reason and who), frees the slot, ends the Dev's session once it has answered, and writes a not-needed jam by the relay. 403 for any token that is not the Dev of this ticket's task, the person's key included. 409 not_on_main for a commit that is not on the base, has_pr for a task with a PR (it is done when the PR merges) and bad_move for a task that is done. 400 for a missing or malformed commit or reason. See When the work is already on main.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "closeTicketNotNeeded",
+        "x-tokens": [
+          "any session"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOne"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The ticket's id, such as T-5.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewNotNeeded"
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel}/tickets/{id}/note": {
       "post": {
         "tags": [
@@ -4596,7 +4656,10 @@
             "type": "string"
           },
           "by": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -4933,6 +4996,31 @@
             "labels": [
               "flaky"
             ]
+          }
+        ]
+      },
+      "NewNotNeeded": {
+        "type": "object",
+        "properties": {
+          "commit": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{7,40}$"
+          },
+          "why": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "commit",
+          "why"
+        ],
+        "additionalProperties": true,
+        "examples": [
+          {
+            "commit": "7db2737",
+            "why": "T-154 fixed it on main"
           }
         ]
       },
