@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const H = require('./helpers.js');
 const plan = require('../manager-jams-plan.js');
+const jamsMod = require('../manager-jams.js');
 
 const NOW = Date.parse('2026-11-25T12:00:00.000Z');
 const jam = (kind, minutesAgo, by) => ({ at: new Date(NOW - minutesAgo * 60000).toISOString(), kind, ticket: null, pr: null, since: null, fix: 'Fixed by hand.', by: by || 'you' });
@@ -67,4 +68,14 @@ test('with the same jam kind logged three times in a day, the manager files one 
   const chat = (await R.call('GET', '/chat/office')).body;
   assert.match(JSON.stringify(chat), /Filed ticket/);
   assert.strictEqual((await R.call('GET', '/tasks')).body.tasks.length, 0, 'nothing was started');
+});
+
+test('the daily text lists causes that have an open ticket, leaves out fixed ones, and keeps the instruction first', () => {
+  const kinds = [['stall', 4]];
+  const none = jamsMod.dailyText(kinds, []);
+  assert.match(none, /Causes that already have a ticket: none\./);
+  assert.match(none, /^Daily jam review\. File one ticket for each cause with no ticket/);
+  const text = jamsMod.dailyText(kinds, [{ kind: 'stall', ticket: 77 }, { kind: 'lint', ticket: 78, fixedAt: NOW }]);
+  assert.match(text, /stall.* is ticket 77/);
+  assert.doesNotMatch(text, /ticket 78/);
 });

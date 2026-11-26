@@ -36,6 +36,11 @@ function save() {
 const chOf = (channel) => { const c = store[channel] || (store[channel] = {}); return Object.assign(c, { causes: c.causes || {}, dailyAt: c.dailyAt || 0 }); };
 const label = (kind) => JAM_KINDS[kind] || kind;
 
+function dailyText(kinds, causes) {
+  const open = causes.filter((x) => !x.fixedAt).map((x) => label(x.kind) + ' is ticket ' + x.ticket).slice(0, 8);
+  return 'Daily jam review. File one ticket for each cause with no ticket, or add evidence to the ticket it has. Read the jam log, the metrics and the hand-overs, and ask what keeps causing them. Jams in the last 7 days by kind: ' + (kinds.length ? kinds.map(([k, n]) => label(k) + ' ' + n).join(', ') : 'none') + '. Causes that already have a ticket: ' + (open.join(', ') || 'none') + '.';
+}
+
 async function repoOf(channel, all) {
   const t = tasks.list(channel).find((x) => x.repo) || all.find((x) => x.repo);
   return t ? t.repo : null;
@@ -78,7 +83,7 @@ async function review(channel, now, log) {
     if (manager) {
       c.dailyAt = now;
       const kinds = Object.entries(list.filter((j) => now - Date.parse(j.at) < 7 * plan.DAY).reduce((m, j) => Object.assign(m, { [j.kind]: (m[j.kind] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1]).slice(0, 8);
-      const text = 'Daily jam review. Jams in the last 7 days by kind: ' + (kinds.length ? kinds.map(([k, n]) => label(k) + ' ' + n).join(', ') : 'none') + '. Causes that already have a ticket: ' + (Object.values(c.causes).map((x) => label(x.kind) + ' is ticket ' + x.ticket).join(', ') || 'none') + '. Read the jam log, the metrics and the hand-overs, and ask what keeps causing them. File one ticket for each cause with no ticket, or add evidence to the ticket it has.';
+      const text = dailyText(kinds, Object.values(c.causes));
       delivery.promptOnce(channel, manager.id, oneLine(text, 1000), (problem) => { if (problem) log('The daily jam review was not told to the manager: ' + problem); });
     }
   }
@@ -93,4 +98,4 @@ function watching(channel, now) {
   return { kind: cause.kind, label: label(cause.kind), ticket: cause.ticket, fixed: !!cause.fixedAt, outcome: plan.outcomeOf(cause, list, now) };
 }
 
-module.exports = { review, watching };
+module.exports = { review, watching, dailyText };
