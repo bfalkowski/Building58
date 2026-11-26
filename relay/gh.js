@@ -51,8 +51,10 @@ function exec(args, { cwd, timeout = 30000, maxBuffer = 16 * 1024 * 1024, input,
   });
 }
 const said = (r) => (r.err.code === 'ENOENT' ? 'gh is not installed' : r.err.killed ? 'gh did not answer in time' : String(r.stderr || r.err.message).trim().split('\n')[0].slice(0, 200) || 'gh failed');
+const WRITES = ['merge', 'close', 'reopen', 'comment', 'edit', 'ready', 'review'];
 async function run(args, opts) {
   const r = await exec(args, opts);
+  if (args[0] === 'pr' && WRITES.includes(args[1]) && args[2]) views.delete(args[2]);
   if (r.err) throw new Error(said(r));
   return r.stdout;
 }

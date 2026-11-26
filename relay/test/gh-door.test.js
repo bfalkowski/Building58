@@ -104,3 +104,16 @@ test('the files of a PR are listed once for a head', async () => {
   await door.files(PR, 'h2');
   assert.strictEqual(listed() - before, 2, 'a new head lists again');
 });
+
+test('a write to a PR drops its kept view, so the next look reads GitHub again', async () => {
+  for (const write of [['merge', '--merge'], ['close'], ['comment', '--body-file', '-'], ['edit', '--add-label', 'x'], ['ready']]) {
+    say({});
+    door.forget(PR);
+    await door.pr(PR);
+    door.waiting((pr) => pr === PR);
+    say({ prs: { [PR]: { state: 'MERGED', headRefOid: 'abc', statusCheckRollup: [] } } });
+    assert.strictEqual((await door.pr(PR)).state, 'OPEN', 'kept before the write');
+    await door.run(['pr', write[0], PR].concat(write.slice(1)));
+    assert.strictEqual((await door.pr(PR)).state, 'MERGED', 'gh pr ' + write[0] + ' drops the view');
+  }
+});
