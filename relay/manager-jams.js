@@ -78,7 +78,7 @@ async function review(channel, now, log) {
     if (manager) {
       c.dailyAt = now;
       const kinds = Object.entries(list.filter((j) => now - Date.parse(j.at) < 7 * plan.DAY).reduce((m, j) => Object.assign(m, { [j.kind]: (m[j.kind] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1]).slice(0, 8);
-      const text = 'Daily jam review. Jams in the last 7 days by kind: ' + (kinds.length ? kinds.map(([k, n]) => label(k) + ' ' + n).join(', ') : 'none') + '. Read the jam log, the metrics and the hand-overs, and ask what keeps causing them. File one ticket for each cause with no ticket, or add evidence to the ticket it has.';
+      const text = 'Daily jam review. Jams in the last 7 days by kind: ' + (kinds.length ? kinds.map(([k, n]) => label(k) + ' ' + n).join(', ') : 'none') + '. Causes that already have a ticket: ' + (Object.values(c.causes).map((x) => label(x.kind) + ' is ticket ' + x.ticket).join(', ') || 'none') + '. Read the jam log, the metrics and the hand-overs, and ask what keeps causing them. File one ticket for each cause with no ticket, or add evidence to the ticket it has.';
       delivery.promptOnce(channel, manager.id, oneLine(text, 1000), (problem) => { if (problem) log('The daily jam review was not told to the manager: ' + problem); });
     }
   }
