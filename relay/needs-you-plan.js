@@ -8,7 +8,8 @@
 //   writeLine(write) -> the line for one GitHub write that failed, which the ticket's card shows too
 //
 // A seat is one running session: { terminal, who, role, live, cause, message, screen, task, stuckWhy, spoke, fresh, continuing },
-// where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen,
+// where live and cause come from relay/liveness.js, screen is 'menu' or 'trust' when a question is on its screen (a menu
+// only once it has been open 5 minutes, and then menu is { text, choices } as the screen shows them, relay/known-prompts.js),
 // spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
 // says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, prMerged, prClosed, owner, note, reviewRuns, pipelineWaits,
@@ -82,7 +83,10 @@ function seatItem(s, t) {
   if (s.live === 'waiting' && PERMISSION.test(message)) return item('permission', 'Approve or deny the request from ' + who + ': ' + message);
   if (s.live === 'waiting') return item('question', 'Answer ' + who + ': ' + (message || 'it waits on you.'));
   if (s.screen === 'trust') return item('question', 'Answer the question on the screen of ' + who + ': does it trust this folder?');
-  if (s.screen === 'menu') return item('question', 'Answer the question on the screen of ' + who + '.');
+  if (s.screen === 'menu') {
+    const m = s.menu || {}, text = oneLine(m.text, 300), choices = (m.choices || []).map((c) => oneLine(c, 80)).filter(Boolean);
+    return item('question', 'Answer the question on the screen of ' + who + (text || choices.length ? ': ' + [text, choices.length ? 'Choices: ' + choices.join(' | ') : ''].filter(Boolean).join(' ') : '.'));
+  }
   if (s.live === 'stuck' && s.cause === 'told') return item('stuck', 'Open the session of ' + who + ': the relay told it something and it did not start' + (s.stuckWhy ? ', ' + oneLine(s.stuckWhy, 160) : '') + '.');
   if (s.role === 'Dev' && s.live === 'idle' && !s.fresh && !s.continuing && t && BUILDING.includes(t.state) && !t.pr) return item('prompt', 'Prompt ' + who + ': ' + (s.spoke === false ? 'it has not started on ' + nameOf(t) + '.' : 'it stopped on ' + nameOf(t) + ' with no PR.'));
   return null;

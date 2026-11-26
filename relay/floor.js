@@ -89,6 +89,10 @@ function seatsOf(channel) {
   const taskOf = taskFinder(channel);
   return terminal.all(channel).map((t) => seatOf(t, taskOf(t)));
 }
+function openMenu(t) {
+  const m = terminal.menuOf(t);
+  return m ? { text: m.text, choices: m.choices, since: new Date(m.since).toISOString() } : null;
+}
 function rowOf(channel, t, task, now, needs) {
   const work = terminal.workOfTerm(t) || {};
   const verdict = leadVerdict(channel, t, task, now);
@@ -98,6 +102,7 @@ function rowOf(channel, t, task, now, needs) {
     role: seat.role, ticket: seat.ticket, title: (task && task.title) || t.title || null,
     pr: work.pr || (task && task.pr) || t.pr || null, state: stateOf(t, now), stuck: t.stuck && t.state === 'idle' ? { minutesAgo: minutes(now - t.stuck.at), why: t.stuck.why } : null, message: t.message || null,
     reviewWaits: !!work.reviewWaits, minutesSinceHook: t.hooked ? minutes(now - t.lastActAt) : null, safe: verdict.safe, canStop: verdict.canStop, why: verdict.reason,
+    menu: openMenu(t),
     desk: deskFor(channel, t, task, work, verdict, now, needs),
     tired: t.lead ? tiredOf(t) : null,
     mergeHold: mergeHoldOf(channel, t, task, now),

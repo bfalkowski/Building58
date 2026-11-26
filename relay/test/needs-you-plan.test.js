@@ -32,6 +32,8 @@ test('a session that waits on an answer, or shows a question on its screen: answ
   const menu = listOf({ seats: [seat({ live: 'working', screen: 'menu' })] })[0];
   assert.strictEqual(menu.kind, 'question');
   assert.strictEqual(menu.line, 'Answer the question on the screen of Ada.');
+  const words = listOf({ seats: [seat({ live: 'idle', screen: 'menu', menu: { text: 'Which database first?', choices: ['1. Orders', '2. Customers'] } })] })[0];
+  assert.strictEqual(words.line, 'Answer the question on the screen of Ada: Which database first? Choices: 1. Orders | 2. Customers');
   const trust = listOf({ seats: [seat({ live: 'idle', screen: 'trust' })] })[0];
   assert.strictEqual(trust.line, 'Answer the question on the screen of Ada: does it trust this folder?');
   assert.deepStrictEqual(listOf({ seats: [seat({ live: 'gone', screen: 'menu' })] }), [], 'an ended session asks nothing');
