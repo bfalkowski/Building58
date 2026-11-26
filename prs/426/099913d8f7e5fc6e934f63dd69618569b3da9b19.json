@@ -1,0 +1,214 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 426,
+  "base": "2d115336c5024e2d8af90d5d8a5ec9c10ea4d309",
+  "head": "099913d8f7e5fc6e934f63dd69618569b3da9b19",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "needs-you",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code",
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1563,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1571,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 799406
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 973
+    },
+    {
+      "type": "failing-before",
+      "params": {},
+      "kinds": [
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "test_files": [
+          "relay/test/needs-you-plan.test.js",
+          "relay/test/push-hold-merge.test.js",
+          "relay/test/push-hold.test.js"
+        ],
+        "tests": [
+          {
+            "name": "relay/test/needs-you-plan.test.js > test > a push the push hold refused: look at the PR, with a Fix it that lifts the hold, ahead of the hand-over",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/needs-you-plan.test.js > test > the most urgent kind comes first, and every kind has a rule",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/push-hold-merge.test.js > under a push hold, a merge of main with a fix on a file it changed is pushed and reviewed again, and any other push is refused, shown and logged > a commit on a file the merge did not change is refused, and Needs you offers Fix it",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/push-hold-merge.test.js > under a push hold, a merge of main with a fix on a file it changed is pushed and reviewed again, and any other push is refused, shown and logged > the jam log has the refused push, once",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/push-hold-merge.test.js > under a push hold, a merge of main with a fix on a file it changed is pushed and reviewed again, and any other push is refused, shown and logged > the merge with a fix on a file it changed goes through, and a follow-up review of it starts",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/push-hold.test.js > test > a fix before the merge, or on a new file, is refused",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/push-hold.test.js > test > a refused push is noted, a later allowed push is noted after it, and the notes go with the mark",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/push-hold.test.js > test > under a push hold, a merge of main plus a commit that changes an unrelated file is refused, with what and why",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/push-hold.test.js > test > under a push hold, a merge of main plus a commit that changes only a file the merge changed is allowed",
+            "on_base": "failed"
+          }
+        ],
+        "passed_on_base": [
+          "relay/test/needs-you-plan.test.js > test > a Dev that stopped with no PR: prompt it",
+          "relay/test/needs-you-plan.test.js > test > a GitHub write that failed: one line for the issue, with GitHub's message and the next try, after the desks",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over stays a decision after review news moves its task out of Waiting on you",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over: decide on it, with its reason",
+          "relay/test/needs-you-plan.test.js > test > a PR merged on GitHub gives a Done line, and one closed with no merge gives a line with no Done",
+          "relay/test/needs-you-plan.test.js > test > a PR only the person may merge: merge it",
+          "relay/test/needs-you-plan.test.js > test > a PR whose automatic review could not start: get a review, with the reason (T-350)",
+          "relay/test/needs-you-plan.test.js > test > a hand-over whose Dev says a finding is a bug offers Fix it, and no other hand-over does",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev running: move the card, the Dev fixes it",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev stopped: bring the Dev back to fix it",
+          "relay/test/needs-you-plan.test.js > test > a posted merge verdict after the hand-over: merge the PR, unless newer commits need a review",
+          "relay/test/needs-you-plan.test.js > test > a saved message that has waited long for a running session: open that session, with why",
+          "relay/test/needs-you-plan.test.js > test > a session that asks for permission: approve it, at its seat",
+          "relay/test/needs-you-plan.test.js > test > a session that waits on an answer, or shows a question on its screen: answer it",
+          "relay/test/needs-you-plan.test.js > test > a session the relay told something that did not start: open it",
+          "relay/test/needs-you-plan.test.js > test > a task in Waiting on you: look at it, with the note that put it there",
+          "relay/test/needs-you-plan.test.js > test > a task whose session ended before a PR: bring it back",
+          "relay/test/needs-you-plan.test.js > test > another relay on the room's state folder: stop it, with its Stop button, before anything else",
+          "relay/test/needs-you-plan.test.js > test > no item twice for the same cause",
+          "relay/test/needs-you-plan.test.js > test > notes signed with another key give one line that names the fix",
+          "relay/test/needs-you-plan.test.js > test > nothing needs the person: the list is empty",
+          "relay/test/needs-you-plan.test.js > test > reviews wait for a desk and the relay may stop no session: one line names the wait, after the questions",
+          "relay/test/needs-you-plan.test.js > test > text from a session is cleaned to one line",
+          "relay/test/needs-you-plan.test.js > test > with no review after the hand-over, the line keeps Autopilot's reason",
+          "relay/test/push-hold.test.js > test > a merge of another branch is refused",
+          "relay/test/push-hold.test.js > test > a merge verdict on a commit older than the PR head does not hold the push",
+          "relay/test/push-hold.test.js > test > after a fix verdict, the mark is gone and a push works",
+          "relay/test/push-hold.test.js > test > after a merge verdict, a push of a merge of main is allowed, and new work after it is still refused",
+          "relay/test/push-hold.test.js > test > after a merge verdict, a push of new work is refused with the message",
+          "relay/test/push-hold.test.js > test > the mark follows the latest posted verdict, and goes once the PR merges or the task is Done"
+        ],
+        "did_not_load_on_base": []
+      },
+      "author": "builder",
+      "duration_ms": 795927
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 128
+    }
+  ],
+  "verdict": "meets_policy",
+  "gaps": [],
+  "checks_by_author": {
+    "builder": 4,
+    "hidden": 0
+  },
+  "flaky_tests": [],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-26T15:14:35.453Z"
+}
