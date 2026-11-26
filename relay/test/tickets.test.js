@@ -748,8 +748,8 @@ for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..'
     // The person adds one by giving it, and then a session can use it too.
     const chore = await R.call('POST', '/tickets', { title: 'Tidy the logs', repo: R.repo, kind: 'chore' });
     assert.strictEqual(chore.status, 201, JSON.stringify(chore.body));
-    assert.deepStrictEqual((await R.call('GET', '/tickets')).body.kinds, ['docs', 'tests', 'bug', 'feature', 'chore']);
-    assert.match(cli('kinds'), /^docs\ntests\nbug\nfeature\nchore\n$/);
+    assert.deepStrictEqual((await R.call('GET', '/tickets')).body.kinds, ['docs', 'tests', 'bug', 'feature', 'jam', 'chore']);
+    assert.match(cli('kinds'), /^docs\ntests\nbug\nfeature\njam\nchore\n$/);
     assert.match(cli('create', 'Another chore', '--kind', 'chore', '--body', 'Tidy'), /Filed:/);
 
     // Only the person changes it: a session's token cannot.
@@ -832,6 +832,7 @@ for (const [name, store] of [['local', ''], ['github', path.join(__dirname, '..'
     assert.match(cli('list'), /Another flaky test {2}\(labels flaky\)/);
     assert.match(cli('labels'), /^flaky\ntests\n$/);
     assert.throws(() => cli('create', 'A chore', '--label', 'chore', '--body', 'Tidy'), /Only the person adds a new label/);
+    assert.throws(() => cli('create', 'A manager note', '--label', 'manager', '--body', 'Look'), /Only the person adds a new label/, 'the manager\'s own label is not open to a session');
 
     // Only the person changes them: a session's token cannot.
     assert.strictEqual((await R.call('POST', '/tickets/' + flaky.id + '/edit', { labels: ['tests'] }, agent)).status, 403, 'not a session');

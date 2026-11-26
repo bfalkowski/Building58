@@ -43,7 +43,7 @@ const office = SESSIONS ? {
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
   config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), metrics: require('./metrics.js'), jams: require('./jams.js'), failures: require('./failures.js'), leadStuck: require('./lead-stuck.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), pmSort: require('./pm-sort.js'),
-  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js'), awake: require('./awake.js')
+  mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), managerWatch: require('./manager-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js'), awake: require('./awake.js')
 } : null;
 if (office) {
   const w = (ONE ? [ONE] : worlds()).find((x) => x.sessions && x.roster);
@@ -52,7 +52,7 @@ if (office) {
   }
 }
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
-const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'metrics', 'jams', 'failures', 'leadStuck', 'security', 'prWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
+const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'metrics', 'jams', 'failures', 'leadStuck', 'security', 'prWatch', 'managerWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -450,6 +450,7 @@ server.listen(PORT, HOST, async () => {
     autopilot.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.update.begin({ port: PORT, key: KEY, log });
     office.prWatch.begin({ log });
+    office.managerWatch.begin({ log });
     office.tasks.begin({ log });
     office.ready.begin({ log });
     office.failures.begin();
@@ -459,6 +460,8 @@ server.listen(PORT, HOST, async () => {
     hooksOpen = true;
     replayHooks(hookQueue.take(stateDir()).concat(earlyHooks.splice(0)).sort((a, b) => a.event.at - b.event.at));
     setTimeout(() => replayHooks(hookQueue.take(stateDir())), 3000).unref();
+    require('./stuck.js').begin();
+    require('./github-pass.js').begin();
     leadCheck.begin();
     pmSort.begin();
     checkouts.sweep().catch((e) => log('Could not tidy the checkouts: ' + e.message));

@@ -152,7 +152,7 @@
   function openSettings(at) {
     $('settings-said').textContent = ''; settingsDlg.showModal(); sync();
     const head = at && $(at);
-    if (head) head.closest('section').scrollIntoView({ block: 'start' });
+    if (head) { window.settingsTabs.showFor(head); head.closest('section').scrollIntoView({ block: 'start' }); }
   }
   settingsBtn.addEventListener('click', () => openSettings());
   $('settings-close').addEventListener('click', () => settingsDlg.close());
@@ -165,6 +165,15 @@
     line.append(...controls); row.append(line, p); $(into).append(row);
     return { row, what: p };
   }
+  function markRow(row, on) {
+    if (!row) return;
+    row.dataset.changed = on ? 'true' : 'false';
+    let mark = row.querySelector('.set-mark');
+    if (!mark) { mark = document.createElement('span'); mark.className = 'set-mark'; mark.textContent = 'changed'; mark.title = 'Not the default'; row.firstElementChild.append(mark); }
+    mark.hidden = !on;
+  }
+  const standard = [];
+  const markExtras = () => { for (const [row, on] of standard) markRow(row, on()); };
   const summary = { reviews: '', autopilot: '', lead: '', huddle: '' }, summaryOn = { reviews: false, autopilot: false, lead: false, huddle: false };
   const CHIPS = [['autopilot', 'set-ap-title', 'Autopilot'], ['lead', 'set-lead-title', 'The Lead'], ['reviews', 'set-reviews-title', 'Reviews'], ['huddle', 'set-huddle-title', 'Huddle']];
   const chips = CHIPS.map(([k, at, name]) => {
@@ -176,7 +185,9 @@
     return b;
   });
   const huddleBox = $('huddle-lead');
+  standard.push([$('huddle-lead-label'), () => !huddleBox.checked]);
   huddleBox.addEventListener('change', () => {
+    markExtras();
     summary.huddle = huddleBox.checked ? 'Huddle: tells the Lead' : 'Huddle: Floor only';
     summaryOn.huddle = false;
     drawSummary();
@@ -189,7 +200,7 @@
     { n: 0, name: 'You drive', want: { auto: true, again: false, board: false, stops: false, merge: false, starts: false, autopilot: false, exhibit: false },
       what: 'The relay reviews each new PR one time and sends the findings to the Dev. You start, move and merge all work.' },
     { n: 1, name: 'Review loop', rung: 'rung 1, with its limit on rounds', want: { auto: true, again: true, board: false, stops: false, merge: false, starts: false, autopilot: false, exhibit: false },
-      what: 'After each push, a reviewer checks the new commits. The Dev fixes and the reviewer checks again, without you. Each PR gets a limited number of automatic reviews: 3, unless you change it under Limits and timings. You start, move and merge all work.' },
+      what: 'After each push, a reviewer checks the new commits. The Dev fixes and the reviewer checks again, without you. Each PR gets a limited number of automatic reviews: 3, unless you change it on the Reviews and PRs tab. You start, move and merge all work.' },
     { n: 2, name: 'The Lead keeps work moving', rung: 'rung 2', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: false, autopilot: false, exhibit: false },
       what: 'The Lead moves cards on the Board and accepts tickets from Triage. It also stops sessions that are safe to stop. You start and merge work.' },
     { n: 3, name: 'The Lead starts tickets', rung: 'rung 3, the start rung', want: { auto: true, again: true, board: true, stops: true, merge: false, starts: true, autopilot: false, exhibit: false },
@@ -217,7 +228,8 @@
     return input;
   });
   const monitor = document.createElement('p'); monitor.className = 'set-what'; monitor.textContent = 'Rung 5 is not built yet. It is a monitor that watches what shipped and files tickets.';
-  $('set-levels').append(levelsBox, monitor, levelsApply, levelsNote);
+  const brakeNote = document.createElement('p'); brakeNote.className = 'set-what'; brakeNote.id = 'set-brake-note';
+  $('set-levels').append(levelsBox, monitor, levelsApply, brakeNote, levelsNote);
   function switchesNow() {
     if (!trust.reviews || !trust.autopilot || !trust.settings) return null;
     return { auto: trust.reviews.auto, again: trust.reviews.again, board: !!(boardTerm && boardTerm.board), stops: !!settingOf('leadStops'), merge: !!(boardTerm && boardTerm.merge), starts: !!(boardTerm && boardTerm.starts), autopilot: !!trust.autopilot.on, exhibit: !!settingOf('autopilotExhibit') };
@@ -226,6 +238,7 @@
   const NAMES = { auto: 'Review PRs automatically', again: 'Review again after each push', board: 'Let the Lead move the board', stops: 'Let the Lead stop sessions', merge: 'Let the Lead merge', starts: 'Let the Lead start tickets', autopilot: 'Autopilot', exhibit: 'Merge only when Exhibit passes' };
   function levelNow(now) { const L = now && LEVELS.find((x) => KEYS.every((k) => wantOf(x)[k] === now[k])); return L ? L.n : null; }
   function drawLevels() {
+    markExtras();
     const now = switchesNow();
     if (!now) return;
     const at = levelNow(now), pick = trust.pick !== null ? trust.pick : at;
@@ -252,8 +265,8 @@
     drawSettings(r.ok ? r : await api('', undefined, '/settings'));
   }
   function skillsText(x) {
-    const list = x.skills || [], missing = list.filter((s) => !s.installed), manual = list.filter((s) => s.manual);
-    return (list.length ? ' · ' + (missing.length ? 'not found: ' + missing.map((s) => s.name).join(', ') : 'all installed') : '') +
+    const list = x.skills || [], missing = list.filter((s) => !s.installed), have = list.filter((s) => s.installed), manual = list.filter((s) => s.manual);
+    return (have.length ? ' · installed: ' + have.map((s) => s.name).join(', ') : '') + (missing.length ? ' · missing: ' + missing.map((s) => s.name).join(', ') + ' (the brief leaves them out)' : '') +
       (manual.length ? ' · read from its file: ' + manual.map((s) => s.name).join(', ') : '');
   }
   function fromText(x) { return x.from === 'page' ? 'set here' + (x.env ? ' (replaces ' + x.env + ')' : '') : x.from === 'env' ? 'from ' + x.env + ' at startup' : 'default'; }
@@ -292,16 +305,14 @@
     const shape = r.settings.map((x) => x.name).join();
     if (shape !== settingsDrawnFor) {
       settingsDrawnFor = shape; settingInputs.clear();
-      const box = $('set-limits'); box.textContent = '';
+      for (const e of document.querySelectorAll('#settings [id^="set-cfg-"]')) e.textContent = '';
       const models = document.createElement('datalist'); models.id = 'set-models';
       for (const m of ['opus', 'sonnet', 'haiku']) { const o = document.createElement('option'); o.value = m; models.append(o); }
-      box.append(models);
-      $('set-lead-stops').textContent = '';
-      let group = null;
+      $('set-cfg-roles').append(models);
       for (const x of r.settings) {
-        if (x.name === 'leadStops' || x.name === 'leadOrder' || x.name === 'leadUnstick' || x.name === 'leadReviews') { const row = document.createElement('div'); row.className = 'set-row'; const line = document.createElement('div'), p = document.createElement('p'); p.className = 'set-what'; p.textContent = x.what; line.append(...settingControl(x)); row.append(line, p); $('set-lead-stops').append(row); continue; }
-        if (x.group !== group) { group = x.group; const h = document.createElement('h4'); h.textContent = group; box.append(h); }
-        settingRow('set-limits', settingControl(x), x.what);
+        if (!$('set-cfg-' + x.tab)) continue;
+        const made = settingRow('set-cfg-' + x.tab, settingControl(x), x.what);
+        settingInputs.get(x.name).row = made.row;
       }
     }
     for (const x of r.settings) {
@@ -312,10 +323,15 @@
       c.from.textContent = fromText(x) + (x.kind === 'skills' ? skillsText(x) : x.kind === 'bool' || x.kind === 'text' ? '' : ' · ' + x.min + ' to ' + x.max + (x.from === 'default' ? '' : ' · default ' + x.def))
         + (x.name === 'leadReviews' && !x.value && trust.autopilot && trust.autopilot.on ? ' · on while Autopilot runs' : '');
       c.reset.hidden = x.from !== 'page';
+      markRow(c.row, JSON.stringify(x.value) !== JSON.stringify(x.def));
     }
     drawLevels();
   }
-  const syncSettings = () => api('', undefined, '/settings').then(drawSettings);
+  const syncSettings = () => Promise.all([api('', undefined, '/settings').then(drawSettings), api('', undefined, '/manager').then((m) => {
+    const last = m && m.ok && Array.isArray(m.lowered) ? m.lowered[m.lowered.length - 1] : null;
+    brakeNote.textContent = last ? 'The manager lowered the trust level on ' + new Date(last.at).toLocaleString() + ': ' + last.said : '';
+    brakeNote.hidden = !last;
+  })]);
 
   levelsApply.addEventListener('click', async () => {
     const L = LEVELS[trust.pick !== null ? trust.pick : -1], now = switchesNow();
@@ -351,12 +367,13 @@
   autoBox.type = 'checkbox'; autoBox.style.flex = 'none'; autoBox.disabled = true;
   autoBox.addEventListener('change', () => setReviews({ auto: autoBox.checked }));
   autoLabel.append(autoBox, ' Review PRs automatically');
-  settingRow('set-reviews', [autoLabel], 'When a session opens a PR, the relay starts a reviewer. The reviewer reads the PR, posts its findings and leaves its desk. Off: no reviewer starts until you press Get a review. But if Review again after each push is on, a PR that had a review still gets follow-up reviews.');
+  const autoRow = settingRow('set-reviews', [autoLabel], 'When a session opens a PR, the relay starts a reviewer. The reviewer reads the PR, posts its findings and leaves its desk. Off: no reviewer starts until you press Get a review. But if Review again after each push is on, a PR that had a review still gets follow-up reviews.');
   const againLabel = document.createElement('label'), againBox = document.createElement('input');
   againBox.type = 'checkbox'; againBox.style.flex = 'none'; againBox.disabled = true;
   againBox.addEventListener('change', () => setReviews({ again: againBox.checked }));
   againLabel.append(againBox, ' Review again after each push');
   const againRow = settingRow('set-reviews', [againLabel], '');
+  standard.push([autoRow.row, () => !!trust.reviews && !trust.reviews.auto], [againRow.row, () => !!trust.reviews && trust.reviews.again]);
   let reviewsSet = 0;
   async function setReviews(body) {
     reviewsSet++;
@@ -390,6 +407,7 @@
   apSays.setAttribute('aria-live', 'polite');
   apLabel.append(apBox, ' Autopilot');
   const apRow = settingRow('set-autopilot', [apLabel], '');
+  standard.push([apRow.row, () => !!trust.autopilot && trust.autopilot.on]);
   apSays.className = 'set-now';
   apRow.what.after(apSays);
   settingRow('set-autopilot', [apOnly], 'Type the tickets that Autopilot may start, like T-12, T-15, or labels, like flaky, or both. A label lets in every ticket that has it, also one you label while Autopilot runs. Leave it empty to let it start every Ready ticket that a person approved, in Board order. Type the list before you turn Autopilot on. You cannot change it while Autopilot is on. When you turn Autopilot off, the list is cleared.');
@@ -603,11 +621,11 @@
   });
   const boardBtn = document.createElement('button');
   boardBtn.type = 'button'; boardBtn.className = 'btn'; boardBtn.id = 'cc-lead-board';
-  settingRow('set-lead', [boardBtn], 'The Lead moves tasks and tickets on the Board, and accepts tickets from Triage. Off: the Lead reads the Board and tells you what to move.');
+  const boardRow = settingRow('set-lead', [boardBtn], 'The Lead moves tasks and tickets on the Board, and accepts tickets from Triage. Off: the Lead reads the Board and tells you what to move.');
   let boardTerm = null, boardHolder = null;
   const mergeBtn = document.createElement('button');
   mergeBtn.type = 'button'; mergeBtn.className = 'btn'; mergeBtn.id = 'cc-lead-merge';
-  settingRow('set-lead', [mergeBtn], 'The Lead merges a PR when all of these are true: a review of the latest commit is posted, each blocking finding is fixed, all checks pass, the PR merges into main with no conflicts, and no decision is left for you. This is the merge rung (constitution, article 5). The Lead never merges a change to CLAUDE.md or the constitution. Off: the Lead does not merge. When you change this, the Lead gets its brief again.');
+  const mergeRow = settingRow('set-lead', [mergeBtn], 'The Lead merges a PR when all of these are true: a review of the latest commit is posted, each blocking finding is fixed, all checks pass, the PR merges into main with no conflicts, and no decision is left for you. This is the merge rung (constitution, article 5). The Lead never merges a change to CLAUDE.md or the constitution. Off: the Lead does not merge. When you change this, the Lead gets its brief again.');
   let mergeHolder = null;
   const startsBox = document.createElement('span'); startsBox.id = 'cc-lead-starts';
   const startsBtn = document.createElement('button'); startsBtn.type = 'button'; startsBtn.className = 'btn';
@@ -617,6 +635,7 @@
   totalPick.value = '3';
   startsBox.append(startsBtn, ' ', startsPick, ' ', totalPick);
   const startsRow = settingRow('set-lead', [startsBox], 'The Lead starts Ready tickets that you approved, one at a time. First number: it starts a ticket only while fewer tasks than this are building. Second number: how many tickets it may start in total. After its last start, this goes off. When you turn it off, work already started continues.');
+  standard.push([boardRow.row, () => !!(boardTerm && boardTerm.board)], [mergeRow.row, () => !!(boardTerm && boardTerm.merge)], [startsRow.row, () => !!(boardTerm && boardTerm.starts)]);
   let startsHolder = null, startsMax = 0, lastStartSeen;
   function drawStarts(r) {
     const max = (r.wipLimit || 0) - 1;

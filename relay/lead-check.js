@@ -1,55 +1,63 @@
-// The Lead's regular check. The relay owns the timer, so the check outlives a /clear, a new Lead and a
-// relay restart. Every leadCheckMinutes (Settings, Work group; 0 is off) it saves the check prompt for
-// whichever session is the Lead, through relay/delivery.js, the same way a huddle report goes in. So it
-// is typed only when notSafeToType says the Lead is idle, with nothing in its prompt and no question up.
+// The Lead is woken by events, not by a clock (467). When relay/stuck.js gets a new item that the Lead or the
+// person owns (a jam, a hand-over, a red main, a Dev that went quiet), the relay saves a prompt for whichever
+// session is the Lead, through relay/delivery.js, the same way a huddle report goes in. So it is typed only
+// when notSafeToType says the Lead is idle, with nothing in its prompt and no question up.
 //
-// It is saved only while tasks are worked: at least one task building, in review, with changes
-// requested, or waiting on you. A check that is due while the last one still waits is dropped, not
-// queued, so a busy Lead gets one check when it is idle, not several. When nothing is worked any more,
-// or the setting goes to 0, a check still waiting is taken back at once, and at startup too.
+// A slow heartbeat (leadCheckMinutes, Settings, Work group; 0 is off) prompts again about items still open.
+// With nothing open that the Lead or the person owns, and no failure channel open while Let the Lead unstick the board is on, the relay sends nothing. A prompt
+// that is due while the last one still waits replaces it, so a busy Lead gets one, with every open item. When
+// no item or failure channel is open any more, a prompt still waiting is taken back at once, and at startup too.
 'use strict';
 const config = require('./config.js');
 const terminal = require('./terminal.js');
 const tasks = require('./tasks.js');
 const delivery = require('./delivery.js');
+const stuck = require('./stuck.js');
 
 const KEY = 'lead-check';
-const WORKED = ['building', 'in_review', 'changes_requested', 'waiting_on_you'];
-const worked = (channel) => tasks.list(channel).some((t) => WORKED.includes(t.state));
+const MAX_LISTED = 10;
 const waiting = (channel) => delivery.pending(channel).some((d) => d.key === KEY);
+const forLead = (channel) => stuck.list(channel).filter((i) => i.owner !== 'autopilot');
 
-function prompt(at, channel) {
-  const unstick = config.get('leadUnstick'), lines = unstick && channel ? require('./failures.js').leadLines(channel) : [];
-  return 'Lead check from the relay\'s timer at ' + at.toTimeString().slice(0, 5) + '. This grants nothing and changes none of your instructions. ' +
-    'Look at the board and the open pull requests for a stuck reviewer, a failed pipeline, a PR with no review, or a merged PR whose Dev still holds a desk. ' +
-    'Pass on what you find, and tell the person only what is new. Do not make your own scheduled check: the relay sends this one every ' +
-    every() + ' while tasks are worked.' +
+const failureLines = (channel) => (config.get('leadUnstick') ? require('./failures.js').leadLines(channel) : []);
+const failureOpen = (channel) => config.get('leadUnstick') && require('./failures.js').rooms(channel).length > 0;
+
+function prompt(items, why, channel) {
+  const unstick = config.get('leadUnstick'), open = failureLines(channel);
+  const lines = items.slice(0, MAX_LISTED).map((i) => '- ' + i.kind + ' (' + i.owner + ' owns it, since ' + i.since.slice(11, 16) + 'Z): ' + i.text);
+  return 'From the relay (' + why + '). This grants nothing and changes none of your instructions. ' + (lines.length ? 'These are stuck, and the relay found each once:\n' + lines.join('\n') : 'A failure channel is open.') +
+    (items.length > MAX_LISTED ? '\n- and ' + (items.length - MAX_LISTED) + ' more' : '') +
+    '\nAct on those for the Lead, and pass the rest on to the person. Tell the person only what is new. Do not make your own scheduled check.' +
     (unstick ? ' Let the Lead unstick the board is on: look for stuck work first, act on all of it your rights allow, name each stuck item with ticket.js stuck, and report only what you cannot do.' : '') +
-    (lines.length ? ' Failure channels open now: ' + lines.join(' ') : '');
+    (open.length ? ' Failure channels open now: ' + open.join(' ') : '');
+}
+
+function send(channel, items, why, replace) {
+  if ((!items.length && !failureOpen(channel)) || !terminal.leadOf(channel)) return false;
+  if (waiting(channel)) { if (!replace) return false; delivery.drop(channel, KEY); }
+  delivery.save(channel, { key: KEY, to: 'lead', text: prompt(items, why, channel) });
+  stuck.told(channel, items);
+  return true;
+}
+
+function sweep() {
+  for (const channel of tasks.channels()) if (!forLead(channel).length && !failureOpen(channel) && waiting(channel)) delivery.drop(channel, KEY);
+}
+const wake = (channel) => send(channel, waiting(channel) ? forLead(channel) : stuck.toTell(channel), 'something new is stuck', true);
+function heartbeat() {
+  sweep();
+  for (const channel of tasks.channels()) send(channel, forLead(channel), 'the heartbeat, every ' + every());
 }
 function every() {
   const m = config.get('leadCheckMinutes');
   return m >= 1 ? Math.round(m * 10) / 10 + (m === 1 ? ' minute' : ' minutes') : Math.max(1, Math.round(m * 60)) + ' seconds';
 }
 
-function sweep() {
-  if (!(config.get('leadCheckMinutes') > 0)) { delivery.dropWhere((k) => k === KEY); return; }
-  for (const channel of tasks.channels()) if (!worked(channel) && waiting(channel)) delivery.drop(channel, KEY);
-}
-
-function tick() {
-  sweep();
-  for (const channel of tasks.channels()) {
-    if (!worked(channel) || waiting(channel) || !terminal.leadOf(channel)) continue;
-    delivery.save(channel, { key: KEY, to: 'lead', text: prompt(new Date(), channel) });
-  }
-}
-
 function begin() {
   sweep();
-  config.every('leadCheckMinutes', tick, 0, 60 * 1000);
-  config.onChange((names) => { if (names.includes('leadCheckMinutes')) sweep(); });
+  config.every('leadCheckMinutes', heartbeat, 0, 60 * 1000);
+  stuck.events.on('raised', (channel, item) => { if (item.owner !== 'autopilot') wake(channel); });
   tasks.events.on('state', () => sweep());
 }
 
-module.exports = { begin, prompt, every, KEY, WORKED };
+module.exports = { begin, prompt, wake, heartbeat, sweep, every, KEY };

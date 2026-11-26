@@ -62,6 +62,7 @@ const { oneLine } = require('./clean.js');
 
 const FILE = state.file('autopilot.json', 'RELAY_AUTOPILOT_FILE');
 const ghDoor = require('./gh.js');
+const stuckLog = require('./stuck.js');
 const config = require('./config.js');
 const exhibit = require('./exhibit.js');
 const pmCheck = require('./pm-check.js');
@@ -492,6 +493,7 @@ function handOver(channel, task, rec, why, reason, head) {
     const fix = reason === 'main-kept-moving' ? 'Main kept moving: the Dev merged main as asked and the PR conflicted again.' : 'Conflict dropped: the Dev did not merge main after two asks.';
     jams.record(channel, { kind: 'handed-over', fix: fix + ' Reason ' + reason + '.', ticket: task.ticket, pr: task.pr, by: 'autopilot' });
   }
+  stuckLog.raise(channel, { kind: 'handed-over', id: task.pr ? 'pr ' + task.pr : 'task ' + task.id, text: (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why });
   tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why);
   note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why);
 }
@@ -800,7 +802,21 @@ function verdictOf(channel, pr) {
   return v ? { kind: v.kind, commit: v.commit, posted: postOf(channel, v) } : null;
 }
 const movesIt = (channel, task) => isOn(channel) && mineTask(task);
+function endedRuns(channel) {
+  const end = (r) => (r.mergedAt ? { at: r.mergedAt, outcome: 'merged' } : r.handed && r.handed.reason !== 'merged-by-person' ? { at: r.handed.at, outcome: 'handed' } : r.blocked ? { at: r.blocked.at, outcome: 'handed' } : null);
+  return Object.values(runsOf(channel)).map((r) => ({ r, e: end(r) })).filter((x) => x.e)
+    .map(({ r, e }) => ({ task: r.task, ticket: r.ticket, at: Date.parse(e.at), outcome: e.outcome })).sort((a, b) => a.at - b.at);
+}
 
 const runsKept = (channel) => (store[channel] && store[channel].runs) || {};
 
-module.exports = { tellRedCi, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt };
+function turnOff(channel, by) {
+  const c = chOf(channel);
+  if (!c.on) return false;
+  c.on = false; c.only = null; c.idle = null;
+  terminal.rebriefLead(channel);
+  note(channel, 'Turned off by ' + by + '.');
+  return true;
+}
+
+module.exports = { tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };

@@ -401,9 +401,31 @@
   #settings .set-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--pane-line); }
   #settings h2 { margin: 0; font: 600 20px/1.3 var(--sans); color: var(--pane-strong); }
   #settings .set-head p { margin: 2px 0 0; color: var(--pane-dim); }
-  #settings .set-scroll { overflow: auto; padding: 4px 16px 16px; }
+  #settings .set-scroll { overflow: auto; padding: 4px 16px 16px; min-height: 0; }
+  #settings[open] { height: min(760px, calc(100dvh - 32px)); }
+  #settings .set-search { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 16px; border-bottom: 1px solid var(--pane-line); }
+  #settings #set-search { flex: 1 1 260px; font: 13px var(--mono); color: var(--pane-strong); background: var(--pane-tint); border: 1px solid var(--pane-line); border-radius: 4px; padding: 6px 8px; }
+  #settings #set-search-said { margin: 0; color: var(--pane-dim); }
+  #settings .set-body { display: grid; grid-template-columns: 210px minmax(0, 1fr); flex: 1; min-height: 0; }
+  #settings .set-nav { border-right: 1px solid var(--pane-line); padding: 8px; overflow: auto; }
+  #settings .set-nav [role="tab"] { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; text-align: left; font: 600 13px var(--sans); color: var(--pane-fg); background: none; border: 0; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+  #settings .set-nav [role="tab"]:hover { background: var(--pane-tint); }
+  #settings .set-nav [role="tab"][aria-selected="true"] { background: var(--pane-tint); color: var(--pane-strong); box-shadow: inset 3px 0 0 var(--link); }
+  #settings .set-nav [role="tab"]:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
+  #settings .set-count, #settings .set-mark-key, #settings .set-mark { font: 600 11px var(--mono); color: var(--work); border: 1px solid var(--work); border-radius: 9px; padding: 0 6px; }
+  #settings .set-mark { margin-left: 4px; }
+  #settings .set-nav select { display: none; width: 100%; font: 600 13px var(--sans); }
+  #settings .set-panel:focus-visible { outline: none; }
+  #settings .set-row[data-miss], #settings section[data-miss] { display: none; }
+  #settings .set-empty { color: var(--pane-dim); padding: 16px 0; }
+  @media (max-width: 680px) {
+    #settings .set-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+    #settings .set-nav { border-right: 0; border-bottom: 1px solid var(--pane-line); }
+    #settings .set-nav [role="tablist"] { display: none; }
+    #settings .set-nav select { display: block; }
+  }
   #settings section { padding: 10px 0 4px; border-bottom: 1px solid var(--pane-line); }
-  #settings section:last-child { border-bottom: 0; }
+  #settings section:last-of-type { border-bottom: 0; }
   #settings h3 { margin: 4px 0 6px; font: 500 12px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--pane-strong); }
   #settings .set-row { padding: 8px 0; }
   #settings .set-row > div:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--pane-strong); }
@@ -839,18 +861,43 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
 
   <dialog id="settings" aria-labelledby="settings-title">
     <div class="set-head">
-      <div><h2 id="settings-title">Settings</h2><p>These switches control what the room does without you. The relay keeps them, so they stay set when you close this page or restart the relay.</p><p id="settings-said" role="status"></p></div>
+      <div><h2 id="settings-title">Settings</h2><p>These switches control what the room does without you. The relay keeps them, so they stay set when you close this page or restart the relay. <span class="set-mark-key">Changed</span> marks a value that is not its default.</p><p id="settings-said" role="status"></p></div>
       <button class="btn" id="settings-close" type="button">Close</button>
     </div>
-    <div class="set-scroll">
-      <section aria-labelledby="set-levels-title"><h3 id="set-levels-title">Trust level</h3><p class="set-what">Each level lets the room do one more step without you. The levels follow the trust ladder in the constitution (article 5). Select a level and read what it will change. Then press Set level. You can still change each switch by hand below.</p><div id="set-levels"></div></section>
-      <section aria-labelledby="set-reviews-title"><h3 id="set-reviews-title">Reviews</h3><div id="set-reviews"></div></section>
+    <div class="set-search"><input type="search" id="set-search" placeholder="Search all settings" aria-label="Search all settings" autocomplete="off" spellcheck="false"><p id="set-search-said" role="status"></p></div>
+    <div class="set-body">
+      <nav class="set-nav" aria-label="Settings tabs"><div role="tablist" aria-orientation="vertical" aria-label="Settings tabs" id="set-tabs"><button type="button" role="tab" id="set-tab-trust" data-tab="trust" aria-controls="set-panel-trust" aria-selected="false" tabindex="-1"><span class="set-tab-name">Trust</span><span class="set-count" hidden></span></button><button type="button" role="tab" id="set-tab-autopilot" data-tab="autopilot" aria-controls="set-panel-autopilot" aria-selected="false" tabindex="-1"><span class="set-tab-name">Autopilot</span><span class="set-count" hidden></span></button><button type="button" role="tab" id="set-tab-reviews" data-tab="reviews" aria-controls="set-panel-reviews" aria-selected="false" tabindex="-1"><span class="set-tab-name">Reviews and PRs</span><span class="set-count" hidden></span></button><button type="button" role="tab" id="set-tab-roles" data-tab="roles" aria-controls="set-panel-roles" aria-selected="false" tabindex="-1"><span class="set-tab-name">Roles</span><span class="set-count" hidden></span></button><button type="button" role="tab" id="set-tab-room" data-tab="room" aria-controls="set-panel-room" aria-selected="false" tabindex="-1"><span class="set-tab-name">Room</span><span class="set-count" hidden></span></button><button type="button" role="tab" id="set-tab-chat" data-tab="chat" aria-controls="set-panel-chat" aria-selected="false" tabindex="-1"><span class="set-tab-name">Chat</span><span class="set-count" hidden></span></button><button type="button" role="tab" id="set-tab-advanced" data-tab="advanced" aria-controls="set-panel-advanced" aria-selected="false" tabindex="-1"><span class="set-tab-name">Advanced</span><span class="set-count" hidden></span></button></div><select id="set-tab-menu" aria-label="Settings tab"><option value="trust">Trust</option><option value="autopilot">Autopilot</option><option value="reviews">Reviews and PRs</option><option value="roles">Roles</option><option value="room">Room</option><option value="chat">Chat</option><option value="advanced">Advanced</option></select></nav>
+      <div class="set-scroll">
+      <div class="set-panel" role="tabpanel" id="set-panel-trust" aria-labelledby="set-tab-trust" tabindex="0" hidden>
+      <section aria-labelledby="set-levels-title"><h3 id="set-levels-title">Trust level</h3><p class="set-what">Each level lets the room do one more step without you. The levels follow the trust ladder in the constitution (article 5). Select a level and read what it will change. Then press Set level. You can still change each switch by hand below.</p><div class="set-row" id="set-levels-row"><div id="set-levels"></div></div></section>
       <section aria-labelledby="set-ap-title"><h3 id="set-ap-title">Autopilot</h3><div id="set-autopilot"></div></section>
-      <section aria-labelledby="set-lead-title"><h3 id="set-lead-title">The Lead</h3><p class="set-what" id="set-lead-who"></p><div id="set-lead" hidden></div><div id="set-lead-stops"></div></section>
-      <section aria-labelledby="set-huddle-title"><h3 id="set-huddle-title">Huddle</h3><p class="set-what">A huddle is one short report on everyone in the room, which you start with the Huddle buttons at the top of the Floor. <a class="help-link" href="../docs/manual/roles.html#huddles" target="_blank" rel="noopener">Huddles in the manual</a></p><div class="set-row" id="huddle-lead-label"><div><label><input id="huddle-lead" type="checkbox" checked> Send each status report to the Lead (one Lead turn each)</label></div><p class="set-what">On: each Status report from the Floor is also typed into the Lead's session, so the Lead knows where everyone is. Each one spends one Lead turn. With no Lead running, nobody is told. Off: nothing is sent and nothing is spent. This browser keeps your choice.</p></div></section>
+      <section aria-labelledby="set-lead-title"><h3 id="set-lead-title">The Lead</h3><p class="set-what" id="set-lead-who"></p><div id="set-lead" hidden></div></section>
+      <section aria-labelledby="set-cfg-trust-title"><h3 id="set-cfg-trust-title">Other rights, and PM trust</h3><div id="set-cfg-trust"></div></section>
+      </div>
+      <div class="set-panel" role="tabpanel" id="set-panel-autopilot" aria-labelledby="set-tab-autopilot" tabindex="0" hidden>
+      <section aria-labelledby="set-cfg-autopilot-title"><h3 id="set-cfg-autopilot-title">How Autopilot runs</h3><p class="set-what">The relay reads each value when it uses it, so a change applies immediately. No restart is necessary. A value that you set here replaces the environment variable for that setting. Reset removes your value: the relay then uses the variable, or the default.</p><div id="set-cfg-autopilot"></div></section>
+      </div>
+      <div class="set-panel" role="tabpanel" id="set-panel-reviews" aria-labelledby="set-tab-reviews" tabindex="0" hidden>
+      <section aria-labelledby="set-reviews-title"><h3 id="set-reviews-title">Reviews</h3><div id="set-reviews"></div></section>
+      <section aria-labelledby="set-cfg-reviews-title"><h3 id="set-cfg-reviews-title">Reviewers and the PR watch</h3><div id="set-cfg-reviews"></div></section>
+      </div>
+      <div class="set-panel" role="tabpanel" id="set-panel-roles" aria-labelledby="set-tab-roles" tabindex="0" hidden>
+      <section aria-labelledby="set-cfg-roles-title"><h3 id="set-cfg-roles-title">Models, skills, the PM and the officers</h3><div id="set-cfg-roles"></div></section>
       <section aria-labelledby="rules-title"><h3 id="rules-title">Standing rules</h3><p class="set-what">A rule that holds for a while, such as do not touch the payments folder until Friday. Each new Dev, reviewer, Lead and PM brief ends with the rules in force. A rule never overrides CLAUDE.md or the constitution. A rule past its date leaves new briefs by itself. Sessions already running do not get a new rule.</p><div id="rules-list"></div>
         <form id="rules-form" class="set-row"><div><label>Rule <input type="text" id="rules-text" maxlength="200" required></label></div><div><label>Why <input type="text" id="rules-reason" maxlength="200" required></label></div><div><label>Ends <input type="date" id="rules-until"></label> <span class="set-what">Leave the date empty for until you remove it.</span> <button type="submit" class="btn">Add rule</button></div><p class="set-now" id="rules-said" aria-live="polite"></p></form></section>
-      <section aria-labelledby="set-limits-title"><h3 id="set-limits-title">Limits and timings</h3><p class="set-what">The relay reads each value when it uses it, so a change applies immediately. No restart is necessary. A value that you set here replaces the environment variable for that setting. Reset removes your value: the relay then uses the variable, or the default. The relay keeps your values in settings.json in its state folder: ~/.office-world, unless the relay started with RELAY_STATE_DIR.</p><div id="set-limits"></div></section>
+      </div>
+      <div class="set-panel" role="tabpanel" id="set-panel-room" aria-labelledby="set-tab-room" tabindex="0" hidden>
+      <section aria-labelledby="set-cfg-room-title"><h3 id="set-cfg-room-title">Sessions and updates</h3><div id="set-cfg-room"></div></section>
+      </div>
+      <div class="set-panel" role="tabpanel" id="set-panel-chat" aria-labelledby="set-tab-chat" tabindex="0" hidden>
+      <section aria-labelledby="set-huddle-title"><h3 id="set-huddle-title">Huddle</h3><p class="set-what">A huddle is one short report on everyone in the room, which you start with the Huddle buttons at the top of the Floor. <a class="help-link" href="../docs/manual/roles.html#huddles" target="_blank" rel="noopener">Huddles in the manual</a></p><div class="set-row" id="huddle-lead-label"><div><label><input id="huddle-lead" type="checkbox" checked> Send each status report to the Lead (one Lead turn each)</label></div><p class="set-what">On: each Status report from the Floor is also typed into the Lead's session, so the Lead knows where everyone is. Each one spends one Lead turn. With no Lead running, nobody is told. Off: nothing is sent and nothing is spent. This browser keeps your choice.</p></div></section>
+      <section aria-labelledby="set-cfg-chat-title"><h3 id="set-cfg-chat-title">Chat and huddles</h3><div id="set-cfg-chat"></div></section>
+      </div>
+      <div class="set-panel" role="tabpanel" id="set-panel-advanced" aria-labelledby="set-tab-advanced" tabindex="0" hidden>
+      <section aria-labelledby="set-cfg-advanced-title"><h3 id="set-cfg-advanced-title">How often the relay checks</h3><p class="set-what">How often the relay asks GitHub, git and the Lead. Few people need to change these. A value of 0 stops that check.</p><div id="set-cfg-advanced"></div></section>
+      </div>
+      <p class="set-empty" id="set-empty" hidden>No setting matches.</p>
+      </div>
     </div>
   </dialog>
 
@@ -929,6 +976,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js" integrity="sha384-M169f14mRZOXm3hD/v2Ti0ThIT/RnAQagXA9nlE15yHAtrW19gdePJh/HaTzUOe/" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js" integrity="sha384-iF+jqbuti4XlB64clWgFWYEscb+UnSRv3VgVikGYZu+otNFnSHr7y7NcKfBnGizn" crossorigin="anonymous"></script>
 <script src="reviews.js"></script>
+<script src="settings-tabs.js"></script>
 <script src="terminal.js"></script>
 <script src="rules.js"></script>
 <script src="tasks.js"></script>
@@ -938,6 +986,7 @@ html.trailer #stage.tr-snap { box-shadow: 0 0 0 1.4vw #f6f3ec, 0 2vw 6vw rgba(0,
 <script src="tickets.js"></script>
 <script src="huddle.js"></script>
 <script src="needs-you.js"></script>
+<script src="manager-watch.js"></script>
 <script src="chat.js"></script>
 <script src="fold.js"></script>
 <script src="officers.js"></script>

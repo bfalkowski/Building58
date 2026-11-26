@@ -17,7 +17,7 @@ const history = require('./ticket-history.js');
 const config = require('./config.js');
 const pmNotes = require('./pm-notes.js');
 const { pmBrief, standingBrief } = require('./pm-brief.js');
-const { boardOrder, lastRank, placeNear } = require('./ticket-order.js');
+const { boardOrder, firstRank, lastRank, placeNear } = require('./ticket-order.js');
 const { heldBack, MARKS, proposalWords } = require('./autopilot-plan.js');
 const { likelyTwins } = require('./ticket-twins.js');
 const { writeLine } = require('./needs-you-plan.js');
@@ -28,7 +28,8 @@ const { ANSWERS } = require('./pm-check-brief.js');
 
 const STATUSES = ['triage', 'ready', 'started', 'done', 'rejected'];
 const PRIORITIES = ['high', 'normal', 'low'];
-const KINDS = ['docs', 'tests', 'bug', 'feature'];
+const KINDS = ['docs', 'tests', 'bug', 'feature', 'jam'];
+const JAM = 'jam';
 const KIND = /^[a-z][a-z0-9-]{0,23}$/;
 const kindsOf = (all) => [...new Set(KINDS.concat(all.map((t) => t.kind).filter((k) => typeof k === 'string' && k)))];
 function kindFrom(value, all, agent) {
@@ -47,7 +48,7 @@ function labelsFrom(value, all, agent) {
   const labels = [...new Set(list.map((l) => clean(l).toLowerCase()).filter(Boolean))];
   if (labels.some((l) => !KIND.test(l))) return { error: [400, { ok: false, error: 'bad_label', message: 'A label is one short word: a lowercase letter, then letters, digits or dashes, up to 24 in all, such as flaky or follow-up.' }] };
   if (labels.length > MAX_LABELS) return { error: [400, { ok: false, error: 'bad_label', message: 'A ticket has at most ' + MAX_LABELS + ' labels.' }] };
-  const known = labelsOf(all), unknown = labels.filter((l) => !known.includes(l));
+  const known = labelsOf(all), unknown = labels.filter((l) => !known.includes(l) && !(agent && agent.role === 'manager' && l === 'manager'));
   if (agent && unknown.length) return { error: [400, { ok: false, error: 'bad_label', message: 'No ticket has the label ' + unknown.join(', ') + ' yet. ' + (known.length ? 'Labels are: ' + known.join(', ') + '. ' : '') + 'Only the person adds a new label.' }] };
   return { labels };
 }
@@ -152,6 +153,11 @@ async function create(channel, body, agent) {
   if (unusable) return [400, { ok: false, error: 'bad_base', message: unusable }];
   return inTurn(channel, () => file(channel, { title, text, priority, repo, base, blockedBy: body.blockedBy, shapes: body.shapes, kind: body.kind, labels: body.labels }, agent));
 }
+async function fileAsManager(channel, { title, body, repo }) {
+  const main = await tasks.mainCheckout(repo);
+  const base = await tasks.defaultBranch(main);
+  return inTurn(channel, () => file(channel, { title: clean(title).replace(/\s+/g, ' ').slice(0, MAX_TITLE), text: clean(body).slice(0, MAX_BODY), priority: 'normal', repo: main, base, labels: ['manager'] }, { role: 'manager', cwd: main }));
+}
 async function file(channel, { title, text, priority, repo, base, blockedBy: asked, shapes: askedShapes, kind: askedKind, labels: askedLabels }, agent) {
   const all = await listAll(channel);
   const { kind, error } = kindFrom(askedKind, all, agent);
@@ -173,14 +179,15 @@ async function file(channel, { title, text, priority, repo, base, blockedBy: ask
   if (agent && all.filter((t) => t.status === 'triage').length >= MAX_TRIAGE) {
     return [429, { ok: false, error: 'triage_full', message: 'Triage already has ' + MAX_TRIAGE + ' tickets waiting for a person. Stop filing and carry on.' }];
   }
-  const rank = lastRank(all, priority, Date.now());
+  if (kind === JAM) priority = 'high';
+  const rank = kind === JAM ? firstRank(all, priority, Date.now()) : lastRank(all, priority, Date.now());
   const ticket = await store.create(channel, Object.assign({ title, body: text, priority, rank, repo, base, blockedBy }, shapes.length ? { shapes } : {}, kind ? { kind } : {}, labels.length ? { labels } : {}, { status: agent ? 'triage' : 'ready', createdBy: agent ? agentName(agent) : 'you' }, agent ? {} : { approvedBy: 'you' }));
   history.add(channel, ticket, { stage: 'filed', by: ticket.createdBy }, agent || null);
   chat.openTicketRoom(channel, chatOf(ticket));
   filed(channel, ticket, agent, ticket.createdAt);
   return [201, { ok: true, ticket: await view(channel, ticket, all.concat(ticket)), likely: likelyTwins(ticket, live) }];
 }
-const agentName = (t) => (t.role === 'pm' ? 'PM' : t.role === 'coo' ? 'COO' : t.lead ? 'Lead' : t.title ? 'Worker on ' + t.title : 'Session ' + t.sessionId.slice(0, 8)).slice(0, 60);
+const agentName = (t) => (t.role === 'manager' ? 'Manager' : t.role === 'pm' ? 'PM' : t.role === 'coo' ? 'COO' : t.lead ? 'Lead' : t.title ? 'Worker on ' + t.title : 'Session ' + t.sessionId.slice(0, 8)).slice(0, 60);
 
 async function move(channel, ticket, body, agent) {
   const to = String(body.to || '');
@@ -666,6 +673,11 @@ async function edit(channel, ticket, body, agent) {
     if (body.labels !== undefined) { const r = labelsFrom(body.labels, all, null); if (r.error) return r.error; want.labels = r.labels; }
     if (body.shapes !== undefined) { const r = shapesFrom(body.shapes, all, now.id); if (r.error) return r.error; want.shapes = r.shapes; }
     if (want.replacedBy && (want.replacedBy === now.id || !all.some((t) => t.id === want.replacedBy))) return [400, { ok: false, error: 'bad_mark', message: want.replacedBy === now.id ? 'A ticket cannot replace itself.' : 'No such ticket: ' + want.replacedBy + '.' }];
+    const kindNow = want.kind !== undefined ? want.kind : now.kind;
+    if (kindNow === JAM) {
+      if (want.priority !== undefined && want.priority !== 'high') return [409, { ok: false, error: 'jam_priority', message: 'A jam ticket stays high priority: stuck work holds other PRs. Close it, or leave its priority.' }];
+      if (want.priority === undefined && want.kind === JAM && now.kind !== JAM && (now.priority || 'normal') !== 'high') want.priority = 'high';
+    }
     const had = (k) => (k === 'priority' ? (now.priority || 'normal') : k === 'labels' || k === 'shapes' ? (Array.isArray(now[k]) ? now[k] : []).join(',') : k === 'mark' || k === 'replacedBy' || k === 'kind' ? (now[k] || null) : (now[k] || ''));
     const what = Object.keys(want).filter((k) => had(k) !== (Array.isArray(want[k]) ? want[k].join(',') : want[k]));
     if (!what.length) return [200, { ok: true, unchanged: true, edited: [], ticket: await view(channel, now, all) }];
@@ -677,7 +689,9 @@ async function edit(channel, ticket, body, agent) {
     const changes = {};
     for (const k of what) changes[k] = want[k];
     if (what.includes('mark') || what.includes('replacedBy')) Object.assign(changes, { mark: want.mark, replacedBy: want.replacedBy });
-    if (what.includes('priority')) Object.assign(changes, { rank: lastRank(all.filter((t) => t.id !== now.id), want.priority, Date.now()) }, setBy(agent, 'priority'));
+    const others = all.filter((t) => t.id !== now.id);
+    if (what.includes('priority')) Object.assign(changes, { rank: want.kind === JAM ? firstRank(others, want.priority, Date.now()) : lastRank(others, want.priority, Date.now()) }, setBy(agent, 'priority'));
+    else if (what.includes('kind') && want.kind === JAM && (now.priority || 'normal') === 'high') changes.rank = firstRank(others, 'high', Date.now());
     const approvalTaken = !!agent && now.status === 'ready' && personApproved(now) && (what.includes('title') || what.includes('body'));
     if (approvalTaken) changes.approvedBy = 'none';
     const edited = await store.update(channel, now.id, changes);
@@ -762,4 +776,4 @@ async function handle(req, res, channel, rest, ctx) {
 const startingNow = (channel) => leadStarting.has(channel) || [...starting].some((k) => k.startsWith(channel + '/'));
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { closeForFailure, seatPm, handle, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { closeForFailure, seatPm, handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };

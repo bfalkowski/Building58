@@ -594,4 +594,11 @@ function reviewEmpty(channel, pr) {
 
 const failedOf = (channel, pr) => { const r = pr && recOf(channel, pr); return (r && r.failed) || null; };
 
-module.exports = { handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };
+function setSwitch(channel, k, on) {
+  const c = chOf(channel);
+  c[k] = on;
+  if (!followsPushes(channel)) for (const r of Object.values(c.prs)) if (r.pending && !r.pending.watch) { r.pending = null; delete r.queued; }
+  save();
+}
+
+module.exports = { setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };

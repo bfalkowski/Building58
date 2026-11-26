@@ -11,6 +11,7 @@
 #      clone's relay/github-app.js copied in, so any image version works. It listens on 127.0.0.1 at
 #      SETUP_APP_PORT, 47123 unless you set it.
 #   4. ROOM_REPOS: the repos the room works on, as owner/name.
+#   5. ROOM_PLUGINS: whether to install the plugins the briefs use (plugins.json), only on a yes.
 set -eu
 cd "$(dirname "$0")"
 ENV=.env
@@ -48,6 +49,7 @@ docker compose version >/dev/null 2>&1 || stop "This needs Docker Compose (docke
 
 if [ ! -f "$ENV" ]; then
   (umask 077; cp .env.example "$ENV")
+  put ROOM_PLUGINS ""
   say "Made $ENV from .env.example. Never commit it: git ignores it."
 fi
 chmod 600 "$ENV"
@@ -123,15 +125,31 @@ if [ -z "$(get ROOM_REPOS)" ]; then
   [ -n "$repos" ] && put ROOM_REPOS "$repos" || say "No repos for now. Add them to ROOM_REPOS in $ENV later."
 fi
 
+if [ -z "$(get ROOM_PLUGINS)" ]; then
+  plugins=$(sed -n 's/^ROOM_PLUGINS=//p' .env.example | tail -1)
+  say ""
+  say "The room's briefs name skills from these Claude Code plugins: $plugins"
+  say "A plugin is code that every session runs, at the versions pinned in plugins.json. Without them, the briefs go out with no skills."
+  if [ -t 0 ]; then
+    printf '%s ' "Install them in the room at each start (ROOM_PLUGINS)? [y/N]" >&2; read -r answer || answer=""
+    case "$answer" in
+      y|Y|yes|YES) put ROOM_PLUGINS "$plugins"; say "Saved ROOM_PLUGINS in $ENV." ;;
+      *) put ROOM_PLUGINS none; say "No plugins. Needs you will list the commands to install them. To change this, edit ROOM_PLUGINS in $ENV." ;;
+    esac
+  else
+    say "No terminal to ask in, so no plugins are installed. Set ROOM_PLUGINS in $ENV to install them."
+  fi
+fi
+
 say ""
 say "Starting the room..."
 docker compose up -d
 port=$(get ROOM_PORT); port=${port:-8787}
 for i in $(seq 180); do curl -fs -o /dev/null "http://127.0.0.1:$port/health" 2>/dev/null && break; sleep 2; done
 curl -fs -o /dev/null "http://127.0.0.1:$port/health" || stop "The room did not answer on port $port. See: docker compose logs room"
-for i in $(seq 60); do docker compose logs --no-log-prefix room 2>/dev/null | grep -q '^Repos:' && break; sleep 2; done
+for i in $(seq 60); do docker compose logs --no-log-prefix room 2>/dev/null | grep -q '^Skills:' && break; sleep 2; done
 say ""
-docker compose logs --no-log-prefix room 2>/dev/null | grep -E '^(Claude Code|GitHub|Repos):' || true
+docker compose logs --no-log-prefix room 2>/dev/null | grep -E '^(Claude Code|GitHub|Repos|Skills):' || true
 link="http://localhost:$port/office/?channel=office&key=$(get RELAY_KEY)"
 say ""
 say "The room is running. Open it: http://localhost:$port/office/?channel=office&key=<RELAY_KEY in $ENV>"
