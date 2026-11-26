@@ -126,7 +126,6 @@ const SCHEMAS = {
     stuckJobs: list(obj({ pid: N(), command: S(), minutes: N() }, ['pid', 'command', 'minutes'])),
     desk: { type: 'object' }
   }, ['terminal', 'name', 'role', 'state', 'safe', 'canStop', 'why']),
-  EndedJob: okWith({ ended: obj({ name: S(), terminal: S(), pid: N() }, ['name', 'terminal', 'pid']) }, ['ended']),
   Floor: okWith({ sessions: list(ref('FloorRow')), pm: obj({ trust: N(), trustName: S(), sortHours: N(), nextSortAt: orNull(S()) }), leadEnded: { type: ['object', 'null'] }, mainRed: list(obj({ branch: S(), repo: S(), says: S() })) }, ['sessions']),
   NewJam: obj({
     kind: S({ enum: Object.keys(require('./metrics-plan.js').JAM_KINDS) }),
@@ -197,7 +196,6 @@ const RESPONSES = {
   'POST /tasks/{id}/move': 'TaskOne',
   'GET /terminals': 'SessionList',
   'GET /floor': 'Floor',
-  'POST /floor/end-job': 'EndedJob',
   'GET /metrics': 'Metrics',
   'POST /jams': 'JamOne',
   'GET /jams': 'JamList',

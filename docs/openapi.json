@@ -1133,7 +1133,7 @@
           "Floor"
         ],
         "summary": "End stuck job",
-        "description": "Ends one stuck job of a session, never the session. A job is stuck when its process tree used no CPU and its output file grew not at all for 30 minutes. Body {\"who\", \"pid\"}: pid is a stuck job's process id, and may be left out when the session has one. A job that is not stuck is refused with 409 and not_stuck. With the relay key, as End it on a Needs you line sends it, who is a terminal id. With a session's token, the Lead ends one by name or task id: only the token of a Lead you let move the board, and only while Let the Lead stop sessions is on, with Autopilot on or off. GET /floor lists each session's stuckJobs. See Stuck jobs.\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Ends one stuck job of a session, never the session. A job is stuck when its process tree used no CPU and its output file grew not at all for 30 minutes. Body {\"who\", \"pid\"}: pid is a stuck job's process id, and may be left out when the session has one. A job that is not stuck is refused with 409 and not_stuck. With the relay key, as End it on a Needs you line sends it, who is a terminal id. With a session's token, the Lead ends one by name or task id: only the token of a Lead you let move the board, and only while Let the Lead stop sessions is on, with Autopilot on or off. The Floor read lists each session's stuckJobs. See Stuck jobs.\n\nTokens: the relay key, and the token of a Lead you let move the board. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "endStuckJob",
         "x-tokens": [
           "a Lead you let move the board"
@@ -1144,7 +1144,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EndedJob"
+                  "$ref": "#/components/schemas/Ok"
                 }
               }
             }
@@ -5489,39 +5489,6 @@
           "safe",
           "canStop",
           "why"
-        ],
-        "additionalProperties": true
-      },
-      "EndedJob": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "const": true
-          },
-          "ended": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "terminal": {
-                "type": "string"
-              },
-              "pid": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "name",
-              "terminal",
-              "pid"
-            ],
-            "additionalProperties": true
-          }
-        },
-        "required": [
-          "ok",
-          "ended"
         ],
         "additionalProperties": true
       },
