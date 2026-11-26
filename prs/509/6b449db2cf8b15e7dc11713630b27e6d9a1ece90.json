@@ -1,0 +1,485 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 509,
+  "base": "d2ac0bc24429e0292ebdf22759715231042291e1",
+  "head": "6b449db2cf8b15e7dc11713630b27e6d9a1ece90",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "needs-you",
+      "relay-tests",
+      "test-helpers"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code",
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1720,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1732,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 1063636
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 1032
+    },
+    {
+      "type": "failing-before",
+      "params": {},
+      "kinds": [
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "test_files": [
+          "relay/test/auto-review.test.js",
+          "relay/test/autopilot-desks.test.js",
+          "relay/test/autopilot-review-first.test.js",
+          "relay/test/browser/front-office.test.js",
+          "relay/test/front.test.js",
+          "relay/test/helpers.js",
+          "relay/test/huddle.test.js",
+          "relay/test/lead-review.test.js",
+          "relay/test/lead-stop.test.js",
+          "relay/test/manager-jams.test.js",
+          "relay/test/manager-seat.test.js",
+          "relay/test/manager-token.test.js",
+          "relay/test/needs-you-plan.test.js",
+          "relay/test/pm-seat.test.js",
+          "relay/test/pr-watch.test.js",
+          "relay/test/review-desk.test.js",
+          "relay/test/review-end.test.js",
+          "relay/test/work.test.js"
+        ],
+        "tests": [
+          {
+            "name": "relay/test/auto-review.test.js > the relay starts the first review and the follow-ups, with no page open > a first review that keeps failing for another reason waits on the person",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/auto-review.test.js > the relay starts the first review and the follow-ups, with no page open > a first review with no desk free starts once a desk is free",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/auto-review.test.js > the relay starts the first review and the follow-ups, with no page open > a task's review that could not start 3 times says why in Needs you (T-350)",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/autopilot-desks.test.js > test > a task fills the WIP limit while Autopilot frees a desk: it waits, then starts the ticket",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/autopilot-desks.test.js > test > every desk is taken and an ending session hangs: Autopilot stops its own Done Dev instead, and starts the ticket",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/autopilot-desks.test.js > test > every desk is taken and its own Done Dev is idle: Autopilot stops it and starts the ticket",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/autopilot-desks.test.js > test > every desk is taken and nothing is Autopilot's to stop: it waits, then starts the ticket once a desk frees",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/autopilot-desks.test.js > test > every desk is taken and one session is still ending: Autopilot waits for it and starts the ticket",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/autopilot-review-first.test.js > test > every desk holds an idle Dev and a review waits, with a Ready ticket: the Dev stops, the review starts, the ticket waits",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/comment-paths.test.js > test > each repo file a code comment names exists",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/front.test.js > test > Today uses the numbers the COO counts, and free desks are 6 minus the workers",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-review.test.js > the Lead starts a review through the relay, within its switch and the limits > a session that is no longer the Lead gets 401, and off again refuses the new Lead",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-review.test.js > the Lead starts a review through the relay, within its switch and the limits > an ask with no desk free is refused, and is not counted",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/lead-review.test.js > the Lead starts a review through the relay, within its switch and the limits > the relay counts each review in the per-PR count the automatic ones use, and stops at 3",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/manager-jams.test.js > test > a cause is a kind of jam logged three times in a day, by anyone but Autopilot",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/manager-jams.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/manager-jams.test.js > test > it says whether the jam count went down after the ticket was done",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/manager-jams.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/manager-jams.test.js > test > one ticket for a cause: file it, add new jams to it, file again only when its fix is done and the jams come back",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/manager-jams.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/manager-jams.test.js > test > the daily text lists causes that have an open ticket, leaves out fixed ones, and keeps the instruction first",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/manager-jams.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/manager-jams.test.js > test > with the same jam kind logged three times in a day, the manager files one ticket naming the cause, and adds to it the next time",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/manager-jams.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/manager-seat.test.js > test > the room keeps a manager running, and starts it again when it ends",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/manager-seat.test.js > test > workers have at most 6 desks, and the Lead, the PM and the manager can still sit",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/manager-token.test.js > the manager's token reaches the watch and the brake, and gets 403 for the rest > a note goes on Needs you and is replaced by one with the same key",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/manager-token.test.js > the manager's token reaches the watch and the brake, and gets 403 for the rest > anything beyond the watch and the brake is 403, and changes nothing",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/manager-token.test.js > the manager's token reaches the watch and the brake, and gets 403 for the rest > it lowers the trust level one step while the person allows it, and cannot raise it",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/manager-token.test.js > the manager's token reaches the watch and the brake, and gets 403 for the rest > it reads its notes, the jam log and the metrics, and files and notes a ticket",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/needs-you-plan.test.js > test > the most urgent kind comes first, and every kind has a rule",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/pm-seat.test.js > test > workers have at most 6 desks, and the Lead and the PM can still sit",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/pr-watch.test.js > test > a linked PR with no review record and all desks full waits in the desk queue",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/review-desk.test.js > test > a reviewer whose review is posted goes before a Dev",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/review-desk.test.js > test > every desk is idle and a review waits: the relay stops the Dev whose PR waits on it, and the review starts",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/review-desk.test.js > test > reviews wait and no session may be stopped: nobody is stopped, Needs you names the wait, and each review starts once a session may be stopped",
+            "on_base": "failed"
+          }
+        ],
+        "passed_on_base": [
+          "relay/test/auto-review.test.js > test > the switches are the relay's, so a restart keeps them",
+          "relay/test/auto-review.test.js > the relay starts the first review and the follow-ups, with no page open > a push that moved nothing starts no review and uses none of the 3",
+          "relay/test/auto-review.test.js > the relay starts the first review and the follow-ups, with no page open > a push to a reviewed PR starts one follow-up of the latest head, once its review and the Dev's turn are done",
+          "relay/test/auto-review.test.js > the relay starts the first review and the follow-ups, with no page open > only the room page sets the switches",
+          "relay/test/auto-review.test.js > the relay starts the first review and the follow-ups, with no page open > the first review starts from the relay, and a follow-up stays off until the person turns it on",
+          "relay/test/autopilot-desks.test.js > test > a start fails for another reason: Autopilot turns itself off and says why",
+          "relay/test/autopilot-desks.test.js > test > the WIP limit is full with a task Autopilot did not start: it waits, then starts the ticket",
+          "relay/test/autopilot-review-first.test.js > test > a first review in retry back-off with a free desk: the ticket waits and the idle line says the review goes first",
+          "relay/test/autopilot-review-first.test.js > test > a free desk, a review that waits and a Ready ticket: the review starts, not the ticket",
+          "relay/test/front.test.js > test > Up next lists the next 5 Ready tickets in Autopilot's order with the PM's latest verdict",
+          "relay/test/front.test.js > test > a Dev with no PR has a card that says PR not started, and no reviewer yet",
+          "relay/test/front.test.js > test > a card waits on you only when Needs you names it, with the reason first, and is stuck when its desk says so",
+          "relay/test/front.test.js > test > a reviewer whose Dev is not on the floor stays a card of its own",
+          "relay/test/front.test.js > test > a ticket opens on the Board, or on GitHub for the GitHub store, and a PR on GitHub",
+          "relay/test/front.test.js > test > the PM seat shows its rung, next sort and a waiting proposal, and waits on you only when Needs you says so",
+          "relay/test/front.test.js > test > the reviewer of its PR is in the same card, and the stage follows the review",
+          "relay/test/huddle.test.js > a green PR with a merge verdict on its head and no GitHub approval waits on the Lead > with a fix verdict on its head",
+          "relay/test/huddle.test.js > a green PR with a merge verdict on its head and no GitHub approval waits on the Lead > with a merge verdict on an older commit",
+          "relay/test/huddle.test.js > a green PR with a merge verdict on its head and no GitHub approval waits on the Lead > with a merge verdict on its head",
+          "relay/test/huddle.test.js > a green PR with a merge verdict on its head and no GitHub approval waits on the Lead > with a merge verdict on its head and a change to CLAUDE.md",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with a Lead that may merge, it names the Lead and does not need the person",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with a base other than main, it still waits on the person and says why",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with a change to CLAUDE.md, it still waits on the person and says why",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with a change to the constitution, it still waits on the person and says why",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with a conflict, it still waits on the person and says why",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with a file list gh cut short, it still waits on the person and says why",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with a merge GitHub has not checked, it still waits on the person and says why",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with no Lead that may merge, it waits on the person",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with no checks reported yet, it still waits on the person and says why",
+          "relay/test/huddle.test.js > an approved, green PR waits on the Lead when it may merge > with no file list from gh, it still waits on the person and says why",
+          "relay/test/huddle.test.js > asking idle sessions > a huddle says it is waiting, and a second cannot start",
+          "relay/test/huddle.test.js > asking idle sessions > a late answer changes nothing",
+          "relay/test/huddle.test.js > asking idle sessions > an answer through a tunnel does not count",
+          "relay/test/huddle.test.js > asking idle sessions > an idle session that answers is in the report, and only its line left the hook",
+          "relay/test/huddle.test.js > asking idle sessions > one that does not answer is reported, and the huddle still finishes",
+          "relay/test/huddle.test.js > asking idle sessions > only idle sessions are asked",
+          "relay/test/huddle.test.js > asking idle sessions > working and waiting sessions are left alone and say why",
+          "relay/test/huddle.test.js > one PR, several sessions > comments alone never need you",
+          "relay/test/huddle.test.js > one PR, several sessions > nobody needs you while someone is working on it",
+          "relay/test/huddle.test.js > one PR, several sessions > once everyone has stopped, it waits on someone to fix the pipeline, which the Needs you list does not name",
+          "relay/test/huddle.test.js > quiet and stuck in a huddle follow the same rule as the Floor > hooks stop while its output goes on: quiet, as on the Floor",
+          "relay/test/huddle.test.js > quiet and stuck in a huddle follow the same rule as the Floor > neither hooks nor output: stuck, as on the Floor",
+          "relay/test/huddle.test.js > test > a clean checkout with no branch has no empty part",
+          "relay/test/huddle.test.js > test > a saved message survives a relay restart",
+          "relay/test/huddle.test.js > test > a saved report goes to whoever is the Lead when it is typed",
+          "relay/test/huddle.test.js > test > a stopped task whose PR is merged",
+          "relay/test/huddle.test.js > test > a task whose session is gone",
+          "relay/test/huddle.test.js > test > nothing is typed if a session gets busy before the question goes in",
+          "relay/test/huddle.test.js > test > nothing is typed while a menu is on screen, though the hooks say idle",
+          "relay/test/huddle.test.js > test > questions from a huddle do not outlive a restart",
+          "relay/test/huddle.test.js > test > the report follows the Lead you chose, after its brief",
+          "relay/test/huddle.test.js > the Lead gets the report > a Stop through a tunnel does not make a busy Lead idle",
+          "relay/test/huddle.test.js > the Lead gets the report > a long report goes in as one paste, since a long burst loses its start",
+          "relay/test/huddle.test.js > the Lead gets the report > a worker's answer reaches the Lead quoted and marked, and cannot break out",
+          "relay/test/huddle.test.js > the Lead gets the report > and goes in, on one line, as information, once it is idle",
+          "relay/test/huddle.test.js > the Lead gets the report > and only if you say so",
+          "relay/test/huddle.test.js > the Lead gets the report > it is not asked the question it is about to get the answers to",
+          "relay/test/huddle.test.js > the Lead gets the report > it waits while the Lead is working",
+          "relay/test/huddle.test.js > the Lead gets the report > text a hook sent through a tunnel never reaches the Lead",
+          "relay/test/huddle.test.js > the Lead gets the report > unticking takes back a report still waiting for a busy Lead",
+          "relay/test/huddle.test.js > the free report > a failing pipeline that someone is working on does not need the person",
+          "relay/test/huddle.test.js > the free report > a session with no PR says so, which is different",
+          "relay/test/huddle.test.js > the free report > asks gh only when pressed, not on the page's polling",
+          "relay/test/huddle.test.js > the free report > gh failing is said plainly, and never reads as no PR",
+          "relay/test/huddle.test.js > the free report > has a line for each session, saying what state it is in",
+          "relay/test/huddle.test.js > the free report > has the PR, pipeline, review and how long since anything happened",
+          "relay/test/huddle.test.js > the free report > it answers the room page only",
+          "relay/test/huddle.test.js > the free report > leads with what needs the person, and says what they wait on",
+          "relay/test/huddle.test.js > the free report > types into nobody",
+          "relay/test/lead-review.test.js > test > an automatic review and the Lead's count toward the same per-PR limit",
+          "relay/test/lead-review.test.js > test > while Autopilot is on the Lead starts a review with Let the Lead start reviews off (T-333)",
+          "relay/test/lead-review.test.js > the Lead starts a review through the relay, within its switch and the limits > a PR that a reviewer is on is refused, and is not counted",
+          "relay/test/lead-review.test.js > the Lead starts a review through the relay, within its switch and the limits > a PR that is no task's, or not a PR link, is refused",
+          "relay/test/lead-review.test.js > the Lead starts a review through the relay, within its switch and the limits > off by default: the Lead gets 403 and no reviewer starts",
+          "relay/test/lead-review.test.js > the Lead starts a review through the relay, within its switch and the limits > on: only the Lead's token asks; a Dev's gets 401 and the person's key 403",
+          "relay/test/lead-review.test.js > the Lead starts a review through the relay, within its switch and the limits > ticket.js review starts the Get a review reviewer, in its own checkout of the PR head, which posts",
+          "relay/test/lead-stop.test.js > each desk says its ticket, column and next step, and the person stops the safe ones > Stop all safe stops only the safe desks, with the Lead's switch off",
+          "relay/test/lead-stop.test.js > each desk says its ticket, column and next step, and the person stops the safe ones > Stop stops one safe desk, and refuses one that is not",
+          "relay/test/lead-stop.test.js > each desk says its ticket, column and next step, and the person stops the safe ones > each desk on GET /floor",
+          "relay/test/lead-stop.test.js > test > the switch is off by default",
+          "relay/test/lead-stop.test.js > the Lead never stops a session the verdict calls not safe > a name it cannot pin to a session stops nobody",
+          "relay/test/lead-stop.test.js > the Lead never stops a session the verdict calls not safe > it refuses a session that is busy, waiting on the person, the Lead, or the PM talking to the person",
+          "relay/test/lead-stop.test.js > the Lead never stops a session the verdict calls not safe > only the Lead the person let move the board may ask",
+          "relay/test/lead-stop.test.js > the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done > it refuses a Done Dev with uncommitted changes, or a commit that is not pushed",
+          "relay/test/lead-stop.test.js > the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done > it refuses a reviewer that has not posted, and a Dev whose PR has not merged",
+          "relay/test/lead-stop.test.js > the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done > it refuses a session the person just added, and the same one once it is idle",
+          "relay/test/lead-stop.test.js > the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done > it refuses the PM the person is not talking to",
+          "relay/test/lead-stop.test.js > the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done > it stops a Dev whose PR merged, though its task is not Done",
+          "relay/test/lead-stop.test.js > the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done > it stops a Dev whose task is Done by its task id, and the checkout, branch and Bring back stay",
+          "relay/test/lead-stop.test.js > the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done > it stops a posted automatic reviewer by name, and ticket.js, the log and the page say who",
+          "relay/test/lead-stop.test.js > the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done > it stops at most RELAY_LEAD_STOP_LIMIT sessions an hour",
+          "relay/test/manager-token.test.js > the manager's token reaches the watch and the brake, and gets 403 for the rest > another session's token cannot lower the trust level or put a note on Needs you",
+          "relay/test/needs-you-plan.test.js > test > a Dev that stopped with no PR: prompt it",
+          "relay/test/needs-you-plan.test.js > test > a GitHub write that failed: one line for the issue, with GitHub's message and the next try, after the desks",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over stays a decision after review news moves its task out of Waiting on you",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over: decide on it, with its reason",
+          "relay/test/needs-you-plan.test.js > test > a PR merged on GitHub gives a Done line, and one closed with no merge gives a line with no Done",
+          "relay/test/needs-you-plan.test.js > test > a PR only the person may merge: merge it",
+          "relay/test/needs-you-plan.test.js > test > a PR whose automatic review could not start: get a review, with the reason (T-350)",
+          "relay/test/needs-you-plan.test.js > test > a hand-over whose Dev says a finding is a bug offers Fix it, and no other hand-over does",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev running: move the card, the Dev fixes it",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev stopped: bring the Dev back to fix it",
+          "relay/test/needs-you-plan.test.js > test > a posted merge verdict after the hand-over: merge the PR, unless newer commits need a review",
+          "relay/test/needs-you-plan.test.js > test > a push the push hold refused: look at the PR, with a Fix it that lifts the hold, ahead of the hand-over",
+          "relay/test/needs-you-plan.test.js > test > a saved message that has waited long for a running session: open that session, with why",
+          "relay/test/needs-you-plan.test.js > test > a session that asks for permission: approve it, at its seat",
+          "relay/test/needs-you-plan.test.js > test > a session that waits on an answer, or shows a question on its screen: answer it",
+          "relay/test/needs-you-plan.test.js > test > a session the relay told something that did not start: open it",
+          "relay/test/needs-you-plan.test.js > test > a task in Waiting on you: look at it, with the note that put it there",
+          "relay/test/needs-you-plan.test.js > test > a task whose session ended before a PR: bring it back",
+          "relay/test/needs-you-plan.test.js > test > another relay on the room's state folder: stop it, with its Stop button, before anything else",
+          "relay/test/needs-you-plan.test.js > test > no item twice for the same cause",
+          "relay/test/needs-you-plan.test.js > test > notes signed with another key give one line that names the fix",
+          "relay/test/needs-you-plan.test.js > test > nothing needs the person: the list is empty",
+          "relay/test/needs-you-plan.test.js > test > reviews wait for a desk and the relay may stop no session: one line names the wait, after the questions",
+          "relay/test/needs-you-plan.test.js > test > text from a session is cleaned to one line",
+          "relay/test/needs-you-plan.test.js > test > with no review after the hand-over, the line keeps Autopilot's reason",
+          "relay/test/pm-seat.test.js > test > the room keeps a PM running, and starts it again when it ends",
+          "relay/test/pr-watch.test.js > test > a PR found by its branch gets its first review, with the PR watch off",
+          "relay/test/pr-watch.test.js > test > a PR found by its branch that already has a review record gets no second review",
+          "relay/test/pr-watch.test.js > test > a PR that waits past the set time goes to the person",
+          "relay/test/pr-watch.test.js > test > a fix review, then a Dev reply on the PR and no push, starts a follow-up review of the same commit with the reply in its brief",
+          "relay/test/pr-watch.test.js > test > a linked PR in Waiting on you with a protected file gets its first review",
+          "relay/test/pr-watch.test.js > test > a linked PR with no review record gets its first review while a check runs",
+          "relay/test/pr-watch.test.js > test > a linked PR with no review record gets its first review within one PR watch pass",
+          "relay/test/pr-watch.test.js > test > a relay that starts with a PR head newer than its last reviewed commit starts the follow-up review within one PR watch pass",
+          "relay/test/pr-watch.test.js > test > a task with no PR finds the open PR whose head is its branch, and no other. It asks no more once it has one, with the setting at 0, or with its folder gone",
+          "relay/test/pr-watch.test.js > test > a task with no PR is not looked up while the hourly GitHub budget is used up",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > a restart keeps what was done: the Dev is not told again",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > it is off by default, and does nothing then",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 1 again, then row 4: a new head gets a follow-up, and reviewed, green and clean tells the Lead",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 1: a PR with no review of its head, and no record of one, gets one",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 2: a conflict with main, then a failed check, each told once",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 2: blocking findings are told to the Dev once, and a Dev that does not start shows as stuck",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 3: commits in the Dev's checkout that the PR does not have, with the Dev idle: push",
+          "relay/test/pr-watch.test.js > the PR watch moves an open task PR to its next step, once for each head and cause > row 5: one line on the Floor, the Board and ticket.js floor",
+          "relay/test/review-desk.test.js > test > which session a review may stop, and in what order",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > a failed post does not count",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > a gh command quoted in the review's body is not a post",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > a new prompt from the person during the grace period keeps it",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > a post to another PR does not count",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > a posted comment, then the end of its turn: the session ends, its desk is free and its checkout goes",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > a prompt the relay typed does not keep it, and a huddle in the grace period does not ask it",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > a review that left a file behind ends, and its checkout waits for Clean up with the reason",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > a session without the automatic reviewer's start that posts a comment keeps going",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > gh pr review counts too, and links the PR",
+          "relay/test/review-end.test.js > a reviewer that has posted ends by itself > typing during the grace period keeps it",
+          "relay/test/review-end.test.js > test > the hook reports a post only for a gh command that ran and worked",
+          "relay/test/work.test.js > what each session is working on > a Dev shows their task's ticket",
+          "relay/test/work.test.js > what each session is working on > a page that reloads can get every label from the relay, using only its address",
+          "relay/test/work.test.js > what each session is working on > a reviewer keeps their ticket after the task is cleaned up",
+          "relay/test/work.test.js > what each session is working on > a reviewer started after the task records its PR shows the ticket at once",
+          "relay/test/work.test.js > what each session is working on > a reviewer started before the task records its PR shows the PR, then the ticket",
+          "relay/test/work.test.js > what each session is working on > a reviewer whose PR has no task has no number",
+          "relay/test/work.test.js > what each session is working on > a session with no ticket has no work, and keeps its own title",
+          "relay/test/work.test.js > what each session is working on > a task that moves on to a new PR keeps the reviewer of the old one",
+          "relay/test/work.test.js > what each session is working on > a task with no ticket has no number",
+          "relay/test/work.test.js > what each session is working on > the PM says they are the PM",
+          "relay/test/work.test.js > what each session is working on > the stream a page attaches to says the same"
+        ],
+        "did_not_load_on_base": [
+          "relay/test/manager-jams.test.js"
+        ]
+      },
+      "author": "builder",
+      "duration_ms": 1124010
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 202866
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "room-settings",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund > /dev/null && HOME=\"$(mktemp -d)\" RELAY_ROLLBACK=1 RELAY_WORLD=office OFFICE_HOOK_URL=http://127.0.0.1:9/hook OFFICE_TICKET_TOKEN=probe OFFICE_ROOM_PROBE=1 CLAUDE_CODE_ROOM_PROBE=1 node --test --test-timeout=120000 relay/test/room-env.test.js relay/test/rollback.test.js relay/test/restart.test.js relay/test/review-link.test.js"
+      },
+      "kinds": [
+        "test-helpers"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/room-settings/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 114373
+    }
+  ],
+  "verdict": "meets_policy",
+  "gaps": [],
+  "checks_by_author": {
+    "builder": 5,
+    "hidden": 0
+  },
+  "flaky_tests": [],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-26T13:12:28.079Z"
+}
