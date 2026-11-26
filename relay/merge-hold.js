@@ -10,6 +10,9 @@
 //   - Is the Dev at work, running a job (such as npm test in the background), at a question, or told
 //     something it has not started on? It may still be answering the latest review, and its fixes would
 //     land after the merge.
+//     A running job alone holds nothing while the push hold covers the PR's head (relay/push-hold.js): the
+//     latest verdict says merge for that head, so the Dev cannot push, and a job cannot change what merges
+//     (T-483, PR 451 waited 9.5 hours on a wait loop that never ended).
 //   - Was the Dev told something (t.toldAt, set by relay/delivery.js when it types a note) after its
 //     last turn began (t.turnAt)? Then the review news is delivered, so task.reviews.pending is empty,
 //     but its hooks still say idle until its UserPromptSubmit hook comes, about a second later, and it is
@@ -26,6 +29,7 @@ const { execFileSync } = require('child_process');
 const { livenessOf, jobWords } = require('./liveness.js');
 const config = require('./config.js');
 const { TOLD_HOLD } = require('./stop-verdict.js');
+const pushHold = require('./push-hold.js');
 
 function unsavedWork(dir) {
   const git = (...args) => execFileSync('git', ['-C', dir].concat(args), { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -44,14 +48,24 @@ const busy = (lv, dev) => ({ working: 'is working', quiet: 'is in a turn', waiti
 
 const toldSinceTurn = (dev, now) => (dev.toldAt || 0) > (dev.turnAt || 0) && now - dev.toldAt < TOLD_HOLD;
 
-function holdOf(task, dev, now, unsaved = unsavedWork) {
+function pushHeld(task, head) {
+  const dir = task.worktree && pushHold.gitDirOf(task.worktree);
+  if (!dir) return false;
+  try {
+    const mark = JSON.parse(fs.readFileSync(require('path').join(dir, pushHold.MARK), 'utf8'));
+    const at = head || execFileSync('git', ['-C', task.worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return !!mark.commit && mark.commit === at;
+  } catch (e) { return false; }
+}
+
+function holdOf(task, dev, now, unsaved = unsavedWork, head = null) {
   const lv = livenessOf(dev, now);
   const gone = lv.state === 'gone';
   const r = task.reviews || {};
   if (unseen(r)) return { act: 'wait', why: UNSEEN };
   const news = r.pending;
   if (news && !gone) return { act: 'wait', why: 'Its Dev has not been told of the latest review yet.' };
-  if (busy(lv, dev)) return { act: 'wait', why: 'Its Dev ' + busy(lv, dev) + ', maybe still answering the latest review, so the PR may not hold every fix yet.' };
+  if (busy(lv, dev) && !(lv.state === 'job' && pushHeld(task, head))) return { act: 'wait', why: 'Its Dev ' + busy(lv, dev) + ', maybe still answering the latest review, so the PR may not hold every fix yet.' };
   if (!gone && toldSinceTurn(dev, now)) return { act: 'wait', why: 'Its Dev was told something and has not started on it yet, so the PR may not hold every fix yet.' };
   const dir = task.worktree || (dev && dev.cwd);
   const left = dir && fs.existsSync(dir) ? unsaved(dir) : null;
