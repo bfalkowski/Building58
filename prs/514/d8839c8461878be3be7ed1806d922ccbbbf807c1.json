@@ -1,0 +1,254 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 514,
+  "base": "78256ec2e370d0a506151971ad8c9a49611fb41e",
+  "head": "d8839c8461878be3be7ed1806d922ccbbbf807c1",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "needs-you",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code",
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1720,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1732,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 1066598
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 1015
+    },
+    {
+      "type": "failing-before",
+      "params": {},
+      "kinds": [
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "test_files": [
+          "relay/test/jobs.test.js",
+          "relay/test/needs-you-plan.test.js",
+          "relay/test/pr-watch-plan.test.js",
+          "relay/test/stuck-job-relay.test.js"
+        ],
+        "tests": [
+          {
+            "name": "relay/test/comment-paths.test.js > test > each repo file a code comment names exists",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/jobs.test.js > test > a job that goes quiet counts its 30 minutes from the last output, not from its start",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/jobs.test.js > test > a job that uses CPU is not stuck, even when its compilers come and go",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/jobs.test.js > test > a job whose output file grows is not stuck, however little CPU it uses",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/jobs.test.js > test > a job with no CPU and no output for 30 minutes is stuck, from a wait loop that spawns sleeps",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/jobs.test.js > test > a session's jobs are the jobs of the claude under its bridge, and no one else's",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/jobs.test.js > test > a stuck job does not make a session busy: it is idle, and a job that works still does",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/jobs.test.js > test > ending a job ends its own processes only, never the session, a helper or another session's job",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/jobs.test.js > test > the command is the one line the Bash tool ran, not the shell's snapshot setup",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/needs-you-plan.test.js > test > the most urgent kind comes first, and every kind has a rule",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/pr-watch-plan.test.js > test > a wait that Autopilot owns turns late after the set time, like any other",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/stuck-job-relay.test.js > test > a Dev's own token cannot end a stuck job, and the Lead needs the board",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/stuck-job-relay.test.js > test > a stuck job shows on the Floor and Needs you, the Dev is told once, and after the second look only the job ends",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/stuck-job-relay.test.js > test > the Lead ends a stuck job only with Let the Lead stop sessions on, and while Autopilot is on",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/stuck-job-relay.test.js > test > the person ends a stuck job with End it, and a job that is not stuck is refused",
+            "on_base": "failed"
+          }
+        ],
+        "passed_on_base": [
+          "relay/test/jobs.test.js > test > Claude Code's helpers and MCP servers are not jobs, however long they run",
+          "relay/test/jobs.test.js > test > a hook or status line command is a shell with -c, but a helper while it is young",
+          "relay/test/jobs.test.js > test > a job does not change the other states",
+          "relay/test/jobs.test.js > test > a shell from the Bash tool is a job, from its first second",
+          "relay/test/jobs.test.js > test > a shell without -c, such as a subshell of the program itself, is not a job",
+          "relay/test/jobs.test.js > test > out of a turn with a job still running: job since its turn ended, not idle",
+          "relay/test/jobs.test.js > test > ps times read as milliseconds",
+          "relay/test/needs-you-plan.test.js > test > a Dev that stopped with no PR: prompt it",
+          "relay/test/needs-you-plan.test.js > test > a GitHub write that failed: one line for the issue, with GitHub's message and the next try, after the desks",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over stays a decision after review news moves its task out of Waiting on you",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over: decide on it, with its reason",
+          "relay/test/needs-you-plan.test.js > test > a PR merged on GitHub gives a Done line, and one closed with no merge gives a line with no Done",
+          "relay/test/needs-you-plan.test.js > test > a PR only the person may merge: merge it",
+          "relay/test/needs-you-plan.test.js > test > a PR whose automatic review could not start: get a review, with the reason (T-350)",
+          "relay/test/needs-you-plan.test.js > test > a hand-over whose Dev says a finding is a bug offers Fix it, and no other hand-over does",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev running: move the card, the Dev fixes it",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev stopped: bring the Dev back to fix it",
+          "relay/test/needs-you-plan.test.js > test > a posted merge verdict after the hand-over: merge the PR, unless newer commits need a review",
+          "relay/test/needs-you-plan.test.js > test > a push the push hold refused: look at the PR, with a Fix it that lifts the hold, ahead of the hand-over",
+          "relay/test/needs-you-plan.test.js > test > a saved message that has waited long for a running session: open that session, with why",
+          "relay/test/needs-you-plan.test.js > test > a session that asks for permission: approve it, at its seat",
+          "relay/test/needs-you-plan.test.js > test > a session that waits on an answer, or shows a question on its screen: answer it",
+          "relay/test/needs-you-plan.test.js > test > a session the relay told something that did not start: open it",
+          "relay/test/needs-you-plan.test.js > test > a task in Waiting on you: look at it, with the note that put it there",
+          "relay/test/needs-you-plan.test.js > test > a task whose session ended before a PR: bring it back",
+          "relay/test/needs-you-plan.test.js > test > another relay on the room's state folder: stop it, with its Stop button, before anything else",
+          "relay/test/needs-you-plan.test.js > test > no item twice for the same cause",
+          "relay/test/needs-you-plan.test.js > test > notes signed with another key give one line that names the fix",
+          "relay/test/needs-you-plan.test.js > test > nothing needs the person: the list is empty",
+          "relay/test/needs-you-plan.test.js > test > reviews wait for a desk and the relay may stop no session: one line names the wait, after the questions",
+          "relay/test/needs-you-plan.test.js > test > text from a session is cleaned to one line",
+          "relay/test/needs-you-plan.test.js > test > with no review after the hand-over, the line keeps Autopilot's reason",
+          "relay/test/pr-watch-plan.test.js > test > CI running, a verdict not posted, a review with no verdict",
+          "relay/test/pr-watch-plan.test.js > test > Waiting on you and Autopilot's own tasks are left alone",
+          "relay/test/pr-watch-plan.test.js > test > a Dev at work, at a question or stuck is not told again",
+          "relay/test/pr-watch-plan.test.js > test > a PR the relay has no review record of still gets one",
+          "relay/test/pr-watch-plan.test.js > test > a red PR that changes the PM brief and not its eval file waits on you to run the eval",
+          "relay/test/pr-watch-plan.test.js > test > blocking findings, a conflict and a failed check go to the Dev",
+          "relay/test/pr-watch-plan.test.js > test > commits the PR does not have, with the Dev idle: it tells the Dev to push, before any review",
+          "relay/test/pr-watch-plan.test.js > test > no review of the current head: it asks for one",
+          "relay/test/pr-watch-plan.test.js > test > one that changes the constitution or CLAUDE.md waits on you",
+          "relay/test/pr-watch-plan.test.js > test > past the review limit, off, failed or already waiting, it asks for none",
+          "relay/test/pr-watch-plan.test.js > test > reviewed at the head, green and clean: it tells the Lead",
+          "relay/test/pr-watch-plan.test.js > test > waiting past the set time goes to the person, and the line says who and how long",
+          "relay/test/pr-watch-plan.test.js > test > with its Dev gone, nobody can be told, so it is the person's"
+        ],
+        "did_not_load_on_base": []
+      },
+      "author": "builder",
+      "duration_ms": 1066501
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 24621
+    }
+  ],
+  "verdict": "meets_policy",
+  "gaps": [],
+  "checks_by_author": {
+    "builder": 4,
+    "hidden": 0
+  },
+  "flaky_tests": [],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-26T12:30:02.878Z"
+}
