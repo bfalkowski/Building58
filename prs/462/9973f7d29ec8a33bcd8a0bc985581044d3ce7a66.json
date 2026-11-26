@@ -1,0 +1,127 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 462,
+  "base": "9516d4b0d94db88ce1569fca5b30902fedde7f5c",
+  "head": "9973f7d29ec8a33bcd8a0bc985581044d3ce7a66",
+  "classification": {
+    "kinds": [
+      "code",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": true,
+    "fix_signal": "title_after_key:fix",
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1600,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1600,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 789451
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "missing",
+      "details": {
+        "test_files": [
+          "relay/test/browser/games.test.js",
+          "relay/test/browser/pingpong.test.js",
+          "relay/test/rollback.test.js"
+        ],
+        "tests": [],
+        "passed_on_base": [
+          "relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > a fail while the relay still runs: it is stopped, saves its sessions, and Update goes back",
+          "relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > a fail: the new relay does not start, so Update checks out the last good commit and restarts on it",
+          "relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > a pass: the new relay answers, serves the page and brings back the session, so its commit is recorded",
+          "relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > and Update pulls nothing more until a person checks out main, and says why",
+          "relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > once a person checks out main, the page no longer says it rolled back",
+          "relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > the first start passes, and its commit is recorded outside the repo",
+          "relay/test/rollback.test.js > test > a rollback never touches changes to tracked files",
+          "relay/test/rollback.test.js > test > a rollback to a commit with no session host stops the host, so the old relay brings each session back once",
+          "relay/test/rollback.test.js > test > a test relay runs no rollback check unless the test asks, even from a shell with RELAY_ROLLBACK=1",
+          "relay/test/rollback.test.js > test > plan: when a failed check rolls back",
+          "relay/test/rollback.test.js > test > the record of the last good commit belongs to one folder"
+        ],
+        "did_not_load_on_base": []
+      },
+      "author": "builder",
+      "duration_ms": 393818
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 76
+    }
+  ],
+  "verdict": "needs_person",
+  "gaps": [
+    {
+      "type": "failing-before",
+      "status": "missing",
+      "how_to_fix": "11 tests that the change adds or changes pass on the base too, so they do not show the problem: relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > a fail while the relay still runs: it is stopped, saves its sessions, and Update goes back; relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > a fail: the new relay does not start, so Update checks out the last good commit and restarts on it; relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > a pass: the new relay answers, serves the page and brings back the session, so its commit is recorded; relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > and Update pulls nothing more until a person checks out main, and says why; relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > once a person checks out main, the page no longer says it rolled back; relay/test/rollback.test.js > Update goes back to the last good commit when the new relay fails its check > the first start passes, and its commit is recorded outside the repo; relay/test/rollback.test.js > test > a rollback never touches changes to tracked files; relay/test/rollback.test.js > test > a rollback to a commit with no session host stops the host, so the old relay brings each session back once; relay/test/rollback.test.js > test > a test relay runs no rollback check unless the test asks, even from a shell with RELAY_ROLLBACK=1; relay/test/rollback.test.js > test > plan: when a failed check rolls back; relay/test/rollback.test.js > test > the record of the last good commit belongs to one folder. Add a test that fails without the change and passes with it, and run exhibit check again. A flaky test never counts."
+    }
+  ],
+  "checks_by_author": {
+    "builder": 3,
+    "hidden": 0
+  },
+  "flaky_tests": [],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-26T14:26:21.069Z"
+}
