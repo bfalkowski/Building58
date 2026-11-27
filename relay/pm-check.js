@@ -20,6 +20,7 @@ const HOLDING = ['not-needed', 'duplicate', 'part-of'];
 const asked = new Map();
 const chains = new Map();
 const preferred = new Map();
+const redirected = new Map();
 const held = new Map();
 const keyOf = (channel, id) => channel + '/' + id;
 const deliveryKey = (id) => 'pm-check ' + id;
@@ -48,7 +49,7 @@ function consult(channel, ticket, all) {
   if (p && p.answer && history.changedSince(channel, ticket, p.answeredAt)) { give(channel, id); p = undefined; }
   if (!p || !p.answer) {
     const saved = history.advice(channel, ticket);
-    if (saved && !saved.proposed && !(rung >= trust.HOLD && saved.rung >= trust.HOLD && HOLDING.includes(saved.answer))) {
+    if (saved && !(saved.answer === 'first' && saved.at <= (redirected.get(key) || '')) && !saved.proposed && !(rung >= trust.HOLD && saved.rung >= trust.HOLD && HOLDING.includes(saved.answer))) {
       give(channel, id);
       return decide(channel, id, saved, rung, all);
     }
@@ -76,6 +77,7 @@ function consult(channel, ticket, all) {
 }
 
 function decide(channel, id, answer, rung, all) {
+  if (answer.answer === 'first') redirected.set(keyOf(channel, id), new Date().toISOString());
   const chain = chains.get(channel) || [];
   if (answer.answer === 'first' && rung >= trust.HOLD) {
     const other = all.find((t) => t.id === answer.of);
@@ -110,6 +112,6 @@ const takeHeld = (channel) => { const said = held.get(channel) || []; held.delet
 const prefer = (channel) => preferred.get(channel) || null;
 const clearPrefer = (channel) => { preferred.delete(channel); };
 const waiting = (channel) => [...asked].some(([k, p]) => k.startsWith(channel + '/') && !p.answer && Date.now() - p.askedAt < limitMs());
-const forget = () => { asked.clear(); chains.clear(); preferred.clear(); held.clear(); };
+const forget = () => { asked.clear(); chains.clear(); preferred.clear(); held.clear(); redirected.clear(); };
 
 module.exports = { consult, answered, takeHeld, prefer, clearPrefer, waiting, seat, forget };
