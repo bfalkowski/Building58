@@ -274,10 +274,10 @@ const dropHandOver = (rec) => { plan.clearConflictCount(rec); rec.handedOver = n
 function held(channel, task) {
   const rec = task.pr && chOf(channel).prs[task.pr];
   if (!rec || !rec.handedOver) return task.state === 'waiting_on_you';
-  if (handedBack(task, rec)) { dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save(); return false; }
+  if (handedBack(task, rec)) { dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save(); reviews.giveReview(channel, task.pr); return false; }
   const v = answeredByReview(channel, rec);
   if (!v) return true;
-  dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save();
+  dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save(); reviews.giveReview(channel, task.pr);
   const why = 'a review of ' + v.commit.slice(0, 7) + ', a newer commit than the hand-over, says merge';
   if (task.state === 'waiting_on_you') tasks.setState(channel, task, 'in_review', BY, 'Autopilot: ' + why + ', so the task is back.');
   note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
@@ -325,7 +325,7 @@ function mergeTest(channel, task, rec, decide, head) {
 }
 function forPersonMerge(channel, task, rec, pr, locked) {
   const v = latest(rec);
-  return plan.forPersonMerge(pr, locked, v, mergeTest(channel, task, rec, (x, gone) => plan.forReviewed(pr, x, roundsOf(rec), MAX_ROUNDS(), gone), pr.headRefOid));
+  return plan.forPersonMerge(pr, locked, v, mergeTest(channel, task, rec, (x, gone) => plan.forReviewed(pr, x, roundsOf(rec), MAX_ROUNDS(), gone, undefined, reviews.noReview(channel, task.pr)), pr.headRefOid));
 }
 async function follow(channel, task) {
   const rec = recOf(channel, task.pr), got = await readPr(task, rec);
@@ -356,10 +356,10 @@ async function lookAt(channel, task) {
   if (files) { rec.apiFiles = plan.touchesApi(files); if (rec.apiSeq === undefined) rec.apiSeq = chOf(channel).apiSeq || 0; }
   if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
   const v = latest(rec);
-  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone), pr.headRefOid);
+  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, undefined, reviews.noReview(channel, task.pr)), pr.headRefOid);
   if (d.act === 'merge') {
     const ex = await exhibitOf(task, pr);
-    if (ex !== undefined) d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex), pr.headRefOid);
+    if (ex !== undefined) d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex, reviews.noReview(channel, task.pr)), pr.headRefOid);
   }
   rec.why = d.why; rec.act = d.act;
   if (d.act === 'wait') rec.why = reviews.deskLine(channel, task.pr) || rec.why;
@@ -377,7 +377,7 @@ async function lookAt(channel, task) {
     const again = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch((e) => ({ failed: e.message }));
     if (again.failed) { rec.why = 'Ready to merge, but gh could not read the PR again just before: ' + again.failed; rec.act = 'wait'; return; }
     const lastEx = await exhibitOf(task, again);
-    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone, lastEx), again.headRefOid);
+    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone, lastEx, reviews.noReview(channel, task.pr)), again.headRefOid);
     if (last.act !== 'merge') { rec.why = last.why; rec.act = last.act; return; }
     try { await gh(['pr', 'merge', task.pr, '--merge', '--match-head-commit', pr.headRefOid], task.repo); } catch (e) {
       const now = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch(() => null);
@@ -724,6 +724,8 @@ function decideFix(channel, task, by) {
   const who = by === 'you' ? 'You' : 'The Lead', held = handedReasonOf(rec) === 'dev-says-bug' ? (String(rec.handedOver || '').match(HELD_URL) || [])[0] : null;
   rec.verdicts.push({ kind: 'fix', commit: v.commit, by, sessionId: null, at: new Date().toISOString(), posted: 'decided by ' + by });
   dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; rec.act = 'wait'; rec.why = null;
+  reviews.giveReview(channel, task.pr);
+  const none = reviews.noReview(channel, task.pr), after = none ? ' No follow-up review will start, since ' + none + '. Start one with Get a review.' : ' A follow-up review checks the fix.';
   if (chOf(channel).stuck) delete chOf(channel).stuck[task.id];
   save();
   holdPushes(channel, task);
@@ -731,9 +733,9 @@ function decideFix(channel, task, by) {
   if (task.state === 'changes_requested') tasks.record(task, { type: 'note', note: why }); else tasks.setState(channel, task, 'changes_requested', by, why);
   tasks.save();
   delivery.save(channel, { key: 'autopilot-fix ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
-    text: (by === 'you' ? 'The person' : 'The Lead') + ' decided that a finding on your PR ' + task.pr + ' must be fixed in this PR' + (held ? ', as you said in ' + oneLine(held, 200) : '') + '. Fix it, run the tests, and push. The push hold is lifted, and a follow-up review checks the fix.' });
+    text: (by === 'you' ? 'The person' : 'The Lead') + ' decided that a finding on your PR ' + task.pr + ' must be fixed in this PR' + (held ? ', as you said in ' + oneLine(held, 200) : '') + '. Fix it, run the tests, and push. The push hold is lifted.' + after });
   note(channel, (task.ticket || 'Task ' + task.id) + ': ' + why + ' The push hold is lifted.');
-  return [200, { ok: true, pr: task.pr, task: task.id, commit: v.commit, message: why + ' The push hold is lifted, and its Dev is told to fix it.' }];
+  return [200, { ok: true, pr: task.pr, task: task.id, commit: v.commit, message: why + ' The push hold is lifted, and its Dev is told to fix it.' + after }];
 }
 const findTask = (channel, what) => tasks.list(channel).find((x) => what && (x.id === what || x.ticket === what || x.pr === what)) || null;
 
@@ -779,7 +781,7 @@ function deskOf(channel, task) {
   const handed = r && r.handedOver && !handedBack(task, r) ? r.handedOver : null;
   const since = handed && handedReasonOf(r) === 'stalled' && r.verdicts.filter((x) => Date.parse(x.at) > Date.parse(r.handedOverAt) && postOf(channel, x)).pop();
   const reviewedSince = since ? { kind: since.kind, commit: since.commit, url: postOf(channel, since) } : null;
-  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', reviewedSince, pushRefused: refusedOf(task, v) };
+  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', outOfReviews: !!handed && handedReasonOf(r) === 'rounds', reviewedSince, pushRefused: refusedOf(task, v) };
 }
 
 function refusedOf(task, v) {

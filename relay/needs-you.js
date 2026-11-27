@@ -61,7 +61,7 @@ function noteOf(task) {
 
 function handedOf(channel, task) {
   const desk = autopilot.deskOf(channel, task), r = desk.reviewedSince, head = r && (pipeline.of(task.pr) || {}).head;
-  return { handedOver: desk.handedOver, devSaysBug: !!desk.devSaysBug, pushRefused: desk.pushRefused, reviewedSince: r ? { ...r, current: !head || head === r.commit } : null };
+  return { handedOver: desk.handedOver, devSaysBug: !!desk.devSaysBug, outOfReviews: !!desk.outOfReviews, pushRefused: desk.pushRefused, reviewedSince: r ? { ...r, current: !head || head === r.commit } : null };
 }
 
 function stateOf(channel, now, lastReport) {
@@ -74,7 +74,7 @@ function stateOf(channel, now, lastReport) {
   const report = lastReport || huddles.reportOf(channel);
   const reviewing = (pr) => all.some((x) => !x.exited && x.reviewOf === pr && !x.posted);
   const out = list.map((task) => ({
-    id: task.id, ticket: task.ticket || null, title: task.title || null, state: task.state, pr: task.pr || null,
+    id: task.id, repo: task.repo || null, ticket: task.ticket || null, title: task.title || null, state: task.state, pr: task.pr || null,
     prOpen: task.pr ? !closed(channel, task.pr) : null,
     prMerged: !!task.pr && tasks.prMerged(channel, task),
     prClosed: !!task.pr && !tasks.prMerged(channel, task) && (chat.prClosed(channel, task.pr) || (pipeline.of(task.pr) || {}).prState === 'CLOSED'),
