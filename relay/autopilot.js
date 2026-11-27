@@ -36,6 +36,7 @@
 'use strict';
 const { execFile } = require('child_process');
 const { mergedMain } = require('./merged-main.js');
+const workflowPush = require('./workflow-push.js');
 const fs = require('fs');
 const path = require('path');
 const state = require('./state.js');
@@ -363,6 +364,7 @@ async function lookAt(channel, task) {
   }
   rec.why = d.why; rec.act = d.act;
   if (d.act === 'wait') rec.why = reviews.deskLine(channel, task.pr) || rec.why;
+  rec.why = workflowPush.reasonFor(channel, task.id, rec.why);
   if (d.act === 'done') markDone(channel, task);
   else if (d.act === 'merge') {
     const c = chOf(channel);
@@ -603,7 +605,7 @@ function stalled(channel) {
     const reviewing = task.pr && terminal.all(channel).some((t) => t.reviewOf === task.pr && livenessOf(t, Date.now()).state !== 'gone');
     const waitsOnCi = rec && /CI|GitHub says|PRs today/.test(rec.why || '');
     const waitsForDesk = !!task.pr && reviews.owes(channel, task.pr);
-    const stuck = !devBusy && !reviewing && !waitsOnCi && !waitsForDesk;
+    const stuck = plan.stalls({ devBusy, reviewing, waitsOnCi, waitsForDesk, waitsOnPerson: workflowPush.waits(channel, task.id) });
     const key = channel + ' ' + task.id;
     if (!stuck) { stuckSince.delete(key); continue; }
     if (!stuckSince.has(key)) { stuckSince.set(key, Date.now()); continue; }

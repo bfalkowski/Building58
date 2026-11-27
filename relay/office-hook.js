@@ -153,7 +153,13 @@ function summarize(p) {
     if (posted) out.posted = posted;
     if (ran && pushedIn(ran, p.tool_response)) out.pushed = true;
   }
+  if (p.tool_name === 'Bash' && p.tool_input && refusedPush(String(p.tool_input.command || ''), p.hook_event_name === 'PostToolUseFailure' ? p.error : p.tool_response)) out.workflow_refused = true;
   return out;
+}
+const WORKFLOW_REFUSAL = /refusing to allow a GitHub App to create or update workflow/i;
+function refusedPush(cmd, said) {
+  if (!WORKFLOW_REFUSAL.test(typeof said === 'string' ? said : JSON.stringify(said || ''))) return false;
+  return blankText(cmd).search(GIT_PUSH) >= 0;
 }
 const VALUE_FLAGS = new Set(['-b', '--body', '-F', '--body-file', '-R', '--repo']);
 const NOT_POSTED = new Set(['-w', '--web', '--delete-last', '--edit-last', '-e', '--editor', '-h', '--help']);

@@ -402,6 +402,7 @@ let hooksOpen = false;
 const earlyHooks = [];
 function noteHook(name, event) {
   for (const k of ['terminal', 'tasks', 'prComments', 'huddles', 'reviews', 'coo', 'security', 'chat']) office[k].noteHook(name, event);
+  if (office) require('./workflow-push.js').noteHook(name, event);
 }
 const LOCAL = new Set(['127.0.0.1', 'localhost', '[::1]']);
 function replayHooks(entries) {
@@ -458,6 +459,7 @@ server.listen(PORT, HOST, async () => {
     require('./pm-seat.js').begin(LEAD_CHANNEL, { port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.metrics.start(LEAD_CHANNEL);
     reviews.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
+    require('./workflow-push.js').begin();
     autopilot.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.update.begin({ port: PORT, key: KEY, log });
     office.prWatch.begin({ log });
