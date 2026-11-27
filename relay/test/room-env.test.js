@@ -44,7 +44,7 @@ test('the test runner gives each file none of the room variables of the shell th
   assert.match(r.stdout, /room variables: \[\]/);
 });
 
-test('a test relay reads no plugins from the CLAUDE_CONFIG_DIR of the shell, but reads the one the test sets (T-492)', async (t) => {
+test('a test relay reads no plugins from the CLAUDE_CONFIG_DIR of the shell, but reads the one the test sets', async (t) => {
   const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-config-env-')));
   const seen = path.join(tmp, 'env.txt'), cmd = path.join(tmp, 'claude'), plugins = path.join(tmp, 'plugins');
   fs.mkdirSync(plugins);
