@@ -11,8 +11,7 @@
 //     something it has not started on? It may still be answering the latest review, and its fixes would
 //     land after the merge.
 //     A running job alone holds nothing while the push hold covers the PR's head (relay/push-hold.js): the
-//     latest verdict says merge for that head, so the Dev cannot push, and a job cannot change what merges
-//     (T-483, PR 451 waited 9.5 hours on a wait loop that never ended).
+//     latest verdict says merge for that head, so the Dev cannot push, and a job cannot change what merges.
 //   - Was the Dev told something (t.toldAt, set by relay/delivery.js when it types a note) after its
 //     last turn began (t.turnAt)? Then the review news is delivered, so task.reviews.pending is empty,
 //     but its hooks still say idle until its UserPromptSubmit hook comes, about a second later, and it is

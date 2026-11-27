@@ -1043,7 +1043,6 @@ test('a Dev whose turn ends without merging main is asked once more, then the pe
   assert.deepStrictEqual(jam.map((j) => [j.kind, j.by, /Reason conflict-dropped\./.test(j.fix)]), [['handed-over', 'autopilot', true]]);
 });
 
-// T-483: a job cannot change what merges once the push hold covers the reviewed head, so a Dev running one does not hold a merge.
 test('a merge verdict on its head merges although the Dev is running a job', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_JOB_SCAN_MS: '200' });
