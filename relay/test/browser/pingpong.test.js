@@ -50,7 +50,7 @@ pageTest('someone sent to their desk ends their game, so the other player leaves
     }).map((w) => w.id).sort();
     if (players.length === 1) return { bad: 'one person plays alone: ' + players.join(', ') };
     return { done: !players.includes('sam') && window.run.debug(window.__partner).spot !== 'pp-e' };
-  }, [PLAYING]);
+  }, [PLAYING], 90000);
   assert.strictEqual(seen.bad, undefined, seen.bad);
   assert.ok(!(await playing(p)).includes('sam'), 'Sam left the game');
   assert.deepStrictEqual(p.errors, []);

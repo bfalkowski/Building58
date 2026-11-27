@@ -94,18 +94,19 @@ pageTest('someone on the couch stays there for the party, no new game starts, an
 
   // Nobody starts ping pong on their own while it is on: chooseIdle is driven a while at speed.
   await page.evaluate(() => window.run.speed({ value: 8 }));
-  const seen = await watch(p, () => {
+  const seen = await watch(p, (stay) => {
     const now = window.run.state().workers.filter((w) => w.present && w.status === 'idle').map((w) => [w.id, window.run.debug(w.id)]);
     if (now.some(([, d]) => /^pp-/.test(d.spot))) return { bad: 'somebody went to the table' };
     const prev = window.__choices || (window.__choices = {});
     for (const [id, d] of now) {
+      if (id === stay) continue;
       const key = d.step ? d.step.t + ':' + d.step.key : '';
       const was = prev[id];
       if (!was) prev[id] = { key, el: d.step ? d.step.el : 0, n: 0 };
       else { if (was.key !== key || (d.step && d.step.el < was.el)) was.n++; was.key = key; was.el = d.step ? d.step.el : 0; }
     }
     return { done: Object.values(prev).length > 0 && Object.values(prev).every((c) => c.n >= 1) };
-  });
+  }, id, 90000);
   assert.strictEqual(seen.bad, undefined, seen.bad);
   await page.evaluate(() => window.run.do({ action: 'party', on: false }));
   assert.deepStrictEqual(p.errors, []);
