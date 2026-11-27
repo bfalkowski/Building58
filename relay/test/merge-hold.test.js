@@ -107,3 +107,18 @@ test('a Dev told something after its last turn began, with no hook since: wait',
   assert.strictEqual(holdOf(task(dir), dev('idle', { exited: true, toldAt: now - 500 }), now), null, 'a Dev that has ended will not start on it');
   assert.strictEqual(holdOf(task(dir), dev('idle', { turnAt: now - 60000, toldAt: now - 16000 }), now), null, 'past RELAY_TOLD_HOLD_MS (15 seconds) the wait ends, so a note that never starts a turn cannot hold the merge for good');
 });
+
+test('a running job does not hold a merge while the push hold covers the reviewed head', (t) => {
+  const dir = checkout(t);
+  const head = sh(dir, 'rev-parse', 'HEAD');
+  const gitDir = path.join(dir, '.git');
+  const job = dev('idle', { jobs: { count: 1 } });
+  assert.strictEqual(holdOf(task(dir), job, now, undefined, head).act, 'wait', 'push hold off: the job still holds');
+  fs.writeFileSync(path.join(gitDir, 'office-push-hold.json'), JSON.stringify({ pr: 'x', commit: head, base: 'main' }) + '\n');
+  assert.strictEqual(holdOf(task(dir), job, now, undefined, head), null, 'push hold on for this head');
+  assert.strictEqual(holdOf(task(dir), job, now), null, 'head read from the checkout');
+  assert.strictEqual(holdOf(task(dir), job, now, undefined, 'f'.repeat(40)).act, 'wait', 'the PR head is not the reviewed commit');
+  assert.strictEqual(holdOf(task(dir), dev('working'), now, undefined, head).act, 'wait', 'a Dev in a turn still holds');
+  assert.strictEqual(holdOf(task(dir), dev('waiting'), now, undefined, head).act, 'wait', 'a Dev at a question still holds');
+  assert.strictEqual(holdOf(task(dir, { reviews: { pending: { links: ['x'], count: 1 } } }), job, now, undefined, head).act, 'wait', 'untold news still holds');
+});
