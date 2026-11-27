@@ -86,3 +86,25 @@ test('an open failure channel with no stuck item prompts on the heartbeat and is
   lead.sweep();
   assert.strictEqual(pending.length, 0, 'taken back when the channel closes');
 });
+
+test('open items are kept in the state folder, and a restart brings them back with their told mark', () => {
+  const file = require('../state.js').file('stuck.json', 'RELAY_STUCK_FILE');
+  stuck.raise('t', { kind: 'main-red', id: 'main 1', text: 'Main is red' });
+  const [item] = stuck.list('t');
+  stuck.told('t', [item]);
+  assert.strictEqual(JSON.parse(require('fs').readFileSync(file, 'utf8')).t.length, 1);
+  delete require.cache[require.resolve('../stuck.js')];
+  const again = require('../stuck.js');
+  assert.deepStrictEqual(again.list('t').map((i) => [i.id, i.kind, i.owner, i.told]), [['main 1', 'main-red', 'lead', true]]);
+  assert.strictEqual(again.raise('t', { kind: 'main-red', id: 'main 1', text: 'again' }).fresh, false);
+  again.clear('t', 'main 1');
+  assert.deepStrictEqual(JSON.parse(require('fs').readFileSync(file, 'utf8')), {});
+});
+
+test('clearTask clears the items of a task by its PR and by its id', () => {
+  stuck.raise('t', { kind: 'handed-over', id: 'pr https://github.com/o/r/pull/9', text: 'a' });
+  stuck.raise('t', { kind: 'handed-over', id: 'task 4', text: 'b' });
+  stuck.raise('t', { kind: 'handed-over', id: 'pr https://github.com/o/r/pull/10', text: 'c' });
+  stuck.clearTask('t', { id: 4, pr: 'https://github.com/o/r/pull/9' });
+  assert.deepStrictEqual(stuck.list('t').map((i) => i.id), ['pr https://github.com/o/r/pull/10']);
+});
