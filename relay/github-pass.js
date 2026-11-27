@@ -22,6 +22,7 @@ const truncated = (node) => {
   const c = commit && commit.statusCheckRollup && commit.statusCheckRollup.contexts;
   return !!(c && c.pageInfo && c.pageInfo.hasNextPage);
 };
+const checksKey = (node) => valueOf(node).statusCheckRollup.map((c) => [c.name || c.context, c.status, c.conclusion, c.state].join('/')).join(',');
 function valueOf(node) {
   const commit = (((node.commits || {}).nodes || [])[0] || {}).commit;
   const rollup = commit && commit.statusCheckRollup;
@@ -68,7 +69,7 @@ async function once(repos) {
     for (const node of nodes) {
       if (!node || !node.url) continue;
       if (truncated(node)) { gh.forget(node.url); last.delete(node.url); continue; }
-      const key = node.updatedAt + ' ' + node.headRefOid, have = last.get(node.url);
+      const key = node.updatedAt + ' ' + node.headRefOid + ' ' + checksKey(node), have = last.get(node.url);
       const value = have && have.key === key ? have.value : valueOf(node);
       last.set(node.url, { key, value });
       gh.seed(node.url, value, ttl);
