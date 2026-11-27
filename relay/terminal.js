@@ -494,7 +494,7 @@ function onTrustQuestion(screen) {
 }
 
 function questionOnScreen(t) {
-  if (!t.heard && onTrustQuestion(screenOf(t))) return 'trust';
+  if (!t.heard && !t.trustAnswered && onTrustQuestion(screenOf(t))) return 'trust';
   if (MENU.test(screenOf({ tail: t.sinceKey === null ? t.tail : t.sinceKey }).slice(-AFTER_TRUST))) return 'menu';
   return null;
 }
@@ -817,6 +817,7 @@ async function handle(req, res, channel, rest, ctx) {
     const body = await ctx.readJson(req);
     if (t.exited) { ctx.problem(res, 409, 'ended', 'That session has ended.'); return true; }
     if (typeof body.data === 'string' && body.data) {
+      if (/\r/.test(body.data) && questionOnScreen(t) === 'trust') t.trustAnswered = true;
       t.io.write(body.data);
       if (/[\r\n]/.test(body.data)) t.spoke = true;
       t.typedAt = Date.now();
