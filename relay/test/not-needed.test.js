@@ -84,6 +84,15 @@ test('the task\'s own Dev closes its ticket as not needed', async (t) => {
       assert.match(out.stderr, /Use: ticket\.js not-needed/);
     }
   });
+  await t.test('a reason over 500 characters is refused', async () => {
+    const r = await close(other, { commit: onMain, why: 'x'.repeat(501) }, stranger.token);
+    assert.deepStrictEqual([r.status, r.body.error], [400, 'bad_why']);
+  });
+  await t.test('a task the person already moved to done is refused with bad_move', async () => {
+    assert.strictEqual((await R.call('POST', '/tasks/' + stranger.task.id + '/move', { to: 'done' })).status, 200);
+    const r = await close(other, { commit: onMain, why: 'on main' }, stranger.token);
+    assert.deepStrictEqual([r.status, r.body.error], [409, 'bad_move']);
+  });
   await t.test('a second close is refused and changes nothing', async () => {
     const again = await close(mine, { commit: onMain, why: 'again' }, dev.token);
     assert.strictEqual(again.status, 401, JSON.stringify(again.body));

@@ -481,9 +481,13 @@ async function notNeeded(channel, ticket, body, agent) {
     return [200, {}];
   }).then(async (done) => {
     if (done[0] !== 200) return done;
-    await addNote(channel, ticket, { text: 'Closed as not needed by its Dev. The work is on ' + task.base + ' in commit ' + full.slice(0, 10) + ': ' + why }, agent);
-    const fresh = await listAll(channel);
-    return [200, { ok: true, message: ticket.id + ' is closed as not needed, and this session ends.', ticket: await view(channel, fresh.find((t) => t.id === ticket.id) || ticket, fresh) }];
+    const closed = [200, { ok: true, message: ticket.id + ' is closed as not needed, and this session ends.' }];
+    try {
+      await addNote(channel, ticket, { text: 'Closed as not needed by its Dev. The work is on ' + task.base + ' in commit ' + full.slice(0, 10) + ': ' + why }, agent);
+      const fresh = await listAll(channel);
+      closed[1].ticket = await view(channel, fresh.find((t) => t.id === ticket.id) || ticket, fresh);
+    } catch (e) { console.error('Ticket store (' + store.name + ') could not note the close of ' + ticket.id + ': ' + e.message); }
+    return closed;
   });
 }
 
