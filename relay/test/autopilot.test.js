@@ -396,7 +396,7 @@ for (const [name, after, merged] of [['a stored meets_policy lets level 6 merge'
     sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
     sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/' + sh(repo, 'symbolic-ref', '--short', 'HEAD'));
     const log = (n) => { try { return fs.readFileSync(path.join(ghDir, n), 'utf8'); } catch (e) { return ''; } };
-    const COMMENTS = 'repos/acme/widgets/issues/7/comments', gate = path.join(ghDir, 'gate');
+    const gate = path.join(ghDir, 'gate');
     const reads = () => log('calls.log').split('\n').filter((l) => l.includes('contents/prs/7/')).length;
     const say = (s, event, extra) => R.hook(Object.assign({ hook_event_name: event, session_id: s.sessionId.slice(0, 12) }, extra));
     const ap = async () => (await R.call('GET', '/autopilot')).body;
