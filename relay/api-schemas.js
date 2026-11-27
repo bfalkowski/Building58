@@ -123,6 +123,7 @@ const SCHEMAS = {
     canStop: B,
     why: S(),
     seat: orNull(S({ description: 'lead for the Lead, pm for the PM the room keeps running, manager for the manager session, or null.' })),
+    stuckJobs: list(obj({ pid: N(), command: S(), minutes: N() }, ['pid', 'command', 'minutes'])),
     desk: { type: 'object' }
   }, ['terminal', 'name', 'role', 'state', 'safe', 'canStop', 'why']),
   Floor: okWith({ sessions: list(ref('FloorRow')), pm: obj({ trust: N(), trustName: S(), sortHours: N(), nextSortAt: orNull(S()) }), manager: { type: 'object', description: 'The manager seat: the trust level and its name, when the manager last lowered it, the cause it watches and whether the jam count fell after the fix, and the COO\'s last report.' }, leadEnded: { type: ['object', 'null'] }, mainRed: list(obj({ branch: S(), repo: S(), says: S() })) }, ['sessions']),

@@ -452,6 +452,7 @@ server.listen(PORT, HOST, async () => {
     autopilot.begin({ port: PORT, key: KEY, log, command: (c, cmd) => sendCommand(channel(c), cmd) });
     office.update.begin({ port: PORT, key: KEY, log });
     office.prWatch.begin({ log });
+    require('./stuck-jobs.js').begin();
     office.managerWatch.begin({ log });
     office.tasks.begin({ log });
     office.ready.begin({ log });
