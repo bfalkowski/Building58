@@ -26,7 +26,7 @@ function stateOf(rollup) {
   if (!checks.length) return 'none';
   const result = (c) => String(c.conclusion || c.state || '').toUpperCase();
   if (checks.some((c) => result(c) && !OK.includes(result(c)) && !NOT_DONE.includes(result(c)))) return 'red';
-  if (checks.some((c) => (c.status && String(c.status).toUpperCase() !== 'COMPLETED') || !OK.includes(result(c)))) return 'pending';
+  if (checks.some((c) => (c.status && String(c.status).toUpperCase() !== 'COMPLETED' && !c.conclusion) || !OK.includes(result(c)))) return 'pending';
   return 'green';
 }
 
