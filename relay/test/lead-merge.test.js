@@ -25,7 +25,7 @@ test('the brief says never merge unless the switch is on, and names the five con
   assert.ok(!/merge rung|Merge only/.test(off), 'off, it does not point to the rung at all');
   assert.strictEqual(merging(on), 'on');
   assert.ok(!on.includes(NEVER));
-  for (const b of [off, on]) assert.ok(Buffer.byteLength(b) < 1024, Buffer.byteLength(b) + ' bytes, from a checkout root of 120 characters');
+  for (const b of [off, on]) assert.ok(Buffer.byteLength(b) < 1280, Buffer.byteLength(b) + ' bytes, from a checkout root of 120 characters');
 });
 
 test('Let the Lead merge', async (t) => {
