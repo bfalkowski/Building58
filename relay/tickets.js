@@ -450,6 +450,7 @@ function advise(channel, ticket, body, agent) {
   });
 }
 
+const hasPr = (task) => !!task.pr || (task.history || []).some((h) => h.type === 'pr');
 const SHA = /^[0-9a-f]{7,40}$/i;
 async function notNeeded(channel, ticket, body, agent) {
   const no = (code, error, message) => [code, { ok: false, error, message }];
@@ -457,7 +458,7 @@ async function notNeeded(channel, ticket, body, agent) {
   if (!own) return no(403, 'forbidden', 'Only the Dev of the task of ' + ticket.id + ' closes it as not needed.');
   const task = own;
   if (task.state === 'done') return no(409, 'bad_move', 'This task is already done.');
-  if (task.pr || (task.history || []).some((h) => h.type === 'pr')) return no(409, 'has_pr', 'This task has a PR, so it is done when the PR merges.');
+  if (hasPr(task)) return no(409, 'has_pr', 'This task has a PR, so it is done when the PR merges.');
   const commit = clean(body.commit);
   const why = oneLine(body.why || '');
   if (!SHA.test(commit)) return no(400, 'bad_commit', 'Give the commit that did the work, with --commit and its hash (7 to 40 hex digits).');
@@ -471,6 +472,7 @@ async function notNeeded(channel, ticket, body, agent) {
   return inTurn(channel, async () => {
     const live = task.state !== 'done' && tasks.list(channel).includes(task);
     if (!live) return no(409, 'bad_move', 'This task is already done.');
+    if (hasPr(task)) return no(409, 'has_pr', 'This task has a PR, so it is done when the PR merges.');
     await store.update(channel, ticket.id, { status: 'done', closedAs: 'not-needed', closedFor: [], notNeeded: { commit: full, why, by: agentName(agent) }, proposal: null });
     tasks.setState(channel, task, 'done', 'Dev', 'Not needed: the work is on ' + task.base + ' in commit ' + full.slice(0, 10) + '. ' + why);
     chat.archiveTicketRoom(channel, ticket.id, ticket.createdAt, 'the ticket was closed as not needed');

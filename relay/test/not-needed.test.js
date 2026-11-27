@@ -2,7 +2,7 @@
 // The relay checks the commit, notes the reason, moves the task and the ticket to Done, frees the slot, ends
 // the Dev's session and logs a not-needed jam by the relay. Anyone else, and a commit not on main, get a refusal.
 'use strict';
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
@@ -72,9 +72,21 @@ test('the task\'s own Dev closes its ticket as not needed', async (t) => {
     assert.deepStrictEqual(jams.map((j) => [j.ticket, j.by]), [[mine.id, 'the relay']]);
     assert.match(jams[0].fix, /T-154 fixed it/);
   });
+  await t.test('the Dev brief names the command, and the command asks for a commit and a reason', async () => {
+    const fresh = await file('Brief check'), got = await begin(fresh);
+    const seen = await H.until(async () => { const text = (await R.screen(got.task.owner.terminal)).replace(/\s+/g, ' '); return /GOT\[Your task is to build/.test(text) && text; }, 'the brief typed');
+    assert.match(seen, /ticket\.js not-needed \S+ --commit <sha> --why/);
+    const env = { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: got.token['X-Office-Token'] };
+    const run = (args) => spawnSync('node', [path.join(__dirname, '..', 'ticket.js'), ...args], { env, encoding: 'utf8' });
+    for (const args of [['not-needed', fresh.id, '--why', 'x'], ['not-needed', fresh.id, '--commit', onMain]]) {
+      const out = run(args);
+      assert.strictEqual(out.status, 1);
+      assert.match(out.stderr, /Use: ticket\.js not-needed/);
+    }
+  });
   await t.test('a second close is refused and changes nothing', async () => {
     const again = await close(mine, { commit: onMain, why: 'again' }, dev.token);
-    assert.ok([401, 403, 409].includes(again.status), JSON.stringify(again.body));
+    assert.strictEqual(again.status, 401, JSON.stringify(again.body));
     assert.strictEqual((await R.call('GET', '/jams')).body.jams.filter((j) => j.kind === 'not-needed').length, 1);
   });
   await t.test('a task with a PR is refused: it is done when the PR merges', async () => {
