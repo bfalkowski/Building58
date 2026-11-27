@@ -95,6 +95,19 @@ test('a fix verdict or a conflict whose Dev is not running brings the Dev back',
   assert.strictEqual(conflict.for, 'conflict');
   assert.strictEqual(forPr(pr(), FILES, merge, 1, 2, true).act, 'merge', 'a PR ready to merge needs no Dev');
 });
+test('a conflict brings the Dev back whatever review is owed (T-529)', () => {
+  const fix = { kind: 'fix', commit: HEAD, posted: true };
+  const dirty = pr({ headRefOid: 'b'.repeat(40), mergeStateStatus: 'DIRTY' });
+  const gone = forPr(dirty, FILES, fix, 1, 2, true);
+  assert.strictEqual(gone.act, 'bring-back');
+  assert.strictEqual(gone.for, 'conflict');
+  assert.match(gone.why, /merge main/);
+  assert.doesNotMatch(gone.why, /commits after the review/);
+  assert.strictEqual(forPr(dirty, FILES, fix, 1, 2, true, undefined, 'no reviewer is free').act, 'bring-back');
+  assert.strictEqual(forPr(dirty, FILES, fix, 1, 2, false).act, 'conflict');
+  assert.strictEqual(forPr(dirty, FILES, merge, 1, 2, true).for, 'conflict');
+  assert.strictEqual(forPr({ ...dirty, mergeStateStatus: 'CLEAN' }, FILES, fix, 1, 2, true).act, 'wait', 'with no conflict the follow-up review is awaited');
+});
 test('the checks', () => {
   assert.strictEqual(ciOf(green), 'green');
   assert.strictEqual(ciOf([...green, { status: 'COMPLETED', conclusion: 'SKIPPED' }]), 'green');
