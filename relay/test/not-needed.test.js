@@ -66,10 +66,23 @@ test('the task\'s own Dev closes its ticket as not needed', async (t) => {
     assert.strictEqual(ticket.notNeeded.commit, onMain);
     assert.match(ticket.notes.at(-1).text, /T-154 fixed it/);
     assert.strictEqual((await R.call('GET', '/tasks/' + dev.task.id)).body.task.state, 'done');
-    await H.until(async () => (await R.call('GET', '/tasks')).body.tasks.filter((x) => x.state === 'building' && x.worker).length === before - 1, 'the slot free: ' + 1);
+    await H.until(async () => (await R.call('GET', '/tasks')).body.tasks.filter((x) => x.state === 'building' && x.worker).length === before - 1, 'the slot free');
     await H.until(async () => !(await R.call('GET', '/terminals')).body.terminals.some((x) => x.sessionId === dev.task.owner.sessionId && x.running), 'the session ended');
     const jams = (await R.call('GET', '/jams')).body.jams.filter((j) => j.kind === 'not-needed');
     assert.deepStrictEqual(jams.map((j) => [j.ticket, j.by]), [[mine.id, 'the relay']]);
     assert.match(jams[0].fix, /T-154 fixed it/);
+  });
+  await t.test('a second close is refused and changes nothing', async () => {
+    const again = await close(mine, { commit: onMain, why: 'again' }, dev.token);
+    assert.ok([401, 403, 409].includes(again.status), JSON.stringify(again.body));
+    assert.strictEqual((await R.call('GET', '/jams')).body.jams.filter((j) => j.kind === 'not-needed').length, 1);
+  });
+  await t.test('a task with a PR is refused: it is done when the PR merges', async () => {
+    const third = await file('Has a PR'), has = await begin(third);
+    await R.hook({ hook_event_name: 'PostToolUse', session_id: has.task.owner.sessionId.slice(0, 12), pr_url: 'https://github.com/o/r/pull/9' });
+    await H.until(async () => (await R.call('GET', '/tasks/' + has.task.id)).body.task.pr, 'the PR on the task');
+    const r = await close(third, { commit: onMain, why: 'on main' }, has.token);
+    assert.deepStrictEqual([r.status, r.body.error], [409, 'has_pr']);
+    assert.strictEqual((await R.call('GET', '/tickets/' + third.id)).body.ticket.status, 'started');
   });
 });
