@@ -302,7 +302,7 @@ async function look(channel) {
   holdPushes(channel);
   for (const task of tasks.list(channel).filter(mineTask)) track(channel, task);
   const owedFirst = (t) => (t.bringBack ? t.bringBack.at : Infinity);
-  for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done').sort((a, b) => owedFirst(a) - owedFirst(b))) {
+  for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done').sort((a, b) => (owedFirst(a) < owedFirst(b) ? -1 : owedFirst(a) > owedFirst(b) ? 1 : 0))) {
     if (!held(channel, task)) await lookAt(channel, task);
     else if (handedReasonOf(recOf(channel, task.pr)) === 'protected-file') await follow(channel, task);
     else await mergedYet(channel, task);
