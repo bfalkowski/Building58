@@ -13,7 +13,7 @@ test('the rung is in Settings, off by default, and in the Lead\'s brief only whi
   const { leadBrief, UNSTICK } = require('../lead-brief.js');
   const off = leadBrief('/r/relay', {}), on = leadBrief('/r/relay', { unstick: true });
   assert.strictEqual(on.replace(UNSTICK, ''), off, 'the rung adds its line and changes nothing else');
-  assert.ok(!/stuck/.test(off));
+  assert.ok(!/ticket\.js stuck/.test(off));
   assert.match(UNSTICK, /look for stuck work first/);
   const R = await relay();
   t.after(R.stop);

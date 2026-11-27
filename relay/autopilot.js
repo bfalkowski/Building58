@@ -254,7 +254,7 @@ tickets.onFiled((channel, ticket, agent, at) => {
 const roundsOf = (rec) => Math.max(0, postedOf(rec).length - (rec.roundsFrom || 0));
 
 const mineTask = (task) => task.by === BY;
-const handedBack = (task, rec) => (task.history || []).some((h) => h.type === 'moved' && h.by === 'you' && h.at > rec.handedOverAt);
+const handedBack = (task, rec) => (task.history || []).some((h) => h.type === 'moved' && h.at > rec.handedOverAt && (h.by === 'you' || (h.by === 'Lead' && h.note === require('./lead-commands.js').HAND_BACK)));
 const ANSWERED_BY_REVIEW = ['dev-says-bug', 'ci-red'];
 const OLD_REASONS = [[/^Its Dev says a finding the review marked non-blocking is a bug/, 'dev-says-bug'], [/^CI failed on the reviewed commit/, 'ci-red']];
 const handedReasonOf = (rec) => rec.handedReason || (OLD_REASONS.find(([text]) => text.test(rec.handedOver || '')) || [])[1] || null;
@@ -793,7 +793,8 @@ function refusedOf(task, v) {
 }
 
 const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';
-function leadRefusal(channel, to, merged) {
+function leadRefusal(channel, to, merged, command) {
+  if (command) return config.get('leadUnstick') ? null : [403, { ok: false, error: 'forbidden', message: require('./failures.js').NOT_ON + ' Until then ' + command + ' is the person\'s.' }];
   if (!isOn(channel) || (to === 'done' && merged)) return null;
   return [403, { ok: false, error: 'autopilot', message: 'Autopilot is on, so only the relay starts and merges work. The Lead keeps three rights: ' + LEAD_KEEPS + '. ' +
     (to === 'done' ? 'The relay has not seen this PR merge, so it stays where it is.' : 'Leave this to Autopilot, or tell the person.') }];

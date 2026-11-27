@@ -62,7 +62,7 @@ const TAGS = {
   tickets: ['Tickets', 'The Board: file, edit, move, order, approve and start tickets, and proposals and questions about them.'],
   update: ['Update', 'Updating the relay\'s own folder, and rolling a bad update back.']
 };
-const SEGMENT_TAG = { rounds: 'games', play: 'games', rerun: 'failures', stuck: 'failures' };
+const SEGMENT_TAG = { rounds: 'games', play: 'games', rerun: 'failures', stuck: 'failures', lead: 'failures' };
 function tagOf(r) {
   const part = r.section === 'calls' ? 'calls' : r.path.split('/')[3];
   const key = SEGMENT_TAG[part] || part;
