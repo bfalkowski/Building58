@@ -190,6 +190,10 @@ terminal.onReviewDone(async (channel, t) => {
   const again = reviews.reviewEmpty(channel, t.reviewOf);
   note(channel, 'The review of PR ' + number(t.reviewOf) + ' came back empty: it has no verdict line or no words on what was checked, so it does not count. ' + (again ? 'A new review starts.' : 'The person decides.'));
 });
+terminal.onReviewBack((channel, t) => {
+  const rec = chOf(channel).prs[t.reviewOf], v = rec && rec.verdicts.find((x) => x.sessionId === t.sessionId && x.posted);
+  if (v) terminal.reviewFound(channel, t, v.posted);
+});
 const looking = new Set();
 const CLOCK_SKEW_MS = 60 * 1000;
 terminal.onReviewTurnEnd(async (channel, t) => {
