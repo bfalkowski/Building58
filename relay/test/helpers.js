@@ -38,9 +38,11 @@ function makeRepo(home, name) {
 }
 // A session in a room runs the tests with the room's settings in its shell: RELAY_ROLLBACK, RELAY_WORLD,
 // OFFICE_* and CLAUDE_CODE_*. CI has none of them, so a test relay starts without them, and a test that
-// wants one sets it in extraEnv (T-222, relay/test/room-env.test.js). relay/test/run.js uses the same list,
+// wants one sets it in extraEnv (T-222, relay/test/room-env.test.js). CLAUDE_CONFIG_DIR goes too: the machine's
+// plugins would put their skills in a brief and make it longer than CI's, so a test then reads the empty
+// .claude under its own HOME, and one that wants plugins sets CLAUDE_CONFIG_DIR itself (T-492). relay/test/run.js uses the same list,
 // and so does a test that runs the real hook, or the hook would send its event to the shell's own room.
-const ROOM_VARS = /^(RELAY_|OFFICE_|CLAUDE_CODE_)/;
+const ROOM_VARS = /^(RELAY_|OFFICE_|CLAUDE_CODE_|CLAUDE_CONFIG_DIR$)/;
 const withoutRoom = (env) => Object.fromEntries(Object.entries(env).filter(([k]) => !ROOM_VARS.test(k)));
 // Every test relay uses the same key, so a relay that lost its port to another run (a parallel
 // checkout, or another file here) would let the test talk to that run's relay instead. So the test

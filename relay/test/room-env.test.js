@@ -2,7 +2,7 @@
 // reviewer tests in relay/test/restart.test.js failed in an office shell and passed in CI (T-222): the real
 // hook took the shell's OFFICE_HOOK_URL and OFFICE_TICKET_TOKEN and sent its events to the real room, not
 // the test relay. So the test helpers start each relay, the runner each file, and a test the real hook,
-// without RELAY_*, OFFICE_* and CLAUDE_CODE_* from the shell.
+// without RELAY_*, OFFICE_*, CLAUDE_CODE_* and CLAUDE_CONFIG_DIR from the shell.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -42,4 +42,22 @@ test('the test runner gives each file none of the room variables of the shell th
   const r = spawnSync(process.execPath, [path.join(__dirname, 'run.js'), path.join(__dirname, 'room-env.fixture.js')], { env, encoding: 'utf8', timeout: 60000 });
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /room variables: \[\]/);
+});
+
+test('a test relay reads no plugins from the CLAUDE_CONFIG_DIR of the shell, but reads the one the test sets (T-492)', async (t) => {
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'office-config-env-')));
+  const seen = path.join(tmp, 'env.txt'), cmd = path.join(tmp, 'claude'), plugins = path.join(tmp, 'plugins');
+  fs.mkdirSync(plugins);
+  fs.writeFileSync(path.join(plugins, 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'mattpocock-skills@x': [{ scope: 'user', installPath: plugins, version: '1' }] } }));
+  fs.writeFileSync(cmd, '#!/bin/sh\nenv > "' + seen + '"\nexec "' + path.join(__dirname, 'fake-claude.sh') + '" "$@"\n', { mode: 0o755 });
+  const was = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = tmp;
+  t.after(() => { if (was === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = was; fs.rmSync(tmp, { recursive: true, force: true }); });
+  const read = async (extra) => {
+    fs.rmSync(seen, { force: true });
+    const R = await relay({ CLAUDE_CMD: cmd, ...extra });
+    try { await R.start({ cwd: tmp }); return await until(() => fs.existsSync(seen) && fs.readFileSync(seen, 'utf8'), 'the session to write down its environment'); } finally { await R.stop(); }
+  };
+  assert.doesNotMatch(await read({}), /^CLAUDE_CONFIG_DIR=/m, 'the relay passed the shell\'s CLAUDE_CONFIG_DIR on');
+  assert.match(await read({ CLAUDE_CONFIG_DIR: plugins }), new RegExp('^CLAUDE_CONFIG_DIR=' + plugins + '$', 'm'));
 });
