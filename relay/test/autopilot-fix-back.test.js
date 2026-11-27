@@ -67,7 +67,7 @@ test('a task owed a fix keeps its slot: no new ticket starts first, and the Dev 
   await fillDesks(o);
   const second = (await o.R.call('POST', '/tickets', { title: 'New work', repo: o.repo })).body.ticket;
   await o.R.call('POST', '/autopilot', { on: true, only: null });
-  const a = await until(async () => { const y = await o.ap(); return /^Waiting to bring back/.test(y.idle || '') && y; }, 'the wait to bring back');
+  const a = await until(async () => { const y = await o.ap(); return /^Waiting to bring back/.test(y.idle || '') && y; }, 'the wait to bring back').catch(async (e) => { throw new Error(e.message + ' ' + JSON.stringify(await o.ap())); });
   assert.ok(!a.notes.some((n) => n.text.includes(second.id + ' starts once one is free')), 'no start is queued for the new ticket: ' + JSON.stringify(a.notes));
   assert.match(a.idle, new RegExp('^Waiting to bring back the Dev of ' + o.first.id + ' for fixes first: All \\d+ worker desks are taken'));
   const free = (await o.terminals()).find((y) => !y.task && !y.role && !y.lead);
