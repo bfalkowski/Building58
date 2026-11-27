@@ -1,8 +1,9 @@
 // Builds docs/openapi.json, the relay's API as an OpenAPI 3.1 document, from the route tables in
 // docs/manual/relay.html, so the manual stays the one place the routes are described. The version is
-// the one the page gives in <code id="api-version">. npm run openapi writes the file, and
+// worked out from docs/api-changes/ (relay/api-version.js) when the relay serves it, so the file
+// carries a fixed placeholder and no pull request edits it for a version. npm run openapi writes the file, and
 // relay/test/openapi.test.js checks that the file is what this builds, that each route in it answers,
-// and that a change since main came with a new version (docs/constitution.md, article 15).
+// and that a change since main came with a file in docs/api-changes/ (docs/constitution.md, article 15).
 // Each operation's tag comes from the first part of its path, and TAGS gives each one the name and
 // line the docs show, so a new group of routes needs its own entry there.
 //   node relay/openapi.js           writes docs/openapi.json
@@ -11,12 +12,14 @@
 const fs = require('fs');
 const path = require('path');
 const { SCHEMAS, REQUESTS, RESPONSES, ref } = require('./api-schemas.js');
+const apiVersion = require('./api-version.js');
 const { tokenReaches } = require('./token-routes.js');
 
 const ROOT = path.join(__dirname, '..');
 const PAGE = path.join(ROOT, 'docs', 'manual', 'relay.html');
 const OUT = path.join(ROOT, 'docs', 'openapi.json');
 const MANUAL = 'docs/manual/relay.html';
+const PLACEHOLDER = 'worked-out-when-served';
 
 const PARAMS = {
   channel: { pattern: '^[\\w-]{1,64}$', description: 'The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.' },
@@ -138,8 +141,6 @@ function operation(r) {
 }
 
 function build(html) {
-  const version = (html.match(/<code id="api-version">([^<]+)<\/code>/) || [])[1];
-  if (!/^\d+\.\d+\.\d+$/.test(version || '')) throw new Error('No <code id="api-version">MAJOR.MINOR.PATCH</code> in ' + MANUAL + '.');
   const paths = {};
   for (const r of rows(html)) {
     const at = paths[r.path] = paths[r.path] || {}, m = r.method.toLowerCase();
@@ -150,7 +151,7 @@ function build(html) {
     openapi: '3.1.0',
     info: {
       title: 'Building58 relay',
-      version,
+      version: PLACEHOLDER,
       description: 'The relay passes commands to a world\'s page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route\'s description is the manual\'s, from ' + MANUAL + ', where the fields, the tokens and the errors are.',
       license: { name: 'PolyForm Noncommercial 1.0.0', identifier: 'PolyForm-Noncommercial-1.0.0' }
     },
@@ -186,4 +187,6 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, rows, render, OUT, PAGE, TAGS };
+const served = (text) => JSON.stringify({ ...JSON.parse(text), info: { ...JSON.parse(text).info, version: apiVersion.current() } }, null, 2) + '\n';
+
+module.exports = { served, PLACEHOLDER, build, rows, render, OUT, PAGE, TAGS };

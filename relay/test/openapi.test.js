@@ -1,27 +1,28 @@
 // docs/openapi.json is the relay's API as an OpenAPI 3.1 document, built from the route tables in
 // docs/manual/relay.html by relay/openapi.js. These tests keep it true: the file is what the build
 // makes, it is well formed, each route in it answers on a real relay, and a change to it since main
-// came with a new version (docs/constitution.md, article 15).
+// came with a file in docs/api-changes/ (docs/constitution.md, article 15).
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { build, render, rows, OUT, PAGE } = require('../openapi.js');
+const { build, render, rows, served, PLACEHOLDER, OUT, PAGE } = require('../openapi.js');
 const { relay, makeRepo, until, sessionToken } = require('./helpers.js');
 const agentHeaders = (token) => ({ 'X-Office-Token': token });
 const api = require('../api-schemas.js');
+const version = require('../api-version.js');
 
 const ROOT = path.join(__dirname, '..', '..');
 const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 const spec = () => JSON.parse(fs.readFileSync(OUT, 'utf8'));
 const ops = (s) => Object.entries(s.paths).flatMap(([p, o]) => Object.entries(o).map(([m, op]) => ({ method: m.toUpperCase(), path: p, op })));
-const newer = (a, b) => { const [x, y] = [a, b].map((v) => v.split('.').map(Number)); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
-const shape = (s) => JSON.stringify({ ...s, info: { ...s.info, version: null } });
-const versionProblem = (before, now) => {
-  if (shape(now) !== shape(before)) return newer(now.info.version, before.info.version) ? null : 'docs/openapi.json changed since main, so its version must go up from ' + before.info.version + ' (docs/constitution.md, article 15). Change <code id="api-version"> in docs/manual/relay.html, then run npm run openapi.';
-  return now.info.version === before.info.version ? null : 'the version changed with no change to the API';
+const shape = (s) => JSON.stringify(s);
+const CHANGES = 'docs/api-changes';
+const versionProblem = (before, now, added) => {
+  if (shape(now) !== shape(before)) return added.length ? null : 'docs/openapi.json changed since main, so add a file to ' + CHANGES + ' that starts with MAJOR:, MINOR: or PATCH: and what changed (docs/constitution.md, article 15).';
+  return added.length ? 'a file was added to ' + CHANGES + ' with no change to the API' : null;
 };
 
 test('docs/openapi.json is what npm run openapi builds from the manual', () => {
@@ -31,7 +32,7 @@ test('docs/openapi.json is what npm run openapi builds from the manual', () => {
 test('the document is well formed: a version, every path parameter declared, unique operation ids, and every $ref found', () => {
   const s = spec();
   assert.strictEqual(s.openapi, '3.1.0');
-  assert.match(s.info.version, /^\d+\.\d+\.\d+$/);
+  assert.strictEqual(s.info.version, PLACEHOLDER, 'the file holds the placeholder, and the relay works out the version');
   const ids = new Set();
   for (const { method, path: p, op } of ops(s)) {
     const named = [...p.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
@@ -58,9 +59,8 @@ test('each security entry maps a scheme name to a list, and each name is a decla
   assert.strictEqual(new Set(doc.security.map((e) => Object.keys(e)[0])).size, doc.security.length, 'no scheme twice');
 });
 
-test('the build refuses a page with no version, or a route with a parameter it has no pattern for', () => {
+test('the build refuses a route with a parameter it has no pattern for', () => {
   const html = fs.readFileSync(PAGE, 'utf8');
-  assert.throws(() => build(html.replace(/<code id="api-version">[^<]+<\/code>/, '')), /api-version/);
   assert.throws(() => build(html.replace('<code>GET /tickets/{id}</code>', '<code>GET /tickets/{nope}</code>')), /No pattern for \{nope\}/);
   assert.ok(rows(html).length >= 70, 'the manual\'s tables still list the routes');
 });
@@ -114,34 +114,56 @@ test('the relay serves docs/openapi.json, each route in it answers, and a made-u
     if (!known) missing.push(method + ' ' + p + ': ' + r.status + ' ' + JSON.stringify(r.body));
   }
   assert.deepStrictEqual(missing, [], 'routes in docs/openapi.json that the relay does not know');
-  const served = await fetch(base + '/docs/openapi.json');
-  assert.strictEqual(served.status, 200);
-  assert.match(served.headers.get('content-type'), /application\/json/);
-  assert.deepStrictEqual(await served.json(), spec(), 'the relay serves the document at /docs/openapi.json');
+  const reply = await fetch(base + '/docs/openapi.json');
+  assert.strictEqual(reply.status, 200);
+  assert.match(reply.headers.get('content-type'), /application\/json/);
+  const doc = await reply.json();
+  assert.strictEqual(doc.info.version, version.current(), 'the relay puts the version from docs/api-changes/ in the document');
+  assert.deepStrictEqual({ ...doc, info: { ...doc.info, version: PLACEHOLDER } }, spec(), 'the relay serves the document at /docs/openapi.json');
   for (const [method, p] of [['GET', '/channels/t/no-such-route'], ['POST', '/channels/t/tickets/T-1/no-such-verb'], ['GET', '/channels/t/ready']]) {
     const r = await ask(method, p);
     assert.strictEqual(r.body && r.body.error, 'not_found', method + ' ' + p + ' is not a route, so the check above can tell');
   }
 });
 
-test('a change to the API needs a newer version, and a version needs a change', () => {
-  const v1 = { info: { version: '1.0.0' }, paths: { '/a': {} } }, more = { ...v1, paths: { '/a': {}, '/b': {} } };
-  assert.strictEqual(versionProblem(v1, v1), null);
-  assert.match(versionProblem(v1, more), /must go up from 1.0.0/);
-  assert.match(versionProblem(v1, { ...more, info: { version: '0.9.9' } }), /must go up/);
-  assert.strictEqual(versionProblem(v1, { ...more, info: { version: '1.1.0' } }), null);
-  assert.strictEqual(versionProblem(v1, { ...more, info: { version: '1.0.10' } }), null);
-  assert.match(versionProblem(v1, { ...v1, info: { version: '1.0.1' } }), /no change to the API/);
+test('a change to the API needs a file in docs/api-changes/, and a file needs a change', () => {
+  const v1 = { info: { version: 'x' }, paths: { '/a': {} } }, more = { ...v1, paths: { '/a': {}, '/b': {} } };
+  assert.strictEqual(versionProblem(v1, v1, []), null);
+  assert.match(versionProblem(v1, more, []), /add a file to docs\/api-changes/);
+  assert.strictEqual(versionProblem(v1, more, ['x.md']), null);
+  assert.match(versionProblem(v1, v1, ['x.md']), /no change to the API/);
 });
 
-test('a change to docs/openapi.json since main comes with a newer version', (t) => {
-  let before;
-  try { before = JSON.parse(git('show', git('merge-base', 'HEAD', 'origin/main') + ':docs/openapi.json')); } catch (e) {
+test('the version adds one for each file, in the part its first word names, in any order', () => {
+  const [a, b] = version.BASE;
+  assert.strictEqual(version.versionOf([]), version.BASE.join('.'));
+  assert.strictEqual(version.versionOf(['MINOR: a', 'PATCH: b', 'MINOR: c']), [a, b + 2, 1].join('.'));
+  assert.strictEqual(version.versionOf(['MAJOR: a', 'MINOR: b']), [a + 1, b + 1, 0].join('.'));
+  assert.strictEqual(version.versionOf(['PATCH: b', 'MAJOR: a']), version.versionOf(['MAJOR: a', 'PATCH: b']));
+  assert.deepStrictEqual(version.problems('x.md', 'MINOR: added a route\nmore'), []);
+  assert.strictEqual(version.problems('x.md', 'added a route').length, 1);
+  assert.strictEqual(version.problems('x.md', 'MINOR:').length, 1);
+});
+
+test('each file in docs/api-changes/ is well formed, and the folder holds the version the relay serves', () => {
+  const bad = version.names().flatMap((n) => version.problems(n, fs.readFileSync(path.join(version.DIR, n), 'utf8')));
+  assert.deepStrictEqual(bad, []);
+  assert.strictEqual(JSON.parse(served(fs.readFileSync(OUT, 'utf8'))).info.version, version.current());
+});
+
+test('a change to docs/openapi.json since main comes with a new file in docs/api-changes/', (t) => {
+  let before, was;
+  try {
+    const base = git('merge-base', 'HEAD', 'origin/main');
+    before = JSON.parse(git('show', base + ':docs/openapi.json'));
+    was = git('ls-tree', '--name-only', base, CHANGES + '/').split('\n').filter(Boolean).map((f) => path.basename(f));
+  } catch (e) {
     if (process.env.CI && /merge-base/.test(String(e.message))) assert.fail('CI has no origin/main to compare docs/openapi.json with. Check out with fetch-depth: 0.');
     t.skip('no docs/openapi.json at the merge base with main to compare with');
     return;
   }
-  assert.strictEqual(versionProblem(before, spec()), null);
+  const added = version.names().filter((n) => !was.includes(n));
+  assert.strictEqual(versionProblem(before, spec(), added), null);
 });
 
 test('real answers fit their schemas: tickets, tasks, sessions, the Floor, events and a command', async (t) => {

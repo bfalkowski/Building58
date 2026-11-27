@@ -14,6 +14,7 @@ const http = require('http');
 const fs = require('fs');
 const api = require('./api-schemas.js');
 const { tokenReaches } = require('./token-routes.js');
+const openapi = require('./openapi.js');
 const path = require('path');
 const crypto = require('crypto');
 const cfAccess = require('./cf-access.js');
@@ -169,6 +170,7 @@ function serveStatic(req, res, url) {
     const old = rel.endsWith('.html') ? cookieKey(req) : '';
     if (old && !sameKey(old)) head['Set-Cookie'] = COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0';
     res.writeHead(200, head);
+    if (rel === '/docs/openapi.json') { fs.readFile(file, 'utf8', (e, text) => res.end(e ? '' : openapi.served(text))); return; }
     fs.createReadStream(file).pipe(res);
   });
 }
