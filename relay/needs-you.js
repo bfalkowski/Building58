@@ -89,7 +89,7 @@ function stateOf(channel, now, lastReport) {
     .filter((d) => d.target && !d.typed && d.blocked && !NOT_STUCK.has(d.blocked) && d.savedAt && now - d.savedAt > UNDELIVERED)
     .sort((a, b) => a.savedAt - b.savedAt)
     .map((d) => ({ terminal: d.target, who: chat.nameOf(terminal.find(channel, d.target)), minutes: Math.floor((now - d.savedAt) / 60000), why: delivery.whyWaits(d.blocked) }));
-  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), mains: mainCi.redOf(channel), writes: require('./tickets.js').writeErrors(channel, now), unread: require('./tickets.js').unreadNotes(channel), claude: claudeVersion.current(), skills: require('./skills.js').lacking(), leadStuck: require('./lead-stuck.js').passedOf(channel) };
+  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), mains: mainCi.redOf(channel), writes: require('./tickets.js').writeErrors(channel, now), unread: require('./tickets.js').unreadNotes(channel), claude: claudeVersion.current(), skills: require('./skills.js').lacking(), leadStuck: require('./lead-stuck.js').passedOf(channel), flakes: require('./flake.js').waitingOf(channel) };
 }
 
 async function handle(req, res, channel, rest, ctx) {

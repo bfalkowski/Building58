@@ -30,6 +30,7 @@
 // A write is one ticket whose last write to the GitHub ticket store failed (relay/ticket-stores/github.js):
 // { id, what, message, inMs }, where message is what GitHub said and inMs is the time to the next try.
 // leadStuck is the items the Lead named on three passes in a row without acting: { item, why, passes }.
+// flakes is the PRs that failed a known flaky test again after the relay reran it once: { pr, checks, ticket } (relay/flake.js).
 //
 // One rule for each kind. A session gives at most one item, and so does a task. A task whose Dev already has an
 // item gives none, since answering the Dev is the one move. The kinds, most urgent first:
@@ -47,6 +48,8 @@
 //   merge        an open PR that only the person may merge
 //   lead-stuck   an item the Lead named on three passes in a row and did not act on, with the Lead's reason
 //                (relay/lead-stuck.js), while Let the Lead unstick the board is on
+//   flake        an open PR that failed a known flaky test again after the relay reran it once, with Let the Lead
+//                unstick the board off (relay/flake.js)
 //   push-refused an open PR whose Dev's push the push hold refused after a merge verdict, with the reason and
 //                a Fix it button that lifts the hold, unless the hand-over for a Dev's bug claim has that button
 //   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
@@ -73,6 +76,7 @@ const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
 
+const PR_LINK = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 const numberOf = (pr) => '#' + String(pr).split('/').pop();
 const nameOf = (t) => oneLine(t.ticket, 20) || 'task ' + oneLine(t.id, 20);
 
@@ -187,6 +191,11 @@ function listOf(input) {
   for (const x of (input && input.leadStuck) || []) {
     if (!x || !x.item) continue;
     items.push({ kind: 'lead-stuck', who: 'Lead', terminal: null, task: null, ticket: null, pr: /^https:/.test(x.item) ? x.item : null, line: 'The Lead cannot unstick ' + oneLine(x.item, 120) + ': ' + oneLine(x.why, 300).replace(/([^.!?])$/, '$1.') + ' It named it on ' + (Number(x.passes) || 3) + ' passes in a row and did not act.', link: /^https:/.test(x.item) ? { url: x.item } : {} });
+  }
+  for (const f of (input && input.flakes) || []) {
+    if (!f || !PR_LINK.test(String(f.pr))) continue;
+    const n = numberOf(f.pr), checks = oneLine((f.checks || []).join(', '), 120) || 'a check', ticket = /^[\w.-]{1,20}$/.test(String(f.ticket)) ? String(f.ticket) : null;
+    items.push({ kind: 'flake', who: 'the relay', terminal: null, task: null, ticket: null, pr: f.pr, line: 'Look at PR ' + n + ': the check ' + checks + ' failed again on the same commit after the relay reran it once, so it does not rerun it again.' + (ticket ? ' It matches the known flake on ticket ' + ticket + '.' : '') + ' Rerun the job yourself, or fix the flake.', link: { url: f.pr } });
   }
   const claude = claudeItem(input && input.claude);
   if (claude) items.push(claude);

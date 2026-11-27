@@ -10,6 +10,7 @@
 //   { "runs": [...] }                     what `gh run list` prints. Without it, `gh run list` prints [].
 //   { "lists": { "<branch>": [...] } }  what `gh pr list --head <branch>` prints. Anything else is [].
 // `gh pr comment <link> --body-file -` appends its link and body to posted.log, and prints a comment link.
+//   { "logs": { "<run id>": "text" } }  what `gh run view <id> --log-failed` prints. Anything else is empty.
 // `gh run rerun <id> ...` appends its arguments to rerun.log.
 // `gh pr merge <link> --merge` appends `<link> --merge` to merged.log.
 // `gh pr edit <link> ...` appends its arguments to edited.log, and adds or removes the label on that PR in answers.json. With "labels": [...] in answers.json, adding a
@@ -36,6 +37,10 @@ if (verb === 'api') {
 }
 if (verb === 'run' && sub === 'rerun') {  // appends its arguments to rerun.log
   fs.appendFileSync(path.join(dir, 'rerun.log'), process.argv.slice(4).join(' ') + '\n');
+  process.exit(0);
+}
+if (verb === 'run' && sub === 'view') {
+  process.stdout.write((answers.logs || {})[process.argv[4]] || '');
   process.exit(0);
 }
 if (verb === 'run' && sub === 'list') {
