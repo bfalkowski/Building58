@@ -52,3 +52,21 @@ test('a reviewer with its review posted ends after a restart', async (t) => {
   await until(async () => { try { return (await R.call('GET', '/update')).body.run !== run; } catch (e) { return false; } }, 'the relay to restart');
   await until(async () => !(await terminals()).some((x) => x.id === c.id), 'the reviewer to end');
 });
+
+test('a posted review is saved with its session at once, and a later prompt of the person clears it', async (t) => {
+  const R = await relay({ RELAY_RESUME: '1', RELAY_REVIEW_GRACE_MS: '60000' }), repo = makeRepo(R.home), prs = path.join(R.home, 'prs.git');
+  t.after(R.stop);
+  sh(R.home, 'init', '-q', '--bare', prs);
+  fs.writeFileSync(path.join(R.home, '.gitconfig'), '[url "' + prs + '"]\n\tinsteadOf = https://github.com/acme/widgets.git\n');
+  sh(repo, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+  sh(repo, 'push', '-q', prs, 'HEAD:refs/pull/7/head');
+  const c = (await R.call('POST', '/checkouts', { from: repo, pr: PR, prompt: 'Review it.' })).body;
+  assert.ok(c.id, JSON.stringify(c));
+  const hook = (extra) => R.hook(Object.assign({ session_id: c.sessionId.slice(0, 12) }, extra));
+  const mine = () => ((read(R.home, 'sessions.json') || {}).t || []).find((x) => x.sessionId === c.sessionId);
+  await hook({ hook_event_name: 'UserPromptSubmit', notice: true });
+  await hook({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'gh pr comment 7 --body x' }, tool_response: { stdout: URL }, posted: { repo: 'acme/widgets', pr: 7, kind: 'comment', url: URL } });
+  await until(() => mine() && mine().posted && mine().posted.url === URL, 'the post to be saved with no other event');
+  await hook({ hook_event_name: 'UserPromptSubmit' });
+  await until(() => mine() && !mine().posted, 'the post to be cleared when the person types');
+});
