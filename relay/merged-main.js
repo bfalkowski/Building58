@@ -15,4 +15,12 @@ async function mergedMain(git, from, head) {
   return false;
 }
 
-module.exports = { mergedMain };
+async function holdsAll(git, commits, head) {
+  if (!commits.length) return false;
+  for (const c of commits) {
+    if (!c || !(await git(['merge-base', '--is-ancestor', c, head]).then(() => true, () => false))) return false;
+  }
+  return true;
+}
+
+module.exports = { mergedMain, holdsAll };
