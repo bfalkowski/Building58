@@ -187,6 +187,9 @@ if (require.main === module) {
   }
 }
 
-const served = (text) => JSON.stringify({ ...JSON.parse(text), info: { ...JSON.parse(text).info, version: apiVersion.current() } }, null, 2) + '\n';
+function served(text, dir) {
+  const doc = JSON.parse(text);
+  return JSON.stringify({ ...doc, info: { ...doc.info, version: apiVersion.current(dir) } }, null, 2) + '\n';
+}
 
 module.exports = { served, PLACEHOLDER, build, rows, render, OUT, PAGE, TAGS };

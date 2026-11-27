@@ -145,6 +145,11 @@ test('the version adds one for each file, in the part its first word names, in a
   assert.strictEqual(version.problems('x.md', 'MINOR:').length, 1);
 });
 
+test('serving the document fails, and does not crash, when the folder is missing or the file is not JSON', () => {
+  assert.throws(() => served(fs.readFileSync(OUT, 'utf8'), path.join(version.DIR, 'no-such-folder')));
+  assert.throws(() => served('{'));
+});
+
 test('each file in docs/api-changes/ is well formed, and the folder holds the version the relay serves', () => {
   const bad = version.names().flatMap((n) => version.problems(n, fs.readFileSync(path.join(version.DIR, n), 'utf8')));
   assert.deepStrictEqual(bad, []);
