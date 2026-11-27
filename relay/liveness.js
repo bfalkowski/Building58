@@ -12,7 +12,8 @@
 //   idle     hooks say its turn ended
 //   job      hooks say its turn ended, but a command it started still runs, such as npm test in the
 //            background (relay/jobs.js, which the session host runs). Busy, not idle: Autopilot does not
-//            count it as stalled, Update waits for it, and it is not safe to stop.
+//            count it as stalled, Update waits for it, and it is not safe to stop. A job with no CPU and
+//            no new output for 30 minutes is stuck, and does not count: the session is idle (stuckJobsOf).
 //   working  in a turn, and a hook came within the stall time
 //   quiet    in a turn, no hook for the stall time, but it printed within it
 //   stuck    in a turn, with no hook and no output for the stall time (cause 'silent'), or out of a turn,
@@ -36,6 +37,9 @@ let jobsSource = () => null;
 const useJobs = (fn) => { jobsSource = fn; };
 const jobsOf = (t) => (!t ? null : t.jobs !== undefined ? t.jobs : jobsSource(t.id));
 
+const stuckJobsOf = (t) => ((jobsOf(t) || {}).stuck || []);
+const liveJobs = (t) => Math.max(0, ((jobsOf(t) || {}).count || 0) - stuckJobsOf(t).length);
+
 function livenessOf(t, now, stallMs) {
   const at = (state, since, cause) => ({ state, since: since == null ? null : since, cause: cause || null });
   if (!t || t.exited || t.stopped) return at('gone', null);
@@ -44,17 +48,19 @@ function livenessOf(t, now, stallMs) {
   if (t.state === 'waiting') return at('waiting', t.waitingAt || hookAt);
   if (t.state !== 'working') {
     if (t.stuck) return at('stuck', t.stuck.at, 'told');
-    const jobs = jobsOf(t);
-    return jobs && jobs.count > 0 ? at('job', hookAt) : at('idle', hookAt);
+    return liveJobs(t) > 0 ? at('job', hookAt) : at('idle', hookAt);
   }
   if (now - hookAt < stall) return at('working', hookAt);
   if (now - outAt < stall) return at('quiet', hookAt);
   return at('stuck', Math.max(hookAt, outAt), 'silent');
 }
 
+const quietMin = (since, now) => Math.max(0, Math.floor((now - since) / 60000));
+const stuckJobWords = (job, now) => 'stuck job: ' + (String(job.command || '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'a command') + ', quiet for ' + quietMin(job.since, now) + ' min';
+
 function jobWords(t) {
-  const n = (jobsOf(t) || {}).count || 0;
+  const n = liveJobs(t);
   return n > 1 ? n + ' commands it started still run' : 'a command it started still runs';
 }
 
-module.exports = { livenessOf, jobsOf, jobWords, useJobs, STALL };
+module.exports = { livenessOf, jobsOf, stuckJobsOf, jobWords, stuckJobWords, useJobs, STALL };

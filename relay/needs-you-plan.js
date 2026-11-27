@@ -56,6 +56,8 @@
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
+//   stuck-job    a job of a session with no CPU and no new output for 30 minutes (relay/jobs.js): the line has an
+//                End it button, which ends that one process and not the session (relay/stuck-jobs.js)
 //   undelivered  a saved message for a running session has waited long, unless that session has another item
 //   prompt       an idle Dev on a task in Building or Changes requested with no PR, unless it has just started or
 //                the relay still has a continue prompt for it
@@ -67,7 +69,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -77,7 +79,7 @@ const nameOf = (t) => oneLine(t.ticket, 20) || 'task ' + oneLine(t.id, 20);
 
 function seatItem(s, t) {
   const who = oneLine(s.who, 40) || 'a session';
-  const item = (kind, line) => ({ kind, who, terminal: s.terminal, task: t ? t.id : null, ticket: t ? t.ticket || null : null, pr: t ? t.pr || null : null, line, link: { terminal: s.terminal } });
+  const item = (kind, line, more) => ({ kind, who, terminal: s.terminal, task: t ? t.id : null, ticket: t ? t.ticket || null : null, pr: t ? t.pr || null : null, line, link: Object.assign({ terminal: s.terminal }, more) });
   if (s.live === 'gone') return null;
   const message = oneLine(s.message, 200);
   if (s.live === 'waiting' && PERMISSION.test(message)) return item('permission', 'Approve or deny the request from ' + who + ': ' + message);
@@ -88,6 +90,8 @@ function seatItem(s, t) {
     return item('question', 'Answer the question on the screen of ' + who + (text || choices.length ? ': ' + [text, choices.length ? 'Choices: ' + choices.join(' | ') : ''].filter(Boolean).join(' ') : '.'));
   }
   if (s.live === 'stuck' && s.cause === 'told') return item('stuck', 'Open the session of ' + who + ': the relay told it something and it did not start' + (s.stuckWhy ? ', ' + oneLine(s.stuckWhy, 160) : '') + '.');
+  const job = (s.stuckJobs || [])[0];
+  if (job) return item('stuck-job', 'End the stuck job of ' + who + ': ' + oneLine(job.command, 120) + ', quiet for ' + Math.max(0, Math.floor(Number(job.minutes) || 0)) + ' min, with no CPU and no new output. Press End it. The session runs on.', { endJob: job.pid });
   if (s.role === 'Dev' && s.live === 'idle' && !s.fresh && !s.continuing && t && BUILDING.includes(t.state) && !t.pr) return item('prompt', 'Prompt ' + who + ': ' + (s.spoke === false ? 'it has not started on ' + nameOf(t) + '.' : 'it stopped on ' + nameOf(t) + ' with no PR.'));
   return null;
 }

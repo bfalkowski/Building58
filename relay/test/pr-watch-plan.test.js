@@ -90,6 +90,15 @@ test('Waiting on you and Autopilot\'s own tasks are left alone', () => {
   assert.deepStrictEqual(pick(nextMove(base({ task: { state: 'in_review', autopilot: true }, review: null }))), ['Autopilot', 'autopilot', null]);
 });
 
+test('a wait that Autopilot owns turns late after the set time, like any other', () => {
+  const move = nextMove(base({ task: { state: 'in_review', autopilot: true }, review: null }));
+  const hour = 60 * 60 * 1000;
+  assert.strictEqual(lateness(move, 0, hour - 1, hour), null);
+  const late = lateness(move, 0, 561 * 60 * 1000, hour);
+  assert.strictEqual(late.owner, 'you');
+  assert.match(late.why, /^Autopilot has owed the next move for 561 min\. Autopilot moves it\.$/);
+});
+
 test('waiting past the set time goes to the person, and the line says who and how long', () => {
   const move = nextMove(base({ verdict: { kind: 'fix', commit: H, posted: 'u' } }));
   const hour = 60 * 60 * 1000;

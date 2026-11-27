@@ -53,6 +53,18 @@
       });
       li.append(stop);
     }
+    if (Number.isInteger(link.endJob) && link.terminal) {
+      const end = document.createElement('button');
+      end.type = 'button'; end.className = 'needs-stop'; end.textContent = 'End it';
+      end.title = 'End this one stuck command. The session runs on.';
+      end.addEventListener('click', () => {
+        end.disabled = true; end.textContent = 'Ending';
+        fetch(base + '/floor/end-job', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ who: link.terminal, pid: link.endJob }) })
+          .then((r) => r.json()).catch(() => null)
+          .then((r) => { end.textContent = r && r.ok ? 'Ended' : 'Not ended'; end.title = (r && r.message) || end.title; drawn = ''; read().then(draw); });
+      });
+      li.append(end);
+    }
     if (typeof link.fix === 'string' && link.fix) {
       const fix = document.createElement('button');
       fix.type = 'button'; fix.className = 'needs-stop'; fix.textContent = 'Fix it';

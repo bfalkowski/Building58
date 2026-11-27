@@ -28,7 +28,7 @@ const prWatch = require('./pr-watch.js');
 const huddles = require('./huddles.js');
 const pipeline = require('./pipeline.js');
 const chat = require('./chat.js');
-const { livenessOf } = require('./liveness.js');
+const { livenessOf, stuckJobsOf } = require('./liveness.js');
 const delivery = require('./delivery.js');
 const { owesContinue } = require('./sessions.js');
 const { listOf } = require('./needs-you-plan.js');
@@ -78,7 +78,7 @@ function stateOf(channel, now, lastReport) {
   const taskOf = (t) => (t.task && list.find((x) => x.id === t.task)) || list.find((x) => x.owner && x.owner.terminal === t.id) || null;
   const seats = all.map((t) => {
     const task = taskOf(t), lv = livenessOf(t, now);
-    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : screenOf(t, now), menu: lv.state === 'gone' ? null : menuOf(t, now), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, spoke: !!t.spoke, continuing: owesContinue(channel, t), fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
+    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : screenOf(t, now), menu: lv.state === 'gone' ? null : menuOf(t, now), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, stuckJobs: lv.state === 'gone' ? [] : stuckJobsOf(t).map((j) => ({ pid: j.pid, command: j.command, minutes: Math.floor((now - j.since) / 60000) })), spoke: !!t.spoke, continuing: owesContinue(channel, t), fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
   });
   const report = lastReport || huddles.reportOf(channel);
   const reviewing = (pr) => all.some((x) => !x.exited && x.reviewOf === pr && !x.posted);
