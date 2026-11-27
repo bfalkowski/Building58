@@ -225,6 +225,7 @@ function giveReview(channel, pr) {
   if (!rec) return;
   if ((rec.count || 0) >= max) rec.count = max - 1;
   rec.waits = false;
+  delete rec.failed;
   save();
 }
 
