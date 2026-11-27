@@ -77,6 +77,18 @@
       });
       li.append(fix);
     }
+    if (link.review && typeof link.review.from === 'string' && PR.test(link.review.pr) && window.OfficeReviews) {
+      const get = document.createElement('button');
+      get.type = 'button'; get.className = 'needs-stop'; get.textContent = 'Get a review';
+      get.title = 'Start a review of this PR now. It is your own, and the automatic count does not include it.';
+      get.addEventListener('click', () => {
+        get.disabled = true; get.textContent = 'Starting';
+        fetch(base + '/checkouts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: link.review.from, pr: link.review.pr, prompt: window.OfficeReviews.prBrief(link.review.pr), cols: 120, rows: 32 }) })
+          .then((r) => r.json()).catch(() => null)
+          .then((r) => { get.textContent = r && r.ok ? 'Started' : 'Not started'; get.title = (r && r.message) || get.title; drawn = ''; read().then(draw); });
+      });
+      li.append(get);
+    }
     if (typeof link.done === 'string' && link.done) {
       const done = document.createElement('button');
       done.type = 'button'; done.className = 'needs-stop'; done.textContent = 'Done';

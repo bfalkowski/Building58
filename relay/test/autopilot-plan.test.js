@@ -234,3 +234,20 @@ test('level 6: with Exhibit read, a merge also needs meets_policy at the head', 
   }
   assert.strictEqual(forPr(pr({ statusCheckRollup: [] }), FILES, merge, 1, 2, false, null).why, 'Waiting for CI.', 'CI is asked first');
 });
+
+const NONE = 'out of automatic reviews: start one with Get a review, or merge or close it';
+const fixed = { kind: 'fix', commit: HEAD, posted: true };
+test('when no review can start, a fix verdict goes to the person at once, never to a wait', () => {
+  const after = pr({ headRefOid: 'b'.repeat(40) });
+  const d = forPr(after, FILES, fixed, 1, 5, false, undefined, NONE);
+  assert.deepStrictEqual([d.act, d.reason], ['person', 'rounds']);
+  assert.ok(d.why.includes(NONE));
+  assert.strictEqual(forPr(pr(), FILES, fixed, 1, 5, false, undefined, '').act, 'wait', 'a review that can start is waited for');
+  assert.strictEqual(forPr(pr(), FILES, fixed, 1, 5, true, undefined, NONE).act, 'bring-back', 'a Dev that is gone still fixes first');
+  assert.strictEqual(forPr(after, FILES, fixed, 1, 5, true, undefined, NONE).reason, 'rounds');
+});
+test('commits after a merge verdict go to the person at once when no review can start', () => {
+  const d = forPr(pr({ headRefOid: 'b'.repeat(40) }), FILES, merge, 1, 5, false, undefined, NONE);
+  assert.deepStrictEqual([d.act, d.reason], ['person', 'rounds']);
+  assert.strictEqual(forPr(pr({ headRefOid: 'b'.repeat(40) }), FILES, merge, 1, 5, false, undefined, '').act, 'wait');
+});
