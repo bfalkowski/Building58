@@ -28,9 +28,9 @@ const WAITS_FOR_REVIEW = 'Waiting for the review.';
 function exhibitStep(pr, exhibit) {
   if (exhibit === undefined) return null;
   if (exhibit && exhibit.failed) return { act: 'wait', why: 'Level 6 needs Exhibit\'s verdict, and ' + exhibit.failed + '.' };
-  if (!exhibit) return { act: 'wait', why: 'Level 6 waits for Exhibit\'s summary comment on the PR.' };
+  if (!exhibit) return { act: 'wait', why: 'Level 6 waits for the nightly Exhibit run to store a verdict for this head.' };
   const head = String(pr.headRefOid || '');
-  if (!head.startsWith(exhibit.commit)) return { act: 'wait', why: 'Exhibit\'s summary is for ' + exhibit.commit.slice(0, 7) + ', not the head ' + head.slice(0, 7) + ', so Autopilot waits for its next run.' };
+  if (!head.startsWith(exhibit.commit)) return { act: 'wait', why: 'Exhibit\'s verdict is for ' + exhibit.commit.slice(0, 7) + ', not the head ' + head.slice(0, 7) + ', so Autopilot waits for its next run.' };
   if (exhibit.verdict === 'meets_policy') return null;
   return { act: 'person', reason: 'exhibit', why: 'Exhibit says ' + exhibit.verdict + ' at ' + exhibit.commit.slice(0, 7) + ', so its evidence does not pass. Level 6 leaves the merge to a person.' };
 }

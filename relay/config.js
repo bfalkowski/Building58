@@ -60,7 +60,7 @@ const SETTINGS = [
   { name: 'reviewGraceSeconds', group: 'Reviews', tab: 'reviews', label: 'A reviewer leaves after', unit: 'seconds', env: 'RELAY_REVIEW_GRACE_MS', scale: 1 / 1000, def: 30, min: 1, max: 600,
     what: 'After an automatic reviewer posts and its turn ends, the relay waits this long, then ends the session and frees its desk.' },
   { name: 'autopilotExhibit', group: 'Autopilot', tab: 'autopilot', label: 'Merge only when Exhibit passes', kind: 'bool', def: false,
-    what: 'Level 6. Autopilot also needs the Exhibit summary comment on the PR to say meets_policy at the PR\'s head commit before it merges. It waits while there is no summary, or one for an older commit, and hands the PR to you when Exhibit says needs_person or error. Exhibit must run on the repo\'s PRs, or Autopilot never merges. Off by default.' },
+    what: 'Level 6. Autopilot also needs the verdict that the nightly Exhibit run stored for the PR\'s head commit (on the exhibit-data branch) to say meets_policy before it merges. It waits while none is stored for the current head, and hands the PR to you when Exhibit says needs_person or error. The nightly run must have checked the PR, or Autopilot never merges it. Off by default.' },
   { name: 'autopilotRounds', group: 'Autopilot', tab: 'autopilot', label: 'Review rounds', unit: 'rounds', def: 2, min: 1, max: 5,
     what: 'If this many reviews in a row still ask for fixes, Autopilot stops and puts the task in Waiting on you.' },
   { name: 'autopilotMerges', group: 'Autopilot', tab: 'autopilot', label: 'Merges a day', unit: 'merges', def: 10, min: 1, max: 50,
