@@ -6,7 +6,7 @@
 'use strict';
 const assert = require('node:assert');
 const test = require('node:test');
-const { office, pageTest, until } = require('./page.js');
+const { office, pageTest, until, watch } = require('./page.js');
 
 let o;
 test.before(async () => { o = await office(); });
@@ -38,14 +38,20 @@ pageTest('someone sent to their desk ends their game, so the other player leaves
   // At normal speed a game lasts 37 to 57 seconds, so for the next few seconds the game can end only
   // because Sam left. The partner may start a new game with someone else, but nobody plays alone.
   // Sam goes to his own desk, which is always free: the window or the couch can be full and refuse.
+  await p.page.evaluate((id) => { window.__partner = id; }, partner);
   const away = await p.page.evaluate(() => { window.run.speed({ value: 1 }); return window.run.idle({ who: 'sam', do: 'desk' }); });
   assert.strictEqual(away.ok, true, JSON.stringify(away));
   await p.page.waitForFunction((who) => window.run.debug(who).step === null || window.run.debug(who).step.t !== 'act', partner, { timeout: 5000 }).catch(() => {});
-  for (let i = 0; i < 10; i++) {
-    const players = await playing(p);
-    assert.notStrictEqual(players.length, 1, 'one person plays alone: ' + players.join(', '));
-    await p.page.waitForTimeout(400);
-  }
+  const seen = await watch(p, ([label]) => {
+    const players = window.run.state().workers.filter((w) => {
+      const d = window.run.debug(w.id), s = d && d.step;
+      const headed = String((s && s.key) || '').startsWith('pp-') || d.steps.some((x) => /:pp-/.test(x));
+      return w.doing === label && !!d && ((!!s && s.t === 'act' && d.spot.startsWith('pp-')) || headed);
+    }).map((w) => w.id).sort();
+    if (players.length === 1) return { bad: 'one person plays alone: ' + players.join(', ') };
+    return { done: !players.includes('sam') && window.run.debug(window.__partner).spot !== 'pp-e' };
+  }, [PLAYING]);
+  assert.strictEqual(seen.bad, undefined, seen.bad);
   assert.ok(!(await playing(p)).includes('sam'), 'Sam left the game');
   assert.deepStrictEqual(p.errors, []);
 });

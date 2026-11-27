@@ -4,7 +4,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { office, pageTest, SOFTWARE } = require('./page.js');
+const { office, pageTest, SOFTWARE, frames } = require('./page.js');
 
 const WORLDS = { office: '/office/' };
 
@@ -27,11 +27,11 @@ test.describe('the pad, with WebGL, in software', () => {
       const box = await left.boundingBox();
       await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await p.page.mouse.down();
-      await p.page.waitForTimeout(500);
+      await p.page.waitForFunction((theta) => window.NavPad.pads[0].angles().theta < theta - 0.1, home.theta);
       await p.page.mouse.up();
       const held = await angles();
       assert.ok(held.theta < home.theta - 0.05, 'holding the left arrow goes around to the left: ' + JSON.stringify([home, held]));
-      await p.page.waitForTimeout(300);
+      await frames(p);
       assert.ok(Math.abs((await angles()).theta - held.theta) < 0.02, 'letting go stops it');
 
       await p.page.focus('.navpad button[data-dir="home"]');
