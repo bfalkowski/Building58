@@ -385,7 +385,7 @@ test('Autopilot reads the PR again just before it merges, so a check that went r
   assert.strictEqual(log('merged.log'), '', 'the kept answer said green, the fresh one said red, and nothing merged');
 });
 
-for (const [name, after, merged] of [['a meets_policy summary lets level 6 merge', 'meets_policy', true], ['a summary that turns needs_person before the re-read stops the merge and hands the PR over', 'needs_person', false]]) {
+for (const [name, after, merged] of [['a stored meets_policy lets level 6 merge', 'meets_policy', true], ['a stored verdict that turns needs_person before the re-read stops the merge and hands the PR over', 'needs_person', false]]) {
   test('level 6: ' + name, async (t) => {
     const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
     const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '0' });
@@ -397,7 +397,7 @@ for (const [name, after, merged] of [['a meets_policy summary lets level 6 merge
     sh(repo, 'push', '-q', origin, 'HEAD:refs/heads/' + sh(repo, 'symbolic-ref', '--short', 'HEAD'));
     const log = (n) => { try { return fs.readFileSync(path.join(ghDir, n), 'utf8'); } catch (e) { return ''; } };
     const COMMENTS = 'repos/acme/widgets/issues/7/comments', gate = path.join(ghDir, 'gate');
-    const reads = () => log('calls.log').split('\n').filter((l) => l.includes(COMMENTS)).length;
+    const reads = () => log('calls.log').split('\n').filter((l) => l.includes('contents/prs/7/')).length;
     const say = (s, event, extra) => R.hook(Object.assign({ hook_event_name: event, session_id: s.sessionId.slice(0, 12) }, extra));
     const ap = async () => (await R.call('GET', '/autopilot')).body;
     const task = async () => (await R.call('GET', '/tasks')).body.tasks[0];
@@ -410,9 +410,10 @@ for (const [name, after, merged] of [['a meets_policy summary lets level 6 merge
     sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'hello');
     pushPr(wt, origin);
     const head = sh(wt, 'rev-parse', 'HEAD');
-    const summary = (verdict) => [{ user: { login: 'github-actions[bot]', type: 'Bot' }, updated_at: '2026-11-25T01:00:00Z', body: require('../exhibit.js').MARK + '\nVerdict: **' + verdict + '** at head commit `' + head.slice(0, 7) + '`.\n' }];
+    const STORED = 'repos/acme/widgets/contents/prs/7/' + head + '.json';
+    const summary = (verdict) => ({ pr: 7, head, repo: 'acme/widgets', verdict });
     const answer = (verdict, gated) => fs.writeFileSync(path.join(ghDir, 'answers.json'), JSON.stringify({ prs: { [PR]: { state: 'OPEN', headRefOid: head, mergeStateStatus: 'CLEAN', statusCheckRollup: GREEN } },
-      api: { 'repos/acme/widgets/pulls/7/files': [{ filename: 'a.txt' }], [COMMENTS]: summary(verdict) }, gateApi: gated ? { [COMMENTS]: gate } : {} }));
+      api: { 'repos/acme/widgets/pulls/7/files': [{ filename: 'a.txt' }], [STORED]: summary(verdict) }, gateApi: gated ? { [STORED]: gate } : {} }));
     answer('meets_policy', false);
     await say(dev, 'PostToolUse', { pr_url: PR, cwd: wt });
     await say(dev, 'UserPromptSubmit');
@@ -423,12 +424,12 @@ for (const [name, after, merged] of [['a meets_policy summary lets level 6 merge
     await say(r, 'PostToolUse', { tool_name: 'Bash', posted: { pr: 7, repo: 'acme/widgets', kind: 'comment', url: PR + '#issuecomment-101' } });
     await say(r, 'Stop');
     await until(async () => (await ap()).prs.some((p) => p.verdict === 'merge' && /^Its Dev is working/.test(p.why || '')), 'Autopilot to wait for the Dev');
-    assert.strictEqual(reads(), 0, 'while the plan still waits, it does not list the comments');
+    assert.strictEqual(reads(), 0, 'while the plan still waits, it does not read the stored exhibit');
     const before = reads();
     if (!merged) answer('meets_policy', true);
     await say(dev, 'Stop');
     if (!merged) {
-      await until(() => reads() > before, 'the first read of the summary, held at the gate');
+      await until(() => reads() > before, 'the first read of the stored exhibit, held at the gate');
       answer(after, false);
       fs.writeFileSync(gate, '');
     }

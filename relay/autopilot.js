@@ -347,7 +347,7 @@ function readyNow(channel, task, rec, f) {
   rec.readyTold = f.ready; save();
   note(channel, (task.ticket || 'Task ' + task.id) + ', PR ' + number(task.pr) + ': ' + f.why);
 }
-const exhibitOf = (task, pr) => (config.get('autopilotExhibit') && pr.state === 'OPEN' ? exhibit.read(task.pr, task.repo) : Promise.resolve(undefined));
+const exhibitOf = (task, pr) => (config.get('autopilotExhibit') && pr.state === 'OPEN' ? exhibit.read(task.pr, task.repo, pr.headRefOid) : Promise.resolve(undefined));
 async function lookAt(channel, task) {
   const rec = recOf(channel, task.pr);
   const got = await readPr(task, rec);
