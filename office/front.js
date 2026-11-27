@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
   const WORKER_DESKS = 7;
-  const STUCK_KINDS = ['stuck', 'undelivered', 'prompt', 'gone'];
+  const STUCK_KINDS = ['stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
   const SHORT = { merge: 'merge', question: 'a question', permission: 'a permission', 'handed-over': 'handed over', review: 'a review', waiting: 'a look', merged: 'merged', closed: 'closed', desks: 'a free desk', main: 'main is red', claude: 'Claude Code', relay: 'the relay' };
   const VERDICT = {
     start: ['start', 'start', '✓'], first: ['first', 'after', '↓'], 'not-needed': ['no', 'not needed', '✕'],
@@ -25,6 +25,7 @@
     const d = row.desk || {}, doing = d.doing || {};
     const mine = needsOf(row, needs);
     const stuck = mine.find((i) => STUCK_KINDS.includes(i.kind));
+    if (doing.state === 'stuck' && /^stuck job:/.test(doing.words)) return { kind: 'stuck', text: cut(doing.words.replace(/^s/, 'S'), 90) };
     if (doing.state === 'stuck') return { kind: 'stuck', text: 'Stuck: ' + String(doing.words || 'stuck').replace(/^stuck:\s*/i, '') };
     if (stuck) return { kind: 'stuck', text: 'Stuck: ' + cut(stuck.line, 90) };
     if (mine.length && !(d.review && d.review.followUp)) return { kind: 'wait', text: 'Waits on you: ' + (SHORT[mine[0].kind] || cut(mine[0].line, 50)) };
