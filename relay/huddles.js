@@ -305,4 +305,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, noteHook, reportOf: (channel) => latest.get(channel) || null, busy: () => open.size };
+module.exports = { lineOf, waitingOn, handle, noteHook, reportOf: (channel) => latest.get(channel) || null, busy: () => open.size };

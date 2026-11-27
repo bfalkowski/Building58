@@ -23,7 +23,8 @@ const { claim } = require('./lockfile.js');
 const REFUSAL = /refusing to allow a GitHub App to create or update workflow/i;
 const WAITS = 'waits on the person: push';
 const FILE = state.file('workflow-pushes.json', 'RELAY_WORKFLOW_PUSHES_FILE');
-const DIFF_LIMIT = 6000, FILES_LIMIT = 10, COMMITS_LIMIT = 20;
+const { DIFF_LIMIT } = require('./needs-you-plan.js');
+const FILES_LIMIT = 10, COMMITS_LIMIT = 20;
 const ownsFile = claim(FILE);
 
 let store = {};
@@ -76,9 +77,17 @@ async function inspect(cwd) {
 
 const commandOf = (cwd, branch) => 'git -C ' + cwd + ' push origin ' + branch;
 
+async function refresh(item) {
+  const seen = await inspect(item.cwd);
+  if (!seen) return false;
+  Object.assign(item, seen, { command: commandOf(item.cwd, seen.branch) });
+  save();
+  return true;
+}
+
 async function open(channel, { task, terminal }) {
   const c = chOf(channel), have = c[task.id];
-  if (have && have.cwd === terminal.cwd) return have;
+  if (have && have.cwd === terminal.cwd) { await refresh(have); return have; }
   const seen = await inspect(terminal.cwd);
   if (!seen) return null;
   const item = Object.assign({
@@ -130,6 +139,7 @@ async function check(channel) {
   const c = chOf(channel);
   for (const id of Object.keys(c)) {
     const item = c[id];
+    if ((await git(item.cwd, ['rev-parse', 'HEAD'])) !== item.commit) await refresh(item);
     if (!(await reached(item))) continue;
     delete c[id];
     save();

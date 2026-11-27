@@ -70,6 +70,7 @@
 'use strict';
 const { oneLine, keepLines } = require('./clean.js');
 
+const DIFF_LIMIT = 6000;
 const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'workflow-push', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
@@ -106,7 +107,7 @@ function reviewedLine(t, dev, item) {
 function workflowItem(t, item, onPr) {
   const w = t.workflowPush, n = w.commits.length;
   const line = 'Push this as you: ' + nameOf(t) + onPr + ' has ' + n + (n === 1 ? ' commit' : ' commits') + ' on ' + oneLine(w.branch, 120) + ' that GitHub does not have, because GitHub refuses the room\'s App a push of a workflow file. On your own computer, run ' + oneLine(w.command, 400) + '. This line clears when GitHub has the commit.';
-  return Object.assign(item('workflow-push', line, t.pr ? { url: t.pr } : { ticket: t.ticket || t.id }), { branch: oneLine(w.branch, 120), commits: w.commits.map((c) => ({ sha: oneLine(c.sha, 12), subject: oneLine(c.subject, 200) })), files: w.files.map((f) => ({ file: oneLine(f.file, 200), diff: keepLines(f.diff, 6000) })), command: oneLine(w.command, 400) });
+  return Object.assign(item('workflow-push', line, t.pr ? { url: t.pr } : { ticket: t.ticket || t.id }), { branch: oneLine(w.branch, 120), commits: w.commits.map((c) => ({ sha: oneLine(c.sha, 12), subject: oneLine(c.subject, 200) })), files: w.files.map((f) => ({ file: oneLine(f.file, 200), diff: keepLines(f.diff, DIFF_LIMIT) })), command: oneLine(w.command, 400) });
 }
 
 function taskItem(t, dev) {
@@ -236,4 +237,4 @@ function skillsItem(s) {
   return { kind: 'skills', who: 'Skills', terminal: null, task: null, ticket: null, pr: null, line: parts.join(' '), link: {} };
 }
 
-module.exports = { listOf, redMain, writeLine, KINDS };
+module.exports = { DIFF_LIMIT, listOf, redMain, writeLine, KINDS };

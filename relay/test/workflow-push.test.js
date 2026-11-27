@@ -114,3 +114,32 @@ test('a task with an open item gets no stall hand-over, and Autopilot says it wa
   assert.strictEqual(wp.reasonFor('office', 'zz', 'keeps its own'), 'keeps its own');
   wp.drop('office', 'k1');
 });
+
+test('a commit the Dev amends after the refusal refreshes the item, and the item clears once the new commit is on GitHub', async () => {
+  const r = rig(), at = there(r);
+  logged.length = 0;
+  const item = await wp.open('office', at);
+  assert.strictEqual(item.commit, r.head);
+  fs.appendFileSync(path.join(r.dev, '.github', 'workflows', 'exhibit.yml'), 'jobs: {}\n');
+  sh(r.dev, 'commit', '-qa', '--amend', '-m', 'Fix the exhibit workflow again');
+  const amended = sh(r.dev, 'rev-parse', 'HEAD');
+  await wp.check('office');
+  const now = wp.of('office', 'k1');
+  assert.strictEqual(now.commit, amended, 'the item follows the Dev\'s HEAD');
+  assert.match(now.files[0].diff, /\+jobs: \{\}/);
+  assert.strictEqual(now.since, item.since);
+  sh(r.dev, 'push', '-q', 'origin', 'task/x');
+  await wp.check('office');
+  assert.strictEqual(wp.of('office', 'k1'), null);
+  assert.strictEqual(logged.length, 1);
+});
+
+test('the Lead\'s look says the person pushes the workflow file, and what the task waits on', () => {
+  const { lineOf, waitingOn } = require('../huddles.js');
+  const row = { who: 'Ada', ticket: '435', title: 'Exhibit', status: 'finished', taskState: 'building', pr: null, git: { branch: 'task/x', pushed: true, changed: 0, ahead: 1 }, waitingOn: null, lastSeconds: null, workflowPush: true };
+  assert.strictEqual(waitingOn(row, {}).on, 'you: push the workflow file');
+  assert.strictEqual(waitingOn(Object.assign({}, row, { workflowPush: false }), {}).on !== 'you: push the workflow file', true);
+  row.waitingOn = waitingOn(row, {}).on;
+  assert.match(lineOf(row), /1 unpushed \(GitHub refuses the App a workflow file, so the person pushes it\)/);
+  assert.doesNotMatch(lineOf(Object.assign({}, row, { workflowPush: false })), /refuses the App/);
+});
