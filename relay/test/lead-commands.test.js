@@ -28,7 +28,7 @@ async function office() {
   assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: lead.id })).body.lead, true);
   const token = await until(() => { try { return { 'X-Office-Token': sessionToken(lead.sessionId) }; } catch (e) { return null; } }, 'the token');
   const done = async () => { await R.kill().catch(() => {}); await R.remove(); removeDir(gh); };
-  return { R, dev, task, token, done, hook,  rowOf: async (id) => (await R.call('GET', '/floor')).body.sessions.find((r) => r.terminal === id) };
+  return { R, dev, lead, task, token, done, hook,  rowOf: async (id) => (await R.call('GET', '/floor')).body.sessions.find((r) => r.terminal === id) };
 }
 
 test('with Autopilot on and the rung off, each command answers 403 with the reason and changes nothing', async (t) => {
@@ -64,6 +64,11 @@ test('with Autopilot on and the rung on, tell, stop-command, bring-back and reru
   assert.strictEqual(told.status, 200, JSON.stringify(told.body));
   await until(async () => /GOT\[From the Lead: Please rebase on main\]/.test(await R.screen(dev.id)) || null, 'the Dev to be told when idle');
   assert.strictEqual((await R.call('POST', '/lead/tell', { who: dev.id, text: '  ' }, token)).status, 400, 'no empty text');
+  const self = await R.call('POST', '/lead/tell', { who: o.lead.id, text: 'hello me' }, token);
+  assert.deepStrictEqual([self.status, self.body.error], [409, 'is_lead']);
+  await R.call('POST', '/lead/tell', { who: dev.id, text: 'First line' }, token);
+  await R.call('POST', '/lead/tell', { who: dev.id, text: 'Second line' }, token);
+  await until(async () => { const sc = await R.screen(dev.id); return /GOT\[From the Lead: First line\]/.test(sc) && /GOT\[From the Lead: Second line\]/.test(sc) || null; }, 'both tells to arrive, none replaced');
   assert.strictEqual((await R.call('POST', '/lead/tell', { who: 'Nobody', text: 'hi' }, token)).status, 404);
 
   const row = await until(async () => { const r = await rowOf(dev.id); return r.stuckJobs.length && r; }, 'the job to be called stuck');
@@ -91,8 +96,9 @@ test('with Autopilot on and the rung on, tell, stop-command, bring-back and reru
   assert.strictEqual(rerun.status, 404, 'rerun is not refused by Autopilot: it answers for the PR, which is no task here: ' + JSON.stringify(rerun.body));
 
   const jams = (await R.call('GET', '/jams')).body.jams.filter((j) => j.by === 'Lead');
-  assert.deepStrictEqual(jams.map((j) => [j.by, j.kind]), [['Lead', 'other'], ['Lead', 'stuck-job'], ['Lead', 'dev-idle']]);
+  assert.deepStrictEqual(jams.map((j) => [j.by, j.kind]), [['Lead', 'other'], ['Lead', 'other'], ['Lead', 'other'], ['Lead', 'stuck-job'], ['Lead', 'dev-idle']]);
   assert.match(jams[0].fix, /^Told .*: Please rebase on main$/);
+  assert.deepStrictEqual(jams.slice(1, 3).map((j) => j.fix.replace(/^Told .*: /, '')), ['First line', 'Second line']);
 });
 
 test('the Lead\'s brief opens with keeping work moving, files stuck work as a jam ticket, and keeps its rules', () => {
@@ -118,7 +124,7 @@ test('hand-back takes only a task Autopilot handed over for a reason the Lead ma
   const keep = Object.keys(require.cache);
   let reason = null;
   stub('../terminal.js', {});
-  stub('../autopilot.js', { isOn: () => true, handedReasonFor: () => reason });
+  stub('../autopilot.js', { HAND_BACK: 'Handed back to Autopilot by the Lead.', isOn: () => true, handedReasonFor: () => reason });
   stub('../tasks.js', { list: () => [task], setState: (c, t, to, by, note) => moved.push([to, by, note]) });
   stub('../jams.js', { record: () => {} });
   stub('../floor.js', {});

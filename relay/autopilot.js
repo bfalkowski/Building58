@@ -254,7 +254,8 @@ tickets.onFiled((channel, ticket, agent, at) => {
 const roundsOf = (rec) => Math.max(0, postedOf(rec).length - (rec.roundsFrom || 0));
 
 const mineTask = (task) => task.by === BY;
-const handedBack = (task, rec) => (task.history || []).some((h) => h.type === 'moved' && h.at > rec.handedOverAt && (h.by === 'you' || (h.by === 'Lead' && h.note === require('./lead-commands.js').HAND_BACK)));
+const HAND_BACK = 'Handed back to Autopilot by the Lead.';
+const handedBack = (task, rec) => (task.history || []).some((h) => h.type === 'moved' && h.at > rec.handedOverAt && (h.by === 'you' || (h.by === 'Lead' && h.note === HAND_BACK)));
 const ANSWERED_BY_REVIEW = ['dev-says-bug', 'ci-red'];
 const OLD_REASONS = [[/^Its Dev says a finding the review marked non-blocking is a bug/, 'dev-says-bug'], [/^CI failed on the reviewed commit/, 'ci-red']];
 const handedReasonOf = (rec) => rec.handedReason || (OLD_REASONS.find(([text]) => text.test(rec.handedOver || '')) || [])[1] || null;
@@ -828,4 +829,4 @@ function turnOff(channel, by) {
   return true;
 }
 
-module.exports = { handedReasonFor, tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };
+module.exports = { HAND_BACK, handedReasonFor, tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };

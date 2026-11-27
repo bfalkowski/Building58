@@ -10,11 +10,11 @@ const delivery = require('./delivery.js');
 const jams = require('./jams.js');
 const tasks = require('./tasks.js');
 const floor = require('./floor.js');
+const crypto = require('crypto');
 const { oneLine } = require('./clean.js');
 
 const MAY_HAND_BACK = ['stalled', 'dev-gone', 'conflict-dropped', 'main-kept-moving', 'merge-failed'];
 const COMMANDS = ['tell', 'bring-back', 'hand-back', 'stop-command'];
-const HAND_BACK = 'Handed back to Autopilot by the Lead.';
 const TWELVE_HOURS = 12 * 60 * 60 * 1000;
 const bad = (message) => [400, { ok: false, error: 'bad_param', message }];
 
@@ -29,7 +29,7 @@ function tell(channel, body) {
   if (!t) return [status, { ok: false, error, message }];
   if (terminal.leadOf(channel) === t) return [409, { ok: false, error: 'is_lead', message: 'That is you. Tell the person instead.' }];
   const name = floor.nameOf(t);
-  delivery.save(channel, { key: 'lead-tell ' + t.id, terminal: t.id, sessionId: t.sessionId, expiresAt: Date.now() + TWELVE_HOURS, text: 'From the Lead: ' + text });
+  delivery.save(channel, { key: 'lead-tell ' + t.id + ' ' + crypto.createHash('sha256').update(text).digest('hex').slice(0, 12), terminal: t.id, sessionId: t.sessionId, expiresAt: Date.now() + TWELVE_HOURS, text: 'From the Lead: ' + text });
   log(channel, 'other', 'Told ' + name + ': ' + text);
   return [200, { ok: true, told: { name, terminal: t.id }, message: 'Saved for ' + name + '. It is typed when the session is idle.' }];
 }
@@ -55,7 +55,7 @@ function handBack(channel, body) {
   const reason = autopilot.handedReasonFor(channel, task);
   if (!reason) return [409, { ok: false, error: 'not_handed', message: 'Autopilot did not hand this task over, so the person put it in Waiting on you. Leave it to them.' }];
   if (!MAY_HAND_BACK.includes(reason)) return [403, { ok: false, error: 'persons_decision', message: 'Autopilot handed this task over for a decision that is the person\'s (' + reason + '). Tell the person instead.' }];
-  tasks.setState(channel, task, 'in_review', 'Lead', HAND_BACK);
+  tasks.setState(channel, task, 'in_review', 'Lead', autopilot.HAND_BACK);
   log(channel, 'handed-over', 'Handed ' + (task.ticket || 'task ' + task.id) + ' back to Autopilot', task);
   return [200, { ok: true, task: { id: task.id, state: task.state, pr: task.pr }, message: 'Handed back. Autopilot takes it from its next pass.' }];
 }
@@ -81,4 +81,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, handBack, COMMANDS, HAND_BACK };
+module.exports = { handle, handBack, COMMANDS };
