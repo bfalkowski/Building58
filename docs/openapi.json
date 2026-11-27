@@ -1495,7 +1495,7 @@
           "Failures"
         ],
         "summary": "Lead hand back",
-        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"task\"}: moves a task from Waiting on you to In review, and Autopilot takes it from its next pass and gives its PR a review. 409 not_handed for any other state, autopilot_off while Autopilot is off. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"task\"}: moves a task Autopilot handed over for a mechanical reason from Waiting on you to In review, and Autopilot takes it from its next pass and gives its PR a review. 409 not_handed for a task Autopilot did not hand over, autopilot_off while Autopilot is off, 403 persons_decision for a hand-over that is the person's decision. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "leadHandBack",
         "x-tokens": [
           "the Lead"

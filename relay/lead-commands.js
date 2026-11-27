@@ -12,6 +12,7 @@ const tasks = require('./tasks.js');
 const floor = require('./floor.js');
 const { oneLine } = require('./clean.js');
 
+const MAY_HAND_BACK = ['stalled', 'dev-gone', 'conflict-dropped', 'main-kept-moving', 'merge-failed'];
 const COMMANDS = ['tell', 'bring-back', 'hand-back', 'stop-command'];
 const HAND_BACK = 'Handed back to Autopilot by the Lead.';
 const TWELVE_HOURS = 12 * 60 * 60 * 1000;
@@ -51,6 +52,9 @@ function handBack(channel, body) {
   if (!task) return [404, { ok: false, error: 'no_task', message: 'No such task on this channel. ticket.js tasks lists them.' }];
   if (!autopilot.isOn(channel)) return [409, { ok: false, error: 'autopilot_off', message: 'Autopilot is off, so there is nothing to hand this back to.' }];
   if (task.state !== 'waiting_on_you') return [409, { ok: false, error: 'not_handed', message: 'That task is in ' + task.state + ', not Waiting on you, so Autopilot did not hand it over.' }];
+  const reason = autopilot.handedReasonFor(channel, task);
+  if (!reason) return [409, { ok: false, error: 'not_handed', message: 'Autopilot did not hand this task over, so the person put it in Waiting on you. Leave it to them.' }];
+  if (!MAY_HAND_BACK.includes(reason)) return [403, { ok: false, error: 'persons_decision', message: 'Autopilot handed this task over for a decision that is the person\'s (' + reason + '). Tell the person instead.' }];
   tasks.setState(channel, task, 'in_review', 'Lead', HAND_BACK);
   log(channel, 'handed-over', 'Handed ' + (task.ticket || 'task ' + task.id) + ' back to Autopilot', task);
   return [200, { ok: true, task: { id: task.id, state: task.state, pr: task.pr }, message: 'Handed back. Autopilot takes it from its next pass.' }];
@@ -77,4 +81,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, COMMANDS, HAND_BACK };
+module.exports = { handle, handBack, COMMANDS, HAND_BACK };

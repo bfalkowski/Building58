@@ -792,6 +792,12 @@ function refusedOf(task, v) {
   return last && !last.allowed ? { at: last.at, why: last.why } : null;
 }
 
+function handedReasonFor(channel, task) {
+  const rec = task.pr && chOf(channel).prs[task.pr];
+  if (!rec || !rec.handedOver || handedBack(task, rec)) return null;
+  return handedReasonOf(rec) || 'unknown';
+}
+
 const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';
 function leadRefusal(channel, to, merged, command) {
   if (command) return config.get('leadUnstick') ? null : [403, { ok: false, error: 'forbidden', message: require('./failures.js').NOT_ON + ' Until then ' + command + ' is the person\'s.' }];
@@ -822,4 +828,4 @@ function turnOff(channel, by) {
   return true;
 }
 
-module.exports = { tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };
+module.exports = { handedReasonFor, tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };

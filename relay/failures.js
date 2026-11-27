@@ -188,7 +188,7 @@ async function rerun(channel, body) {
     if (reran.has(key)) continue;
     if (!run) return [409, { ok: false, error: 'no_run', message: 'The failed check ' + f.name + ' has no run address, so the relay cannot rerun it.' }];
     reran.set(key, Date.now());
-    try { await gh.run(['run', 'rerun', run, '--failed', '-R', repoOf(pr)]); } catch (e) { reran.delete(key); return [502, { ok: false, error: 'gh', message: 'gh could not rerun it: ' + e.message + (/not accessible|403/i.test(e.message) ? ' The room\'s GitHub App needs Actions: write to rerun a job.' : '') }]; }
+    try { await gh.run(['run', 'rerun', run, '--failed', '-R', repoOf(pr)]); } catch (e) { reran.delete(key); return [502, { ok: false, error: 'gh', message: 'gh could not rerun it: ' + e.message + (/Resource not accessible by integration/i.test(e.message) ? ' The room\'s GitHub App needs Actions: write to rerun a job.' : '') }]; }
     done.push(f.name);
   }
   if (!done.length) return [409, { ok: false, error: 'already_rerun', message: 'The relay reran the failed job of this commit once already. A second rerun would hide the failure. Fix it, or tell the person.' }];
