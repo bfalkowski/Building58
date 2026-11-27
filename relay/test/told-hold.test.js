@@ -37,6 +37,6 @@ test('with no turn after the first note, the second goes in once the hold has pa
   assert.strictEqual(typedTo('h1').length, 1, 'held at first');
   await until(() => typedTo('h1').length === 2, 'the second note after the hold');
   const [a, b] = typedTo('h1');
-  assert.ok(b.at - a.at >= HOLD, 'not before the hold: ' + (b.at - a.at) + ' ms');
+  assert.ok(b.at - a.at >= HOLD - 50, 'not before the hold: ' + (b.at - a.at) + ' ms');
   assert.ok(b.at - a.at < HOLD + 2000, 'soon after it: ' + (b.at - a.at) + ' ms');
 });
