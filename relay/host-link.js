@@ -22,6 +22,7 @@ const jobs = new Map();
 let lost = () => {};
 liveness.useJobs((id) => jobs.get(id) || null);
 
+const jobOf = (j) => ({ count: Number(j.count) || 0, since: j.since || null, stuck: Array.isArray(j.stuck) ? j.stuck.filter((x) => x && Number.isInteger(x.pid)).map((x) => ({ pid: x.pid, command: String(x.command || ''), since: Number(x.since) || 0 })) : [] });
 const knows = (op) => op === 'list' || (host.OPS[op] || Infinity) <= hostVersion;
 function send(msg) {
   if (!conn || conn.destroyed) return;
@@ -43,13 +44,13 @@ function receive(m) {
     for (const s of m.sessions || []) {
       if (s.exited) continue;
       live.set(s.id, { meta: s.meta, cols: s.cols, rows: s.rows, out: [Buffer.from(s.out || '', 'base64')] });
-      if (s.jobs) jobs.set(s.id, { count: s.jobs.count, since: s.jobs.since });
+      if (s.jobs) jobs.set(s.id, jobOf(s.jobs));
     }
     ready = true;
     return;
   }
   const mine = sessions.get(m.id), waiting = live.get(m.id);
-  if (m.op === 'jobs') { jobs.set(m.id, { count: Number(m.count) || 0, since: m.since || null }); return; }
+  if (m.op === 'jobs') { jobs.set(m.id, jobOf(m)); return; }
   if (m.op === 'exit') jobs.delete(m.id);
   if (m.op === 'out') {
     const buf = Buffer.from(String(m.data || ''), 'base64');
@@ -103,6 +104,8 @@ function io(id) {
   };
 }
 
+function endJob(id, pid) { send({ op: 'end', id, pid }); return knows('end'); }
+
 function spawn(opts, handlers) {
   if (!ready || !conn || conn.destroyed) return null;
   sessions.set(opts.id, { handlers });
@@ -125,4 +128,4 @@ function dropUnclaimed(log) {
 const onLost = (fn) => { lost = fn; };
 function close() { closing = true; if (conn) conn.end(); }
 
-module.exports = { connect, versionGap, gapWords, spawn, peek, adopt, dropUnclaimed, onLost, close, isReady: () => ready && !!conn && !conn.destroyed };
+module.exports = { connect, endJob, versionGap, gapWords, spawn, peek, adopt, dropUnclaimed, onLost, close, isReady: () => ready && !!conn && !conn.destroyed };

@@ -741,7 +741,15 @@ function holdPushes(channel, only) {
   for (const task of tasks.list(channel)) {
     if (!task.pr || !task.worktree || (only && task !== only)) continue;
     try { pushHold.sync(task, verdictOf(channel, task.pr), pipeline.of(task.pr)); } catch (e) { if (ctx) ctx.log('Could not mark the push hold of ' + task.worktree + ': ' + e.message); }
+    try { tellRedCi(channel, task); } catch (e) { if (ctx) ctx.log('Could not tell the Dev of ' + task.worktree + ' that CI is red: ' + e.message); }
   }
+}
+function tellRedCi(channel, task) {
+  const lift = pushHold.untoldLift(task);
+  if (!lift) return;
+  delivery.save(channel, { key: 'red-ci-lift ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000, text: pushHold.RED_CI_TEXT + ' PR: ' + task.pr });
+  if (!jams.record(channel, { kind: 'push-hold-red-ci', ticket: task.ticket || undefined, pr: task.pr, since: lift.at, fix: 'CI went red after a merge verdict, so the push hold was lifted for the fix.', by: 'the relay' })) return;
+  pushHold.markLiftTold(task);
 }
 function logRefusals() {
   for (const channel of tasks.channels()) {
@@ -811,4 +819,4 @@ function turnOff(channel, by) {
   return true;
 }
 
-module.exports = { turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };
+module.exports = { tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };

@@ -7,6 +7,13 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { office, pageTest, SOFTWARE, until } = require('./page.js');
 
+const STILL_FRAMES = 10, STILL_LIMIT = 1e-6, STAY_FRAMES = 60;
+const frames = (page, n) => page.evaluate((count) => new Promise((done) => {
+  let left = count;
+  const tick = () => (--left > 0 ? requestAnimationFrame(tick) : done());
+  requestAnimationFrame(tick);
+}), n);
+
 test.describe('the office view, with WebGL, in software', () => {
   let o;
   test.before(async () => { o = await office({ webgl: true }); });
@@ -26,7 +33,7 @@ test.describe('the office view, with WebGL, in software', () => {
     assert.strictEqual(await btn.innerText(), 'Back to the room');
     const inside = await angles();
     assert.ok(Math.abs(inside.radius - home.radius) > 1, 'the view moved: ' + JSON.stringify([home, inside]));
-    await p.page.waitForTimeout(800);
+    await frames(p.page, STAY_FRAMES);
     const later = await angles();
     for (const k of ['theta', 'phi', 'radius']) assert.ok(Math.abs(later[k] - inside[k]) < 0.02, 'the view stays in the office, ' + k + ': ' + JSON.stringify([inside, later]));
     assert.ok(inside.radius < 2.1, 'the view is behind him at his desk, close up: ' + JSON.stringify(inside));
@@ -37,7 +44,18 @@ test.describe('the office view, with WebGL, in software', () => {
     });
     // Turning, it stays at his desk and stops before the walls: about 70 degrees each way.
     const left = p.page.locator('.navpad button[data-dir="left"]'), box = await left.boundingBox();
-    await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.page.mouse.down(); await p.page.waitForTimeout(2500); await p.page.mouse.up();
+    await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.page.mouse.down();
+    await until(p, ({ needed, limit }) => new Promise((done) => {
+      let last = null, still = 0;
+      const tick = () => {
+        const t = window.NavPad.pads[0].angles().theta;
+        still = last !== null && Math.abs(t - last) < limit ? still + 1 : 0;
+        last = t;
+        return still >= needed ? done(true) : requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }), { needed: STILL_FRAMES, limit: STILL_LIMIT });
+    await p.page.mouse.up();
     const turned = await angles();
     assert.ok(Math.abs(turned.radius - inside.radius) < 0.05, 'turning keeps the view at his desk: ' + JSON.stringify([inside, turned]));
     const off = Math.abs(Math.atan2(Math.sin(turned.theta - inside.theta), Math.cos(turned.theta - inside.theta)));
