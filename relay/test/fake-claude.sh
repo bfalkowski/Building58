@@ -23,7 +23,9 @@ fi
 # With FAKE_CLAUDE_MENU=known it shows Claude Code's own auto mode prompt before its prompt, and waits for a
 # key: 3 dismisses it (it says MENU-ANSWER[3] and draws its prompt), anything else leaves it open. With
 # FAKE_CLAUDE_MENU=unknown it shows a menu of its own, which no key closes but Esc (MENU-ANSWER[esc]).
-if [ -n "$FAKE_CLAUDE_MENU" ]; then
+if [ "$FAKE_CLAUDE_MENU" = "quoted" ]; then
+  echo "The prompt says: Teach auto mode about your environment?"
+elif [ -n "$FAKE_CLAUDE_MENU" ]; then
   stty -icanon min 1 time 0 2>/dev/null
   if [ "$FAKE_CLAUDE_MENU" = "known" ]; then
     printf 'Teach auto mode about your environment?\n\xe2\x9d\xaf 1. Yes\n  2. Not now\n  3. Don'"'"'t show again\n'

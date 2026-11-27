@@ -15,8 +15,6 @@ const SCREEN = 'Teachautomodeaboutyourenvironment?❯1.Yes2.Notnow3.Don\'tshowag
 test('a known prompt is found by its text, and the last one on screen wins', () => {
   assert.strictEqual(known.identify(SCREEN).id, 'auto-mode-environment');
   assert.strictEqual(known.identify(SCREEN).keys[0], '3', 'Don\'t show again, never Yes');
-  assert.strictEqual(known.identify('HowisClaudedoingthissession?(optional)1:Bad2:Fine3:Good0:Dismiss').keys[0], '0');
-  assert.strictEqual(known.identify(SCREEN + 'HowisClaudedoingthissession?').id, 'feedback-survey');
   assert.strictEqual(known.identify('Whichdatabaseshouldwemigratefirst?❯1.Orders2.Customers'), null);
   for (const k of known.KNOWN) assert.ok(!k.keys.includes('1') && !k.keys.includes('\r'), k.id + ' never picks the first choice or presses Enter');
 });
@@ -63,4 +61,14 @@ test('a menu the room does not know is not answered, and shows in Needs you with
   assert.strictEqual(row.menu.text, 'Which database should the Dev migrate first?');
   assert.deepStrictEqual(row.menu.choices, ['1. Orders', '2. Customers', '3. Both']);
   assert.strictEqual((await R.call('GET', '/jams')).body.jams.filter((j) => j.kind === 'news-behind-menu').length, 0, 'no jam for a menu the room did not close');
+});
+
+test('a session that prints a known prompt\'s words with no menu is left alone', async (t) => {
+  const R = await relay({ FAKE_CLAUDE_MENU: 'quoted' });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = await R.start({ cwd: makeRepo(R.home) });
+  await until(async () => (await R.screen(s.id)).includes('Teach auto mode'), 'the words on screen');
+  await sleep(4000);
+  assert.strictEqual((await R.call('GET', '/jams')).body.jams.length, 0, 'no jam');
+  assert.doesNotMatch(await R.screen(s.id), /MENU-ANSWER/, 'no key sent');
 });

@@ -525,12 +525,14 @@ function closeKnown(t, known) {
   for (const fn of answeredFns) { try { fn(t.channel, t, known); } catch (e) { console.error('After a known prompt: ' + e.message); } }
 }
 function lookAtMenu(t) {
-  clearTimeout(t.menuLook); t.menuLook = null;
   if (!t || t.exited || t.stopped) return;
+  clearTimeout(t.menuLook); t.menuLook = null;
+  const open = questionOnScreen(t) === 'menu';
+  if (!open) { t.menuSince = null; t.knownTries = 0; return; }
+  if (!t.menuSince) t.menuSince = Date.now();
   const known = knownPrompts.identify(screenOf({ tail: sinceKeyOf(t) }).slice(-MENU_LOOK));
   if (known && (t.knownTries || 0) < known.keys.length) { closeKnown(t, known); return; }
   if (!known) t.knownTries = 0;
-  if (questionOnScreen(t) !== 'menu') t.menuSince = null;
 }
 
 function notSafeToType(t, brief) {

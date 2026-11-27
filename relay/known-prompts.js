@@ -16,7 +16,6 @@ const { oneLine } = require('./clean.js');
 
 const KNOWN = [
   { id: 'auto-mode-environment', label: 'Teach auto mode about your environment?', answer: 'Don\'t show again', match: /Teachautomodeaboutyourenvironment/i, keys: ['3', '\x1b'] },
-  { id: 'feedback-survey', label: 'How is Claude doing this session?', answer: 'Dismiss', match: /HowisClaudedoingthissession/i, keys: ['0', '\x1b'] },
 ];
 
 function identify(screen) {
