@@ -211,12 +211,12 @@ function waitOnPerson(channel, pr) {
     text: 'PR ' + pr + ' has had ' + MAX_AUTO_REVIEWS() + ' automatic reviews and has new commits since the last one, so its next review waits on the person. Tell them it is theirs to review or to start a review with Get a review.' });
 }
 
-const OUT_OF_REVIEWS = 'out of automatic reviews: start one with Get a review, or merge or close it';
+const OUT_OF_REVIEWS = 'it is out of automatic reviews';
 function noReview(channel, pr) {
   const rec = recOf(channel, pr);
   if (!rec || rec.first || rec.pending || reviewing(channel, pr)) return '';
-  if (!switchesOf(channel).auto) return 'Review PRs automatically is off: start one with Get a review, or merge or close it';
-  if (rec.failed) return 'its automatic review could not start: start one with Get a review, or merge or close it';
+  if (!switchesOf(channel).auto) return 'Review PRs automatically is off';
+  if (rec.failed) return 'its automatic review could not start';
   if (rec.waits || (rec.count || 0) >= MAX_AUTO_REVIEWS()) return OUT_OF_REVIEWS;
   return '';
 }

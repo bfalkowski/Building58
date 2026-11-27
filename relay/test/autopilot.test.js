@@ -676,9 +676,11 @@ test('the person\'s Fix it lifts the push hold, a later review counts, and the L
   });
 
   await t.test('the person\'s Fix it lifts the push hold, and the fix then pushes', async () => {
+    assert.strictEqual((await R.call('POST', '/reviews', { auto: true })).status, 200);
     const r = await R.call('POST', '/autopilot/fix', { task: x.id });
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     assert.strictEqual(r.body.commit, reviewed);
+    assert.match(r.body.message, /A follow-up review checks the fix\./);
     assert.strictEqual(markOf(wt), null, 'the mark is gone');
     const now = await task();
     assert.strictEqual(now.state, 'changes_requested', 'the task goes back to its Dev');
@@ -695,8 +697,10 @@ test('the person\'s Fix it lifts the push hold, a later review counts, and the L
     await review(103);
     assert.deepStrictEqual(await until(() => { const m = markOf(wt); return m && m.commit === head && m; }, 'the push hold on the new commit'), { pr: PR, commit: head, base: 'main' });
     assert.strictEqual((await R.call('POST', '/terminals/lead', { terminal: lead.id, merge: true })).status, 200);
+    assert.strictEqual((await R.call('POST', '/reviews', { auto: false })).status, 200);
     const r = await R.call('POST', '/autopilot/fix', { task: ticket.id }, await tokenOf(lead));
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.match(r.body.message, /No follow-up review will start, since Review PRs automatically is off\. Start one with Get a review\./);
     assert.strictEqual(markOf(wt), null);
     assert.ok((await task()).history.some((h) => /^The Lead decided a finding on PR #7 must be fixed/.test(h.note || '')), 'the card says the Lead decided');
   });

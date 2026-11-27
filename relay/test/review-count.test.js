@@ -18,15 +18,15 @@ fs.writeFileSync(path.join(home, 'reviews.json'), JSON.stringify({
 const reviews = require('../reviews.js');
 
 test('a PR at 3 of 3 has no review to wait for, and a hand-back gives it one more', () => {
-  assert.strictEqual(reviews.noReview('c', PR), 'out of automatic reviews: start one with Get a review, or merge or close it');
+  assert.strictEqual(reviews.noReview('c', PR), 'it is out of automatic reviews');
   reviews.giveReview('c', PR);
   assert.strictEqual(reviews.noReview('c', PR), '');
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(home, 'reviews.json'), 'utf8')).c.prs[PR].count, 2);
   assert.strictEqual(reviews.noReview('c', 'https://github.com/acme/app/pull/9'), '', 'a PR with no record gets its first review');
 });
 test('no review is owed when the switch is off, a start failed, or one waits', () => {
-  assert.match(reviews.noReview('off', PR), /^Review PRs automatically is off: start one with Get a review/);
-  assert.match(reviews.noReview('c', at(1)), /^its automatic review could not start: start one with Get a review/);
+  assert.match(reviews.noReview('off', PR), /^Review PRs automatically is off$/);
+  assert.match(reviews.noReview('c', at(1)), /^its automatic review could not start$/);
   assert.strictEqual(reviews.noReview('c', at(2)), '', 'a first review waits to start');
   assert.strictEqual(reviews.noReview('c', at(3)), '', 'a follow-up waits to start');
 });

@@ -725,7 +725,7 @@ function decideFix(channel, task, by) {
   rec.verdicts.push({ kind: 'fix', commit: v.commit, by, sessionId: null, at: new Date().toISOString(), posted: 'decided by ' + by });
   dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; rec.act = 'wait'; rec.why = null;
   reviews.giveReview(channel, task.pr);
-  const none = reviews.noReview(channel, task.pr), after = none ? ' No follow-up review will start: ' + none + '.' : ' A follow-up review checks the fix.';
+  const none = reviews.noReview(channel, task.pr), after = none ? ' No follow-up review will start, since ' + none + '. Start one with Get a review.' : ' A follow-up review checks the fix.';
   if (chOf(channel).stuck) delete chOf(channel).stuck[task.id];
   save();
   holdPushes(channel, task);
