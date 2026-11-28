@@ -6,6 +6,7 @@
 //   a room sample every 5 minutes: the container's CPU and memory, from the cgroup files or /proc
 //   when each review's session started, for the time a PR waited for its review
 //   the PM's verdicts, once something writes them (notePm)
+//   each session's Skill calls and its role, counted from Claude Code's transcript of the session
 // It reads the rest from Autopilot's run records (relay/autopilot.js), the COO's store (relay/coo.js) and
 // the tasks (relay/tasks.js). Like the terminal, it answers only the room page on this machine.
 'use strict';
@@ -22,6 +23,8 @@ const { livenessOf } = require('./liveness.js');
 const { claim } = require('./lockfile.js');
 const plan = require('./metrics-plan.js');
 const jams = require('./jams.js');
+const seatSteps = require('./seat-steps.js');
+const skills = require('./skills.js');
 
 const FILE = state.file('metrics.json', 'RELAY_METRICS_FILE');
 const WATCH_MS = 10 * 1000;
@@ -93,11 +96,27 @@ function watchReviews() {
   for (const t of terminal.everyone()) if (t.reviewOf) changed = plan.noteReview(store, t.reviewOf, t.round, Date.parse(t.startedAt) || Date.now()) || changed;
   if (changed) save();
 }
+const seen = new Map();
+function watchSkills() {
+  let changed = false;
+  for (const t of terminal.everyone()) {
+    const role = skills.roleOf({ task: t.task, role: t.role }, t, t.lead);
+    const file = role && seatSteps.fileOf(t.cwd, t.sessionId, process.env.CLAUDE_CONFIG_DIR);
+    if (!file) continue;
+    let size;
+    try { size = fs.statSync(file).size; } catch (e) { continue; }
+    if (seen.get(file) === size) continue;
+    seen.set(file, size);
+    changed = plan.noteSkills(store, t.sessionId, role, Date.parse(t.startedAt) || Date.now(), seatSteps.read(file, { steps: false }).skills) || changed;
+  }
+  if (changed) save();
+}
 function start(channel) {
   if (channel) channels.add(channel);
   roomNow();
   setInterval(() => tick(Date.now()), 60 * 1000).unref();
   setInterval(watchReviews, WATCH_MS).unref();
+  setInterval(watchSkills, 60 * 1000).unref();
 }
 function notePm(channel, verdict) {
   const n = (k) => Math.max(0, Number(verdict[k]) || 0);
@@ -108,7 +127,7 @@ function notePm(channel, verdict) {
 function inputOf(channel, range, now) {
   const runs = Object.values(autopilot.runsKept(channel));
   const cooStore = coo.storeOf(channel);
-  return { now, range, runs, tasks: tasks.list(channel), hands: cooStore.hands, events: cooStore.events, desks: store.desks[channel] || [], room: store.room, reviews: store.reviews, pm: store.pm, jams: jams.listOf(channel) };
+  return { now, range, runs, tasks: tasks.list(channel), hands: cooStore.hands, events: cooStore.events, desks: store.desks[channel] || [], room: store.room, reviews: store.reviews, pm: store.pm, skills: store.skills, jams: jams.listOf(channel) };
 }
 
 async function handle(req, res, channel, rest, ctx) {
@@ -128,4 +147,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, start, notePm, tick, watchReviews, inputOf, FILE };
+module.exports = { handle, start, notePm, tick, watchReviews, watchSkills, inputOf, FILE };

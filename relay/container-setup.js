@@ -4,7 +4,9 @@
 // Claude Code: a new Claude Code first asks for a text style, and asks again whether to use an API key
 // found in the environment. Nobody answers those in a room, so this marks the first run done in
 // CLAUDE_CONFIG_DIR/.claude.json and approves the ANTHROPIC_API_KEY the person put in .env. Claude Code
-// also asks whether to trust each new folder, and a new task's checkout is a new folder. The person listed
+// also asks whether to teach auto mode about the environment, in every session at once after 5 denials counted in
+// that shared config, so this marks that prompt dismissed (relay/known-prompts.js). It also asks whether to
+// trust each new folder, and a new task's checkout is a new folder. The person listed
 // the repos in ROOM_REPOS, and the room runs from the Building58 folder, so those folders are marked trusted:
 // Claude Code trusts a folder inside a trusted one, so each checkout under .worktrees starts with no question. It reads the
 // sign-in from `claude auth status`, which sees that a token is there, not that it works.
@@ -52,6 +54,7 @@ function claudeConfig(env, trusted) {
     const rejected = Array.isArray(answers.rejected) ? answers.rejected : [];
     config.customApiKeyResponses = { approved: approved.includes(tail) ? approved : approved.concat(tail), rejected: rejected.filter((x) => x !== tail) };
   }
+  if (!(config.autoModeEnvSetup && config.autoModeEnvSetup.dismissed)) config.autoModeEnvSetup = Object.assign({}, config.autoModeEnvSetup, { dismissed: true, dismissedAt: Date.now() });
   if (trusted && trusted.length) {
     config.projects = config.projects && typeof config.projects === 'object' ? config.projects : {};
     for (const folder of trusted) config.projects[folder] = Object.assign({}, config.projects[folder], { hasTrustDialogAccepted: true });

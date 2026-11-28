@@ -26,7 +26,7 @@
 // It merges at most MAX_MERGES_A_DAY PRs a day, and never one that changes CLAUDE.md or the
 // constitution. After a merge it pulls main into the relay's folder (relay/update.js), which
 // restarts the relay once no session is busy if relay files changed. While that update waits, Autopilot
-// goes on: it stops only once the restart begins.
+// starts no new task, so the quiet moment comes. Its other work goes on, and it stops all of it once the restart begins.
 // A task whose Dev or reviewer is stuck (stalled below) goes to Waiting on you, its session left running
 // at its desk, and comes back to Autopilot by itself once that session moves again. One that nothing
 // moved comes back once something does: a PR, a hook from its Dev, or a posted verdict (movedAgain).
@@ -45,6 +45,7 @@ const tickets = require('./tickets.js');
 const mainCi = require('./main-ci.js');
 const { redMain } = require('./needs-you-plan.js');
 const reviews = require('./reviews.js');
+const owedFirst = require('./owed-first.js');
 const prComments = require('./pr-comments.js');
 const update = require('./update.js');
 const delivery = require('./delivery.js');
@@ -131,7 +132,7 @@ const verdictAsk = () => ' Mark each finding blocking, fix now or follow-up. Blo
   'Before you post, run node ' + JSON.stringify(tickets.CLI) + ' verdict merge only if no finding is blocking or fix now, or verdict fix if one is, so the Dev fixes it in this PR. Then post. ' +
   'Post one comment that starts with the line ## Review of <the commit you read>, says what you checked, and has a line Verdict: merge or Verdict: fix that matches the command. ' +
   'Post it with gh pr comment <PR> --body-file - and the text in a quoted heredoc (<<\'EOF\'), never with --body -, which posts a dash. A comment with no verdict line or no words does not count as a review, and the room starts the review again.';
-reviews.useAutopilot({ follows: isOn, ask: () => verdictAsk(), verdictOf: (channel, pr) => verdictOf(channel, pr),
+reviews.useAutopilot({ owed: (channel) => !!owedFirst.canStart(tasks.list(channel).filter((t) => open(channel, t))), follows: isOn, ask: () => verdictAsk(), verdictOf: (channel, pr) => verdictOf(channel, pr),
   since: (channel, pr) => { const r = isOn(channel) && chOf(channel).prs[pr]; const v = r && postedOf(r).slice(-1)[0]; return v ? v.commit : null; },
   freed: (channel, pr, text) => {
     const task = tasks.list(channel).find((x) => x.pr === pr);
@@ -493,7 +494,7 @@ async function bringBack(channel, task, rec, d, commit, pr) {
   }
   if (WAITS_FOR_ROOM.includes(out.error)) {
     rec.act = 'wait'; rec.why = 'Its Dev is not running, and Autopilot brings it back for ' + what + ' once it can: ' + out.message;
-    if (d.for === 'fix') { task.bringBack = Object.assign(task.bringBack || { at: Date.now() }, { why: out.message }); tasks.save(); }
+    if (d.for === 'fix') { task.bringBack = Object.assign(task.bringBack || { at: Date.now() }, { why: out.message, error: out.error }); tasks.save(); }
     return;
   }
   handOver(channel, task, rec, 'Its Dev is not running, and Autopilot could not bring it back for ' + what + ': ' + out.message + step, 'dev-gone', commit);
@@ -541,6 +542,12 @@ async function maybeStart(channel) {
   const c = chOf(channel);
   for (const said of pmCheck.takeHeld(channel)) note(channel, said);
   if (starting || tasks.busy() || update.restarting()) return;
+  if (update.waiting()) {
+    const why = 'An update waits for a quiet moment, so Autopilot starts no new task until the relay has restarted.';
+    if (c.idle !== why) { c.idle = why; note(channel, why); }
+    return;
+  }
+  if (c.idle === 'An update waits for a quiet moment, so Autopilot starts no new task until the relay has restarted.') { c.idle = null; save(); }
   const limit = MAX_MERGES_A_DAY();
   if (c.merged >= limit) {
     const why = 'Autopilot merged ' + c.merged + ' PR' + (c.merged === 1 ? '' : 's') + ' today, its limit. It starts again tomorrow, or raise Merges a day in Settings.';
@@ -548,7 +555,7 @@ async function maybeStart(channel) {
     return;
   }
   if (/^Autopilot merged \d+ PRs? today, its limit\./.test(c.idle || '')) { c.idle = null; save(); }
-  const owed = tasks.list(channel).filter((t) => t.bringBack && open(channel, t)).sort((a, b) => a.bringBack.at - b.bringBack.at)[0];
+  const owed = owedFirst.oldest(tasks.list(channel).filter((t) => open(channel, t)));
   if (owed) { c.idle = 'Waiting to bring back the Dev of ' + (owed.ticket || 'task ' + owed.id) + ' for fixes first: ' + owed.bringBack.why; return; }
   if (tasks.list(channel).filter((t) => open(channel, t)).length >= AT_ONCE()) return;
   const held = tickets.heldWhy(channel);

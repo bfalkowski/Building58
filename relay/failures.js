@@ -178,23 +178,40 @@ function rerunProblem(channel, body) {
   if (!bad.length) return [409, { ok: false, error: 'not_known', message: 'No failed check on ' + nameOfPr(pr) + ' is a known flaky one. A check is known when an open failure channel names it. Fix the failure, or tell the person.' }];
   return { pr, p, bad };
 }
-async function rerun(channel, body) {
-  const asked = rerunProblem(channel, body);
-  if (Array.isArray(asked)) return asked;
-  const { pr, p, bad } = asked, done = [];
-  for (const f of bad) {
+async function rerunFailed(pr, p, list) {
+  const done = [];
+  for (const f of list) {
     const key = pr + '|' + p.head + '|' + f.name;
     const run = (f.url.match(/\/actions\/runs\/(\d+)/) || [])[1];
     if (reran.has(key)) continue;
-    if (!run) return [409, { ok: false, error: 'no_run', message: 'The failed check ' + f.name + ' has no run address, so the relay cannot rerun it.' }];
+    if (!run) return { error: [409, { ok: false, error: 'no_run', message: 'The failed check ' + f.name + ' has no run address, so the relay cannot rerun it.' }] };
     reran.set(key, Date.now());
-    try { await gh.run(['run', 'rerun', run, '--failed', '-R', repoOf(pr)]); } catch (e) { reran.delete(key); return [502, { ok: false, error: 'gh', message: 'gh could not rerun it: ' + e.message + (/Resource not accessible by integration/i.test(e.message) ? ' The room\'s GitHub App needs Actions: write to rerun a job.' : '') }]; }
+    try { await gh.run(['run', 'rerun', run, '--failed', '-R', repoOf(pr)]); } catch (e) { reran.delete(key); return { error: [502, { ok: false, error: 'gh', message: 'gh could not rerun it: ' + e.message + (/Resource not accessible by integration/i.test(e.message) ? ' The room\'s GitHub App needs Actions: write to rerun a job.' : '') }] }; }
     done.push(f.name);
   }
+  return { done };
+}
+async function rerun(channel, body) {
+  const asked = rerunProblem(channel, body);
+  if (Array.isArray(asked)) return asked;
+  const { pr, p, bad } = asked;
+  const got = await rerunFailed(pr, p, bad);
+  if (got.error) return got.error;
+  const done = got.done;
   if (!done.length) return [409, { ok: false, error: 'already_rerun', message: 'The relay reran the failed job of this commit once already. A second rerun would hide the failure. Fix it, or tell the person.' }];
   pipeline.soon(pr);
   chat.announce(channel, 'The Lead reran the failed job of ' + nameOfPr(pr) + ': ' + done.join(', ') + '.');
   return [200, { ok: true, pr, rerun: done, message: 'Reran the failed job of ' + nameOfPr(pr) + ': ' + done.join(', ') + '. It reruns once per commit.' }];
+}
+
+function shareFailure(channel, pr, names) {
+  const keys = [...new Set(names.map(plan.keyOf).filter(Boolean))];
+  for (const key of keys) {
+    const room = roomFor(channel, key);
+    if (!room) openRoom(channel, key, [pr], 'the relay');
+    else if (!room.failure.prs.includes(pr)) join(channel, room, pr);
+  }
+  return keys.length;
 }
 
 const NOT_ON = 'The person has not let the Lead unstick the board. They turn it on with Let the Lead unstick the board in Settings.';
@@ -234,4 +251,4 @@ function begin() {
   config.every('chatPollSeconds', async () => { for (const channel of tasks.channels()) await sweep(channel); }, 1000);
 }
 
-module.exports = { begin, sweep, handle, ticketMay, linked, bothLinked, leadLines, openRoom, rooms, rerun, RELAY, NOT_ON };
+module.exports = { begin, sweep, handle, ticketMay, linked, bothLinked, leadLines, openRoom, rooms, rerun, rerunFailed, shareFailure, nameOfPr, RELAY, NOT_ON };
