@@ -1847,6 +1847,7 @@
     idle: { desc: 'Sends someone who is not working to do something: coffee, couch, window, chat, board, desk, fridge or pingpong.', params: { who: 'a person', do: Object.keys(IDLE_SPOTS).join(', ') },
       run: (c) => {
         const w = findWorker(c); if (!w) return fail('bad_param', 'Name "who".');
+        if (!w.present) return fail('away', w.name + ' is not in the room.');
         if (w.task) return fail('busy', w.name + ' is working.');
         if (w.waiting) return fail('busy', w.name + ' is waiting for your OK.');
         const what = c.do || 'coffee';
