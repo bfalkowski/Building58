@@ -3,7 +3,8 @@
 // opens what it names: the session at its desk, the PR or the failed CI run on GitHub, or the ticket on the Board. A line about
 // another relay on the room's state folder has a Stop button, which asks the relay to stop it (relay/old-relays.js).
 // A PR Autopilot handed over because its Dev says a finding is a bug has a Fix it button: the person agrees, and
-// the relay lifts the push hold and tells the Dev (POST /autopilot/fix, relay/autopilot.js).
+// the relay lifts the push hold and tells the Dev (POST /autopilot/fix, relay/autopilot.js). A Push this as you line has a
+// details block with the commits, the diff of each workflow file and the command to run (relay/workflow-push.js).
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -76,6 +77,16 @@
           .then((r) => { fix.textContent = r && r.ok ? 'Sent to its Dev' : 'Not sent'; fix.title = (r && r.message) || fix.title; drawn = ''; read().then(draw); });
       });
       li.append(fix);
+    }
+    if (item.kind === 'workflow-push' && Array.isArray(item.files)) {
+      const more = document.createElement('details');
+      more.className = 'needs-diff';
+      const head = document.createElement('summary');
+      head.textContent = 'Branch ' + item.branch + ', ' + (item.commits || []).length + ' commit(s), ' + item.files.length + ' workflow file(s)';
+      const body = document.createElement('pre');
+      body.textContent = (item.commits || []).map((c) => c.sha + ' ' + c.subject).join('\n') + '\n\n' + item.files.map((f) => f.file + '\n' + f.diff).join('\n\n') + '\n\n' + item.command;
+      more.append(head, body);
+      li.append(more);
     }
     if (link.review && typeof link.review.from === 'string' && PR.test(link.review.pr) && window.OfficeReviews) {
       const get = document.createElement('button');

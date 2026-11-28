@@ -13,7 +13,7 @@
 // spoke says a turn of it has begun, fresh says it started under a minute ago with no turn yet, and continuing
 // says the relay still has a continue prompt for it after a restart cut its turn short (relay/sessions.js).
 // A task is one started ticket: { id, ticket, title, state, pr, prOpen, prMerged, prClosed, owner, note, reviewRuns, pipelineWaits,
-// handedOver, devSaysBug, pushRefused, reviewedSince, onlyYouMerge, reviewFailed }, where pushRefused is { why } when the push hold refused its Dev's push, and owner is the terminal of its Dev while
+// handedOver, devSaysBug, workflowPush, pushRefused, reviewedSince, onlyYouMerge, reviewFailed }, where workflowPush is { branch, commits: [{ sha, subject }], files: [{ file, diff }], command } while a refused workflow push waits on the person, and pushRefused is { why } when the push hold refused its Dev's push, and owner is the terminal of its Dev while
 // that session runs, pipelineWaits says its open PR's pipeline is running or failing, devSaysBug says Autopilot handed
 // it over because its Dev says a finding the merge review marked non-blocking is a bug, reviewedSince is the last
 // review posted after Autopilot handed it over because nothing moved it: { kind, commit, url, current }, where current
@@ -49,6 +49,8 @@
 //   merge        an open PR that only the person may merge
 //   lead-stuck   an item the Lead named on three passes in a row and did not act on, with the Lead's reason
 //                (relay/lead-stuck.js), while Let the Lead unstick the board is on
+//   workflow-push a task's Dev committed a workflow file that GitHub refuses the room's App to push: Push this as you, with the
+//                branch, the commits GitHub does not have, the diff of each workflow file and the command to run (relay/workflow-push.js)
 //   flake        an open PR that failed a known flaky test again after the relay reran it once, with Let the Lead
 //                unstick the board off (relay/flake.js)
 //   push-refused an open PR whose Dev's push the push hold refused after a merge verdict, with the reason and
@@ -71,9 +73,10 @@
 // is a bug also has { fix }, its task's id, which the page's Fix it button sends to POST /autopilot/fix. A merged line has
 // { done }, its task's id, which the page's Done button sends to POST /tasks/<id>/move with { to: 'done' }.
 'use strict';
-const { oneLine } = require('./clean.js');
+const { oneLine, keepLines } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'manager-note', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
+const DIFF_LIMIT = 6000;
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'manager-note', 'workflow-push', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -110,6 +113,12 @@ function reviewedLine(t, dev, item) {
   return item('handed-over', 'Move ' + nameOf(t) + ' out of Waiting on you: the review of ' + at + ' on PR ' + n + ' says fix, and ' + (oneLine(dev.who, 40) ? 'its Dev ' + oneLine(dev.who, 40) : 'its Dev') + ' is running to fix it.' + where, { ticket: t.ticket || t.id });
 }
 
+function workflowItem(t, item, onPr) {
+  const w = t.workflowPush, n = w.commits.length;
+  const line = 'Push this as you: ' + nameOf(t) + onPr + ' has ' + n + (n === 1 ? ' commit' : ' commits') + ' on ' + oneLine(w.branch, 120) + ' that GitHub does not have, because GitHub refuses the room\'s App a push of a workflow file. On your own computer, run ' + oneLine(w.command, 400) + '. This line clears when GitHub has the commit.';
+  return Object.assign(item('workflow-push', line, t.pr ? { url: t.pr } : { ticket: t.ticket || t.id }), { branch: oneLine(w.branch, 120), commits: w.commits.map((c) => ({ sha: oneLine(c.sha, 12), subject: oneLine(c.subject, 200) })), files: w.files.map((f) => ({ file: oneLine(f.file, 200), diff: keepLines(f.diff, DIFF_LIMIT) })), command: oneLine(w.command, 400) });
+}
+
 function taskItem(t, dev) {
   const who = dev ? oneLine(dev.who, 40) || 'its Dev' : 'Worker on ' + nameOf(t);
   const pr = t.pr || null;
@@ -117,6 +126,7 @@ function taskItem(t, dev) {
   const onPr = pr ? ' (' + nameOf(t) + ')' : '';
   if (pr && t.prMerged) return item('merged', 'PR ' + numberOf(pr) + onPr + ' merged on GitHub. Move its task to Done.', { url: pr, done: t.id });
   if (pr && t.prClosed) return item('closed', 'PR ' + numberOf(pr) + onPr + ' was closed on GitHub without a merge. Look at it. This line stays until the PR is reopened, its task gets a new PR, or its task is Done.', { url: pr });
+  if (t.workflowPush) return workflowItem(t, item, onPr);
   if (pr && t.prOpen !== false && t.pushRefused && !(t.handedOver && t.devSaysBug)) return item('push-refused', 'Look at PR ' + numberOf(pr) + onPr + ': the push hold refused its Dev\'s push. ' + oneLine(t.pushRefused.why, 300) + ' Press Fix it to lift the hold, so its Dev can push and a follow-up review checks it.', { url: pr, fix: t.id });
   if (t.handedOver && pr && t.prOpen !== false && t.reviewedSince) return reviewedLine(t, dev, item);
   if (t.handedOver && pr && t.prOpen !== false && t.outOfReviews) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.repo ? { url: pr, review: { pr, from: t.repo } } : { url: pr });
@@ -246,4 +256,4 @@ function skillsItem(s) {
   return { kind: 'skills', who: 'Skills', terminal: null, task: null, ticket: null, pr: null, line: parts.join(' '), link: {} };
 }
 
-module.exports = { listOf, redMain, writeLine, KINDS };
+module.exports = { DIFF_LIMIT, listOf, redMain, writeLine, KINDS };

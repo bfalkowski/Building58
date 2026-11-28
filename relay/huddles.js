@@ -98,6 +98,7 @@ function waitingOn(row, prs) {
     if (pr && pr.state === 'CLOSED') return { on: 'you' };
     return { on: 'you to bring it back' };
   }
+  if (row.workflowPush) return { on: 'you: push the workflow file' };
   if (row.status === 'waiting') return { on: 'you: ' + (row.message || 'needs your OK') };
   if (row.taskState === 'waiting_on_you' && !(pr && ['failing', 'running'].includes(pr.pipeline))) return { on: 'you' };
   if (row.live === 'quiet') return { on: 'nobody knows' };
@@ -130,7 +131,7 @@ function lineOf(row) {
   else if (row.status !== 'gone') parts.push('no PR');
   parts.push(STATUS_WORDS[row.status]);
   const git = row.git ? [row.git.changed ? row.git.changed + ' uncommitted' : '', row.git.ahead ? row.git.ahead + ' unpushed' : '', !row.git.pushed && row.git.branch ? 'branch not pushed' : ''].filter(Boolean).join(', ') : '';
-  if (git) parts.push(git);
+  if (git) parts.push(row.workflowPush && row.git.ahead ? git + ' (GitHub refuses the App a workflow file, so the person pushes it)' : git);
   parts.push('waiting on ' + row.waitingOn);
   const flag = row.live === 'quiet' || row.live === 'stuck' ? row.live.toUpperCase() + ' ' : null;
   if (row.lastSeconds !== null) parts.push(flag ? flag + ago(row.lastSeconds) : 'last did anything ' + ago(row.lastSeconds) + ' ago');
@@ -144,7 +145,7 @@ async function rowOf(channel, t, task, names, leadId) {
   const now = Date.now(), lastSeconds = Math.max(0, Math.round((now - t.lastActAt) / 1000));
   const live = livenessOf(t, now).state;
   const status = statusOf(t);
-  return { terminal: t.id, who: clean(names[t.id] || t.who, 40) || 'Session ' + t.sessionId.slice(0, 8), lead: t.id === leadId, role: t.role, ticket: task ? task.ticket : null, title: clean(task ? task.title : t.title, 60) || null, taskId: task ? task.id : null, taskState: task ? task.state : null, status, message: clean(t.message, 160) || null, git, pr, lastSeconds, live, quiet: live === 'quiet' };
+  return { terminal: t.id, who: clean(names[t.id] || t.who, 40) || 'Session ' + t.sessionId.slice(0, 8), lead: t.id === leadId, role: t.role, ticket: task ? task.ticket : null, title: clean(task ? task.title : t.title, 60) || null, taskId: task ? task.id : null, taskState: task ? task.state : null, status, message: clean(t.message, 160) || null, git, pr, lastSeconds, live, quiet: live === 'quiet', workflowPush: !!(task && require('./workflow-push.js').of(channel, task.id)) };
 }
 async function goneRow(task) {
   const pr = task.pr && PR_URL.test(task.pr) ? await prOf(task.repo, task.pr) : null;
@@ -304,4 +305,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, noteHook, reportOf: (channel) => latest.get(channel) || null, busy: () => open.size };
+module.exports = { lineOf, waitingOn, handle, noteHook, reportOf: (channel) => latest.get(channel) || null, busy: () => open.size };

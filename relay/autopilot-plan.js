@@ -182,4 +182,6 @@ function reviewPostFor(comments, { login, since, commit, kind }) {
   return found;
 }
 
-module.exports = { BACK_REASONS, handedStillHolds, API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, countsAsReview, PROTECTED, WORDING_TICKET };
+const stalls = (x) => !x.devBusy && !x.reviewing && !x.waitsOnCi && !x.waitsForDesk && !x.waitsOnPerson && !x.bringBack;
+
+module.exports = { stalls, BACK_REASONS, handedStillHolds, API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, countsAsReview, PROTECTED, WORDING_TICKET };
