@@ -5,7 +5,14 @@
 // for a session that is a seat in a game round. See docs/manual/relay.html#tokens.
 'use strict';
 
+const MANAGER_READS = /^\/(manager|jams|metrics|tickets|rules|chat(\/[\w-]{1,64})?)$/;
+const MANAGER_WRITES = /^\/(manager\/(lower|note)|tickets|chat(\/[\w-]{1,64})?|tickets\/[\w-]{1,64}\/note|commands|terminals\/context)$/;
+function managerReaches(method, rest) {
+  return method === 'GET' ? MANAGER_READS.test(rest) || /^\/tickets\/[\w-]{1,64}$/.test(rest) : method === 'POST' && MANAGER_WRITES.test(rest);
+}
+
 function tokenReaches(agent, method, rest, seat) {
+  if (agent.role === 'manager' && !agent.lead) return managerReaches(method, rest);
   const proposer = agent.role === 'coo' || agent.role === 'security';
   const plays = method === 'POST' && rest === '/play';
   return !!((plays || (seat ? method === 'POST' && (rest === '/commands' || rest === '/terminals/context') : ((rest === '/tickets' && !(proposer && method !== 'GET')) || (!proposer && /^\/chat(\/[\w-]{1,64})?$/.test(rest)) || (agent.lead && method === 'GET' && rest === '/floor') || (method === 'GET' && rest === '/rules') ||
@@ -21,6 +28,7 @@ function tokenReaches(agent, method, rest, seat) {
     ((agent.role === 'reviewer' || !!agent.reviewOf) && method === 'POST' && rest === '/autopilot/verdict') ||
     ((agent.role === 'pm' || agent.lead) && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/order$/.test(rest)) ||
     ((agent.role === 'pm' || agent.lead) && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/(edit|propose)$/.test(rest)) ||
+    (!proposer && agent.role !== 'reviewer' && !agent.reviewOf && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/propose$/.test(rest)) ||
     (agent.role === 'pm' && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/advice$/.test(rest)) ||
     (!proposer && method === 'POST' && /^\/tickets\/[\w-]{1,64}\/note$/.test(rest)) ||
     (agent.lead && method === 'POST' && rest === '/reviews/lead') ||

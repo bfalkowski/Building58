@@ -80,11 +80,11 @@
     if (!p) return '';
     const ids = (p.ids || []).join(', ');
     const what = p.action === 'replace' ? 'replace ' + t.id + ' with ' + ids : p.action === 'merge' ? 'merge ' + t.id + ' into ' + ids
-      : p.action === 'close' ? 'close ' + t.id : 'set the blockers of ' + t.id + ' to ' + (ids || 'none');
+      : p.action === 'close' ? 'close ' + t.id + (p.commit ? ' as not needed (commit ' + String(p.commit).slice(0, 10) + ')' : '') : 'set the blockers of ' + t.id + ' to ' + (ids || 'none');
     return (WHO[p.by] || 'A session') + (p.by === 'you' ? ' propose' : ' proposes') + ' to ' + what + '.' + (p.why ? ' Why: ' + p.why : '');
   }
   const CLOSED = { replaced: 'replaced by ', merged: 'merged into ' };
-  const closedText = (t) => (t.closedAs === 'closed' ? 'closed' : CLOSED[t.closedAs] ? CLOSED[t.closedAs] + (t.closedFor || []).join(', ') : '');
+  const closedText = (t) => (t.closedAs === 'closed' ? 'closed' : t.closedAs === 'not-needed' ? 'not needed' : CLOSED[t.closedAs] ? CLOSED[t.closedAs] + (t.closedFor || []).join(', ') : '');
   function noteTime(at) {
     const d = new Date(at);
     if (!at || isNaN(d)) return 'time not recorded';

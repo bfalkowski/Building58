@@ -20,7 +20,7 @@ const pipeline = require('./pipeline.js');
 const mainCi = require('./main-ci.js');
 const { redMain } = require('./needs-you-plan.js');
 const { stopVerdict, leadMayStop, forReview } = require('./stop-verdict.js');
-const { deskOf, pairReviewers } = require('./desk.js');
+const { deskOf, pairReviewers, samePr } = require('./desk.js');
 const { livenessOf, jobWords, stuckJobsOf, stuckJobWords } = require('./liveness.js');
 const { tiredOf } = require('./lead-tired.js');
 const { holdOf, unsavedWork } = require('./merge-hold.js');
@@ -45,6 +45,7 @@ function stateOf(t, now) {
 function roleOf(t) {
   if (t.lead) return 'Lead';
   if (t.role === 'pm') return 'PM';
+  if (t.role === 'manager') return 'Manager';
   if (t.role === 'coo') return 'COO';
   if (t.role === 'security') return 'Security';
   if (t.role === 'reviewer') return 'reviewer';
@@ -63,12 +64,14 @@ function leadVerdict(channel, t, task, now) {
   return { safe: true, canStop: true, reason: kind.why + v.reason };
 }
 
+const reviewerOf = (sessions, t, pr) => (pr ? sessions.find((x) => x !== t && !x.exited && samePr(x.reviewOf, pr) && !x.posted) || null : null);
+
 function deskFor(channel, t, task, work, verdict, now, needs) {
   const role = roleOf(t), pr = work.pr || (task && task.pr) || t.pr || t.reviewOf || null;
   const shown = role === 'reviewer' ? (pr && tasks.list(channel).find((x) => x.pr === pr)) || null : task;
   const lead = terminal.leadOf(channel);
   const pipe = shown && shown.pr === pr ? tasks.pipelineOf(shown) : null;
-  const reviewer = pr ? terminal.all(channel).find((x) => x !== t && !x.exited && x.reviewOf === pr && !x.posted) || null : null;
+  const reviewer = reviewerOf(terminal.all(channel), t, pr);
   return deskOf({
     t, role, work, now, verdict,
     task: shown && Object.assign({}, shown, { pipeline: pipe }, needs ? needs.get(shown.id) || { needsYou: null, reviewRuns: false } : null),
@@ -76,7 +79,6 @@ function deskFor(channel, t, task, work, verdict, now, needs) {
     failed: pipe && pipe.state === 'red' ? ((require('./pipeline.js').of(pr) || {}).failed || []).map((f) => f.name) : [],
     review: pr ? require('./reviews.js').deskOf(channel, pr) : null,
     reviewing: !!reviewer,
-    reviewer: reviewer ? reviewer.who || null : null,
     autopilot: shown ? require('./autopilot.js').deskOf(channel, shown) : null,
     leadMerges: !!(lead && lead.merge),
     merged: !!pr && merged(channel, pr),
@@ -100,7 +102,7 @@ function rowOf(channel, t, task, now, needs) {
   const verdict = leadVerdict(channel, t, task, now);
   const seat = seatOf(t, task);
   return {
-    terminal: t.id, name: seat.name, named: seat.named, seat: t.lead ? 'lead' : t.standing ? 'pm' : null,
+    terminal: t.id, name: seat.name, named: seat.named, seat: t.lead ? 'lead' : t.standing ? 'pm' : t.role === 'manager' ? 'manager' : null,
     role: seat.role, ticket: seat.ticket, title: (task && task.title) || t.title || null,
     pr: work.pr || (task && task.pr) || t.pr || null, state: stateOf(t, now), stuck: t.stuck && t.state === 'idle' ? { minutesAgo: minutes(now - t.stuck.at), why: t.stuck.why } : null, message: t.message || null,
     stuckJobs: stuckJobsOf(t).map((j) => ({ pid: j.pid, command: j.command, minutes: minutes(now - j.since) })),
@@ -247,7 +249,7 @@ async function handle(req, res, channel, rest, ctx) {
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (!terminal.ENABLED) { ctx.problem(res, 404, 'terminal_off', 'The floor needs the terminal. Start the relay with npm run office, or with RELAY_TERMINAL=1.'); return true; }
-  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()), pm: pmOf(Date.now()), leadEnded: terminal.leadEndedOf(channel), mainRed: mainCi.redOf(channel).map((m) => ({ branch: m.branch, repo: m.name, url: m.run.url || null, says: 'Red: ' + redMain(m) })) }); return true; }
+  if (isRead) { ctx.send(res, 200, { ok: true, sessions: floorOf(channel, Date.now()), pm: pmOf(Date.now()), manager: require('./manager-watch.js').seatView(channel, Date.now()), leadEnded: terminal.leadEndedOf(channel), mainRed: mainCi.redOf(channel).map((m) => ({ branch: m.branch, repo: m.name, url: m.run.url || null, says: 'Red: ' + redMain(m) })) }); return true; }
   const body = await ctx.readJson(req);
   if (isEnd) { const [code, answer] = endJob(channel, body, ctx, Date.now()); ctx.send(res, code, answer); return true; }
   const [status, out] = ctx.agent ? stopOne(channel, body.who, ctx, Date.now()) : personStop(channel, body, ctx, Date.now());
@@ -255,4 +257,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, floorOf, seatsOf, personStop, freeDesks, freeForReview, merged, LEAD_STOPS, pick, nameOf, endJob };
+module.exports = { reviewerOf, handle, floorOf, seatsOf, personStop, freeDesks, freeForReview, merged, LEAD_STOPS, pick, nameOf, endJob };

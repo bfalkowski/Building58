@@ -39,7 +39,7 @@ const mainCi = require('./main-ci.js');
 const FRESH_MS = 60 * 1000;
 const UNDELIVERED = Number(process.env.RELAY_UNDELIVERED_MS) > 0 ? Number(process.env.RELAY_UNDELIVERED_MS) : 15 * 60 * 1000;
 const NOT_STUCK = new Set(['working', 'waiting', 'ended']);
-const OFFICERS = ['pm', 'coo', 'security', 'reviewer'];
+const OFFICERS = ['pm', 'manager', 'coo', 'security', 'reviewer'];
 const roleOf = (t, task) => (t.lead ? 'Lead' : t.role === 'reviewer' ? 'reviewer' : OFFICERS.includes(t.role) ? t.role : task ? 'Dev' : 'session');
 
 function closed(channel, pr) {
@@ -100,7 +100,7 @@ function stateOf(channel, now, lastReport) {
     .filter((d) => d.target && !d.typed && d.blocked && !NOT_STUCK.has(d.blocked) && d.savedAt && now - d.savedAt > UNDELIVERED)
     .sort((a, b) => a.savedAt - b.savedAt)
     .map((d) => ({ terminal: d.target, who: chat.nameOf(terminal.find(channel, d.target)), minutes: Math.floor((now - d.savedAt) / 60000), why: delivery.whyWaits(d.blocked) }));
-  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), mains: mainCi.redOf(channel), writes: require('./tickets.js').writeErrors(channel, now), unread: require('./tickets.js').unreadNotes(channel), claude: claudeVersion.current(), skills: require('./skills.js').lacking(), leadStuck: require('./lead-stuck.js').passedOf(channel), flakes: require('./flake.js').waitingOf(channel) };
+  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), mains: mainCi.redOf(channel), writes: require('./tickets.js').writeErrors(channel, now), unread: require('./tickets.js').unreadNotes(channel), claude: claudeVersion.current(), skills: require('./skills.js').lacking(), leadStuck: require('./lead-stuck.js').passedOf(channel), flakes: require('./flake.js').waitingOf(channel), managerNotes: require('./manager-watch.js').needsItems(channel) };
 }
 
 async function handle(req, res, channel, rest, ctx) {

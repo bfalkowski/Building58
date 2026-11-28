@@ -1,4 +1,4 @@
-// Draws the front office (the Lead and PM seats, Today, Up next) and the workers row (one card for each
+// Draws the front office (the Lead, PM and manager seats, Today, Up next) and the workers row (one card for each
 // ticket, its Dev beside the reviewer of its PR) from what office/front.js works out. It reads the Floor
 // (office/desks.js sends office:floor), Needs you (office/needs-you.js sends office:needs), the Board
 // (the office:tickets stream, or GET /tickets while it does not come) and the day's numbers (GET /metrics).
@@ -15,7 +15,7 @@
   if (!F || !channel || !seatsEl || !cardsEl) return;
 
   const base = location.origin + '/channels/' + encodeURIComponent(channel);
-  let floor = { sessions: [], pm: null }, needs = [], board = null, metrics = null, selected = null, pushed = false, ready = false;
+  let floor = { sessions: [], pm: null, manager: null }, needs = [], board = null, metrics = null, selected = null, pushed = false, ready = false;
   const seen = { floor: false, needs: false, board: false };
   const known = new Map();
   const drawn = {};
@@ -79,6 +79,16 @@
     if (seat.proposal) next.append(' ' + seat.proposal);
     if (seat.sort) next.append(' ' + seat.sort);
     node.append(top, who, doing, next);
+    if (seat.kind === 'manager') {
+      for (const line of seat.lines || []) node.append(el('div', 'mline', line));
+      const coo = el('div', 'coo');
+      const ask = el('button', 'btn', seat.coo && seat.coo.running ? 'The COO is writing' : 'Ask the COO');
+      ask.type = 'button'; ask.dataset.coo = 'ask'; ask.disabled = !!(seat.coo && seat.coo.running);
+      ask.title = 'The COO is not a seat. It runs only when you ask: it reads the measures, writes its report, and leaves.';
+      ask.addEventListener('click', () => askCoo(ask));
+      coo.append(ask, ' ' + (seat.coo ? seat.coo.last : ''));
+      node.append(coo);
+    }
     const tired = seat.row && seat.row.tired;
     if (tired) {
       const t = el('div', 'tired', tired.icon + ' ' + tired.label[0].toUpperCase() + tired.label.slice(1) + ' \u00b7 context ' + tired.percent + '% used');
@@ -87,6 +97,11 @@
     }
     if (seat.terminal) node.prepend(pickButton(seat.terminal, seat.role + ' ' + seat.name + ': ' + seat.doing, 'hit'));
     return node;
+  }
+  function askCoo(btn) {
+    btn.disabled = true;
+    fetch(base + '/officers/coo/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then((r) => r.json()).catch(() => null).then((r) => { if (r && r.ok) btn.textContent = 'The COO is writing'; else { btn.disabled = false; btn.title = (r && r.message) || 'It did not start.'; } });
   }
   function namedOf(terminal) {
     const w = window.run && window.run.state().workers.find((x) => x.session && x.session.terminal === terminal);
@@ -164,8 +179,8 @@
 
   function drawSeats() {
     const rows = floor.sessions, pm = floor.pm ? Object.assign({ now: Date.now() }, floor.pm) : null;
-    const seats = [F.seatOf('lead', rows, needs, board && board.tickets, null), F.seatOf('pm', rows, needs, board && board.tickets, pm)];
-    const sig = JSON.stringify([seats.map((s) => [s.kind, s.name, s.state, s.dot, s.doing, s.next, s.proposal, s.rung, s.sort, s.reason && s.reason.text, s.terminal]), selected, board && board.store, slug(), Math.floor(Date.now() / 60000)]);
+    const seats = [F.seatOf('lead', rows, needs, board && board.tickets, null), F.seatOf('pm', rows, needs, board && board.tickets, pm), F.seatOf('manager', rows, needs, board && board.tickets, null, floor.manager)];
+    const sig = JSON.stringify([seats.map((s) => [s.kind, s.name, s.state, s.dot, s.doing, s.next, s.proposal, s.rung, s.sort, s.reason && s.reason.text, s.terminal, s.lines, s.coo]), selected, board && board.store, slug(), Math.floor(Date.now() / 60000)]);
     const nodes = seats.map(seatNode);
     if (put(seatsEl, nodes, sig, 'seats')) seats.forEach((s, i) => pulse(nodes[i], 'seat:' + s.kind, s.state));
   }
@@ -216,7 +231,7 @@
   }
   function drawWorkers() {
     const { cards, extras } = F.cardsOf(floor.sessions, needs);
-    const workers = floor.sessions.filter((r) => !r.seat && r.role !== 'PM').length, free = Math.max(0, F.WORKER_DESKS - workers);
+    const workers = floor.sessions.filter((r) => !r.seat && r.role !== 'PM' && r.role !== 'Manager').length, free = Math.max(0, F.WORKER_DESKS - workers);
     const reviewers = floor.sessions.filter((r) => r.role === 'reviewer').length, ticketed = cards.filter((c) => c.ticket).length;
     $('workers-meta').textContent = workers + (workers === 1 ? ' worker' : ' workers') + ' on ' + ticketed + (ticketed === 1 ? ' ticket' : ' tickets') + ' · ' + reviewers + (reviewers === 1 ? ' reviewer' : ' reviewers') + ' · ' + free + (free === 1 ? ' desk' : ' desks') + ' free';
     const sig = JSON.stringify([cards.map((c) => [c.key, c.header, c.state, c.slot.live && c.slot.live.terminal, c.slot.none, c.slot.hint, c.rounds, c.dev.name, c.dev.desk.doing, c.dev.desk.status, c.slot.live && c.slot.live.desk.doing]), extras.map((x) => [x.key, x.header, x.state, x.row.name, x.row.desk.doing]), free, selected, board && board.store, slug(), floor.sessions.map((r) => namedOf(r.terminal).full)]);

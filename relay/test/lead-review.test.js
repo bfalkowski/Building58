@@ -121,7 +121,7 @@ test('the Lead starts a review through the relay, within its switch and the limi
 
   await t.test('an ask with no desk free is refused, and is not counted', async () => {
     const others = [];
-    while ((await terminals()).length < 8) others.push((await R.call('POST', '/terminals', { cwd: repo })).body);
+    while ((await terminals()).length < 7) others.push((await R.call('POST', '/terminals', { cwd: repo })).body);
     const r = await ask(PR, leadT);
     assert.strictEqual(r.status, 409);
     assert.strictEqual(r.body.error, 'full');

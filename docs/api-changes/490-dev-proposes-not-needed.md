@@ -1,0 +1,1 @@
+MINOR: POST /tickets/{id}/propose is also open to the Dev of a started ticket's own task, for action close with a commit, to close it as not needed. The task ends at once and the ticket closes when the proposal is approved.

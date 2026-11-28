@@ -9,6 +9,11 @@ const { heldBy } = require('./held-words.js');
 const { livenessOf, jobWords, stuckJobsOf, stuckJobWords } = require('./liveness.js');
 
 const minutes = (ms) => Math.max(0, Math.floor(ms / 60000));
+const prKeyOf = (pr) => {
+  const m = String(pr || '').match(/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/pull\/(\d+)(?![\d])/i);
+  return m ? (m[1] + '/' + m[2] + '#' + m[3]).toLowerCase() : null;
+};
+const samePr = (a, b) => !!a && !!b && (a === b || (!!prKeyOf(a) && prKeyOf(a) === prKeyOf(b)));
 const numberOf = (pr) => (pr ? '#' + String(pr).split('/').pop() : null);
 const CI_WORDS = { green: 'CI green', red: 'CI failed', pending: 'CI running', none: 'no CI', unknown: 'CI unknown' };
 
@@ -87,7 +92,7 @@ function statusOf(d, task, pr, ci, p) {
   if (task.state === 'done') return s('done', 'done');
   if (task.state === 'waiting_on_you' || a.handedOver) return s('waiting_on_you', 'waiting on you');
   if (!pr) return s('building', 'building');
-  if (d.reviewing) return s('reviewing', d.reviewer ? 'being reviewed by ' + d.reviewer : 'being reviewed');
+  if (d.reviewing) return s('reviewing', 'being reviewed');
   if (ci === 'red') return s('ci_failed', 'CI failed');
   if (ci === 'pending') return s('ci_running', 'CI running');
   if ((task.state === 'changes_requested' || a.verdict === 'fix') && current) return s('fix', 'fix requested');
@@ -124,6 +129,7 @@ function deskOf(d) {
   if (lv.state === 'stuck' && /^first-prompt /.test(t.stuck.key || '')) return step('Waiting on you: it did not start on its first prompt, ' + t.stuck.why + '. Open its session and press Enter if the prompt is still in its box, or answer what is on its screen. Stopping it drops the prompt', 'you');
   if (lv.state === 'stuck') return step('Waiting on you: it did not start on what it was told, ' + t.stuck.why + '. Open its session, or stop it and Bring it back', 'you');
   if (role === 'Lead') return step('The Lead keeps tickets moving', 'Lead');
+  if (role === 'Manager') return step('The manager watches the room and files tickets for what keeps jamming it', 'Manager');
   if (role === 'PM') return step('Waiting on you: talk tickets through with the PM', 'you');
   if (role === 'COO') return t.state === 'working' ? step('The COO writes its report on the room', 'COO') : step('Waiting on you: read the COO report', 'you');
   if (role === 'Security') return t.state === 'working' ? step('The security officer writes its report on access', 'Security') : step('Waiting on you: read the Security report', 'you');
@@ -151,11 +157,11 @@ function pairReviewers(rows) {
   for (const d of devs) d.desk.reviewedBy = [];
   for (const r of rows) {
     if (r.role !== 'reviewer' || !r.desk) continue;
-    const dev = r.desk.pr ? devs.find((d) => d.desk.pr === r.desk.pr) : null;
+    const dev = r.desk.pr ? devs.find((d) => samePr(d.desk.pr, r.desk.pr)) : null;
     r.desk.reviewing = r.desk.pr ? { pr: r.desk.pr, prNumber: r.desk.prNumber, dev: dev ? { terminal: dev.terminal, name: dev.name } : null } : null;
     if (dev) dev.desk.reviewedBy.push({ terminal: r.terminal, name: r.name });
   }
   return rows;
 }
 
-module.exports = { deskOf, columnOfTask, pairReviewers };
+module.exports = { samePr, deskOf, columnOfTask, pairReviewers };

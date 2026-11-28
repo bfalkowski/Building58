@@ -9,15 +9,18 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, removeDir, until, sessionToken } = require('./helpers.js');
+const { relay, makeRepo, removeDir, sleep, until, sessionToken } = require('./helpers.js');
 
 const sh = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t'].concat(args), { cwd, encoding: 'utf8' }).trim();
 const PR = 'https://github.com/acme/widgets/pull/7';
 const GREEN = [{ name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' }];
 
-async function office(t) {
+const STALL_MS = 2000;
+const NEVER_STALLS_MS = 600000;
+
+async function office(t, stallMs = STALL_MS) {
   const ghDir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
-  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: '2000', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '3600', RELAY_WIP_LIMIT: '1' }, null, { autoReview: true });
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: String(stallMs), RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '3600', RELAY_WIP_LIMIT: '1' }, null, { autoReview: true });
   t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
@@ -45,7 +48,7 @@ async function office(t) {
   const r = await until(async () => (await terminals()).find((y) => y.role === 'reviewer' && y.pr === PR), 'a reviewer');
   await R.call('POST', '/terminals/' + dev.id + '/stop', {});
   await until(async () => !(await terminals()).some((y) => y.id === dev.id), 'the Dev to stop');
-  return { first, R, repo, dev, r, say, tasks, ap, terminals };
+  return { first, R, repo, dev, r, say, tasks, ap, terminals, ghDir };
 }
 async function fixVerdict(o) {
   const token = { 'X-Office-Token': await until(() => { try { return sessionToken(o.r.sessionId); } catch (e) { return null; } }, 'its token') };
@@ -61,7 +64,7 @@ async function fillDesks(o) {
 }
 
 test('a task owed a fix keeps its slot: no new ticket starts first, and the Dev comes back on the freed desk', async (t) => {
-  const o = await office(t);
+  const o = await office(t, NEVER_STALLS_MS);
   await o.R.call('POST', '/autopilot', { on: false });
   await fixVerdict(o);
   await fillDesks(o);
@@ -89,4 +92,24 @@ test('a task waiting only to be brought back is not handed over as stalled, and 
   const x = (await o.tasks())[0];
   assert.notStrictEqual(x.state, 'waiting_on_you');
   assert.ok(!x.history.some((h) => h.type === 'moved' && h.to === 'waiting_on_you'), 'never handed over');
+});
+
+test('a look that is reading the PR when Autopilot is turned off does not bring the Dev back', async (t) => {
+  const o = await office(t);
+  await o.R.call('POST', '/autopilot', { on: false });
+  await fixVerdict(o);
+  const answers = path.join(o.ghDir, 'answers.json'), gate = path.join(o.ghDir, 'gate'), FILES = 'repos/acme/widgets/pulls/7/files';
+  const held = JSON.parse(fs.readFileSync(answers, 'utf8'));
+  held.gateApi = { [FILES]: gate };
+  fs.writeFileSync(answers, JSON.stringify(held));
+  const asked = () => fs.readFileSync(path.join(o.ghDir, 'calls.log'), 'utf8').split('\n').filter((c) => c.includes(FILES)).length;
+  const before = asked();
+  await o.R.call('POST', '/autopilot', { on: true, only: null });
+  await until(() => asked() > before, 'a look to wait at the gate');
+  await o.R.call('POST', '/autopilot', { on: false });
+  fs.writeFileSync(gate, '');
+  await sleep(2500);
+  const x = (await o.tasks())[0];
+  assert.strictEqual(x.worker, null, 'the Dev was not brought back');
+  assert.ok(!x.history.some((h) => h.type === 'resumed'), 'nothing resumed it: ' + JSON.stringify(x.history.map((h) => h.type)));
 });

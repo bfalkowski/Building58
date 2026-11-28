@@ -448,6 +448,7 @@ test('the Lead gets the report', async (t) => {
   });
   await t.test('a long report goes in as one paste, since a long burst loses its start', async () => {
     const names = {};
+    for (const x of (await R.call('GET', '/terminals')).body.terminals.filter((y) => y.running && !y.lead)) await R.call('POST', '/terminals/' + x.id + '/stop', {});  // workers have 6 desks
     for (let i = 0; i < 6; i++) names[(await add()).id] = 'Person with quite a long name ' + i;
     await R.hook({ hook_event_name: 'Stop', session_id: sid(lead) });
     await huddle({ names });
