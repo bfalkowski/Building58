@@ -188,7 +188,7 @@ async function rerun(channel, body) {
     if (reran.has(key)) continue;
     if (!run) return [409, { ok: false, error: 'no_run', message: 'The failed check ' + f.name + ' has no run address, so the relay cannot rerun it.' }];
     reran.set(key, Date.now());
-    try { await gh.run(['run', 'rerun', run, '--failed', '-R', repoOf(pr)]); } catch (e) { reran.delete(key); return [502, { ok: false, error: 'gh', message: 'gh could not rerun it: ' + e.message }]; }
+    try { await gh.run(['run', 'rerun', run, '--failed', '-R', repoOf(pr)]); } catch (e) { reran.delete(key); return [502, { ok: false, error: 'gh', message: 'gh could not rerun it: ' + e.message + (/Resource not accessible by integration/i.test(e.message) ? ' The room\'s GitHub App needs Actions: write to rerun a job.' : '') }]; }
     done.push(f.name);
   }
   if (!done.length) return [409, { ok: false, error: 'already_rerun', message: 'The relay reran the failed job of this commit once already. A second rerun would hide the failure. Fix it, or tell the person.' }];
@@ -207,7 +207,10 @@ async function handle(req, res, channel, rest, ctx) {
   if (ctx.agent && !(ctx.agent.lead || (what === 'failures' && req.method === 'GET'))) { ctx.problem(res, 403, 'forbidden', 'Only the Lead and the person use this route.'); return true; }
   if (ctx.agent && req.method === 'POST' && !config.get('leadUnstick')) { ctx.problem(res, 403, 'forbidden', NOT_ON); return true; }
   let out;
-  if (what === 'rerun' && req.method === 'POST') out = await rerun(channel, await ctx.readJson(req));
+  if (what === 'rerun' && req.method === 'POST') {
+    out = await rerun(channel, await ctx.readJson(req));
+    if (ctx.agent && out[0] === 200) require('./jams.js').record(channel, { kind: 'flake-blocks', fix: 'Reran the failed job of ' + out[1].pr + ' once', by: 'Lead', pr: out[1].pr });
+  }
   else if (what === 'failures' && !name && req.method === 'GET') out = [200, { ok: true, failures: all(channel).map(view) }];
   else if (what === 'failures' && !name && req.method === 'POST') {
     const body = (await ctx.readJson(req)) || {};

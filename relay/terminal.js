@@ -402,6 +402,7 @@ function start(channel, body, ctx, onExit, own) {
     t.ending = setTimeout(() => { t.ending = null; reviewDone(channel, t); }, REVIEW_GRACE());
   }
   terms.set(id, t);
+  if (adopted && t.reviewOf && !t.posted) tell(reviewBackFns, channel, t, 'After a reviewer was taken back');
   reseat(channel);
   const emitOut = (buf) => {
     t.out.push(buf); t.outSize += buf.length;
@@ -497,7 +498,7 @@ function onTrustQuestion(screen) {
 }
 
 function questionOnScreen(t) {
-  if (!t.heard && onTrustQuestion(screenOf(t))) return 'trust';
+  if (!t.heard && !t.trustAnswered && onTrustQuestion(screenOf(t))) return 'trust';
   if (MENU.test(screenOf({ tail: t.sinceKey === null ? t.tail : t.sinceKey }).slice(-AFTER_TRUST))) return 'menu';
   return null;
 }
@@ -736,6 +737,7 @@ function noteReview(channel, t, name, ev) {
   if (name === 'PostToolUse' && postedHere(t, ev.posted)) {
     const url = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+#issuecomment-\d+$/.test(ev.posted.url || '') ? ev.posted.url : t.reviewOf;
     t.posted = { kind: ['comment', 'review', 'approve', 'request-changes'].includes(ev.posted.kind) ? ev.posted.kind : 'review', url };
+    saveSessions();
     console.log('The review of ' + t.reviewOf + ' is posted. Its session ends ' + REVIEW_GRACE() / 1000 + ' seconds after its turn does.');
     tell(reviewPostedFns, channel, t, 'After a review was posted');
   } else if (name === 'UserPromptSubmit') {
@@ -750,13 +752,15 @@ function noteReview(channel, t, name, ev) {
 function reviewFound(channel, t, url) {
   if (t.exited || t.stopped || t.posted || !t.reviewOf) return;
   t.posted = { kind: 'comment', url };
+  saveSessions();
   console.log('The review of ' + t.reviewOf + ' is on the PR. Its session ends ' + REVIEW_GRACE() / 1000 + ' seconds after its turn does.');
   if (t.state !== 'working' && !t.ending) t.ending = setTimeout(() => { t.ending = null; reviewDone(channel, t); }, REVIEW_GRACE());
 }
 function tell(fns, channel, t, what) { for (const fn of fns) { try { fn(channel, t); } catch (e) { console.error(what + ': ' + e.message); } } }
 function pauseReview(t) { clearTimeout(t.ending); t.ending = null; }
-function keepReviewer(t) { pauseReview(t); t.posted = null; }
-const reviewDoneFns = [], reviewPostedFns = [], turnEndFns = [];
+function keepReviewer(t) { pauseReview(t); t.posted = null; saveSessions(); }
+const reviewDoneFns = [], reviewPostedFns = [], turnEndFns = [], reviewBackFns = [];
+const onReviewBack = (fn) => { reviewBackFns.push(fn); };
 const onReviewDone = (fn) => { reviewDoneFns.push(fn); };
 const onReviewPosted = (fn) => { reviewPostedFns.push(fn); };
 const onReviewTurnEnd = (fn) => { turnEndFns.push(fn); };
@@ -853,6 +857,7 @@ async function handle(req, res, channel, rest, ctx) {
     const body = await ctx.readJson(req);
     if (t.exited) { ctx.problem(res, 409, 'ended', 'That session has ended.'); return true; }
     if (typeof body.data === 'string' && body.data) {
+      if (/\r/.test(body.data) && questionOnScreen(t) === 'trust') t.trustAnswered = true;
       t.io.write(body.data);
       if (/[\r\n]/.test(body.data)) t.spoke = true;
       t.typedAt = Date.now();
@@ -925,4 +930,4 @@ function agentFor(req) {
 const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited);
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { setLead, screenOf, isClosing: () => closing, isUpdating: () => updating(), DESKS: MAX_TERMINALS, WORKER_DESKS, workersOf, seated, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, reviewFound, onWork, workOfTerm, questionOnScreen, menuOf, MENU_WAIT, onPromptAnswered, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeSettle, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };
+module.exports = { setLead, screenOf, isClosing: () => closing, isUpdating: () => updating(), DESKS: MAX_TERMINALS, WORKER_DESKS, workersOf, seated, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onReviewBack, reviewFound, onWork, workOfTerm, questionOnScreen, menuOf, MENU_WAIT, onPromptAnswered, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeSettle, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };

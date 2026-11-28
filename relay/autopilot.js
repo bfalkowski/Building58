@@ -190,6 +190,10 @@ terminal.onReviewDone(async (channel, t) => {
   const again = reviews.reviewEmpty(channel, t.reviewOf);
   note(channel, 'The review of PR ' + number(t.reviewOf) + ' came back empty: it has no verdict line or no words on what was checked, so it does not count. ' + (again ? 'A new review starts.' : 'The person decides.'));
 });
+terminal.onReviewBack((channel, t) => {
+  const rec = chOf(channel).prs[t.reviewOf], v = rec && rec.verdicts.find((x) => x.sessionId === t.sessionId && x.posted);
+  if (v) terminal.reviewFound(channel, t, v.posted);
+});
 const looking = new Set();
 const CLOCK_SKEW_MS = 60 * 1000;
 terminal.onReviewTurnEnd(async (channel, t) => {
@@ -254,7 +258,8 @@ tickets.onFiled((channel, ticket, agent, at) => {
 const roundsOf = (rec) => Math.max(0, postedOf(rec).length - (rec.roundsFrom || 0));
 
 const mineTask = (task) => task.by === BY;
-const handedBack = (task, rec) => (task.history || []).some((h) => h.type === 'moved' && h.by === 'you' && h.at > rec.handedOverAt);
+const HAND_BACK = 'Handed back to Autopilot by the Lead.';
+const handedBack = (task, rec) => (task.history || []).some((h) => h.type === 'moved' && h.at > rec.handedOverAt && (h.by === 'you' || (h.by === 'Lead' && h.note === HAND_BACK)));
 const ANSWERED_BY_REVIEW = ['dev-says-bug', 'ci-red'];
 const OLD_REASONS = [[/^Its Dev says a finding the review marked non-blocking is a bug/, 'dev-says-bug'], [/^CI failed on the reviewed commit/, 'ci-red']];
 const handedReasonOf = (rec) => rec.handedReason || (OLD_REASONS.find(([text]) => text.test(rec.handedOver || '')) || [])[1] || null;
@@ -274,10 +279,10 @@ const dropHandOver = (rec) => { plan.clearConflictCount(rec); rec.handedOver = n
 function held(channel, task) {
   const rec = task.pr && chOf(channel).prs[task.pr];
   if (!rec || !rec.handedOver) return task.state === 'waiting_on_you';
-  if (handedBack(task, rec)) { dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save(); return false; }
+  if (handedBack(task, rec)) { dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save(); reviews.giveReview(channel, task.pr); return false; }
   const v = answeredByReview(channel, rec);
   if (!v) return true;
-  dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save();
+  dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; save(); reviews.giveReview(channel, task.pr);
   const why = 'a review of ' + v.commit.slice(0, 7) + ', a newer commit than the hand-over, says merge';
   if (task.state === 'waiting_on_you') tasks.setState(channel, task, 'in_review', BY, 'Autopilot: ' + why + ', so the task is back.');
   note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
@@ -300,7 +305,8 @@ async function look(channel) {
   movedAgain(channel);
   holdPushes(channel);
   for (const task of tasks.list(channel).filter(mineTask)) track(channel, task);
-  for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done')) {
+  const owedFirst = (t) => (t.bringBack ? t.bringBack.at : Infinity);
+  for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done').sort((a, b) => (owedFirst(a) < owedFirst(b) ? -1 : owedFirst(a) > owedFirst(b) ? 1 : 0))) {
     if (!held(channel, task)) await lookAt(channel, task);
     else if (handedReasonOf(recOf(channel, task.pr)) === 'protected-file') await follow(channel, task);
     else await mergedYet(channel, task);
@@ -316,16 +322,16 @@ async function readPr(task, rec) {
   }
   return { pr, files };
 }
-function mergeTest(channel, task, rec, decide) {
+function mergeTest(channel, task, rec, decide, head) {
   const dev = terminal.find(channel, task.owner && task.owner.terminal);
   const d = decide(latest(rec), !dev || dev.exited);
-  const hold = d.act === 'merge' && holdOf(task, dev, Date.now());
+  const hold = d.act === 'merge' && holdOf(task, dev, Date.now(), undefined, head);
   if (hold && hold.reason === 'news-untold') return { act: 'bring-back', for: 'news', why: 'There is review news its Dev was never told, and its session has ended, so Autopilot brings it back to tell it.' };
   return hold || d;
 }
 function forPersonMerge(channel, task, rec, pr, locked) {
   const v = latest(rec);
-  return plan.forPersonMerge(pr, locked, v, mergeTest(channel, task, rec, (x, gone) => plan.forReviewed(pr, x, roundsOf(rec), MAX_ROUNDS(), gone)));
+  return plan.forPersonMerge(pr, locked, v, mergeTest(channel, task, rec, (x, gone) => plan.forReviewed(pr, x, roundsOf(rec), MAX_ROUNDS(), gone, undefined, reviews.noReview(channel, task.pr)), pr.headRefOid));
 }
 async function follow(channel, task) {
   const rec = recOf(channel, task.pr), got = await readPr(task, rec);
@@ -347,7 +353,7 @@ function readyNow(channel, task, rec, f) {
   rec.readyTold = f.ready; save();
   note(channel, (task.ticket || 'Task ' + task.id) + ', PR ' + number(task.pr) + ': ' + f.why);
 }
-const exhibitOf = (task, pr) => (config.get('autopilotExhibit') && pr.state === 'OPEN' ? exhibit.read(task.pr, task.repo) : Promise.resolve(undefined));
+const exhibitOf = (task, pr) => (config.get('autopilotExhibit') && pr.state === 'OPEN' ? exhibit.read(task.pr, task.repo, pr.headRefOid) : Promise.resolve(undefined));
 async function lookAt(channel, task) {
   const rec = recOf(channel, task.pr);
   const got = await readPr(task, rec);
@@ -356,12 +362,13 @@ async function lookAt(channel, task) {
   if (files) { rec.apiFiles = plan.touchesApi(files); if (rec.apiSeq === undefined) rec.apiSeq = chOf(channel).apiSeq || 0; }
   if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
   const v = latest(rec);
-  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone));
+  let d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, undefined, reviews.noReview(channel, task.pr)), pr.headRefOid);
   if (d.act === 'merge') {
     const ex = await exhibitOf(task, pr);
-    if (ex !== undefined) d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex));
+    if (ex !== undefined) d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex, reviews.noReview(channel, task.pr)), pr.headRefOid);
   }
   rec.why = d.why; rec.act = d.act;
+  if (task.bringBack && !(d.act === 'bring-back' && d.for === 'fix')) { delete task.bringBack; tasks.save(); }
   if (d.act === 'wait') rec.why = reviews.deskLine(channel, task.pr) || rec.why;
   if (d.act === 'done') markDone(channel, task);
   else if (d.act === 'merge') {
@@ -377,7 +384,7 @@ async function lookAt(channel, task) {
     const again = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch((e) => ({ failed: e.message }));
     if (again.failed) { rec.why = 'Ready to merge, but gh could not read the PR again just before: ' + again.failed; rec.act = 'wait'; return; }
     const lastEx = await exhibitOf(task, again);
-    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone, lastEx));
+    const last = mergeTest(channel, task, rec, (x, gone) => plan.forPr(again, files, x, roundsOf(rec), MAX_ROUNDS(), gone, lastEx, reviews.noReview(channel, task.pr)), again.headRefOid);
     if (last.act !== 'merge') { rec.why = last.why; rec.act = last.act; return; }
     try { await gh(['pr', 'merge', task.pr, '--merge', '--match-head-commit', pr.headRefOid], task.repo); } catch (e) {
       const now = await ghDoor.pr(task.pr, task.repo, { fresh: true }).catch(() => null);
@@ -460,7 +467,11 @@ async function bringBack(channel, task, rec, d, commit, pr) {
     note(channel, name + ': its Dev was not running, so Autopilot brought it back for ' + what + '.');
     return;
   }
-  if (WAITS_FOR_ROOM.includes(out.error)) { rec.act = 'wait'; rec.why = 'Its Dev is not running, and Autopilot brings it back for ' + what + ' once it can: ' + out.message; return; }
+  if (WAITS_FOR_ROOM.includes(out.error)) {
+    rec.act = 'wait'; rec.why = 'Its Dev is not running, and Autopilot brings it back for ' + what + ' once it can: ' + out.message;
+    if (d.for === 'fix') { task.bringBack = Object.assign(task.bringBack || { at: Date.now() }, { why: out.message }); tasks.save(); }
+    return;
+  }
   handOver(channel, task, rec, 'Its Dev is not running, and Autopilot could not bring it back for ' + what + ': ' + out.message + step, 'dev-gone', commit);
 }
 function counted(channel, task, rec, head) {
@@ -487,6 +498,7 @@ async function mergedYet(channel, task) {
   if (pr.state === 'MERGED') markDone(channel, task);
 }
 function handOver(channel, task, rec, why, reason, head) {
+  if (task.bringBack) { delete task.bringBack; tasks.save(); }
   rec.handedOver = why; rec.handedOverAt = new Date().toISOString(); rec.handedReason = reason; rec.handedOverHead = head || null; save();
   handRun(channel, task, reason);
   if (reason === 'main-kept-moving' || reason === 'conflict-dropped') {
@@ -512,6 +524,8 @@ async function maybeStart(channel) {
     return;
   }
   if (/^Autopilot merged \d+ PRs? today, its limit\./.test(c.idle || '')) { c.idle = null; save(); }
+  const owed = tasks.list(channel).filter((t) => t.bringBack && open(channel, t)).sort((a, b) => a.bringBack.at - b.bringBack.at)[0];
+  if (owed) { c.idle = 'Waiting to bring back the Dev of ' + (owed.ticket || 'task ' + owed.id) + ' for fixes first: ' + owed.bringBack.why; return; }
   if (tasks.list(channel).filter((t) => open(channel, t)).length >= AT_ONCE()) return;
   const held = tickets.heldWhy(channel);
   if (held) { c.idle = held; return; }
@@ -603,7 +617,7 @@ function stalled(channel) {
     const reviewing = task.pr && terminal.all(channel).some((t) => t.reviewOf === task.pr && livenessOf(t, Date.now()).state !== 'gone');
     const waitsOnCi = rec && /CI|GitHub says|PRs today/.test(rec.why || '');
     const waitsForDesk = !!task.pr && reviews.owes(channel, task.pr);
-    const stuck = !devBusy && !reviewing && !waitsOnCi && !waitsForDesk;
+    const stuck = !devBusy && !reviewing && !waitsOnCi && !waitsForDesk && !task.bringBack;
     const key = channel + ' ' + task.id;
     if (!stuck) { stuckSince.delete(key); continue; }
     if (!stuckSince.has(key)) { stuckSince.set(key, Date.now()); continue; }
@@ -724,6 +738,8 @@ function decideFix(channel, task, by) {
   const who = by === 'you' ? 'You' : 'The Lead', held = handedReasonOf(rec) === 'dev-says-bug' ? (String(rec.handedOver || '').match(HELD_URL) || [])[0] : null;
   rec.verdicts.push({ kind: 'fix', commit: v.commit, by, sessionId: null, at: new Date().toISOString(), posted: 'decided by ' + by });
   dropHandOver(rec); rec.roundsFrom = postedOf(rec).length; rec.act = 'wait'; rec.why = null;
+  reviews.giveReview(channel, task.pr);
+  const none = reviews.noReview(channel, task.pr), after = none ? ' No follow-up review will start, since ' + none + '. Start one with Get a review.' : ' A follow-up review checks the fix.';
   if (chOf(channel).stuck) delete chOf(channel).stuck[task.id];
   save();
   holdPushes(channel, task);
@@ -731,9 +747,9 @@ function decideFix(channel, task, by) {
   if (task.state === 'changes_requested') tasks.record(task, { type: 'note', note: why }); else tasks.setState(channel, task, 'changes_requested', by, why);
   tasks.save();
   delivery.save(channel, { key: 'autopilot-fix ' + task.pr, terminal: task.owner && task.owner.terminal, sessionId: task.owner && task.owner.sessionId, expiresAt: Date.now() + 12 * 60 * 60 * 1000,
-    text: (by === 'you' ? 'The person' : 'The Lead') + ' decided that a finding on your PR ' + task.pr + ' must be fixed in this PR' + (held ? ', as you said in ' + oneLine(held, 200) : '') + '. Fix it, run the tests, and push. The push hold is lifted, and a follow-up review checks the fix.' });
+    text: (by === 'you' ? 'The person' : 'The Lead') + ' decided that a finding on your PR ' + task.pr + ' must be fixed in this PR' + (held ? ', as you said in ' + oneLine(held, 200) : '') + '. Fix it, run the tests, and push. The push hold is lifted.' + after });
   note(channel, (task.ticket || 'Task ' + task.id) + ': ' + why + ' The push hold is lifted.');
-  return [200, { ok: true, pr: task.pr, task: task.id, commit: v.commit, message: why + ' The push hold is lifted, and its Dev is told to fix it.' }];
+  return [200, { ok: true, pr: task.pr, task: task.id, commit: v.commit, message: why + ' The push hold is lifted, and its Dev is told to fix it.' + after }];
 }
 const findTask = (channel, what) => tasks.list(channel).find((x) => what && (x.id === what || x.ticket === what || x.pr === what)) || null;
 
@@ -779,7 +795,7 @@ function deskOf(channel, task) {
   const handed = r && r.handedOver && !handedBack(task, r) ? r.handedOver : null;
   const since = handed && handedReasonOf(r) === 'stalled' && r.verdicts.filter((x) => Date.parse(x.at) > Date.parse(r.handedOverAt) && postOf(channel, x)).pop();
   const reviewedSince = since ? { kind: since.kind, commit: since.commit, url: postOf(channel, since) } : null;
-  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', reviewedSince, pushRefused: refusedOf(task, v) };
+  return { on: isOn(channel), mine: !!task && mineTask(task), act: (r && r.act) || null, why: handed || (r && r.why) || null, verdict: v && v.posted ? v.kind : null, verdictAt: v && v.posted ? v.commit || null : null, handedOver: handed, devSaysBug: !!handed && handedReasonOf(r) === 'dev-says-bug', outOfReviews: !!handed && handedReasonOf(r) === 'rounds', reviewedSince, pushRefused: refusedOf(task, v) };
 }
 
 function refusedOf(task, v) {
@@ -790,8 +806,15 @@ function refusedOf(task, v) {
   return last && !last.allowed ? { at: last.at, why: last.why } : null;
 }
 
+function handedReasonFor(channel, task) {
+  const rec = task.pr && chOf(channel).prs[task.pr];
+  if (!rec || !rec.handedOver || handedBack(task, rec)) return null;
+  return handedReasonOf(rec) || 'unknown';
+}
+
 const LEAD_KEEPS = 'stop a session the Floor calls safe to stop, move a task to Done once its PR has merged, and ask the relay to review a task\'s PR';
-function leadRefusal(channel, to, merged) {
+function leadRefusal(channel, to, merged, command) {
+  if (command) return config.get('leadUnstick') ? null : [403, { ok: false, error: 'forbidden', message: require('./failures.js').NOT_ON + ' Until then ' + command + ' is the person\'s.' }];
   if (!isOn(channel) || (to === 'done' && merged)) return null;
   return [403, { ok: false, error: 'autopilot', message: 'Autopilot is on, so only the relay starts and merges work. The Lead keeps three rights: ' + LEAD_KEEPS + '. ' +
     (to === 'done' ? 'The relay has not seen this PR merge, so it stays where it is.' : 'Leave this to Autopilot, or tell the person.') }];
@@ -819,4 +842,5 @@ function turnOff(channel, by) {
   return true;
 }
 
-module.exports = { tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };
+const bringBackLate = (task) => (task.bringBack && Date.now() - task.bringBack.at >= STALL_MS() ? task.bringBack.why : null);
+module.exports = { bringBackLate, HAND_BACK, handedReasonFor, tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };

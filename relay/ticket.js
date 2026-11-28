@@ -94,6 +94,9 @@
 // The relay counts passes: an item named on three passes in a row with no action goes on Needs you with your reason:
 //   node relay/ticket.js stuck https://github.com/owner/repo/pull/12 --why 'Green for an hour, and no review is running' [--kind no-first-review]
 //   node relay/ticket.js jam no-first-review --fix 'Started the review' --pr https://github.com/owner/repo/pull/12   (logs a fix, by Lead)
+//   node relay/ticket.js tell Theo "text"       saves a line for a session, typed when it is idle (the unstick switch)
+//   node relay/ticket.js bring-back <task>      brings a stopped Dev back; hand-back <task> gives a Waiting on you task to Autopilot
+//   node relay/ticket.js stop-command Theo [pid]  ends one stuck command of a session, not the session
 //   node relay/ticket.js rerun https://github.com/owner/repo/pull/12     (a known-flaky failed job, once for each commit)
 //   node relay/ticket.js failures                                        (the shared failure channels, and the PRs and tickets each holds)
 //   node relay/ticket.js failure browser https://github.com/o/r/pull/1,https://github.com/o/r/pull/2   (open the channel for a failure)
@@ -362,6 +365,32 @@ async function main() {
     console.log(r.message);
     return 0;
   }
+  if (cmd === 'tell' && args.length > 1) {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/lead/tell'), { method: 'POST', headers, body: JSON.stringify({ who: args[0], text: args.slice(1).join(' ') }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log(r.message);
+    return 0;
+  }
+  if (cmd === 'bring-back' && args[0]) {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/lead/bring-back'), { method: 'POST', headers, body: JSON.stringify({ task: args[0] }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log('Brought back the Dev of task ' + args[0] + '.');
+    return 0;
+  }
+  if (cmd === 'hand-back' && args[0]) {
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/lead/hand-back'), { method: 'POST', headers, body: JSON.stringify({ task: args[0] }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log(r.message);
+    return 0;
+  }
+  if (cmd === 'stop-command' && args.length) {
+    const pid = /^\d+$/.test(args[args.length - 1]) && args.length > 1 ? Number(args[args.length - 1]) : undefined;
+    const who = (pid === undefined ? args : args.slice(0, -1)).join(' ');
+    const r = await (await fetch(URL_.replace(/\/tickets$/, '/lead/stop-command'), { method: 'POST', headers, body: JSON.stringify({ who, pid }) })).json();
+    if (!r.ok) { console.error(r.message); return 1; }
+    console.log('Ended stuck command ' + r.ended.pid + ' of ' + r.ended.name + '. The session runs on.');
+    return 0;
+  }
   if (cmd === 'failures') {
     const r = await (await fetch(URL_.replace(/\/tickets$/, '/failures'), { headers })).json();
     if (!r.ok) { console.error(r.message); return 1; }
@@ -450,7 +479,7 @@ async function main() {
     console.log('Moved: ' + moved.id + '  ' + (r.ticket ? moved.status : moved.state) + (r.ticket && r.ticket.pr ? '  ' + r.ticket.pr : ''));
     return 0;
   }
-  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js show T-1, ticket.js note T-1 --body -, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js end-job Theo [pid], ticket.js ready (run it bare to see how), ticket.js review <PR link>, ticket.js fix T-1 (with Let the Lead merge on), or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the Lead while the person lets it unstick the board: ticket.js stuck <PR> --why text, ticket.js jam <kind> --fix text, ticket.js rerun <PR>, ticket.js failures, ticket.js failure <check> <PR>,<PR>, ticket.js failure-ticket <channel> <ticket>, or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
+  console.error('Use: ticket.js create "Title" [--body text | --body - | --body-file path] [--priority high|normal|low] [--blocked-by ID,ID] [--shapes ID,ID], or: ticket.js list, ticket.js show T-1, ticket.js note T-1 --body -, ticket.js chat [T-1], ticket.js post T-1 "text", or for a reviewer: ticket.js verdict merge|fix, or for the Lead: ticket.js floor, ticket.js tired, ticket.js move T-1 ready, ticket.js tasks, ticket.js task 63e175 in_review, ticket.js start T-1, ticket.js stop Theo, ticket.js end-job Theo [pid], ticket.js ready (run it bare to see how), ticket.js review <PR link>, ticket.js fix T-1 (with Let the Lead merge on), or for the PM or Lead: ticket.js edit T-1 [--title text] [--body text | --body - | --body-file path] [--priority high|normal|low], ticket.js replace T-10 --by T-18,T-19, ticket.js merge T-24 --into T-8, ticket.js close T-5, ticket.js blockers T-19 --blocked-by T-18, each with --why text, or for a PM or Lead the person let set the order: ticket.js priority T-5 high, ticket.js order T-5 --before T-4 (or --after T-4), or for the Lead while the person lets it unstick the board: ticket.js stuck <PR> --why text, ticket.js jam <kind> --fix text, ticket.js rerun <PR>, ticket.js tell <name> "text", ticket.js bring-back <task>, ticket.js hand-back <task>, ticket.js stop-command <name> [pid], ticket.js failures, ticket.js failure <check> <PR>,<PR>, ticket.js failure-ticket <channel> <ticket>, or for the COO: ticket.js measures, ticket.js report < report.md, or for the security officer: ticket.js access, ticket.js access-report < report.md');
   return 1;
 }
 main().then((code) => { process.exitCode = code; }, (e) => { console.error('The relay did not answer: ' + e.message); process.exitCode = 1; });

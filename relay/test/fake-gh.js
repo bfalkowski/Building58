@@ -26,7 +26,7 @@ try { answers = JSON.parse(fs.readFileSync(path.join(dir, 'answers.json'), 'utf8
 if (answers.fail) { console.error(answers.fail); process.exit(1); }
 const [verb, sub] = process.argv.slice(2);
 if (verb === 'api') {
-  const at = process.argv.slice(3).find((a) => !a.startsWith('-')).split('?')[0];
+  const at = process.argv.slice(3).find((a, i, all) => !a.startsWith('-') && all[i - 1] !== '-H').split('?')[0];
   if ((answers.failApi || {})[at]) { console.error(answers.failApi[at]); process.exit(1); }
   const gate = (answers.gateApi || {})[at];
   while (gate && !fs.existsSync(gate)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);

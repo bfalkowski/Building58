@@ -276,3 +276,10 @@ test('a push the push hold refused: look at the PR, with a Fix it that lifts the
   assert.deepStrictEqual(listOf({ seats: [], tasks: [Object.assign({}, refused, { prOpen: false })] }).filter((i) => i.kind === 'push-refused'), [], 'a closed PR has no push to fix');
   assert.deepStrictEqual(listOf({ seats: [], tasks: [Object.assign({}, refused, { pushRefused: null, handedOver: null, state: 'in_review' })] }), []);
 });
+
+test('a PR handed over because no review can start offers Get a review', () => {
+  const why = 'The last review asks for fixes, but out of automatic reviews: start one with Get a review, or merge or close it.';
+  const [item] = listOf({ seats: [], tasks: [task({ state: 'waiting_on_you', pr: PR, prOpen: true, repo: '/work/repo', handedOver: why, outOfReviews: true })] });
+  assert.strictEqual(item.kind, 'handed-over');
+  assert.deepStrictEqual(item.link, { url: PR, review: { pr: PR, from: '/work/repo' } });
+});

@@ -166,11 +166,11 @@ function stopOne(channel, who, ctx, now) {
   return [200, { ok: true, stopped: Object.assign(row, { why: verdict.reason }) }];
 }
 
-function endJob(channel, body, ctx, now) {
+function endJob(channel, body, ctx, now, viaRung) {
   const stuckJobs = require('./stuck-jobs.js');
   const lead = !!ctx.agent;
-  if (lead && !LEAD_STOPS()) return [403, { ok: false, error: 'lead_stops_off', message: 'The person has not let the Lead stop sessions, and ending a stuck job is part of it. They turn it on with Let the Lead stop sessions in Settings. Tell them which job is stuck instead.' }];
-  if (lead && (!ctx.agent.lead || !ctx.agent.board)) return [403, { ok: false, error: 'lead_only', message: 'Only a Lead the person let move the board ends a stuck job this way. The page ends one with End it.' }];
+  if (lead && !viaRung && !LEAD_STOPS()) return [403, { ok: false, error: 'lead_stops_off', message: 'The person has not let the Lead stop sessions, and ending a stuck job is part of it. They turn it on with Let the Lead stop sessions in Settings. Tell them which job is stuck instead.' }];
+  if (lead && (!ctx.agent.lead || (!viaRung && !ctx.agent.board))) return [403, { ok: false, error: 'lead_only', message: 'Only a Lead the person let move the board ends a stuck job this way. The page ends one with End it.' }];
   const [t, status, error, message] = lead ? pick(channel, body && body.who) : [terminal.find(channel, String((body && body.who) || ''))];
   if (!t) return [status || 404, { ok: false, error: error || 'no_session', message: message || 'That session is not running.' }];
   const stuck = stuckJobsOf(t);
@@ -254,4 +254,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, floorOf, seatsOf, personStop, freeDesks, freeForReview, merged, LEAD_STOPS };
+module.exports = { handle, floorOf, seatsOf, personStop, freeDesks, freeForReview, merged, LEAD_STOPS, pick, nameOf, endJob };
