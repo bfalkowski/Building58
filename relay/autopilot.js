@@ -333,7 +333,6 @@ async function look(channel) {
     else if (handedReasonOf(recOf(channel, task.pr)) === 'protected-file') await follow(channel, task);
     else await mergedYet(channel, task);
   }
-  if (!isOn(channel)) return;
   stalled(channel);
   await maybeStart(channel);
 }
@@ -380,7 +379,7 @@ const exhibitOf = (task, pr) => (config.get('autopilotExhibit') && pr.state === 
 async function lookAt(channel, task) {
   const rec = recOf(channel, task.pr);
   const got = await readPr(task, rec);
-  if (!got || !isOn(channel)) return;
+  if (!got) return;
   const { pr, files } = got;
   if (files) { rec.apiFiles = plan.touchesApi(files); if (rec.apiSeq === undefined) rec.apiSeq = chOf(channel).apiSeq || 0; }
   if (pr.state === 'OPEN' && rec.mergedHead === pr.headRefOid) { rec.why = 'Merged, but GitHub still shows the PR open.'; rec.act = 'wait'; return; }
