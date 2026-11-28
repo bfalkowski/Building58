@@ -120,6 +120,7 @@
       <tr><td><span class="ui">Update waits at most</span></td><td class="plain">30 minutes</td><td><code>RELAY_UPDATE_WAIT_MS</code></td><td>An update that has fetched new relay code waits for a moment with no session in a turn.</td></tr>
       <tr><td><span class="ui">Forced restarts at most every</span></td><td class="plain">60 minutes</td><td><code>RELAY_UPDATE_FORCED_MS</code></td><td>The most often an update restarts the relay before the room is quiet.</td></tr>
       <tr><td><span class="ui">A session is stuck after</span></td><td class="plain">30 minutes</td><td><code>RELAY_STALL_MS</code></td><td>A session in a turn that sends no hook and prints nothing for this long is stuck.</td></tr>
+      <tr><td><span class="ui">Games</span></td><td class="plain">off</td><td><code>RELAY_GAMES</code></td><td>Rounds that act out a game or a simulation from another repo (<code>GAMES_REPO</code>), with a fresh session for each seat. They are not done yet, so this is off: the Games panel is hidden, and the relay starts no round and no seat session (<code>POST /rounds</code> answers 409 <code>games_off</code>). Turn it on to try a round. See <a href="running.html#games-panel">the Games panel</a>.</td></tr>
       <tr><td><span class="ui">Keep the computer awake</span></td><td class="plain">on</td><td><code>RELAY_KEEP_AWAKE</code></td><td>While a task is building, has changes requested or is in review, or Autopilot is on, the relay keeps the Mac from sleeping, with its own caffeinate tool.</td></tr>
     </tbody>
   </table>

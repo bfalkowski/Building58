@@ -32,7 +32,6 @@ test('the stop verdict', async (t) => {
     ['a first prompt typed long ago, and no turn began', idle({ lastEnterAt: now - 12 * min, owesPrompt: 'Review PR 154' }), /^Enter was pressed 12 min ago and no turn began, so its first prompt did not go in$/],
     ['Enter pressed long ago into a session no hook ever reached', idle({ hooked: false, lastEnterAt: now - 10 * min }), /Enter was pressed and no hook has answered yet/],
     ['spoken to with no hook heard', idle({ hooked: false }), /no hook has said/],
-    ['its task is Waiting on you', idle({ task: 'abc123' }), /its task is Waiting on you/, { state: 'waiting_on_you' }],
     ['ended', idle({ exited: true }), /it has ended/],
     ['the trust question on screen', idle({ spoke: false, hooked: false }), /whether to trust its folder/, null, 'trust'],
     ['a menu open on screen', idle(), /a menu is open/, null, 'menu'],
@@ -138,7 +137,7 @@ test('the floor', async (t) => {
     assert.deepStrictEqual([f.named, f.name, f.minutesSinceHook], [true, await nameOf(fresh), null]);
   });
 
-  await t.test('the verdict at the route: never safe while working, waiting, typed in, the Lead, or the PM talking', async () => {
+  await t.test('the verdict at the route: never safe while working, waiting, typed in, the Lead, or the PM talking, and safe while its task waits on you', async () => {
     const verdict = async (s) => { const r = await rowOf(s); return [r.canStop, r.why]; };
     assert.deepStrictEqual(await verdict(working), [false, 'it is working']);
     assert.deepStrictEqual(await verdict(waiting), [false, 'it is waiting on the person: Claude needs your permission to use Bash']);
@@ -153,7 +152,7 @@ test('the floor', async (t) => {
     await until(async () => (await rowOf(dev)).safe, 'the Dev to settle');
     assert.deepStrictEqual(await safe(dev), [true, false, 'not one the Lead may stop: its PR has not merged and its task is not Done']);
     await R.call('POST', '/tasks/' + task.id + '/move', { to: 'waiting_on_you' });
-    assert.deepStrictEqual(await verdict(dev), [false, 'its task is Waiting on you']);
+    assert.deepStrictEqual(await safe(dev), [true, true, 'its task waits on the person, idle 0 min, and Bring back returns it to the same checkout']);
   });
 
   await t.test('only the Lead\'s token reads it, and ticket.js floor prints a line each', async () => {
@@ -166,7 +165,7 @@ test('the floor', async (t) => {
     const line = (text) => assert.ok(out.split('\n').includes(text), text + ' in:\n' + out);
     line(await nameOf(reviewer) + ' · reviewer of PR 31 · idle · last hook 0 min ago · not one the Lead may stop: the relay did not start it to review a PR');
     line(await nameOf(working) + ' · session · working · last hook 0 min ago · not safe to stop: it is working');
-    line(await nameOf(dev) + ' · Dev · idle · last hook 0 min ago · not safe to stop: its task is Waiting on you');
+    line(await nameOf(dev) + ' · Dev · idle · last hook 0 min ago · safe to stop: its task waits on the person, idle 0 min, and Bring back returns it to the same checkout');
     line(await nameOf(fresh) + ' · session · idle · no hook yet · not one the Lead may stop: it is not a reviewer or a Dev');
     assert.strictEqual(out.trim().split('\n').length, 8);
     assert.throws(() => execFileSync('node', [CLI, 'floor'], { env: { ...env, OFFICE_TICKET_TOKEN: otherToken['X-Office-Token'] }, encoding: 'utf8', stdio: 'pipe' }), /Only the Lead can read the floor/);
