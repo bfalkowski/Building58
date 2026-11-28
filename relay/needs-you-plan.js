@@ -53,8 +53,9 @@
 //                unstick the board off (relay/flake.js)
 //   push-refused an open PR whose Dev's push the push hold refused after a merge verdict, with the reason and
 //                a Fix it button that lifts the hold, unless the hand-over for a Dev's bug claim has that button
-//   handed-over  an open PR's task that Autopilot handed over, in any column until the person moves its card, with Autopilot's reason, or, for a stall,
-//                with the next step a review posted after it gives
+//   handed-over  an open PR's task that Autopilot handed over, in any column until the person moves its
+//                card, with Autopilot's reason, or, for a stall, with the next step a review posted
+//                after it gives
 //   review       an open PR whose automatic review could not start, with the reason, unless a review of it runs
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
