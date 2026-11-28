@@ -42,6 +42,7 @@
 // And with a seat's own token:
 //   POST /play                     { kind, args } one action for that seat. The answer comes back.
 'use strict';
+const config = require('./config.js');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -122,6 +123,7 @@ function view(r) {
 }
 
 function startRound(channel, body, ctx) {
+  if (!config.get('games')) return [409, { ok: false, error: 'games_off', message: 'Games are off. Turn on Games in Settings to start a round.' }];
   if (rounds.has(channel)) return [409, { ok: false, error: 'round_running', message: 'A round is running. Finish or stop it first.' }];
   const game = listGames().find((g) => g.folder === body.game);
   if (!game) return [404, { ok: false, error: 'no_game', message: 'There is no game ' + body.game + ' in GAMES_REPO.' }];
@@ -296,7 +298,7 @@ async function handle(req, res, channel, rest, ctx) {
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
   if (rest === '/games') {
     if (req.method !== 'GET') return false;
-    ctx.send(res, 200, { ok: true, games: listGames().map((g) => { const o = Object.assign({}, g); delete o.need; delete o.entry; return o; }) });
+    ctx.send(res, 200, { ok: true, on: !!config.get('games'), games: listGames().map((g) => { const o = Object.assign({}, g); delete o.need; delete o.entry; return o; }) });
     return true;
   }
   if (rest === '/play') {
