@@ -38,7 +38,7 @@ const conflictFor = (devGone, owed) => devGone
   ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main' + owed + ', but its Dev is not running, so Autopilot brings it back to merge main.' }
   : { act: 'conflict', why: 'It conflicts with main' + owed + '.' };
 function forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit, noReview) {
-  if (!verdict) return { act: 'wait', why: WAITS_FOR_REVIEW };
+  if (!verdict) return pr.mergeStateStatus === 'DIRTY' ? conflictFor(devGone, ', so no review starts until it is merged') : { act: 'wait', why: WAITS_FOR_REVIEW };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
     if (rounds >= maxRounds) return { act: 'person', reason: 'rounds', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };
