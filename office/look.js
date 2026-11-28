@@ -232,7 +232,7 @@
     await precompile(t);
   }
   const compiled = new Set();
-  function pending(t, asSwap) {
+  function pending(asSwap) {
     const fx = !!(composer && fxWanted), inRoom = new Set([room]), todo = [], seen = new Set();
     asSwap(() => ctx.scene.traverse((o) => {
       if (!o.material || !shown(o) || (fx ? o.type === 'GridHelper' : !under(o, inRoom))) return;
@@ -270,19 +270,22 @@
     });
     return i;
   }
-  async function precompile(t) {
-    const asSwap = swapView(t);
-    for (;;) {
-      const { todo } = pending(t, asSwap);
-      if (!todo.length) return;
-      for (let i = 0; i < todo.length;) {
-        i = compileBatch(asSwap, todo, i, 8);
-        await nextFrame();
-      }
+  const PASSES = 4;
+  async function settle(gather, batch, frame, passes) {
+    let n = 0;
+    for (; n < passes; n++) {
+      const todo = gather();
+      if (!todo.length) break;
+      for (let i = 0; i < todo.length;) { i = batch(todo, i); await frame(); }
     }
+    return n;
+  }
+  function precompile(t) {
+    const asSwap = swapView(t);
+    return settle(() => pending(asSwap).todo, (todo, i) => compileBatch(asSwap, todo, i, 8), nextFrame, PASSES);
   }
   function topUp(t) {
-    const asSwap = swapView(t), { todo } = pending(t, asSwap);
+    const asSwap = swapView(t), { todo } = pending(asSwap);
     compileBatch(asSwap, todo, 0, Infinity);
   }
   function tune(time) {
@@ -327,7 +330,7 @@
     if (wantBaked) part(c.part());
   }
 
-  const api = { wanted, wantFx, meshKey, materialName, bakeable, MIN_SIZE, FX, ADDONS, INTEGRITY, state, attach, part, render, liveParts: () => liveParts() };
+  const api = { wanted, wantFx, meshKey, materialName, bakeable, MIN_SIZE, settle, FX, ADDONS, INTEGRITY, state, attach, part, render, liveParts: () => liveParts() };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfficeLook = api;
 })(typeof window !== 'undefined' ? window : this);

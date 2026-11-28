@@ -74,3 +74,17 @@ test('the bake in office/baked/ has one key per part, a light for each time of d
   for (const prim of json.meshes.flatMap((m) => m.primitives)) assert.ok('TEXCOORD_1' in prim.attributes, 'every part has the bake\'s UVs');
   assert.ok(fs.statSync(path.join(BAKED, 'ao.png')).size > 1000, 'ao.png');
 });
+
+test('settling compiles a part that appears while it works, once, and stops at the pass limit', async () => {
+  const done = [], waiting = ['a', 'b'];
+  const gather = () => waiting.filter((n) => !done.includes(n));
+  let frames = 0;
+  const batch = (todo, i) => { done.push(todo[i]); if (todo[i] === 'a') waiting.push('late'); return i + 1; };
+  const passes = await look.settle(gather, batch, async () => { frames++; }, 4);
+  assert.deepStrictEqual(done, ['a', 'b', 'late']);
+  assert.strictEqual(passes, 2);
+  assert.strictEqual(frames, 3);
+  let n = 0;
+  const forever = await look.settle(() => ['x' + n++], (todo, i) => i + 1, async () => {}, 4);
+  assert.strictEqual(forever, 4, 'new parts every pass cannot hold the swap back');
+});
