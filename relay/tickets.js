@@ -209,7 +209,6 @@ async function move(channel, ticket, body, agent) {
     if (owner) return [409, { ok: false, error: 'pr_taken', message: pr + ' is already the PR of ' + owner + ', so it cannot mark ' + now.id + ' done. Give the PR that delivered ' + now.id + '.' }];
     const changes = Object.assign({ status: to }, now.proposal && (to === 'rejected' || to === 'done') ? { proposal: null } : {}, now.closedAs && to === 'triage' ? { closedAs: null, closedFor: null } : {}, to === 'done' ? { pr } : {}, to === 'ready' && now.status === 'started' ? {} : to === 'ready' ? { approvedBy: agent ? 'Lead' : 'you' } : now.status === 'ready' ? { approvedBy: 'none' } : {});
     const moved = await store.update(channel, now.id, changes, { person: !agent });
-    if (to === 'rejected') clearStuck(channel, now);
     if (to === 'done' || to === 'rejected') chat.archiveTicketRoom(channel, now.id, now.createdAt, to === 'done' ? 'the ticket moved to Done' : 'the ticket was rejected');
     else if (now.status === 'rejected') chat.openTicketRoom(channel, chatOf(moved));
     history.add(channel, now, to === 'ready' && now.status !== 'started' ? { stage: 'approved', by: agent ? 'Lead' : 'you' } : { stage: 'moved', from: now.status, to, by: agent ? 'Lead' : 'you' }, agent || null);
@@ -364,7 +363,7 @@ function decide(channel, ticket, body, by = 'you') {
       : Object.assign({ status: 'rejected', closedAs: CLOSED_AS[p.action], closedFor: p.ids, proposal: null }, now.status === 'ready' ? { approvedBy: 'none' } : {});
     const changed = await store.update(channel, now.id, changes);
     history.add(channel, now, Object.assign({ stage: 'proposal-approved' }, step));
-    if (changes.status === 'rejected') { clearStuck(channel, now); chat.archiveTicketRoom(channel, now.id, now.createdAt, 'the ticket was ' + CLOSED_AS[p.action]); }
+    if (changes.status === 'rejected') chat.archiveTicketRoom(channel, now.id, now.createdAt, 'the ticket was ' + CLOSED_AS[p.action]);
     return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
   });
 }
@@ -379,11 +378,6 @@ async function carryOut(channel, ticket) {
   const note = await addNote(channel, ticket, { text: 'Let the Lead unstick the board is on, and both tickets are linked to one failure channel, so the relay merged this one into ' + (decided[1].ticket.closedFor || []).join(', ') + '. To bring it back, move it to Triage.' }, RELAYER);
   return [200, Object.assign({ ok: true, message: 'Merged ' + ticket.id + ' into ' + (decided[1].ticket.closedFor || []).join(', ') + '.' }, note[1].ok ? { ticket: note[1].ticket } : { ticket: decided[1].ticket })];
 }
-function clearStuck(channel, ticket) {
-  const stuck = require('./stuck.js'), task = tasks.ofTicket(channel, ticket);
-  if (task) stuck.clearTask(channel, task);
-  if (ticket.pr) stuck.clear(channel, 'pr ' + ticket.pr);
-}
 const RELAYER = { role: 'relay', who: 'the relay', sessionId: 'relay' };
 async function closeForFailure(channel, ids, pr, others, key) {
   const n = (link) => '#' + String(link).split('/').pop();
@@ -392,7 +386,6 @@ async function closeForFailure(channel, ids, pr, others, key) {
       const all = await listAll(channel), now = all.find((t) => t.id === id);
       if (!now || !ORDERABLE.includes(now.status) || starting.has(channel + '/' + id)) return null;
       await store.update(channel, id, Object.assign({ status: 'rejected', closedAs: 'closed', closedFor: [], proposal: null }, now.status === 'ready' ? { approvedBy: 'none' } : {}));
-      clearStuck(channel, now);
       history.add(channel, now, { stage: 'moved', from: now.status, to: 'rejected', by: 'relay', pr });
       chat.archiveTicketRoom(channel, id, now.createdAt, 'PR ' + n(pr) + ' fixed the failure ' + key);
       return now;

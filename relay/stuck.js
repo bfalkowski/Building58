@@ -26,7 +26,10 @@ const ownsFile = claim(FILE);
 function save() {
   if (!ownsFile) return;
   const out = {};
-  for (const [channel, items] of open) if (items.size) out[channel] = [...items.values()];
+  for (const [channel, items] of open) {
+    const keep = [...items.values()].filter((i) => !i.id.startsWith('session '));
+    if (keep.length) out[channel] = keep;
+  }
   try {
     fs.mkdirSync(path.dirname(FILE), { recursive: true });
     const tmp = FILE + '.' + process.pid + '.tmp';
@@ -70,9 +73,6 @@ const toTell = (channel) => list(channel).filter((i) => i.owner !== 'autopilot' 
 function told(channel, items) { for (const i of items) i.told = true; save(); }
 function untold(channel) { for (const i of list(channel)) i.told = false; save(); }
 function reset() { open.clear(); save(); }
-function clearTask(channel, task) {
-  for (const id of [task.pr && 'pr ' + task.pr, 'task ' + task.id]) if (id) clear(channel, id);
-}
 
 function begin() {
   require('./delivery.js').onStuck((channel, t) => raise(channel, { kind: 'dev-idle', id: 'session ' + t.id, text: (t.name || 'A session') + ' is stuck: ' + ((t.stuck && t.stuck.why) || 'it did not take a message') + '.', since: t.stuck && t.stuck.at }));
@@ -80,4 +80,4 @@ function begin() {
   require('./tasks.js').events.on('state', (channel, task) => { if (task.pr && (task.state === 'done' || task.state === 'building')) clear(channel, 'pr ' + task.pr); });
 }
 
-module.exports = { begin, raise, clear, clearTask, list, toTell, told, untold, reset, events, OWNERS };
+module.exports = { begin, raise, clear, list, toTell, told, untold, reset, events, OWNERS };

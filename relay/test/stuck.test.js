@@ -101,10 +101,20 @@ test('open items are kept in the state folder, and a restart brings them back wi
   assert.deepStrictEqual(JSON.parse(require('fs').readFileSync(file, 'utf8')), {});
 });
 
-test('clearTask clears the items of a task by its PR and by its id', () => {
-  stuck.raise('t', { kind: 'handed-over', id: 'pr https://github.com/o/r/pull/9', text: 'a' });
-  stuck.raise('t', { kind: 'handed-over', id: 'task 4', text: 'b' });
-  stuck.raise('t', { kind: 'handed-over', id: 'pr https://github.com/o/r/pull/10', text: 'c' });
-  stuck.clearTask('t', { id: 4, pr: 'https://github.com/o/r/pull/9' });
-  assert.deepStrictEqual(stuck.list('t').map((i) => i.id), ['pr https://github.com/o/r/pull/10']);
+test('a session item is not saved, since the session may end while the relay is down', () => {
+  const file = require('../state.js').file('stuck.json', 'RELAY_STUCK_FILE');
+  stuck.raise('t', { kind: 'dev-idle', id: 'session abc', text: 'stuck' });
+  stuck.raise('t', { kind: 'handed-over', id: 'pr x', text: 'waits' });
+  assert.deepStrictEqual(JSON.parse(require('fs').readFileSync(file, 'utf8')).t.map((i) => i.id), ['pr x']);
+});
+
+test('a file with junk loads what is good and drops the rest', () => {
+  const fs = require('fs');
+  const file = require('../state.js').file('stuck.json', 'RELAY_STUCK_FILE');
+  const good = { id: 'pr ok', kind: 'handed-over', text: 'ok', since: '2026-11-27T00:00:00.000Z', told: false };
+  const load = (text) => { fs.writeFileSync(file, text); delete require.cache[require.resolve('../stuck.js')]; return require('../stuck.js'); };
+  const mixed = load(JSON.stringify({ t: [good, { id: 5, kind: 'handed-over', since: good.since }, { id: 'pr a', kind: 'nope', since: good.since }, { id: 'pr b', kind: 'handed-over', since: 'not a date' }, null, 'x'], u: 'no' }));
+  assert.deepStrictEqual(mixed.list('t').map((i) => i.id), ['pr ok']);
+  assert.deepStrictEqual(mixed.list('u'), []);
+  for (const text of ['not json', '[1,2]', 'null', '"x"']) assert.deepStrictEqual(load(text).list('t'), [], text);
 });
