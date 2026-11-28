@@ -4,6 +4,9 @@
 // was a prompt in the 30 second grace after the reviewer's turn: a <task-notification> from its own
 // background test run (Ada), and the person typing into it (Greta). The relay took either for the person
 // taking over, and forgot the post. These tests drive that through a real relay, with a fake gh.
+// The fake gh shows a new head only once its review has a verdict. Autopilot looks every 300 ms, and a look
+// between the new head and its verdict, with Review PRs automatically off, hands the task over for good, so
+// the merge never comes (T-550).
 const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -50,9 +53,9 @@ test('a posted review stays linked to its verdict, whatever comes after it', asy
     sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'hello ' + n);
     sh(wt, 'push', '-qf', origin, 'HEAD:refs/pull/7/head'); sh(wt, 'update-ref', 'refs/remotes/origin/pr', 'HEAD');
     head = sh(wt, 'rev-parse', 'HEAD');
-    answers();
   };
   await push();
+  answers();
   await say(dev, 'PostToolUse', { pr_url: PR, cwd: wt });
   const reviewer = async () => {
     const r = await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: prBrief(PR) });
@@ -90,6 +93,7 @@ test('a posted review stays linked to its verdict, whatever comes after it', asy
     fs.rmSync(path.join(ghDir, 'merged.log'), { force: true });
     const r = await reviewer();
     await verdict(r);
+    answers();
     greta(r, 502);
     await say(r, 'Stop');
     hook(r, 'UserPromptSubmit', { prompt: 'office-b reported this error - do we have a ticket for it already' });
