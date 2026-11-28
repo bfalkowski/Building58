@@ -12,10 +12,10 @@ away from the person. Here, skills carry the engineering practice, and the perso
 
 ## What the room is
 
-The room is a visual orchestrator for Claude Code sessions. It runs like a squad: a small team
-on one stream of work, with a Lead, Devs, reviewers, a PM and a manager session, and a person as
-the boss. The COO is not a seat: it runs only when the person asks. Its job is to keep tickets moving, and to show at a glance who is working, who is waiting on the
-person, and what is done.
+The room is a visual orchestrator for Claude Code sessions. It runs like a squad: a small team on
+one stream of work, with a Lead, Devs, reviewers, a PM and a manager session, and a person as the
+boss. The COO is not a seat: it runs only when the person asks. Its job is to keep tickets moving,
+and to show at a glance who is working, who is waiting on the person, and what is done.
 
 Addy Osmani names four ways a person takes part in a software factory: shape, steer, hand off and approve. The
 room gives the person all four on one floor. They shape work with the PM and Triage, steer a
