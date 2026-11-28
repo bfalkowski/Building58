@@ -1235,7 +1235,7 @@
           "Games"
         ],
         "summary": "List games",
-        "description": "The games in GAMES_REPO: each folder with a game.json, with its name, version, players, needs, ok, and a reason when the relay cannot run it, and the game's own about and metrics when it has them. See Games.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "on says whether Games is on. The games in GAMES_REPO: each folder with a game.json, with its name, version, players, needs, ok, and a reason when the relay cannot run it, and the game's own about and metrics when it has them. See Games.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listGames",
         "x-tokens": [],
         "responses": {
@@ -2625,7 +2625,7 @@
           "Games"
         ],
         "summary": "Start round",
-        "description": "{\"game\", \"seed\", \"settings\", \"seats\", \"watch\", \"capUsd\"}: starts a round of a game, with a fresh session for each seat. 409 while a round runs, and 409 no_boundary where seats cannot get their boundary. 400 for a game that is not ok, with need when a need is what stops it, a seat count outside its players, or a watch that is not all or none.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "While Games is off (the default), 409 games_off and nothing starts. {\"game\", \"seed\", \"settings\", \"seats\", \"watch\", \"capUsd\"}: starts a round of a game, with a fresh session for each seat. 409 while a round runs, and 409 no_boundary where seats cannot get their boundary. 400 for a game that is not ok, with need when a need is what stops it, a seat count outside its players, or a watch that is not all or none.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "startRound",
         "x-tokens": [],
         "responses": {
