@@ -76,5 +76,11 @@ test('the sampler counts a running session\'s Skill calls by its role, and skips
     fs.writeFileSync(file, call(1) + call(2) + call(3));
     metrics.watchSkills();
     assert.strictEqual(stored()[0].calls, 3, 'a log that grew is read again');
+    const seatSteps = require('../seat-steps.js'), read = seatSteps.read;
+    let reads = 0;
+    seatSteps.read = (...args) => { reads++; return read(...args); };
+    try { metrics.watchSkills(); } finally { seatSteps.read = read; }
+    assert.strictEqual(reads, 0, 'a log of the same size is not read again');
+    assert.strictEqual(stored()[0].calls, 3);
   } finally { terminal.everyone = was; delete process.env.CLAUDE_CONFIG_DIR; fs.rmSync(claude, { recursive: true, force: true }); }
 });
