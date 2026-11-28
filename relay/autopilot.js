@@ -35,7 +35,7 @@
 // relay/autopilot-runs.js) is in RELAY_AUTOPILOT_FILE, so a restart keeps it.
 'use strict';
 const { execFile } = require('child_process');
-const { mergedMain } = require('./merged-main.js');
+const { mergedMain, holdsAll, withHead, headsSince } = require('./merged-main.js');
 const fs = require('fs');
 const path = require('path');
 const state = require('./state.js');
@@ -395,6 +395,8 @@ async function lookAt(channel, task) {
   else if (d.act === 'merge') {
     const c = chOf(channel);
     const turn = chOf(channel).apiTurn && tasks.list(channel).some((x) => x.pr === c.apiTurn && x.pr !== task.pr && open(channel, x)) ? c.apiTurn : null;
+    const seq = c.apiSeq || 0;
+    if (plan.touchesApi(files) && task.worktree && rec.apiSeq !== seq && await holdsAll((args) => git(task.worktree, args), headsSince(c.apiHeads, rec.apiSeq || 0, seq), pr.headRefOid)) { rec.apiSeq = seq; save(); }
     const order = plan.apiTurn({ touches: plan.touchesApi(files), seen: rec.apiSeq, seq: c.apiSeq || 0, asked: rec.apiAsked, head: pr.headRefOid, turn: turn && number(turn), me: number(task.pr) });
     if (order.act === 'wait') { rec.why = order.why; rec.act = 'wait'; return; }
     if (order.act === 'ask-main') { askApiMain(channel, task, rec, pr); rec.why = 'Its Dev was asked to merge main before it merges.'; rec.act = 'wait'; return; }
@@ -499,7 +501,7 @@ function counted(channel, task, rec, head) {
   const c = chOf(channel), run = runOf(channel, task);
   rec.mergedHead = head; c.merged++;
   if (c.apiTurn === task.pr) c.apiTurn = null;
-  if (rec.apiFiles) c.apiSeq = (c.apiSeq || 0) + 1;
+  if (rec.apiFiles) { c.apiHeads = withHead(c.apiHeads, c.apiSeq || 0, head); c.apiSeq = (c.apiSeq || 0) + 1; }
   if (run) runs.merged(run, Date.now(), BY);
   save();
 }
