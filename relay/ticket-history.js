@@ -140,6 +140,18 @@ function entryView(channel, e) {
   out.session = e.sessionId ? sessionView(channel, e.sessionId, e.cwd) : null;
   return out;
 }
+const CHANGES = ['moved', 'edited'];
+function advice(channel, ticket) {
+  const list = entriesOf(channel, ticket.id, ticket.createdAt);
+  const last = list.map((e, i) => [e, i]).filter(([e]) => e.stage === 'pm-advice').pop();
+  if (!last) return null;
+  const [e, i] = last, after = list.slice(i + 1);
+  if (after.some((x) => CHANGES.includes(x.stage))) return null;
+  return { answer: e.answer, of: e.of || null, why: e.why, rung: e.rung, at: e.at, proposed: after.some((x) => x.stage === 'proposal') };
+}
+function changedSince(channel, ticket, at) {
+  return entriesOf(channel, ticket.id, ticket.createdAt).some((x) => CHANGES.includes(x.stage) && x.at > at);
+}
 function holderOf(entries, ticket, task) {
   if (!task || ticket.status !== 'started' || task.state === 'done') return null;
   if (task.state === 'waiting_on_you') return { role: 'you', name: 'You', session: null };
@@ -154,4 +166,4 @@ function view(channel, ticket, task) {
   return { assignee: holderOf(entries, ticket, task), history: entries };
 }
 
-module.exports = { add, view, roleOf, ticketOfPr, FILE };
+module.exports = { add, view, advice, changedSince, roleOf, ticketOfPr, FILE };

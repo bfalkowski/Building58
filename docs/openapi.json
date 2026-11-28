@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.17.0",
+    "version": "worked-out-when-served",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -1438,6 +1438,210 @@
             }
           }
         ]
+      }
+    },
+    "/channels/{channel}/lead/bring-back": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Lead bring back",
+        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"task\"}: brings the Dev of a task back, as Bring back does. 404 no_task, and the refusals of Bring back. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "leadBringBack",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/lead/hand-back": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Lead hand back",
+        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"task\"}: moves a task Autopilot handed over for a mechanical reason from Waiting on you to In review, and Autopilot takes it from its next pass and gives its PR a review. 409 not_handed for a task Autopilot did not hand over, autopilot_off while Autopilot is off, 403 persons_decision for a hand-over that is the person's decision. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "leadHandBack",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/lead/stop-command": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Lead stop command",
+        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"who\", \"pid\"}: ends one stuck command of a session, as POST /floor/end-job does, never the session, with no need for Let the Lead stop sessions. 409 not_stuck when the session has none. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "leadStopCommand",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/lead/tell": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Lead tell",
+        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"who\", \"text\"}: saves one line of up to 500 characters for the session called who (a Floor name, a session id or a task id), typed when it is idle, with From the Lead: in front. 404 no_session, 409 is_lead for the Lead itself, 400 bad_param for no text. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "leadTell",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
       }
     },
     "/channels/{channel}/manager": {

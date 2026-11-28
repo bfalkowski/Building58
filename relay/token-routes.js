@@ -20,6 +20,7 @@ function tokenReaches(agent, method, rest, seat) {
     (agent.lead && agent.starts > 0 && method === 'POST' && /^\/tickets\/[^/]+\/start$/.test(rest)) ||
     (agent.lead && method === 'POST' && rest === '/ready') ||
     (agent.lead && method === 'POST' && /^\/(jams|stuck|rerun|failures)$/.test(rest)) ||
+    (agent.lead && method === 'POST' && /^\/lead\/(tell|bring-back|hand-back|stop-command)$/.test(rest)) ||
     (agent.lead && method === 'POST' && /^\/failures\/[\w-]{1,64}\/tickets$/.test(rest)) ||
     (method === 'GET' && rest === '/failures') ||
     (agent.role === 'coo' && ((method === 'GET' && rest === '/officers/coo/measures') || (method === 'POST' && rest === '/officers/coo/report'))) ||

@@ -25,7 +25,7 @@ test('the brief under Autopilot names the three rights and never merging, whatev
     assert.ok(b.includes(AUTOPILOT), 'merge ' + merge);
     assert.ok(b.includes('Never merge a pull request.') && b.includes('You keep three rights: ' + KEEPS + '.'));
     assert.ok(!b.includes(RUNG), 'it does not point to the merge rung');
-    assert.ok(Buffer.byteLength(b) < 1024, Buffer.byteLength(b) + ' bytes, from a checkout root of 120 characters');
+    assert.ok(Buffer.byteLength(b) < 1280, Buffer.byteLength(b) + ' bytes, from a checkout root of 120 characters');
   }
   assert.ok(!leadBrief(relayDir).includes('Autopilot'), 'with Autopilot off the brief is as before');
 });

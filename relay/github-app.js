@@ -89,7 +89,7 @@ async function signIn(env) {
 }
 
 function manifest(name, redirect, workflows) {
-  const perms = { contents: 'write', pull_requests: 'write', issues: 'write', checks: 'read', statuses: 'read', actions: 'read', metadata: 'read' };
+  const perms = { contents: 'write', pull_requests: 'write', issues: 'write', checks: 'read', statuses: 'read', actions: 'write', metadata: 'read' };
   if (workflows) perms.workflows = 'write';
   return { name, url: 'https://github.com/bfalkowski/Building58', redirect_url: redirect, public: false, default_permissions: perms, default_events: [], hook_attributes: { url: 'https://example.com/building58-no-webhook', active: false } };
 }

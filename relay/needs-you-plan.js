@@ -110,6 +110,7 @@ function taskItem(t, dev) {
   if (pr && t.prClosed) return item('closed', 'PR ' + numberOf(pr) + onPr + ' was closed on GitHub without a merge. Look at it. This line stays until the PR is reopened, its task gets a new PR, or its task is Done.', { url: pr });
   if (pr && t.prOpen !== false && t.pushRefused && !(t.handedOver && t.devSaysBug)) return item('push-refused', 'Look at PR ' + numberOf(pr) + onPr + ': the push hold refused its Dev\'s push. ' + oneLine(t.pushRefused.why, 300) + ' Press Fix it to lift the hold, so its Dev can push and a follow-up review checks it.', { url: pr, fix: t.id });
   if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
+  if (t.handedOver && pr && t.outOfReviews) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.repo ? { url: pr, review: { pr, from: t.repo } } : { url: pr });
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns && /came back empty/.test(t.reviewFailed)) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': the review came back empty, twice, with no verdict or no words on what was checked.', dev ? { terminal: dev.terminal } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
@@ -119,6 +120,7 @@ function taskItem(t, dev) {
     return item('waiting', 'Look at ' + nameOf(t) + ': its task is in Waiting on you.' + (note ? ' ' + note : ''), pr ? { url: pr } : dev ? { terminal: dev.terminal } : { ticket: t.ticket || t.id });
   }
   if (pr && t.prOpen !== false && t.onlyYouMerge) return item('merge', 'Merge PR ' + numberOf(pr) + onPr + ' yourself: ' + oneLine(t.onlyYouMerge, 300), { url: pr });
+  if (t.bringBackWhy && !dev && BUILDING.includes(t.state)) return item('waiting', 'Free a desk or a slot for ' + nameOf(t) + ': Autopilot waits to bring back its Dev to fix PR ' + numberOf(pr) + '. ' + oneLine(t.bringBackWhy, 300), { ticket: t.ticket || t.id });
   if (!dev && BUILDING.includes(t.state) && !pr) return item('gone', 'Bring back the worker on ' + nameOf(t) + ', or move its card: its session ended with no PR.', { ticket: t.ticket || t.id });
   return null;
 }

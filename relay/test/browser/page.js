@@ -102,7 +102,15 @@ const errorsBut = (p, status, route) => p.errors.filter((e) => !(e.startsWith('e
 const pathOf = (line) => { const m = line.match(/\((http[^)]+)\)$/); return m ? new URL(m[1]).pathname : null; };  // a line with no address is kept, as an error
 // Waits until fn, run in the page, returns something true. Arguments go to fn.
 const until = (p, fn, arg) => p.page.waitForFunction(fn, arg);
+// Runs fn in the page on every animation frame, until it returns { bad } or { done }. Resolves with that
+// answer, so a test checks a thing at each frame of an event and not at a guessed time.
+const watch = async (p, fn, arg, timeout) => (await p.page.waitForFunction(([src, a]) => {
+  const r = new Function('return (' + src + ')')()(a);
+  return r && (r.bad || r.done) ? r : false;
+}, [fn.toString(), arg], { polling: 'raf', timeout })).jsonValue();
+// Resolves after the page has drawn two more frames.
+const frames = (p) => p.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 // The text of the Claude Code terminal, as xterm drew it.
 const screenText = (p) => p.page.locator('#cc-term .xterm-rows').innerText();
 
-module.exports = { office, pageTest, SOFTWARE, until, screenText, errorsBut };
+module.exports = { office, pageTest, SOFTWARE, until, watch, frames, screenText, errorsBut };

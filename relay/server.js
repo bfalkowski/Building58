@@ -14,6 +14,7 @@ const http = require('http');
 const fs = require('fs');
 const api = require('./api-schemas.js');
 const { tokenReaches } = require('./token-routes.js');
+const openapi = require('./openapi.js');
 const path = require('path');
 const crypto = require('crypto');
 const cfAccess = require('./cf-access.js');
@@ -42,7 +43,7 @@ const office = SESSIONS ? {
   terminal: require('./terminal.js'), tasks: require('./tasks.js'), checkouts: require('./checkouts.js'), tickets: require('./tickets.js'),
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
-  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), metrics: require('./metrics.js'), jams: require('./jams.js'), failures: require('./failures.js'), leadStuck: require('./lead-stuck.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), pmSort: require('./pm-sort.js'),
+  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), metrics: require('./metrics.js'), jams: require('./jams.js'), failures: require('./failures.js'), leadStuck: require('./lead-stuck.js'), leadCommands: require('./lead-commands.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), pmSort: require('./pm-sort.js'),
   mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), managerWatch: require('./manager-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js'), awake: require('./awake.js')
 } : null;
 if (office) {
@@ -52,7 +53,7 @@ if (office) {
   }
 }
 const LEAD_CHANNEL = office ? ((ONE ? [ONE] : worlds()).find((x) => x.sessions) || {}).channel || null : null;
-const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'metrics', 'jams', 'failures', 'leadStuck', 'security', 'prWatch', 'managerWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
+const ROUTES = office ? ['terminal', 'tasks', 'checkouts', 'reviews', 'autopilot', 'config', 'rules', 'tickets', 'huddles', 'chat', 'floor', 'update', 'coo', 'metrics', 'jams', 'failures', 'leadStuck', 'leadCommands', 'security', 'prWatch', 'managerWatch', 'games', 'needsYou', 'ready', 'oldRelays'].map((k) => office[k]) : [];
 
 const PORT = Number(process.env.PORT || (ONE && ONE.port) || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -168,6 +169,16 @@ function serveStatic(req, res, url) {
     const head = { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' };
     const old = rel.endsWith('.html') ? cookieKey(req) : '';
     if (old && !sameKey(old)) head['Set-Cookie'] = COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0';
+    if (rel === '/docs/openapi.json') {
+      fs.readFile(file, 'utf8', (e, text) => {
+        let body = null;
+        try { if (!e) body = openapi.served(text); } catch (_) { body = null; }
+        if (body === null) { send(res, 500, 'The API document could not be read'); return; }
+        res.writeHead(200, head);
+        res.end(body);
+      });
+      return;
+    }
     res.writeHead(200, head);
     fs.createReadStream(file).pipe(res);
   });

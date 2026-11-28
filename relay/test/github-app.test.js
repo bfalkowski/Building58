@@ -31,7 +31,7 @@ test('the private key comes from .env as base64 on one line, or as the PEM itsel
 
 test('the App asks for what the room uses, checks included, and no webhook', () => {
   const m = manifest('building58-room-abc', 'http://localhost:5000/done', false);
-  assert.deepStrictEqual(m.default_permissions, { contents: 'write', pull_requests: 'write', issues: 'write', checks: 'read', statuses: 'read', actions: 'read', metadata: 'read' });
+  assert.deepStrictEqual(m.default_permissions, { contents: 'write', pull_requests: 'write', issues: 'write', checks: 'read', statuses: 'read', actions: 'write', metadata: 'read' });
   assert.strictEqual(m.public, false);
   assert.strictEqual(m.hook_attributes.active, false);
   assert.deepStrictEqual(m.default_events, []);
