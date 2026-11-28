@@ -2265,7 +2265,7 @@
   if (window.OfficeLook && renderer) {
     window.OfficeLook.attach({
       scene, camera, renderer, sun, hemi, amb, fill, part: () => part,
-      movers: () => [...people.map((w) => w.fig.root), boss.fig.root, ...Object.values(DESKS).flatMap((d) => [d.chair, d.mug]), ...tablePaddles, ppBall, door]
+      movers: () => [...people.map((w) => w.fig.root), boss.fig.root, ...Object.values(DESKS).flatMap((d) => [d.chair, d.mug]), ...tablePaddles, ppBall, door, fridgeDoor]
     });
   }
 
