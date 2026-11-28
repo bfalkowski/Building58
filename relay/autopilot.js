@@ -45,6 +45,7 @@ const tickets = require('./tickets.js');
 const mainCi = require('./main-ci.js');
 const { redMain } = require('./needs-you-plan.js');
 const reviews = require('./reviews.js');
+const mainMerge = require('./main-merge.js');
 const owedFirst = require('./owed-first.js');
 const prComments = require('./pr-comments.js');
 const update = require('./update.js');
@@ -347,7 +348,7 @@ async function readPr(task, rec) {
 }
 function mergeTest(channel, task, rec, decide, head) {
   const dev = terminal.find(channel, task.owner && task.owner.terminal);
-  const d = decide(latest(rec), !dev || dev.exited);
+  const v = latest(rec), d = decide(v && task.pr ? mainMerge.coveredVerdict(v, reviews.coveredHead(channel, task.pr, v.commit)) : v, !dev || dev.exited);
   const hold = d.act === 'merge' && holdOf(task, dev, Date.now(), undefined, head);
   if (hold && hold.reason === 'news-untold') return { act: 'bring-back', for: 'news', why: 'There is review news its Dev was never told, and its session has ended, so Autopilot brings it back to tell it.' };
   return hold || d;

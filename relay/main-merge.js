@@ -17,4 +17,11 @@ async function sameOwnChanges(git, reviewed, head, base) {
 const noteMerge = (rec, head) => { rec.mainMerges = (rec.mainMerges || 0) + 1; rec.head = head; return rec; };
 const roundsLine = (rounds, merges) => rounds + (rounds === 1 ? ' round' : ' rounds') + (merges ? ', plus ' + merges + (merges === 1 ? ' merge' : ' merges') + ' of main' : '');
 
-module.exports = { sameOwnChanges, noteMerge, roundsLine };
+function coveredHead(rec, commit) {
+  let at = commit;
+  for (let i = 0; rec && rec.covers && rec.covers[at] && i < 1000; i++) at = rec.covers[at];
+  return at;
+}
+const coveredVerdict = (v, head) => (v && v.kind === 'merge' && head && head !== v.commit ? Object.assign({}, v, { commit: head }) : v);
+
+module.exports = { coveredHead, coveredVerdict, sameOwnChanges, noteMerge, roundsLine };

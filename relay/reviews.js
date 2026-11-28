@@ -374,17 +374,18 @@ async function checkMainMerge(channel, pr, rec, from, head, git = gitIn(from)) {
   try { await git(['fetch', '-q', 'origin', 'main']); } catch (e) { ownChanged.set(pr, head); return; }
   const same = await mainMerge.sameOwnChanges(git, rec.head, head, 'origin/main');
   if (!same || rec.head === head || !recOf(channel, pr)) { ownChanged.set(pr, head); return; }
+  (rec.covers || (rec.covers = {}))[rec.head] = head;
   mainMerge.noteMerge(rec, head);
   rec.queued = head; rec.reviewedAt = Date.now();
   save();
   say(channel, 'PR ' + number(pr) + ' got a merge of main and its own changes are the same, so no review started: ' + mainMerge.roundsLine(rec.count || 0, rec.mainMerges) + '.');
 }
 const reviewing = (channel, pr) => starting.has(channel + ' ' + pr) || terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr);
-function owedFollowUps(channel, c) {
-  if (!pipeline.on()) return;
-  const follows = followsPushes(channel), max = MAX_AUTO_REVIEWS();
+function owedFollowUps(channel, c, o = {}) {
+  if (!(o.on === undefined ? pipeline.on() : o.on)) return [];
+  const follows = followsPushes(channel), max = MAX_AUTO_REVIEWS(), checks = [];
   for (const [pr, rec] of Object.entries(c.prs)) {
-    const seen = pipeline.of(pr);
+    const seen = (o.seen || pipeline.of)(pr);
     if (seen && (seen.open === false) !== !!rec.closed) { if (seen.open === false) rec.closed = true; else delete rec.closed; save(); }
     const owed = followUpOwed(rec, seen, { follows, reviewing: reviewing(channel, pr), max });
     if (owed === 'person') { waitOnPerson(channel, pr); continue; }
@@ -394,13 +395,14 @@ function owedFollowUps(channel, c) {
     if (!from) continue;
     if (ownChanged.get(pr) !== seen.head) {
       const key = channel + ' ' + pr + ' ' + seen.head;
-      if (!checkingMain.has(key)) { checkingMain.add(key); checkMainMerge(channel, pr, rec, from, seen.head).finally(() => checkingMain.delete(key)); }
+      if (!checkingMain.has(key)) { checkingMain.add(key); checks.push(checkMainMerge(channel, pr, rec, from, seen.head, o.git ? o.git(from) : undefined).finally(() => checkingMain.delete(key))); }
       continue;
     }
     rec.pending = { from, dev: dev ? dev.id : null, session: dev ? dev.sessionId : null, at: Date.now(), tries: 0 };
     rec.queued = seen.head; rec.why = null;
     save();
   }
+  return checks;
 }
 
 function tick() {
@@ -641,4 +643,4 @@ function setSwitch(channel, k, on) {
   save();
 }
 
-module.exports = { firstReviews, chOf, setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, noReview, giveReview, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty, checkMainMerge, ownChangedAt: (pr) => ownChanged.get(pr) };
+module.exports = { firstReviews, chOf, setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, noReview, giveReview, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty, checkMainMerge, owedFollowUps, coveredHead: (channel, pr, commit) => mainMerge.coveredHead(recOf(channel, pr), commit), ownChangedAt: (pr) => ownChanged.get(pr) };
