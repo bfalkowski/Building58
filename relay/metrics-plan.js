@@ -46,12 +46,12 @@ function median(list) {
 }
 const rangeOf = (text) => (Object.hasOwn(RANGES, text) ? text : null);
 
-function blank() { return { desks: {}, room: [], reviews: [], pm: [], at: 0 }; }
+function blank() { return { desks: {}, room: [], reviews: [], pm: [], skills: [], at: 0 }; }
 function shape(store) {
   const s = store && typeof store === 'object' ? store : {};
   const out = blank();
   out.desks = s.desks && typeof s.desks === 'object' ? s.desks : {};
-  for (const k of ['room', 'reviews', 'pm']) if (Array.isArray(s[k])) out[k] = s[k];
+  for (const k of ['room', 'reviews', 'pm', 'skills']) if (Array.isArray(s[k])) out[k] = s[k];
   out.at = Number(s.at) || 0;
   return out;
 }
@@ -66,6 +66,7 @@ function prune(store, now) {
   store.room = keep(store.room, (x) => x[0]);
   store.reviews = keep(store.reviews, (x) => x.at);
   store.pm = keep(store.pm, (x) => x.at);
+  store.skills = keep(store.skills, (x) => x.at);
   return changed;
 }
 function take(store, now, desks, room) {
@@ -75,6 +76,22 @@ function take(store, now, desks, room) {
   if (room) store.room.push([now, room.cpu, room.memory, room.limit]);
   prune(store, now);
   return true;
+}
+const SKILL_ROLES = ['lead', 'dev', 'reviewer', 'pm', 'coo', 'security'];
+function noteSkills(store, session, role, at, calls) {
+  const id = idOf(session);
+  if (!id || !SKILL_ROLES.includes(role) || !Number.isFinite(at)) return false;
+  const n = Math.max(0, Math.floor(Number(calls) || 0));
+  const was = store.skills.find((x) => x.id === id);
+  if (was) { if (was.calls === n && was.role === role) return false; was.calls = n; was.role = role; return true; }
+  store.skills.push({ id, at, role, calls: n });
+  return true;
+}
+function skillsOf(list, from) {
+  const roles = {};
+  for (const r of SKILL_ROLES) roles[r] = { sessions: 0, calls: 0 };
+  for (const x of list || []) if (x.at >= from && Object.hasOwn(roles, x.role)) { roles[x.role].sessions++; roles[x.role].calls += x.calls; }
+  return { roles, calls: SKILL_ROLES.reduce((a, r) => a + roles[r].calls, 0), sessions: SKILL_ROLES.reduce((a, r) => a + roles[r].sessions, 0) };
 }
 function noteReview(store, pr, round, at) {
   const id = idOf(pr);
@@ -294,6 +311,7 @@ function build(input) {
     desks: { points: bucketed(desks, from, size.bucket, ['working', 'idle', 'waiting', 'stuck', 'free']) },
     load: { points: bucketed((input.room || []).map((r) => [r[0], r[1], r[2] / 1048576, r[3] / 1048576]), from, size.bucket, ['cpu', 'memoryMb', 'limitMb']) },
     lead: leadOf(input.jams, from),
+    skills: skillsOf(input.skills, from),
     pm: { available: pmDays.some((d) => d.checked || d.held || d.closed || d.merged || d.moved), days: pmDays }
   };
 }
@@ -321,7 +339,8 @@ function csv(data) {
   add('lead', '', '', 'failure_channels', lead.failures.channels);
   add('lead', '', '', 'failure_prs_blocked', lead.failures.prsBlocked);
   for (const d of data.pm.days) for (const s of ['checked', 'held', 'closed', 'merged', 'moved', 'hoursSaved']) add('pm', d.day, '', s, d[s]);
+  for (const r of Object.keys(data.skills.roles)) { add('skill_calls', '', r, 'calls', data.skills.roles[r].calls); add('skill_calls', '', r, 'sessions', data.skills.roles[r].sessions); }
   return rows.map((r) => r.map(cell).join(',')).join('\n') + '\n';
 }
 
-module.exports = { JAM_KINDS, leadOf, build, csv, take, prune, noteReview, shape, blank, rangeOf, KEEP_DAYS, EVERY_MS, RANGES, PARTS, STALLS, WAIT_REASONS, WAIT_MINUTES };
+module.exports = { JAM_KINDS, leadOf, build, csv, take, prune, noteReview, noteSkills, SKILL_ROLES, shape, blank, rangeOf, KEEP_DAYS, EVERY_MS, RANGES, PARTS, STALLS, WAIT_REASONS, WAIT_MINUTES };
