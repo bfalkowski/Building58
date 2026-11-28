@@ -1,0 +1,146 @@
+// T-490: the Dev of a ticket's own task proposes to close it as not needed, with the commit on main that did the work.
+// The task ends at once (slot and desk free, session ended) and a not-needed jam is logged. The ticket stays started
+// with a close proposal until the person, or the PM at PM trust Close and merge, approves it. Anyone else, and a commit
+// that is not on main, get a refusal. A decline puts the task back.
+'use strict';
+const { execFileSync, spawnSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const test = require('node:test');
+const assert = require('node:assert');
+const H = require('./helpers.js');
+
+const git = (repo, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo, encoding: 'utf8' }).trim();
+
+test('the task\'s own Dev proposes to close its ticket as not needed', async (t) => {
+  const R = await H.relay({});
+  t.after(R.stop);
+  const repo = H.makeRepo(R.home);
+  fs.writeFileSync(path.join(repo, 'fix.txt'), 'fixed\n');
+  git(repo, 'add', 'fix.txt');
+  git(repo, 'commit', '-qm', 'the fix');
+  const onMain = git(repo, 'rev-parse', 'HEAD');
+  git(repo, 'checkout', '-q', '-b', 'side');
+  fs.writeFileSync(path.join(repo, 'side.txt'), 'side\n');
+  git(repo, 'add', 'side.txt');
+  git(repo, 'commit', '-qm', 'not on main');
+  const offMain = git(repo, 'rev-parse', 'HEAD');
+  git(repo, 'checkout', '-q', 'main');
+
+  const file = async (title) => (await R.call('POST', '/tickets', { title, repo })).body.ticket;
+  const tokenOf = (sessionId) => H.until(() => { try { return { 'X-Office-Token': H.sessionToken(sessionId) }; } catch (e) { return null; } }, 'the token');
+  const begin = async (ticket) => {
+    const task = (await R.call('POST', '/tickets/' + ticket.id + '/start', {})).body.task;
+    return { task, token: await tokenOf(task.owner.sessionId) };
+  };
+  const propose = (ticket, body, who) => R.call('POST', '/tickets/' + ticket.id + '/propose', { action: 'close', ...body }, who);
+  const ticketOf = async (ticket) => (await R.call('GET', '/tickets/' + ticket.id)).body.ticket;
+  const taskState = async (dev) => (await R.call('GET', '/tasks/' + dev.task.id)).body.task.state;
+  const working = async () => (await R.call('GET', '/tasks')).body.tasks.filter((x) => x.state === 'building' && x.worker).length;
+  const ended = (dev) => H.until(async () => !(await R.call('GET', '/terminals')).body.terminals.some((x) => x.sessionId === dev.task.owner.sessionId && x.running), 'the session ended');
+  const mine = await file('Already done'), other = await file('Someone else');
+  const dev = await begin(mine), stranger = await begin(other);
+  const reviewer = (await R.call('POST', '/terminals', { cwd: repo, role: 'reviewer', pr: 'https://github.com/o/r/pull/7', title: 'Review' })).body;
+  const reviewerToken = await tokenOf(reviewer.sessionId);
+  const unchanged = async () => {
+    const now = await ticketOf(mine);
+    assert.deepStrictEqual([now.status, now.proposal], ['started', undefined]);
+    assert.strictEqual(await taskState(dev), 'building');
+  };
+
+  await t.test('a session that is not the task\'s Dev is refused', async () => {
+    for (const who of [stranger.token, reviewerToken, undefined]) {
+      const r = await propose(mine, { commit: onMain, why: 'on main' }, who);
+      assert.ok([403, 409].includes(r.status), JSON.stringify(r.body));
+      assert.strictEqual(r.body.ok, false);
+    }
+    await unchanged();
+  });
+  await t.test('the Dev proposes nothing but the close', async () => {
+    const r = await R.call('POST', '/tickets/' + other.id + '/propose', { action: 'merge', ids: [mine.id], commit: onMain, why: 'x' }, stranger.token);
+    assert.strictEqual(r.status, 403);
+  });
+  await t.test('a commit that is not on main, or is not a commit, or no reason, or too long a reason, is refused', async () => {
+    assert.strictEqual((await propose(mine, { commit: offMain, why: 'x' }, dev.token)).body.error, 'not_on_main');
+    assert.strictEqual((await propose(mine, { commit: 'deadbeef', why: 'x' }, dev.token)).body.error, 'not_on_main');
+    assert.strictEqual((await propose(mine, { commit: 'nope', why: 'x' }, dev.token)).body.error, 'bad_commit');
+    assert.strictEqual((await propose(mine, { commit: onMain, why: '' }, dev.token)).body.error, 'bad_why');
+    const long = await propose(mine, { commit: onMain, why: 'x'.repeat(501) }, dev.token);
+    assert.deepStrictEqual([long.status, long.body.error], [400, 'bad_why']);
+    await unchanged();
+  });
+  await t.test('a task the person already moved to done is refused with bad_move', async () => {
+    assert.strictEqual((await R.call('POST', '/tasks/' + stranger.task.id + '/move', { to: 'done' })).status, 200);
+    const r = await propose(other, { commit: onMain, why: 'on main' }, stranger.token);
+    assert.deepStrictEqual([r.status, r.body.error], [409, 'bad_move']);
+  });
+  await t.test('a commit on main ends the task at once, and the ticket waits for the person', async () => {
+    const before = await working();
+    const r = await propose(mine, { commit: onMain.slice(0, 10), why: 'T-154 fixed it' }, dev.token);
+    assert.deepStrictEqual([r.status, r.body.did], [200, 'proposed'], JSON.stringify(r.body));
+    const now = await ticketOf(mine);
+    assert.strictEqual(now.status, 'started', 'the ticket is not closed yet');
+    assert.deepStrictEqual([now.proposal.action, now.proposal.commit, now.proposal.by, now.proposal.why], ['close', onMain, 'Dev', 'T-154 fixed it']);
+    assert.match(now.notes.at(-1).text, /T-154 fixed it/);
+    assert.strictEqual(await taskState(dev), 'done');
+    await H.until(async () => (await working()) === before - 1, 'the slot free');
+    await ended(dev);
+    const jams = (await R.call('GET', '/jams')).body.jams.filter((j) => j.kind === 'not-needed');
+    assert.deepStrictEqual(jams.map((j) => [j.ticket, j.by]), [[mine.id, 'the relay']]);
+    assert.match(jams[0].fix, /T-154 fixed it/);
+  });
+  await t.test('a second proposal is refused (the session has ended) and logs no second jam', async () => {
+    const again = await propose(mine, { commit: onMain, why: 'again' }, dev.token);
+    assert.strictEqual(again.status, 401, JSON.stringify(again.body));
+    assert.strictEqual((await R.call('GET', '/jams')).body.jams.filter((j) => j.kind === 'not-needed').length, 1);
+  });
+  await t.test('the person approves it: the ticket is Done as not needed', async () => {
+    const r = await R.call('POST', '/tickets/' + mine.id + '/proposal', { decision: 'approve' });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const now = await ticketOf(mine);
+    assert.deepStrictEqual([now.status, now.closedAs, now.proposal], ['done', 'not-needed', undefined]);
+    assert.deepStrictEqual([now.notNeeded.commit, now.notNeeded.why], [onMain, 'T-154 fixed it']);
+    assert.strictEqual(await taskState(dev), 'done');
+  });
+  await t.test('a decline puts the task back and the ticket stays started', async () => {
+    const third = await file('Declined'), got = await begin(third);
+    assert.strictEqual((await propose(third, { commit: onMain, why: 'on main' }, got.token)).status, 200);
+    assert.strictEqual((await ticketOf(third)).status, 'started');
+    assert.strictEqual((await R.call('POST', '/tickets/' + third.id + '/proposal', { decision: 'decline' })).status, 200);
+    const now = await ticketOf(third);
+    assert.deepStrictEqual([now.status, now.proposal], ['started', undefined]);
+    assert.strictEqual((await R.call('GET', '/tasks/' + got.task.id)).body.task.state, 'building');
+  });
+  await t.test('at PM trust Close and merge the relay approves it as the PM', async () => {
+    assert.strictEqual((await R.call('POST', '/settings', { values: { pmTrust: 4 } })).status, 200);
+    const fourth = await file('Auto'), got = await begin(fourth);
+    const r = await propose(fourth, { commit: onMain, why: 'on main' }, got.token);
+    assert.deepStrictEqual([r.status, r.body.did], [200, 'carried out'], JSON.stringify(r.body));
+    const now = await ticketOf(fourth);
+    assert.deepStrictEqual([now.status, now.closedAs], ['done', 'not-needed']);
+    assert.strictEqual((await R.call('POST', '/settings', { values: { pmTrust: 1 } })).status, 200);
+  });
+  await t.test('a task with a PR is refused: it is done when the PR merges', async () => {
+    const fifth = await file('Has a PR'), has = await begin(fifth);
+    await R.hook({ hook_event_name: 'PostToolUse', session_id: has.task.owner.sessionId.slice(0, 12), pr_url: 'https://github.com/o/r/pull/9' });
+    await H.until(async () => (await R.call('GET', '/tasks/' + has.task.id)).body.task.pr, 'the PR on the task');
+    const r = await propose(fifth, { commit: onMain, why: 'on main' }, has.token);
+    assert.deepStrictEqual([r.status, r.body.error], [409, 'has_pr']);
+    assert.strictEqual((await ticketOf(fifth)).status, 'started');
+  });
+  await t.test('the Dev brief names the command, and the command asks for a commit and a reason', async () => {
+    const sixth = await file('Brief check'), got = await begin(sixth);
+    const seen = await H.until(async () => { const text = (await R.screen(got.task.owner.terminal)).replace(/\s+/g, ' '); return /GOT\[Your task is to build/.test(text) && text; }, 'the brief typed');
+    assert.match(seen, /ticket\.js not-needed \S+ --commit <sha> --why/);
+    const env = { ...process.env, OFFICE_TICKET_URL: R.base + '/tickets', OFFICE_TICKET_TOKEN: got.token['X-Office-Token'] };
+    const run = (args) => spawnSync('node', [path.join(__dirname, '..', 'ticket.js'), ...args], { env, encoding: 'utf8' });
+    for (const args of [['not-needed', sixth.id, '--why', 'x'], ['not-needed', sixth.id, '--commit', onMain]]) {
+      const out = run(args);
+      assert.strictEqual(out.status, 1);
+      assert.match(out.stderr, /Use: ticket\.js not-needed/);
+    }
+    const ok = run(['not-needed', sixth.id, '--commit', onMain, '--why', 'on main']);
+    assert.strictEqual(ok.status, 0, ok.stderr);
+    assert.match(ok.stdout, /waits for the person/);
+  });
+});
