@@ -63,6 +63,7 @@ const state = require('../state.js');
 
 const STATUS_LABELS = { triage: 'office:triage', ready: 'office:ready', started: 'office:started' };
 const PRIORITIES = ['high', 'normal', 'low'];
+const KIND_PREFIX = 'kind:';
 const COLORS = { 'office:triage': 'fbca04', 'office:ready': '0e8a16', 'office:started': '1d76db', 'office:priority-high': 'd93f0b', 'office:priority-normal': 'c5def5', 'office:priority-low': 'ededed' };
 const MAX_TITLE = 80, MAX_BODY = 8000;
 const LABEL_EXISTS = 422;
@@ -317,9 +318,11 @@ function open(options) {
   }
   function shape(ticket, labels, extra, number) {
     const ours = Object.values(STATUS_LABELS).concat(PRIORITIES.map((p) => 'office:priority-' + p));
-    const next = labels.filter((l) => !ours.includes(l.toLowerCase()));
+    const kind = typeof ticket.kind === 'string' && ticket.kind ? ticket.kind : null;
+    const next = labels.filter((l) => !ours.includes(l.toLowerCase()) && !(kind && l.toLowerCase().startsWith(KIND_PREFIX)));
     if (STATUS_LABELS[ticket.status]) next.push(STATUS_LABELS[ticket.status]);
     next.push('office:priority-' + (PRIORITIES.includes(ticket.priority) ? ticket.priority : 'normal'));
+    if (kind) next.push(KIND_PREFIX + kind);
     const note = {};
     for (const [k, v] of Object.entries(ticket)) if (!NATIVE.includes(k)) note[k] = k === 'repo' ? nameOf(v) : v;
     if (extra.length) note.blockedBy = extra;
@@ -366,7 +369,7 @@ function open(options) {
       throw e;
     }
   }
-  const ourLabels = (patch) => patch.labels.filter((l) => l.startsWith('office:'));
+  const ourLabels = (patch) => patch.labels.filter((l) => l.startsWith('office:') || l.startsWith(KIND_PREFIX));
 
   return {
     name: 'github',

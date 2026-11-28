@@ -239,6 +239,7 @@ docker compose up -d</code></pre>
       <tr><td>Rejected</td><td>Closed as not planned.</td></tr>
       <tr><td>Priority</td><td>The label <code>office:priority-high</code>, <code>office:priority-normal</code> or <code>office:priority-low</code>.</td></tr>
       <tr><td>Blocked by</td><td>The issue's dependencies.</td></tr>
+      <tr><td>Kind</td><td>The label <code>kind:&lt;kind&gt;</code>, such as <code>kind:bug</code>, on the issue, and on the PR of its task. The store swaps it when the kind changes. A ticket with no kind has no kind label, and a kind taken off leaves the label as it was. The relay puts the label on the PR when it links the PR, makes it first if the repo has none, and never takes a label off a PR. Search for fix PRs with <code>label:kind:bug</code>. A ticket filed before this has the label from its next change, or when its task links a PR.</td></tr>
     </tbody>
   </table>
   <p>An issue is a ticket only if it has an <code>office:</code> label, in any case. On GitHub, labels are added by people with triage or write access, and also by issue templates and Actions if the repo has them. The author of an issue, and anyone with write access, can edit its text, and a ticket's text becomes a worker's brief. Use a repo where you trust everyone who can do that.</p>
