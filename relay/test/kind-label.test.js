@@ -24,11 +24,9 @@ test('a task\'s PR gets its ticket\'s kind label once the task links the PR, and
     await R.hook({ hook_event_name: 'PostToolUse', session_id: task.owner.sessionId.slice(0, 12), tool_name: 'Bash', pr_url: pr });
     return task;
   };
-  const withKind = await open({ title: 'Fix it', kind: 'bug' }, PR);
-  await until(() => edited().includes(PR + ' --add-label kind:bug'), 'the PR to get its kind label');
   const none = await open({ title: 'Plain' }, 'https://github.com/acme/widgets/pull/8');
-  await until(async () => (await R.call('GET', '/tasks/' + none.id)).body.task.pr, 'the second task to link its PR');
-  await new Promise((r) => setTimeout(r, 500));
-  assert.ok(withKind.id !== none.id);
-  assert.ok(!edited().includes('pull/8'), 'a ticket with no kind adds no label');
+  await until(async () => (await R.call('GET', '/tasks/' + none.id)).body.task.pr, 'the task with no kind to link its PR');
+  await open({ title: 'Fix it', kind: 'bug' }, PR);
+  await until(() => edited().includes(PR + ' --add-label kind:bug'), 'the PR to get its kind label');
+  assert.deepStrictEqual(edited().trim().split('\n'), [PR + ' --add-label kind:bug'], 'the earlier ticket, with no kind, added no label');
 });
