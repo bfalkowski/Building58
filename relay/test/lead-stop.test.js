@@ -242,7 +242,7 @@ test('each desk says its ticket, column and next step, and the person stops the 
   t.after(o.done);
   const posted = await o.reviewer(true), unposted = await o.reviewer(false);
   const done = await o.dev('done'), review = await o.dev('in_review'), waiting = await o.dev();
-  // Waiting on you is never safe, so dev() could not wait for it to settle in that state.
+  // dev() waits for the Dev to settle, so it is moved to Waiting on you afterwards.
   assert.strictEqual((await R.call('POST', '/tasks/' + waiting.task.id + '/move', { to: 'waiting_on_you', note: 'constitution change' })).status, 200);
   const desk = async (s) => (await o.rowOf(s)).desk;
   const key = { Authorization: 'Bearer test-key' };
@@ -256,7 +256,7 @@ test('each desk says its ticket, column and next step, and the person stops the 
     const r = await desk(review);
     assert.deepStrictEqual([r.column.label, r.next, r.stop.safe], ['In review', { text: 'Waiting on you: read what the Dev wrote, it has no PR yet', owner: 'you' }, false]);
     const w = await desk(waiting);
-    assert.deepStrictEqual([w.column.label, w.next.owner, w.stop.safe], ['Waiting on you', 'you', false]);
+    assert.deepStrictEqual([w.column.label, w.next.owner, w.stop.safe], ['Waiting on you', 'you', true]);
     assert.strictEqual(w.next.text, 'Waiting on you: constitution change');
     const p = await desk(posted);
     assert.deepStrictEqual([p.prNumber, p.review, p.next, p.stop.safe], ['#7', 'review posted', { text: 'Done, safe to stop', owner: 'you' }, true]);
@@ -277,9 +277,9 @@ test('each desk says its ticket, column and next step, and the person stops the 
   await t.test('Stop all safe stops only the safe desks, with the Lead\'s switch off', async () => {
     const all = await press({ all: true });
     assert.strictEqual(all.status, 200, JSON.stringify(all.body));
-    assert.deepStrictEqual(all.body.stopped.map((x) => x.terminal), [done.id]);
-    await until(async () => !(await o.running(done)), 'the Done Dev to stop');
-    for (const s of [unposted, review, waiting, o.lead]) assert.ok(await o.running(s), 'still running');
+    assert.deepStrictEqual(all.body.stopped.map((x) => x.terminal).sort(), [done.id, waiting.id].sort());
+    await until(async () => !(await o.running(done)) && !(await o.running(waiting)), 'the Done Dev and the Dev waiting on you to stop');
+    for (const s of [unposted, review, o.lead]) assert.ok(await o.running(s), 'still running');
     const history = (await R.call('GET', '/tasks')).body.tasks.find((x) => x.id === done.task.id).history;
     assert.ok(history.some((h) => h.type === 'note' && /^You stopped its worker from the Floor: its task is Done/.test(h.note)), 'its history says who stopped it');
   });

@@ -58,7 +58,7 @@ function leadVerdict(channel, t, task, now) {
   const v = stopVerdict(t, task, now, terminal.questionOnScreen(t));
   if (!v.safe) return { safe: false, canStop: false, reason: v.reason };
   const kind = leadMayStop(t, task, merged(channel, task && task.pr));
-  const unsaved = kind.may && t.task ? unsavedWork(task.worktree || t.cwd) : null;
+  const unsaved = kind.may && !kind.keeps && t.task ? unsavedWork(task.worktree || t.cwd) : null;
   if (!kind.may || unsaved) return { safe: true, canStop: false, reason: 'not one the Lead may stop: ' + (unsaved || kind.reason) };
   return { safe: true, canStop: true, reason: kind.why + v.reason };
 }
