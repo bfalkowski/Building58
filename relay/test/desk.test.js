@@ -178,7 +178,6 @@ test('a Dev\'s status icon says where its PR stands, with a label to read it by 
     assert.deepStrictEqual(label({ pipeline: { state: 'red', head: HEAD } }), ['ci_failed', 'CI failed']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, review: { count: 0, held: false } }), ['review_waits', 'waiting for a review']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, reviewing: true }), ['reviewing', 'being reviewed']);
-    assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, reviewing: true }), ['reviewing', 'being reviewed']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD } }, { state: 'changes_requested' }), ['fix', 'fix requested']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, autopilot: { verdict: 'fix', verdictAt: HEAD } }), ['fix', 'fix requested']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, autopilot: { verdict: 'merge', verdictAt: HEAD } }), ['merge', 'review says merge']);
