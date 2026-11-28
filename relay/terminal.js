@@ -22,6 +22,7 @@ const state = require('./state.js');
 const hook = require('./office-hook.js');
 const { heldCommit } = require('./on-main.js');
 const leadTired = require('./lead-tired.js');
+const { replayOf } = require('./replay.js');
 const STATUS_LINE = { type: 'command', command: 'node ' + JSON.stringify(path.join(__dirname, 'status-line.js')), padding: 0 };
 const link = require('./host-link.js');
 
@@ -859,7 +860,7 @@ async function handle(req, res, channel, rest, ctx) {
     res.write('retry: 2000\n\n');
     sse(res, 'hello', info(t));
     flushOut(t);
-    if (t.out.length) sse(res, 'out', Buffer.concat(t.out).toString('base64'));
+    if (t.out.length) sse(res, 'out', replayOf(Buffer.concat(t.out)).toString('base64'));
     if (t.exited) sse(res, 'exit', { code: t.exitCode, stopped: !!t.stopped });
     t.viewers.add(res);
     const ping = setInterval(() => res.write(': ping\n\n'), 15000);

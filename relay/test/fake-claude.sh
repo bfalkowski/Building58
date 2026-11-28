@@ -107,6 +107,7 @@ while IFS= read -r line; do
   fi
   if [ "$line" = "/nojob" ] && [ -n "$job" ]; then pkill -P "$job" 2>/dev/null; kill "$job" 2>/dev/null; job=''; fi
   # /slept prints what a real one says when the computer slept in its turn.
+  if [ "$line" = "/spew" ]; then awk 'BEGIN { for (i = 0; i < 3000; i++) printf "spew %d %0100d\r\n", i, 0; print "SPEW-END" }'; fi
   if [ "$line" = "/slept" ]; then echo "Your computer went to sleep mid-response"; printf '\xe2\x9d\xaf \n'; fi
   if [ "$line" = "/helper" ]; then sleep 60 & fi
   # /env prints its environment, so a test can see what a session was given.
