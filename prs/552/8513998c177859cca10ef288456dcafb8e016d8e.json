@@ -1,0 +1,240 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 552,
+  "base": "874de4999f4a1bee456d88e0bcbd7838bf3abd9c",
+  "head": "8513998c177859cca10ef288456dcafb8e016d8e",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "needs-you",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code",
+        "needs-you"
+      ],
+      "status": "failed",
+      "details": {
+        "base": {
+          "passed": 1785,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1794,
+          "failed": 1,
+          "skipped": 3,
+          "flaky": 1
+        },
+        "failed_on_head": [
+          "relay/test/handover-clears-relay.test.js > test > a PR handed over for red CI comes back when CI is green on a newer head"
+        ]
+      },
+      "author": "builder",
+      "duration_ms": 1647511
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 1055
+    },
+    {
+      "type": "failing-before",
+      "params": {},
+      "kinds": [
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "test_files": [
+          "relay/test/fake-gh.js",
+          "relay/test/flake-rerun.test.js"
+        ],
+        "tests": [
+          {
+            "name": "relay/test/comment-paths.test.js > test > each repo file a code comment names exists",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > a PR red only on a known flake is rerun once, noted, logged, and a second red goes to Needs you > a PR that changes the flaky test's file is not rerun: the failure is its own",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > a PR red only on a known flake is rerun once, noted, logged, and a second red goes to Needs you > a log with no test file name is not rerun, and a refused rerun is tried once",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > a PR red only on a known flake is rerun once, noted, logged, and a second red goes to Needs you > a new head gets its own single rerun",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > a PR red only on a known flake is rerun once, noted, logged, and a second red goes to Needs you > a second red on the same head is not rerun, and goes to Needs you",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > a PR red only on a known flake is rerun once, noted, logged, and a second red goes to Needs you > red on a test no flaky ticket names is not rerun",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > a PR red only on a known flake is rerun once, noted, logged, and a second red goes to Needs you > red only on the known flake is rerun once, noted on the flaky ticket, and logged as a jam",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > a PR red only on a known flake is rerun once, noted, logged, and a second red goes to Needs you > with Let the Lead unstick the board on, a second red opens the shared failure channel",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > test > Autopilot and the Floor say what holds the review",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > test > heldBy says which checks hold the review",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > test > knownBy needs an open ticket that names the failing test, as a flaky one or in its title",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/flake-rerun.test.js > test > testsOf reads the failing tests and files of a job log, spec and TAP",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/flake-rerun.test.js"
+            ]
+          }
+        ],
+        "passed_on_base": [],
+        "did_not_load_on_base": [
+          "relay/test/flake-rerun.test.js"
+        ]
+      },
+      "author": "builder",
+      "duration_ms": 1086081
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 52
+    }
+  ],
+  "verdict": "needs_person",
+  "gaps": [
+    {
+      "type": "tests-before-after",
+      "status": "failed",
+      "how_to_fix": "1 test fails on the head, also when run again: relay/test/handover-clears-relay.test.js > test > a PR handed over for red CI comes back when CI is green on a newer head. Fix the change so that it passes, and run exhibit check again."
+    }
+  ],
+  "checks_by_author": {
+    "builder": 4,
+    "hidden": 0
+  },
+  "flaky_tests": [
+    "relay/test/handover-clears-relay.test.js > test > a PR handed over for red CI comes back when CI is green on a newer head",
+    "relay/test/pm-trust.test.js > test > the scheduled sort runs at its interval, writes its summary brief, and never while a start is in progress"
+  ],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-28T13:51:10.118Z"
+}
