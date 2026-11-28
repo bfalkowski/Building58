@@ -53,6 +53,18 @@
       });
       li.append(stop);
     }
+    if (Number.isInteger(link.endJob) && link.terminal) {
+      const end = document.createElement('button');
+      end.type = 'button'; end.className = 'needs-stop'; end.textContent = 'End it';
+      end.title = 'End this one stuck command. The session runs on.';
+      end.addEventListener('click', () => {
+        end.disabled = true; end.textContent = 'Ending';
+        fetch(base + '/floor/end-job', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ who: link.terminal, pid: link.endJob }) })
+          .then((r) => r.json()).catch(() => null)
+          .then((r) => { end.textContent = r && r.ok ? 'Ended' : 'Not ended'; end.title = (r && r.message) || end.title; drawn = ''; read().then(draw); });
+      });
+      li.append(end);
+    }
     if (typeof link.fix === 'string' && link.fix) {
       const fix = document.createElement('button');
       fix.type = 'button'; fix.className = 'needs-stop'; fix.textContent = 'Fix it';
@@ -64,6 +76,18 @@
           .then((r) => { fix.textContent = r && r.ok ? 'Sent to its Dev' : 'Not sent'; fix.title = (r && r.message) || fix.title; drawn = ''; read().then(draw); });
       });
       li.append(fix);
+    }
+    if (link.review && typeof link.review.from === 'string' && PR.test(link.review.pr) && window.OfficeReviews) {
+      const get = document.createElement('button');
+      get.type = 'button'; get.className = 'needs-stop'; get.textContent = 'Get a review';
+      get.title = 'Start a review of this PR now. It is your own, and the automatic count does not include it.';
+      get.addEventListener('click', () => {
+        get.disabled = true; get.textContent = 'Starting';
+        fetch(base + '/checkouts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: link.review.from, pr: link.review.pr, prompt: window.OfficeReviews.prBrief(link.review.pr), cols: 120, rows: 32 }) })
+          .then((r) => r.json()).catch(() => null)
+          .then((r) => { get.textContent = r && r.ok ? 'Started' : 'Not started'; get.title = (r && r.message) || get.title; drawn = ''; read().then(draw); });
+      });
+      li.append(get);
     }
     if (typeof link.done === 'string' && link.done) {
       const done = document.createElement('button');

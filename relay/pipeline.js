@@ -26,12 +26,15 @@ function stateOf(rollup) {
   if (!checks.length) return 'none';
   const result = (c) => String(c.conclusion || c.state || '').toUpperCase();
   if (checks.some((c) => result(c) && !OK.includes(result(c)) && !NOT_DONE.includes(result(c)))) return 'red';
-  if (checks.some((c) => (c.status && String(c.status).toUpperCase() !== 'COMPLETED') || !OK.includes(result(c)))) return 'pending';
+  if (checks.some((c) => (c.status && String(c.status).toUpperCase() !== 'COMPLETED' && !c.conclusion) || !OK.includes(result(c)))) return 'pending';
   return 'green';
 }
 
 const BAD = ['FAILURE', 'ERROR', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
 const AGGREGATE = 'pipeline';
+function failingOf(rollup) {
+  return (Array.isArray(rollup) ? rollup : []).some((c) => BAD.includes(String(c.conclusion || c.state || '').toUpperCase()));
+}
 function failedOf(rollup) {
   const out = [];
   for (const c of Array.isArray(rollup) ? rollup : []) {
@@ -65,7 +68,7 @@ async function view(pr, cwd, fresh) {
   try {
     const p = await gh.pr(pr, cwd, { fresh });
     const prState = String(p.state || 'OPEN').toUpperCase();
-    return { state: stateOf(p.statusCheckRollup), failed: failedOf(p.statusCheckRollup), conflict: p.mergeStateStatus === 'DIRTY' || p.mergeable === 'CONFLICTING', head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' };
+    return { state: stateOf(p.statusCheckRollup), failed: failedOf(p.statusCheckRollup), failing: failingOf(p.statusCheckRollup), conflict: p.mergeStateStatus === 'DIRTY' || p.mergeable === 'CONFLICTING', head: String(p.headRefOid || ''), prState, open: prState === 'OPEN' };
   } catch (e) {
     return { state: 'unknown', error: e instanceof SyntaxError ? 'gh sent something unreadable' : e.message.slice(0, 160) };
   }
@@ -103,4 +106,4 @@ function begin() {
   config.every('pipelinePollSeconds', poll, 1000);
 }
 
-module.exports = { stateOf, failedOf, gate, watch, of, soon, summary, on, begin, poll };
+module.exports = { failingOf, stateOf, failedOf, gate, watch, of, soon, summary, on, begin, poll };

@@ -88,3 +88,23 @@ test('Autopilot, PR comments, the PR watch and chat ask the pass, not their own 
     assert.ok(!/\[\s*'pr',\s*'view'/.test(text), file + ' has no gh pr view of its own');
   }
 });
+
+test('a PR read while its checks ran is read again when they finish, though its updatedAt did not change', async () => {
+  const running = node(11);
+  running.commits.nodes[0].commit.statusCheckRollup.contexts.nodes = [{ __typename: 'CheckRun', name: 'pipeline', status: 'IN_PROGRESS', conclusion: null }];
+  say([running]);
+  await pass.once(new Map([['o/r', undefined]]));
+  assert.strictEqual((await door.pr(link(11))).statusCheckRollup[0].status, 'IN_PROGRESS');
+  say([node(11)]);
+  await pass.once(new Map([['o/r', undefined]]));
+  assert.strictEqual((await door.pr(link(11))).statusCheckRollup[0].conclusion, 'SUCCESS', 'the finished check is served, not the copy from before');
+});
+
+test('a PR whose merge state changes is read again, though its updatedAt and head did not change (T-533)', async () => {
+  say([node(12)]);
+  await pass.once(new Map([['o/r', undefined]]));
+  assert.strictEqual((await door.pr(link(12))).mergeStateStatus, 'CLEAN');
+  say([Object.assign(node(12), { mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' })]);
+  await pass.once(new Map([['o/r', undefined]]));
+  assert.strictEqual((await door.pr(link(12))).mergeStateStatus, 'DIRTY', 'a conflict that came when main moved is served');
+});

@@ -28,7 +28,7 @@ const prWatch = require('./pr-watch.js');
 const huddles = require('./huddles.js');
 const pipeline = require('./pipeline.js');
 const chat = require('./chat.js');
-const { livenessOf } = require('./liveness.js');
+const { livenessOf, stuckJobsOf } = require('./liveness.js');
 const delivery = require('./delivery.js');
 const { owesContinue } = require('./sessions.js');
 const { listOf } = require('./needs-you-plan.js');
@@ -61,7 +61,7 @@ function noteOf(task) {
 
 function handedOf(channel, task) {
   const desk = autopilot.deskOf(channel, task), r = desk.reviewedSince, head = r && (pipeline.of(task.pr) || {}).head;
-  return { handedOver: desk.handedOver, devSaysBug: !!desk.devSaysBug, pushRefused: desk.pushRefused, reviewedSince: r ? { ...r, current: !head || head === r.commit } : null };
+  return { handedOver: desk.handedOver, devSaysBug: !!desk.devSaysBug, outOfReviews: !!desk.outOfReviews, pushRefused: desk.pushRefused, reviewedSince: r ? { ...r, current: !head || head === r.commit } : null };
 }
 
 function stateOf(channel, now, lastReport) {
@@ -69,18 +69,19 @@ function stateOf(channel, now, lastReport) {
   const taskOf = (t) => (t.task && list.find((x) => x.id === t.task)) || list.find((x) => x.owner && x.owner.terminal === t.id) || null;
   const seats = all.map((t) => {
     const task = taskOf(t), lv = livenessOf(t, now);
-    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : terminal.questionOnScreen(t), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, spoke: !!t.spoke, continuing: owesContinue(channel, t), fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
+    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : terminal.questionOnScreen(t), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, stuckJobs: lv.state === 'gone' ? [] : stuckJobsOf(t).map((j) => ({ pid: j.pid, command: j.command, minutes: Math.floor((now - j.since) / 60000) })), spoke: !!t.spoke, continuing: owesContinue(channel, t), fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
   });
   const report = lastReport || huddles.reportOf(channel);
   const reviewing = (pr) => all.some((x) => !x.exited && x.reviewOf === pr && !x.posted);
   const out = list.map((task) => ({
-    id: task.id, ticket: task.ticket || null, title: task.title || null, state: task.state, pr: task.pr || null,
+    id: task.id, repo: task.repo || null, ticket: task.ticket || null, title: task.title || null, state: task.state, pr: task.pr || null,
     prOpen: task.pr ? !closed(channel, task.pr) : null,
     prMerged: !!task.pr && tasks.prMerged(channel, task),
     prClosed: !!task.pr && !tasks.prMerged(channel, task) && (chat.prClosed(channel, task.pr) || (pipeline.of(task.pr) || {}).prState === 'CLOSED'),
     owner: task.owner && terminal.find(channel, task.owner.terminal) ? task.owner.terminal : null,
     note: noteOf(task), reviewRuns: !!task.pr && reviewing(task.pr), pipelineWaits: !!(tasks.pipelineOf(task) || {}).waits,
     ...handedOf(channel, task),
+    bringBackWhy: autopilot.bringBackLate(task),
     reviewOwed: !!task.pr && !!(reviews.deskOf(channel, task.pr) || {}).followUp,
     reviewFailed: task.pr ? reviews.failedOf(channel, task.pr) : null,
     onlyYouMerge: task.pr ? onlyYouMerge(channel, task.pr, report) : null,

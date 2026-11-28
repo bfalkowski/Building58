@@ -48,10 +48,10 @@ function nextMove(s) {
   return at(s.leadMerges ? 'Lead' : 'you', 'ready', 'tell-lead', 'Reviewed at its head ' + short(head) + ' with no blocking findings, green, and it merges cleanly.');
 }
 
-const WAITS_ON_OTHERS = ['Dev', 'reviewer', 'CI', 'Lead'];
+const WAITS_ON_OTHERS = ['Dev', 'reviewer', 'CI', 'Lead', 'Autopilot'];
 function lateness(move, since, now, late) {
   if (!WAITS_ON_OTHERS.includes(move.owner) || now - since < late) return null;
-  return { owner: 'you', why: (move.owner === 'CI' ? 'CI has' : 'the ' + move.owner + ' has') + ' owed the next move for ' + Math.round((now - since) / 60000) + ' min. ' + move.why };
+  return { owner: 'you', why: (['CI', 'Autopilot'].includes(move.owner) ? move.owner + ' has' : 'the ' + move.owner + ' has') + ' owed the next move for ' + Math.round((now - since) / 60000) + ' min. ' + move.why };
 }
 
 function lineOf(rec, now) {

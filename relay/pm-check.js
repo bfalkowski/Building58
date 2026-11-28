@@ -1,6 +1,8 @@
 // The PM's check of a ticket before Autopilot starts it (docs/manual/roles.html#pm-trust). Autopilot asks
 // consult() on each look at the ticket it would start next. The first ask saves the check brief for the
-// newest running PM through relay/delivery.js, so it is typed only when the PM is idle. Each later ask says
+// newest running PM through relay/delivery.js, so it is typed only when the PM is idle. Before that, it reads the
+// advice the PM already saved on the ticket. An answer is kept until it is used or the ticket is edited or moved,
+// whichever ticket Autopilot looks at, and a ticket with an answer is never checked again. Each later ask says
 // to wait, until the PM answers with ticket.js advise (relay/tickets.js calls answered), or until
 // pmCheckMinutes pass, or the PM goes. The check never blocks the room: with no PM, no answer in time, or
 // PM trust at Off, the answer is go, and the line in `said` tells why.
@@ -9,13 +11,16 @@ const config = require('./config.js');
 const terminal = require('./terminal.js');
 const delivery = require('./delivery.js');
 const trust = require('./pm-trust.js');
+const history = require('./ticket-history.js');
 const { checkBrief } = require('./pm-check-brief.js');
 const CLI = require('path').join(__dirname, 'ticket.js');
 
 const MAX_CHAIN = 3;
+const HOLDING = ['not-needed', 'duplicate', 'part-of'];
 const asked = new Map();
 const chains = new Map();
 const preferred = new Map();
+const redirected = new Map();
 const held = new Map();
 const keyOf = (channel, id) => channel + '/' + id;
 const deliveryKey = (id) => 'pm-check ' + id;
@@ -39,8 +44,16 @@ function consult(channel, ticket, all) {
     return GO();
   }
   const id = ticket.id, key = keyOf(channel, id);
-  for (const other of [...asked.keys()]) if (other.startsWith(channel + '/') && other !== key) give(channel, other.slice(channel.length + 1));
+  for (const [other, q] of [...asked]) if (other.startsWith(channel + '/') && other !== key && !q.answer) give(channel, other.slice(channel.length + 1));
   let p = asked.get(key);
+  if (p && p.answer && history.changedSince(channel, ticket, p.answeredAt)) { give(channel, id); p = undefined; }
+  if (!p || !p.answer) {
+    const saved = history.advice(channel, ticket);
+    if (saved && !(saved.answer === 'first' && saved.at <= (redirected.get(key) || '')) && !saved.proposed && !(rung >= trust.HOLD && saved.rung >= trust.HOLD && HOLDING.includes(saved.answer))) {
+      give(channel, id);
+      return decide(channel, id, saved, rung, all);
+    }
+  }
   const pm = seat(channel);
   if (p && p.answer) {
     give(channel, id);
@@ -64,6 +77,7 @@ function consult(channel, ticket, all) {
 }
 
 function decide(channel, id, answer, rung, all) {
+  if (answer.answer === 'first') redirected.set(keyOf(channel, id), new Date().toISOString());
   const chain = chains.get(channel) || [];
   if (answer.answer === 'first' && rung >= trust.HOLD) {
     const other = all.find((t) => t.id === answer.of);
@@ -82,7 +96,13 @@ function decide(channel, id, answer, rung, all) {
 const WORDS = { 'not-needed': 'not needed', duplicate: 'a duplicate', 'part-of': 'part of another ticket' };
 function answered(channel, id, answer, did) {
   const p = asked.get(keyOf(channel, id));
-  if (did === 'advised') { if (p) p.answer = answer; return; }
+  if (did === 'advised') {
+    const kept = p || { askedAt: Date.now(), answer: null };
+    kept.answer = answer;
+    kept.answeredAt = new Date().toISOString();
+    asked.set(keyOf(channel, id), kept);
+    return;
+  }
   if (p) give(channel, id);
   chains.delete(channel);
   const said = 'The PM says ' + id + ' is ' + WORDS[answer.answer] + (answer.of ? ' (' + answer.of + ')' : '') + ': ' + answer.why + ' ' + (did === 'proposed' ? 'It does not start. A proposal waits for the person.' : 'The relay carried it out.');
@@ -91,7 +111,7 @@ function answered(channel, id, answer, did) {
 const takeHeld = (channel) => { const said = held.get(channel) || []; held.delete(channel); return said; };
 const prefer = (channel) => preferred.get(channel) || null;
 const clearPrefer = (channel) => { preferred.delete(channel); };
-const waiting = (channel) => [...asked].some(([k, p]) => k.startsWith(channel + '/') && Date.now() - p.askedAt < limitMs());
-const forget = () => { asked.clear(); chains.clear(); preferred.clear(); held.clear(); };
+const waiting = (channel) => [...asked].some(([k, p]) => k.startsWith(channel + '/') && !p.answer && Date.now() - p.askedAt < limitMs());
+const forget = () => { asked.clear(); chains.clear(); preferred.clear(); held.clear(); redirected.clear(); };
 
 module.exports = { consult, answered, takeHeld, prefer, clearPrefer, waiting, seat, forget };

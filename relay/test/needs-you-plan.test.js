@@ -197,7 +197,7 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone']);
 });
 
 // T-374: reviews waited for a desk, and every desk was held by a session the relay may not stop.
@@ -273,4 +273,11 @@ test('a push the push hold refused: look at the PR, with a Fix it that lifts the
   assert.match(item.line, /^Look at PR #12 \(T-5\): the push hold refused its Dev's push\. commit 1234567 changes a\.txt, which the merge did not change\. Press Fix it to lift the hold/);
   assert.deepStrictEqual(listOf({ seats: [], tasks: [Object.assign({}, refused, { prOpen: false })] }).filter((i) => i.kind === 'push-refused'), [], 'a closed PR has no push to fix');
   assert.deepStrictEqual(listOf({ seats: [], tasks: [Object.assign({}, refused, { pushRefused: null, handedOver: null, state: 'in_review' })] }), []);
+});
+
+test('a PR handed over because no review can start offers Get a review', () => {
+  const why = 'The last review asks for fixes, but out of automatic reviews: start one with Get a review, or merge or close it.';
+  const [item] = listOf({ seats: [], tasks: [task({ state: 'waiting_on_you', pr: PR, prOpen: true, repo: '/work/repo', handedOver: why, outOfReviews: true })] });
+  assert.strictEqual(item.kind, 'handed-over');
+  assert.deepStrictEqual(item.link, { url: PR, review: { pr: PR, from: '/work/repo' } });
 });

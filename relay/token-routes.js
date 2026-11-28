@@ -9,10 +9,11 @@ function tokenReaches(agent, method, rest, seat) {
   const proposer = agent.role === 'coo' || agent.role === 'security';
   const plays = method === 'POST' && rest === '/play';
   return !!((plays || (seat ? method === 'POST' && (rest === '/commands' || rest === '/terminals/context') : ((rest === '/tickets' && !(proposer && method !== 'GET')) || (!proposer && /^\/chat(\/[\w-]{1,64})?$/.test(rest)) || (agent.lead && method === 'GET' && rest === '/floor') || (method === 'GET' && rest === '/rules') ||
-    (agent.board && ((method === 'GET' && rest === '/tasks') || (method === 'POST' && (rest === '/floor/stop' || /^\/(tasks|tickets)\/[^/]+\/move$/.test(rest))))) ||
+    (agent.board && ((method === 'GET' && rest === '/tasks') || (method === 'POST' && (rest === '/floor/stop' || rest === '/floor/end-job' || /^\/(tasks|tickets)\/[^/]+\/move$/.test(rest))))) ||
     (agent.lead && agent.starts > 0 && method === 'POST' && /^\/tickets\/[^/]+\/start$/.test(rest)) ||
     (agent.lead && method === 'POST' && rest === '/ready') ||
     (agent.lead && method === 'POST' && /^\/(jams|stuck|rerun|failures)$/.test(rest)) ||
+    (agent.lead && method === 'POST' && /^\/lead\/(tell|bring-back|hand-back|stop-command)$/.test(rest)) ||
     (agent.lead && method === 'POST' && /^\/failures\/[\w-]{1,64}\/tickets$/.test(rest)) ||
     (method === 'GET' && rest === '/failures') ||
     (agent.role === 'coo' && ((method === 'GET' && rest === '/officers/coo/measures') || (method === 'POST' && rest === '/officers/coo/report'))) ||

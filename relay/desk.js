@@ -5,7 +5,7 @@
 // it on its own. See docs/manual/how-it-works.html#desks.
 'use strict';
 const { COLUMNS, columnOf } = require('../office/board-model.js');
-const { livenessOf, jobWords } = require('./liveness.js');
+const { livenessOf, jobWords, stuckJobsOf, stuckJobWords } = require('./liveness.js');
 
 const minutes = (ms) => Math.max(0, Math.floor(ms / 60000));
 const numberOf = (pr) => (pr ? '#' + String(pr).split('/').pop() : null);
@@ -33,6 +33,8 @@ function doingOf(t, now, lv) {
   if (lv.state === 'quiet') return { state: 'quiet', words: 'quiet: no hook for ' + minutes(now - lv.since) + ' min, output still moving' };
   if (lv.state === 'stuck' && lv.cause === 'silent') return { state: 'stuck', words: 'stuck: no hook or output for ' + minutes(now - lv.since) + ' min' };
   if (lv.state === 'stuck') return { state: 'stuck', words: 'stuck: told ' + minutes(now - lv.since) + ' min ago, did not start' };
+  const stuckJob = stuckJobsOf(t)[0];
+  if (stuckJob) return { state: 'stuck', words: stuckJobWords(stuckJob, now) };
   return { state: 'idle', words: t.hooked && t.lastActAt ? 'idle ' + minutes(now - t.lastActAt) + ' min' : 'idle' };
 }
 

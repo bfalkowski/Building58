@@ -55,6 +55,8 @@
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
 //   stuck        the relay told a session something, and no turn began after it
+//   stuck-job    a job of a session with no CPU and no new output for 30 minutes (relay/jobs.js): the line has an
+//                End it button, which ends that one process and not the session (relay/stuck-jobs.js)
 //   undelivered  a saved message for a running session has waited long, unless that session has another item
 //   prompt       an idle Dev on a task in Building or Changes requested with no PR, unless it has just started or
 //                the relay still has a continue prompt for it
@@ -66,7 +68,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -76,7 +78,7 @@ const nameOf = (t) => oneLine(t.ticket, 20) || 'task ' + oneLine(t.id, 20);
 
 function seatItem(s, t) {
   const who = oneLine(s.who, 40) || 'a session';
-  const item = (kind, line) => ({ kind, who, terminal: s.terminal, task: t ? t.id : null, ticket: t ? t.ticket || null : null, pr: t ? t.pr || null : null, line, link: { terminal: s.terminal } });
+  const item = (kind, line, more) => ({ kind, who, terminal: s.terminal, task: t ? t.id : null, ticket: t ? t.ticket || null : null, pr: t ? t.pr || null : null, line, link: Object.assign({ terminal: s.terminal }, more) });
   if (s.live === 'gone') return null;
   const message = oneLine(s.message, 200);
   if (s.live === 'waiting' && PERMISSION.test(message)) return item('permission', 'Approve or deny the request from ' + who + ': ' + message);
@@ -84,6 +86,8 @@ function seatItem(s, t) {
   if (s.screen === 'trust') return item('question', 'Answer the question on the screen of ' + who + ': does it trust this folder?');
   if (s.screen === 'menu') return item('question', 'Answer the question on the screen of ' + who + '.');
   if (s.live === 'stuck' && s.cause === 'told') return item('stuck', 'Open the session of ' + who + ': the relay told it something and it did not start' + (s.stuckWhy ? ', ' + oneLine(s.stuckWhy, 160) : '') + '.');
+  const job = (s.stuckJobs || [])[0];
+  if (job) return item('stuck-job', 'End the stuck job of ' + who + ': ' + oneLine(job.command, 120) + ', quiet for ' + Math.max(0, Math.floor(Number(job.minutes) || 0)) + ' min, with no CPU and no new output. Press End it. The session runs on.', { endJob: job.pid });
   if (s.role === 'Dev' && s.live === 'idle' && !s.fresh && !s.continuing && t && BUILDING.includes(t.state) && !t.pr) return item('prompt', 'Prompt ' + who + ': ' + (s.spoke === false ? 'it has not started on ' + nameOf(t) + '.' : 'it stopped on ' + nameOf(t) + ' with no PR.'));
   return null;
 }
@@ -106,6 +110,7 @@ function taskItem(t, dev) {
   if (pr && t.prClosed) return item('closed', 'PR ' + numberOf(pr) + onPr + ' was closed on GitHub without a merge. Look at it. This line stays until the PR is reopened, its task gets a new PR, or its task is Done.', { url: pr });
   if (pr && t.prOpen !== false && t.pushRefused && !(t.handedOver && t.devSaysBug)) return item('push-refused', 'Look at PR ' + numberOf(pr) + onPr + ': the push hold refused its Dev\'s push. ' + oneLine(t.pushRefused.why, 300) + ' Press Fix it to lift the hold, so its Dev can push and a follow-up review checks it.', { url: pr, fix: t.id });
   if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
+  if (t.handedOver && pr && t.outOfReviews) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.repo ? { url: pr, review: { pr, from: t.repo } } : { url: pr });
   if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns && /came back empty/.test(t.reviewFailed)) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': the review came back empty, twice, with no verdict or no words on what was checked.', dev ? { terminal: dev.terminal } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
@@ -115,6 +120,7 @@ function taskItem(t, dev) {
     return item('waiting', 'Look at ' + nameOf(t) + ': its task is in Waiting on you.' + (note ? ' ' + note : ''), pr ? { url: pr } : dev ? { terminal: dev.terminal } : { ticket: t.ticket || t.id });
   }
   if (pr && t.prOpen !== false && t.onlyYouMerge) return item('merge', 'Merge PR ' + numberOf(pr) + onPr + ' yourself: ' + oneLine(t.onlyYouMerge, 300), { url: pr });
+  if (t.bringBackWhy && !dev && BUILDING.includes(t.state)) return item('waiting', 'Free a desk or a slot for ' + nameOf(t) + ': Autopilot waits to bring back its Dev to fix PR ' + numberOf(pr) + '. ' + oneLine(t.bringBackWhy, 300), { ticket: t.ticket || t.id });
   if (!dev && BUILDING.includes(t.state) && !pr) return item('gone', 'Bring back the worker on ' + nameOf(t) + ', or move its card: its session ended with no PR.', { ticket: t.ticket || t.id });
   return null;
 }
