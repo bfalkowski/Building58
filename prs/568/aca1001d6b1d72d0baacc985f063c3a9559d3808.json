@@ -1,0 +1,82 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 568,
+  "base": "f96d682d6c3862e61be68a0026215b809ef1e0ef",
+  "head": "aca1001d6b1d72d0baacc985f063c3a9559d3808",
+  "classification": {
+    "kinds": [
+      "code"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1772,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1771,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 1
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 1675327
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    }
+  ],
+  "verdict": "meets_policy",
+  "gaps": [],
+  "checks_by_author": {
+    "builder": 1,
+    "hidden": 0
+  },
+  "flaky_tests": [
+    "relay/test/autopilot-fix-back.test.js > test > a task owed a fix keeps its slot: no new ticket starts first, and the Dev comes back on the freed desk"
+  ],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-28T14:37:50.007Z"
+}
