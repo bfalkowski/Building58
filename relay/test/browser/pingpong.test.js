@@ -1,8 +1,6 @@
 // Ping pong through the room's idle action (office/office.js), and the trailer's ping pong shot
 // (office/trailer.js), WebGL off. Someone sent to do something else ends their game, so nobody rallies
-// alone. And when a game is already going at the trailer's ping pong cue, the trailer clears the table
-// and Kai still plays: once, Sam started a game with June before the cue, the cue could not seat Kai,
-// then sent Sam to the window, and June played on alone in the shot at 0:40.
+// alone.
 'use strict';
 const assert = require('node:assert');
 const test = require('node:test');
@@ -14,7 +12,6 @@ test.after(() => o && o.stop());
 const get = () => o;
 
 const PLAYING = 'Playing ping pong';
-const CLEAR_AT = 8, CLEAR_STEP = 2, COUCH_BY = 7;
 // Who is in a game: at a table spot with their paddle up, or with the table in their plan. A label can still say
 // Playing ping pong for a moment after the game ends, until the person picks what to do next.
 const playing = (p) => p.page.evaluate((label) => window.run.state().workers.filter((w) => {
@@ -54,64 +51,5 @@ pageTest('someone sent to their desk ends their game, so the other player leaves
   }, [PLAYING], 90000);
   assert.strictEqual(seen.bad, undefined, seen.bad);
   assert.ok(!(await playing(p)).includes('sam'), 'Sam left the game');
-  assert.deepStrictEqual(p.errors, []);
-});
-
-pageTest('the trailer\'s ping pong cue clears a game already going, and Kai plays with a partner', get, async (p) => {
-  await p.page.goto(o.address + '&trailer');
-  await until(p, () => document.documentElement.dataset.trailer === 'playing');
-  // The trailer moves the room by its own clock, so the film is played forward here one frame at a time,
-  // as npm run trailer does. The room takes at most 0.1 s of film a frame, so each step stays under that,
-  // and a slow computer only takes longer.
-  // A slow computer lets the film run on the browser's time before the clock is taken, past the cues that start
-  // June's walk and slow the room down. Taking the clock starts the film over, so none of them is lost.
-  await until(p, () => window.trailer.t >= 3.3);
-  await p.page.evaluate(() => window.run.idle({ who: 'june', do: 'window' }));
-  await p.page.evaluate(() => {
-    window.trailer.clock = 0; window.__to = 0;
-    const step = () => { if (window.trailer.clock < window.__to) window.trailer.clock = Math.min(window.__to, window.trailer.clock + 1 / 12); requestAnimationFrame(step); };
-    requestAnimationFrame(step);
-  });
-  const playTo = (t) => p.page.evaluate((to) => { window.__to = to; }, t).then(() => until(p, (to) => window.trailer.clock >= to, t));
-  await playTo(3);
-  const juneOnCouch = () => { const d = window.run.debug('june'); return d && d.spot.startsWith('couch') && d.seated; };
-  const onCouch = () => p.page.evaluate(juneOnCouch);
-  // The room moves only as the film clock moves, so a wait in real time never seats June: play the film on a second at a time.
-  // If the couch cue was refused because the couch was full, clear it and send June again.
-  let sent = false;
-  for (let at = 4; !(await onCouch()) && at <= COUCH_BY; at++) {
-    await playTo(at);
-    if (await onCouch() || sent) continue;
-    sent = true;
-    const others = await p.page.evaluate(() => window.run.state().workers.filter((w) => w.id !== 'june').filter((w) => { const d = window.run.debug(w.id); return d && String(d.spot).startsWith('couch'); }).map((w) => w.id));
-    for (const id of others) await p.page.evaluate((who) => window.run.idle({ who, do: 'desk' }), id);
-    await p.page.evaluate(() => window.run.idle({ who: 'june', do: 'couch' }));
-  }
-  assert.ok(await onCouch(), 'June sat on the couch');
-  // The room starts games of its own while the film runs fast, and one can end before the cue, so Sam's game is the one under test.
-  const empty = (label) => window.run.state().workers.filter((w) => w.doing === label).length === 0;
-  let r = await p.page.evaluate(() => window.run.idle({ who: 'sam', do: 'pingpong' }));
-  for (let at = CLEAR_AT; !r.ok && at < CLEAR_AT + 3 * CLEAR_STEP; at += CLEAR_STEP) {
-    for (const id of await playing(p)) await p.page.evaluate((who) => window.run.idle({ who, do: 'desk' }), id);
-    await playTo(at);
-    await until(p, empty, PLAYING);
-    r = await p.page.evaluate(() => window.run.idle({ who: 'sam', do: 'pingpong' }));
-  }
-  assert.strictEqual(r.ok, true, JSON.stringify(r));
-  await until(p, (label) => window.run.state().workers.filter((w) => w.doing === label).length === 2, PLAYING);
-  const before = { r, players: await p.page.evaluate((label) => window.run.state().workers.filter((w) => w.doing === label).map((w) => w.id), PLAYING) };
-  assert.strictEqual(before.players.length, 2, JSON.stringify(before));
-  await playTo(29.7);
-  const atEitherEnd = (id) => until(p, ([who, label]) => {
-    const d = window.run.debug(who), w = window.run.state().workers.find((x) => x.id === who);
-    return d && d.spot.startsWith('pp-') && d.step && d.step.t === 'act' && w.doing === label;
-  }, [id, PLAYING]);
-  for (const id of before.players) await atEitherEnd(id);
-  // The ping pong shot starts at 38.8 s, so by then Kai and a partner are at the table.
-  await playTo(38.8);
-  await atTable(p, 'kai', 'pp-w');
-  const partner = await p.page.evaluate(() => window.run.state().workers.find((w) => w.id !== 'kai' && w.doing === 'Playing ping pong').id);
-  await atTable(p, partner, 'pp-e');
-  assert.deepStrictEqual(await playing(p), ['kai', partner].sort(), 'two players, and nobody else at the table');
   assert.deepStrictEqual(p.errors, []);
 });

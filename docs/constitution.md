@@ -12,10 +12,10 @@ away from the person. Here, skills carry the engineering practice, and the perso
 
 ## What the room is
 
-The room is a visual orchestrator for Claude Code sessions. It runs like a squad: a small team
-on one stream of work, with a Lead, Devs, reviewers and a PM, and a person as the manager. Its
-job is to keep tickets moving, and to show at a glance who is working, who is waiting on the
-person, and what is done.
+The room is a visual orchestrator for Claude Code sessions. It runs like a squad: a small team on
+one stream of work, with a Lead, Devs, reviewers, a PM and a manager session, and a person as the
+boss. The COO is not a seat: it runs only when the person asks. Its job is to keep tickets moving,
+and to show at a glance who is working, who is waiting on the person, and what is done.
 
 Addy Osmani names four ways a person takes part in a software factory: shape, steer, hand off and approve. The
 room gives the person all four on one floor. They shape work with the PM and Triage, steer a
@@ -816,6 +816,29 @@ The five questions, for this permission:
 4. Where does the person come back in? Needs you, the Lead section of Metrics, the switch.
 5. What stops two sessions from doing the same work? One Lead at a time, one channel per failure,
    one rerun for each commit, and a separate fix starts only when no blocked Dev runs.
+
+**The manager, as it is today.** The room keeps one manager session running, in a third front-office
+seat beside the Lead and the PM, and starts it again when it ends. It watches the room and reads the
+jam log. It may do four things: lower the trust level by one step, never raise it; put a note on
+Needs you that explains a stall; file tickets, and add notes to them; and post on the chat board. It
+cannot start, move, merge or close work, change a setting, set a priority, or touch a session.
+Lowering is off until the person turns on **Let the manager lower the trust level**, and it is at
+most 2 a day, shared with the watch's own brake. Work under way stays where it is. Raising the level
+again is the person's. The reason: on a stall the room cannot fix, less trust is the safe move, and
+a session that can only lower it, say why, and file a ticket cannot make the stall worse. It gets 3
+desks for itself, the Lead and the PM, so workers have 6 of 9. It starts in the room's own folder,
+and "do not change code" is its brief only. The COO is a separate role that runs only when the
+person presses **Ask the COO**.
+
+*Enforced by:* its own token, which reaches only the routes in `relay/token-routes.js`
+(`MANAGER_READS`, `MANAGER_WRITES`) and gets 403 for every other route (`relay/server.js`). It also
+sends the hooks of its own session. That it files tickets only for a cause of jams is the brief only.
+The tests: `relay/test/manager-token.test.js` (the 403 for the rest, no raise, the limit of 2 a day, and
+the switch off by default), `relay/test/manager-jams.test.js` (one ticket for each cause) and
+`relay/test/manager-seat.test.js` (the seat and its restart).
+
+*Check:* a change to the manager adds no route to its token that starts, moves, merges or closes
+work, or that raises the trust level, and keeps the lowering off by default and limited.
 
 Before a rung goes in, answer the factory's five questions:
 

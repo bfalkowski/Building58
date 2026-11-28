@@ -13,7 +13,7 @@ const assert = require('node:assert');
 const { relay, makeRepo, until, sleep } = require('./helpers.js');
 const { forReview } = require('../stop-verdict.js');
 
-const DESKS = 7;
+const DESKS = 6;
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 const PR = (n) => 'https://github.com/acme/widgets/pull/' + n;
 
@@ -86,7 +86,7 @@ test('reviews wait and no session may be stopped: nobody is stopped, Needs you n
   assert.ok(now.some((x) => x.id === typed.id), 'a session with text typed in its prompt is never stopped');
   const item = (await o.needsYou()).find((x) => x.kind === 'desks');
   assert.strictEqual(item.pr, PR(2), 'the review that waited longest');
-  assert.match(item.line, /^Stop a session to free a desk: the reviews of PR #2 and #1 wait for one\. All 7 desks are taken, and the relay may stop none of them\./);
+  assert.match(item.line, /^Stop a session to free a desk: the reviews of PR #2 and #1 wait for one\. All 6 desks are taken, and the relay may stop none of them\./);
   assert.ok((await o.reviews()).news.some((x) => /^No desk is free for the review of PR #2, and the relay may stop no session for it\./.test(x.text)));
 
   await o.say(busy, 'Stop');

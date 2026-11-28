@@ -1235,7 +1235,7 @@
           "Games"
         ],
         "summary": "List games",
-        "description": "The games in GAMES_REPO: each folder with a game.json, with its name, version, players, needs, ok, and a reason when the relay cannot run it, and the game's own about and metrics when it has them. See Games.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "on says whether Games is on. The games in GAMES_REPO: each folder with a game.json, with its name, version, players, needs, ok, and a reason when the relay cannot run it, and the game's own about and metrics when it has them. See Games.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listGames",
         "x-tokens": [],
         "responses": {
@@ -1406,9 +1406,11 @@
           "Jams"
         ],
         "summary": "List jams",
-        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. ?range=1d|7d|30d (7d by default, anything else is 400 bad_param) lists the jams logged in the range, oldest first, each with at (when it was logged), kind, ticket, pr, since, fix and by, and, when not the defaults, outcome and blocked, and kinds gives each kind's name. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. ?range=1d|7d|30d (7d by default, anything else is 400 bad_param) lists the jams logged in the range, oldest first, each with at (when it was logged), kind, ticket, pr, since, fix and by, and, when not the defaults, outcome and blocked, and kinds gives each kind's name. See The jam log.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listJams",
-        "x-tokens": [],
+        "x-tokens": [
+          "the manager"
+        ],
         "responses": {
           "2XX": {
             "description": "Done.",
@@ -1648,9 +1650,11 @@
           "Manager watch"
         ],
         "summary": "Get manager",
-        "description": "Only with the relay key. What the manager's watch found: on, how often it looks (every, seconds), how many times it has looked (looks) and when (lastLook), its limits, the checks it counts (pr, name and the commits that check failed on), the problems that open now (key, since and the ticket it filed), whether lowersTrust (Let the manager lower the trust level) is on, the trust levels he has lowered in the last notes (lowered: at, key, from, to (or null for no level), saw, said, say), and its last notes: seq, at, kind (brake for a lowering), ticket, task, terminal, reason, say and the ticket it filed.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "With the relay key, or the manager session's token (the manager as a session). What the manager's watch found: on, how often it looks (every, seconds), how many times it has looked (looks) and when (lastLook), its limits, the checks it counts (pr, name and the commits that check failed on), the problems that open now (key, since and the ticket it filed), the room's trust level and its name (levelName), whether lowersTrust (Let the manager lower the trust level) is on, the trust levels he has lowered in the last notes (lowered: at, key, from, to (or null for no level), saw, said, say), and its last notes: seq, at, kind (brake for a lowering), ticket, task, terminal, reason, say and the ticket it filed.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getManager",
-        "x-tokens": [],
+        "x-tokens": [
+          "the manager"
+        ],
         "responses": {
           "2XX": {
             "description": "Done.",
@@ -1680,15 +1684,119 @@
         ]
       }
     },
+    "/channels/{channel}/manager/lower": {
+      "post": {
+        "tags": [
+          "Manager watch"
+        ],
+        "summary": "Post manager lower",
+        "description": "Only the manager session's token, and only while Let the manager lower the trust level is on. {\"why\"}: what work cannot get past. The relay lowers the trust level one step, as the watch does, and answers from, to and message. It never raises it: 403 with the switch off, 409 at level 0, 429 after two lowerings in 24 hours.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postManagerLower",
+        "x-tokens": [
+          "the manager"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/manager/note": {
+      "post": {
+        "tags": [
+          "Manager watch"
+        ],
+        "summary": "Post manager note",
+        "description": "Only the manager session's token. {\"text\", \"key\"}: a short note for Needs you, with what it saw and what the person can do. A note with the same key replaces the old one. It leaves after a day, or when the stall its key names is gone. At most 5 notes.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postManagerNote",
+        "x-tokens": [
+          "the manager"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel}/metrics": {
       "get": {
         "tags": [
           "Metrics"
         ],
         "summary": "Get metrics",
-        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load, lead (time to act, what the Lead fixed, passed to the person and never acted on, by kind, and the shared failure channels), skills (calls and sessions in all, and for each role in roles, from the Skill calls in the sessions' logs) and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load, lead (time to act, what the Lead fixed, passed to the person and never acted on, by kind, and the shared failure channels), skills (calls and sessions in all, and for each role in roles, from the Skill calls in the sessions' logs) and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getMetrics",
-        "x-tokens": [],
+        "x-tokens": [
+          "the manager"
+        ],
         "responses": {
           "2XX": {
             "description": "Done.",
@@ -2517,7 +2625,7 @@
           "Games"
         ],
         "summary": "Start round",
-        "description": "{\"game\", \"seed\", \"settings\", \"seats\", \"watch\", \"capUsd\"}: starts a round of a game, with a fresh session for each seat. 409 while a round runs, and 409 no_boundary where seats cannot get their boundary. 400 for a game that is not ok, with need when a need is what stops it, a seat count outside its players, or a watch that is not all or none.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "While Games is off (the default), 409 games_off and nothing starts. {\"game\", \"seed\", \"settings\", \"seats\", \"watch\", \"capUsd\"}: starts a round of a game, with a fresh session for each seat. 409 while a round runs, and 409 no_boundary where seats cannot get their boundary. 400 for a game that is not ok, with need when a need is what stops it, a seat count outside its players, or a watch that is not all or none.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "startRound",
         "x-tokens": [],
         "responses": {
@@ -4041,9 +4149,11 @@
           "Tickets"
         ],
         "summary": "Get ticket",
-        "description": "One ticket.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "One ticket.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getTicket",
-        "x-tokens": [],
+        "x-tokens": [
+          "the manager"
+        ],
         "responses": {
           "2XX": {
             "description": "Done.",
@@ -4453,11 +4563,10 @@
           "Tickets"
         ],
         "summary": "Propose ticket change",
-        "description": "{\"action\", \"ids\", \"why\"}: proposes to change a Triage or Ready ticket. action is replace (with one or more ids), merge (with one), close (with none) or blockers (the whole new list, which can be empty). why is up to 500 characters. Nothing changes but the ticket's proposal, which holds it back. The PM's and the Lead's tokens propose, and so does the person's key, when the proposal then says You propose. Refused with 400 when an id is not on the Board, is the ticket itself, or was rejected, for every kind, and when a new blocker already waits for the ticket. A ticket that is starting, started, done or rejected gets 409, or 403 for a session's token. See Proposals.\n\nTokens: the relay key, and the token of a PM, the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "{\"action\", \"ids\", \"why\", \"commit\"}: proposes to change a Triage or Ready ticket, or, from the Dev of a started ticket's own task, to close it as not needed. action is replace (with one or more ids), merge (with one), close (with none) or blockers (the whole new list, which can be empty). why is up to 500 characters. Nothing changes but the ticket's proposal, which holds it back. The PM's and the Lead's tokens propose, and so does the person's key, when the proposal then says You propose. Refused with 400 when an id is not on the Board, is the ticket itself, or was rejected, for every kind, and when a new blocker already waits for the ticket. A ticket that is starting, started, done or rejected gets 409, or 403 for a session's token, with one exception: the Dev of a started ticket's own task. That Dev sends action close with commit, a hash of 7 to 40 hex digits that must be on the task's base (git merge-base --is-ancestor in the task's repo), and why, one line of 1 to 500 characters. The task goes to done at once, which frees its slot and desk, the Dev's session ends once it has answered, a not-needed jam is written by the relay, and the ticket stays started with a close proposal that holds the full commit. The answer is did: proposed, or carried out when PM trust is Close and merge and the relay approved it as the PM. Approving it sets the ticket Done with closedAs not-needed and notNeeded (commit, reason, who). Declining it puts the task back to building. That Dev gets 403 for any other action or ticket, 409 not_on_main for a commit that is not on the base, has_pr for a task with a PR and bad_move for a task that is done, and 400 for a missing or malformed commit or reason. See When the work is already on main and Proposals.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "proposeTicketChange",
         "x-tokens": [
-          "a PM",
-          "the Lead"
+          "any session"
         ],
         "responses": {
           "2XX": {
@@ -4874,7 +4983,7 @@
               "string",
               "null"
             ],
-            "description": "dev, reviewer, pm, lead or null for the person."
+            "description": "dev, reviewer, pm, lead, manager or null for the person."
           },
           "at": {
             "type": "string"
@@ -5687,7 +5796,7 @@
               "string",
               "null"
             ],
-            "description": "lead for the Lead, pm for the PM the room keeps running, or null."
+            "description": "lead for the Lead, pm for the PM the room keeps running, manager for the manager session, or null."
           },
           "menu": {
             "type": [
@@ -5786,6 +5895,10 @@
             },
             "required": [],
             "additionalProperties": true
+          },
+          "manager": {
+            "type": "object",
+            "description": "The manager seat: the trust level and its name, when the manager last lowered it, the cause it watches and whether the jam count fell after the fix, and the COO's last report."
           },
           "leadEnded": {
             "type": [
