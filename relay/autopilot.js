@@ -288,6 +288,27 @@ function held(channel, task) {
   note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
   return false;
 }
+async function handBackWhenClear(channel, task) {
+  const rec = task.pr && chOf(channel).prs[task.pr];
+  if (!rec || !rec.handedOver || task.state !== 'waiting_on_you') return;
+  const reason = handedReasonOf(rec);
+  if (!['stalled', 'ci-red', 'conflict-dropped', 'dev-gone'].includes(reason)) return;
+  let pr;
+  try { pr = await ghDoor.pr(task.pr, task.repo); } catch (e) { return; }
+  if (!rec.handedOver || task.state !== 'waiting_on_you') return;
+  if (!rec.handedOverHead && pr.headRefOid) { rec.handedOverHead = pr.headRefOid; save(); }
+  const dev = terminal.find(channel, task.owner && task.owner.terminal);
+  const since = rec.verdicts.find((x) => Date.parse(x.at) > Date.parse(rec.handedOverAt) && postOf(channel, x));
+  const why = (reason === 'stalled' && since && 'a review of PR ' + number(task.pr) + ' was posted with the verdict ' + since.kind)
+    || plan.handedStillHolds({ reason, head: rec.handedOverHead, pr: { ...pr, url: task.pr }, devRunning: !!dev && !dev.exited });
+  if (!why) return;
+  const c = chOf(channel), s = c.stuck && c.stuck[task.id];
+  if (s) delete c.stuck[task.id];
+  dropHandOver(rec); save(); reviews.giveReview(channel, task.pr);
+  stuckLog.clear(channel, 'pr ' + task.pr);
+  tasks.setState(channel, task, (s && s.from) || 'in_review', BY, 'Autopilot: ' + why + ', so the task is back.');
+  note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
+}
 const open = (channel, task) => mineTask(task) && task.state !== 'done' && !held(channel, task);
 let ticking = false, starting = false;
 async function tick() {
@@ -307,6 +328,7 @@ async function look(channel) {
   for (const task of tasks.list(channel).filter(mineTask)) track(channel, task);
   const owedFirst = (t) => (t.bringBack ? t.bringBack.at : Infinity);
   for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done').sort((a, b) => (owedFirst(a) < owedFirst(b) ? -1 : owedFirst(a) > owedFirst(b) ? 1 : 0))) {
+    if (task.state === 'waiting_on_you') await handBackWhenClear(channel, task);
     if (!held(channel, task)) await lookAt(channel, task);
     else if (handedReasonOf(recOf(channel, task.pr)) === 'protected-file') await follow(channel, task);
     else await mergedYet(channel, task);
