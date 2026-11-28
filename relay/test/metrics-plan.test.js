@@ -221,3 +221,40 @@ test('a range that is not 1d, 7d or 30d is not one', () => {
   assert.strictEqual(plan.rangeOf('2d'), null);
   assert.strictEqual(plan.rangeOf('__proto__'), null);
 });
+
+test('Metrics counts Skill calls by role from session logs, in the answer and the CSV', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const seatSteps = require('../seat-steps.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-log-'));
+  const log = (name, calls, other) => {
+    const lines = [];
+    for (let i = 0; i < calls; i++) lines.push({ type: 'assistant', uuid: 'a' + i, message: { id: 'm' + i, role: 'assistant', content: [{ type: 'tool_use', id: 't' + i, name: 'Skill', input: { skill: 'pstack:recall' } }] } });
+    for (let i = 0; i < other; i++) lines.push({ type: 'assistant', uuid: 'b' + i, message: { id: 'n' + i, role: 'assistant', content: [{ type: 'tool_use', id: 'u' + i, name: 'Bash', input: { command: 'ls' } }] } });
+    const file = path.join(dir, name + '.jsonl');
+    fs.writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    return seatSteps.read(file, { steps: false }).skills;
+  };
+  const store = plan.blank();
+  assert.strictEqual(plan.noteSkills(store, 'dev-1', 'dev', ago(2), log('dev-1', 1, 5)), true);
+  assert.strictEqual(plan.noteSkills(store, 'rev-1', 'reviewer', ago(2), log('rev-1', 0, 3)), true);
+  assert.strictEqual(plan.noteSkills(store, 'rev-2', 'reviewer', ago(2), log('rev-2', 0, 0)), true);
+  assert.strictEqual(plan.noteSkills(store, 'lead-1', 'lead', ago(2), log('lead-1', 2, 1)), true);
+  assert.strictEqual(plan.noteSkills(store, 'rev-1', 'reviewer', ago(2), 0), false, 'the same count is no change');
+  assert.strictEqual(plan.noteSkills(store, 'dev-1', 'dev', ago(2), log('dev-1', 1, 5) + 1), true, 'a later call raises the count');
+  assert.strictEqual(plan.noteSkills(store, 'x', 'janitor', ago(2), 4), false, 'an unknown role is not counted');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  const old = plan.blank();
+  plan.noteSkills(old, 'dev-old', 'dev', ago(24 * 20), 9);
+  const d = plan.build({ ...INPUT, skills: [...store.skills, ...old.skills] });
+  assert.deepStrictEqual(d.skills.roles.dev, { sessions: 1, calls: 2 });
+  assert.deepStrictEqual(d.skills.roles.reviewer, { sessions: 2, calls: 0 }, 'sessions that made no call still count');
+  assert.deepStrictEqual(d.skills.roles.lead, { sessions: 1, calls: 2 });
+  assert.deepStrictEqual(d.skills.roles.pm, { sessions: 0, calls: 0 });
+  assert.strictEqual(d.skills.calls, 4, 'a session outside the 7 days is not in it');
+  assert.strictEqual(plan.build({ ...INPUT, range: '30d', skills: [...store.skills, ...old.skills] }).skills.calls, 13);
+  const csv = plan.csv(d).split('\n');
+  assert.ok(csv.includes('skill_calls,,dev,calls,2') && csv.includes('skill_calls,,reviewer,sessions,2'), 'the CSV has a row for each role');
+  assert.deepStrictEqual(plan.build({ now: NOW, range: '7d' }).skills.roles.dev, { sessions: 0, calls: 0 });
+  assert.strictEqual(plan.shape({ skills: 'x' }).skills.length, 0);
+});

@@ -1093,7 +1093,7 @@
           "Floor"
         ],
         "summary": "Get floor",
-        "description": "What the Lead sees of the Floor, and each session's desk: ticket, title, column, pr, ciWords, review, doing, next (text and owner) and stop (safe and reason). The Lead's row also has tired, and every other row has null there. A Dev's row has waitsOn while the PR watch is on and its task has an open PR: owner, minutes, why, late and words. Every other row has null there. Each row has seat: lead for the Lead, pm for the PM the room keeps running (the PM's seat), and null for the rest. A Dev's desk has rounds, how many times its PR was reviewed. The answer also has pm: trust (the rung, 0 to 4), trustName, sortHours and nextSortAt, the time the PM next sorts the Board, or null when it does not. See What the Lead sees and What each desk says.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "What the Lead sees of the Floor, and each session's desk: ticket, title, column, pr, ciWords, review, doing, next (text and owner) and stop (safe and reason). The Lead's row also has tired, and every other row has null there. A Dev's row has waitsOn while the PR watch is on and its task has an open PR: owner, minutes, why, late and words. Every other row has null there. Each row has seat: lead for the Lead, pm for the PM the room keeps running (the PM's seat), and null for the rest. A Dev's desk has rounds, how many times its PR was reviewed. Each row has menu: null, or, while a menu is open on its screen, text, choices and since (an ISO time). The answer also has pm: trust (the rung, 0 to 4), trustName, sortHours and nextSortAt, the time the PM next sorts the Board, or null when it does not. See What the Lead sees and What each desk says.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getFloor",
         "x-tokens": [
           "the Lead"
@@ -1686,7 +1686,7 @@
           "Metrics"
         ],
         "summary": "Get metrics",
-        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load, lead (time to act, what the Lead fixed, passed to the person and never acted on, by kind, and the shared failure channels) and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load, lead (time to act, what the Lead fixed, passed to the person and never acted on, by kind, and the shared failure channels), skills (calls and sessions in all, and for each role in roles, from the Skill calls in the sessions' logs) and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getMetrics",
         "x-tokens": [],
         "responses": {
@@ -3951,7 +3951,7 @@
           "Tickets"
         ],
         "summary": "List tickets",
-        "description": "List the tickets, in Board order: open tickets high, normal, low, in work order (rank) within each, then done and rejected ones, the latest changed first. It also has kinds (the kinds a ticket can have, see Kind), labels (the labels tickets have, A to Z, see Labels), wipLimit, leadStarts (the number you let the Lead start tickets up to, or 0) and leadStartsLeft. A ticket has approvedBy (you or Lead) once it is put in Ready. The room page gets the same list as a tickets event on its GET /stream when it opens the stream with board=1, with people, who sits on each ticket, and without the time each pipeline was checked. The stream's hello says whether it will (tickets). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer.\n\nTokens: the relay key, and the token of any session, the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "List the tickets, in Board order: open tickets high, normal, low, in work order (rank) within each, then done and rejected ones, the latest changed first. It also has kinds (the kinds a ticket can have, see Kind), labels (the labels tickets have, A to Z, see Labels), wipLimit, leadStarts (the number you let the Lead start tickets up to, or 0) and leadStartsLeft. A ticket has approvedBy (you or Lead) once it is put in Ready. The room page gets the same list as a tickets event on its GET /stream when it opens the stream with board=1, with people, who sits on each ticket, and without the time each pipeline was checked. The stream's hello says whether it will (tickets). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer. A ticket filed on GitHub, in the GitHub store, can have likely: the open tickets it looks like (Likely duplicates).\n\nTokens: the relay key, and the token of any session, the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listTickets",
         "x-tokens": [
           "any session",
@@ -5006,6 +5006,37 @@
               "replaced"
             ]
           },
+          "likely": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "triage",
+                    "ready",
+                    "started",
+                    "done",
+                    "rejected"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status"
+              ],
+              "additionalProperties": true,
+              "description": "An open ticket that looks like the same work. Only a ticket filed on GitHub carries it."
+            }
+          },
           "task": {
             "type": [
               "object",
@@ -5657,6 +5688,32 @@
               "null"
             ],
             "description": "lead for the Lead, pm for the PM the room keeps running, or null."
+          },
+          "menu": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "choices": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "since": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text",
+              "choices",
+              "since"
+            ],
+            "additionalProperties": true
           },
           "stuckJobs": {
             "type": "array",
@@ -6534,6 +6591,26 @@
             ],
             "additionalProperties": true
           },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "roles": {
+                "type": "object"
+              },
+              "calls": {
+                "type": "number"
+              },
+              "sessions": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "roles",
+              "calls",
+              "sessions"
+            ],
+            "additionalProperties": true
+          },
           "pm": {
             "type": "object",
             "properties": {
@@ -6568,6 +6645,7 @@
           "desks",
           "load",
           "lead",
+          "skills",
           "pm"
         ],
         "additionalProperties": true

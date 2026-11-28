@@ -5,6 +5,7 @@
 // it on its own. See docs/manual/how-it-works.html#desks.
 'use strict';
 const { COLUMNS, columnOf } = require('../office/board-model.js');
+const { heldBy } = require('./held-words.js');
 const { livenessOf, jobWords, stuckJobsOf, stuckJobWords } = require('./liveness.js');
 
 const minutes = (ms) => Math.max(0, Math.floor(ms / 60000));
@@ -38,13 +39,14 @@ function doingOf(t, now, lv) {
   return { state: 'idle', words: t.hooked && t.lastActAt ? 'idle ' + minutes(now - t.lastActAt) + ' min' : 'idle' };
 }
 
-function reviewWords(review, autopilot, reviewing) {
+function reviewWords(review, autopilot, reviewing, held) {
   if (reviewing) return 'review running';
   if (review && review.waits) return 'automatic reviews used up';
   if (review && review.failed) return 'automatic review could not start';
   if (review && review.followUp && !review.held && !review.desk && !review.retry) return 'waiting for a follow-up review';
   if (autopilot && autopilot.verdict === 'merge') return 'review says merge';
   if (autopilot && autopilot.verdict === 'fix') return 'review asks for fixes';
+  if (review && review.held && held) return held;
   if (review && review.held) return 'review waits on CI';
   if (review && review.desk) return 'review waits for a desk';
   if (review && review.retry) return 'review tries again';
@@ -110,7 +112,7 @@ function deskOf(d) {
     pr, prNumber: numberOf(pr),
     ci, ciWords: ci ? CI_WORDS[ci] || ci : null,
     rounds: pr && !isReviewer && d.review ? d.review.count || 0 : 0,
-    review: pr ? (isReviewer ? (t.posted ? 'review posted' : 'review running') : reviewWords(d.review, d.autopilot, d.reviewing)) : null,
+    review: pr ? (isReviewer ? (t.posted ? 'review posted' : 'review running') : reviewWords(d.review, d.autopilot, d.reviewing, ci === 'red' ? heldBy(d.failed) : null)) : null,
     doing: doingOf(t, now, lv),
     status: role === 'Dev' && task ? statusOf(d, task, pr, ci, p) : null,
     next: null,

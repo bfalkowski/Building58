@@ -4,7 +4,8 @@
 
 const PROTECTED = ['CLAUDE.md', 'docs/constitution.md', 'eslint.config.js', 'eslint-local.js'];
 const WORDING_TICKET = 'CLAUDE.md and constitution updates';
-const { stateOf } = require('./pipeline.js');
+const { stateOf, failedOf } = require('./pipeline.js');
+const { heldBy } = require('./held-words.js');
 const { boardOrder } = require('./ticket-order.js');
 
 function ciOf(rollup) {
@@ -34,11 +35,16 @@ function exhibitStep(pr, exhibit) {
   if (exhibit.verdict === 'meets_policy') return null;
   return { act: 'person', reason: 'exhibit', why: 'Exhibit says ' + exhibit.verdict + ' at ' + exhibit.commit.slice(0, 7) + ', so its evidence does not pass. Level 6 leaves the merge to a person.' };
 }
+function heldWhy(pr) {
+  if (ciOf(pr.statusCheckRollup) !== 'red') return null;
+  const names = failedOf(pr.statusCheckRollup).map((f) => f.name);
+  return heldBy(names.length ? names : ['pipeline']) + '.';
+}
 const conflictFor = (devGone, owed) => devGone
   ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main' + owed + ', but its Dev is not running, so Autopilot brings it back to merge main.' }
   : { act: 'conflict', why: 'It conflicts with main' + owed + '.' };
 function forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit, noReview) {
-  if (!verdict) return pr.mergeStateStatus === 'DIRTY' ? conflictFor(devGone, ', so no review starts until it is merged') : { act: 'wait', why: WAITS_FOR_REVIEW };
+  if (!verdict) return pr.mergeStateStatus === 'DIRTY' ? conflictFor(devGone, ', so no review starts until it is merged') : { act: 'wait', why: heldWhy(pr) || WAITS_FOR_REVIEW };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
     if (rounds >= maxRounds) return { act: 'person', reason: 'rounds', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };

@@ -1018,12 +1018,13 @@
   }
   function bossStop(key, pose, dur, extra) { return [{ t: 'walk', key }, { t: 'face', key }, act(Object.assign({ dur, pose }, extra))]; }
   const bossLines = window.MANAGER_LINES || ['Hm.'];
-  let bossDeck = [];
+  let bossDeck = [], lastBossLine = '';
   function bossRemark() {
     if (Math.random() >= 0.75) return;
-    if (!bossDeck.length) bossDeck = bossLines.slice().sort(() => Math.random() - 0.5);
+    if (!bossDeck.length) bossDeck = window.OfficeBubbles.deck(bossLines, lastBossLine, Math.random);
     const line = bossDeck.pop();
-    bubble(boss, line, Math.min(6, 2 + line.length / 15));
+    lastBossLine = line;
+    bubble(boss, line);
   }
   const bossNotes = [];
   function deskOfNote(n) {
@@ -1546,7 +1547,13 @@
 
   let showTags = true;
   const proj = new THREE.Vector3();
-  function bubble(w, text, secs) { const b = tagFor[w.id].bub; b.textContent = text; b.classList.toggle('long', text.length > 28); b.hidden = false; w.bubbleUntil = performance.now() + (secs || 2.5) * 1000; }
+  function bubble(w, text, secs) {
+    const b = tagFor[w.id].bub;
+    b.classList.remove('long'); b.textContent = text; b.hidden = false;
+    const long = b.clientWidth ? b.scrollWidth > b.clientWidth : text.length > 30;
+    b.classList.toggle('long', long);
+    w.bubbleUntil = performance.now() + window.OfficeBubbles.showSecs(text, secs, long) * 1000;
+  }
   function tickTags() {
     const rect = canvas.getBoundingClientRect(), W = rect.width, H = rect.height, now = performance.now(), shown = [];
     for (const w of people) {
@@ -1568,13 +1575,13 @@
       if (!w.present) continue;
       if (!T.bub.hidden) {
         T.bub.hidden = now > w.bubbleUntil; T.bub.style.visibility = vis ? '' : 'hidden';
-        placeAt(T.bub, sx, sy - 26);
+        placeAt(T.bub, sx, sy - window.OfficeBubbles.GAP);
       }
       if (T.tag.hidden) continue;
       if (!T.w) { T.w = T.tag.offsetWidth; T.h = T.tag.offsetHeight; }
-      shown.push({ el: T.tag, bub: T.bub, x: sx, y: sy, w: T.w, h: T.h });
+      shown.push({ el: T.tag, bub: T.bub, x: sx, y: sy, w: T.bub.hidden ? T.w : Math.max(T.w, T.bub.offsetWidth), h: T.bub.hidden ? T.h : Math.max(T.h, window.OfficeBubbles.GAP + T.bub.offsetHeight) });
     }
-    stackTags(shown);
+    window.OfficeBubbles.stackTags(shown);
     if (boss.present && !tagFor[boss.id].bub.hidden) {
       const b = tagFor[boss.id].bub;
       boss.fig.head.getWorldPosition(proj); proj.y += 0.3; proj.project(camera);
@@ -1583,28 +1590,10 @@
     }
     for (const t of shown) {
       placeAt(t.el, t.x, t.y);
-      if (!t.bub.hidden) placeAt(t.bub, t.x, t.y - 26);
+      if (!t.bub.hidden) placeAt(t.bub, t.x, t.y - window.OfficeBubbles.GAP);
     }
   }
   function placeAt(el, x, y) { el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%, -100%)'; }
-  function stackTags(tags) {
-    const clear = (t, placed, up) => {
-      for (let moved = true; moved;) {
-        moved = false;
-        for (let i = 0; i < placed; i++) {
-          const p = tags[i];
-          if (Math.abs(t.x - p.x) >= (t.w + p.w) / 2 + 4) continue;
-          const above = p.y - p.h - 2, below = p.y + t.h + 2;
-          if (t.y > above && t.y < below) { t.y = up ? above : below; moved = true; }
-        }
-      }
-    };
-    tags.sort((a, b) => b.y - a.y);
-    tags.forEach((t, i) => clear(t, i, true));
-    if (!tags.some((t) => t.y < t.h)) return;
-    tags.sort((a, b) => a.y - b.y);
-    tags.forEach((t, i) => { t.y = Math.max(t.y, t.h); clear(t, i, false); });
-  }
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { Object.values(tagFor).forEach((T) => { T.w = 0; }); });
 
   const sessions = new Map();

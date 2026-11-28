@@ -134,7 +134,7 @@ async function fastForward(to) {
 
 function restartWhenQuiet(ctx, channel) {
   clearInterval(job.timer);
-  job.waitSince = Date.now(); job.forcing = 0; job.fetching = false;
+  job.waitSince = job.waitSince || Date.now(); job.forcing = 0; job.fetching = false;
   job.timer = setInterval(() => {
     if (!job || job.state !== 'waiting' || pulling || job.fetching) return;
     if (!whoIsBusy().length) return restartNow(ctx, channel, false);
@@ -156,8 +156,9 @@ function restartNow(ctx, channel, forced) {
     if (busy.length) {
       const who = busy.map((w) => w.title + ' (' + w.why + ')').join(', ');
       if (job.steps) return endLoop(ctx, stoppedBefore('the restart was called off, since ' + who + ' started just before it.'), 'update_called_off');
-      note(ctx, 'The restart was called off, since ' + who + ' started just before it. The relay\'s folder is as it was. Press Update again to wait for the next quiet moment.', channel, 'update_called_off');
-      job = null; return;
+      note(ctx, 'The restart was called off, since ' + who + ' started just before it. The relay\'s folder is as it was. The update waits for the next quiet moment, and its limit still counts from when it first waited.', channel, 'update_called_off');
+      job.state = 'waiting';
+      return restartWhenQuiet(ctx, channel);
     }
     try { await fastForward(to); } catch (e) {
       if (job.steps) return endLoop(ctx, stoppedBefore('the relay\'s folder could not fast-forward to ' + to.slice(0, 7) + ': ' + e.message), 'update_failed');
@@ -264,6 +265,7 @@ async function pullMore(ctx) {
 }
 const updating = () => !!job || pulling;
 const restarting = () => !!job && job.state === 'restarting';
+const waiting = () => !!job && !job.steps && (job.state === 'waiting' || job.state === 'restarting');
 
 const onceWords = (once) => (once && once.length ? ' ' + once.join(' and ') + (once.length > 1 ? ' changed too. They run' : ' changed too. It runs') + ' until you stop the relay yourself, so stop and start it once to use the new code.' : '');
 const onceIn = (files) => LOADED_ONCE.filter((f) => files.includes(f));
@@ -408,4 +410,4 @@ async function pullMoreSteps(ctx) {
   } finally { pulling = false; }
 }
 
-module.exports = { handle, isRelayFile, run, updating, restarting, begin, DIR };
+module.exports = { handle, isRelayFile, run, updating, restarting, waiting, begin, DIR };

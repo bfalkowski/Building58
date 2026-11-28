@@ -20,6 +20,26 @@ if [ "$FAKE_CLAUDE_TRUST" = "arrow" ]; then
   IFS= read -r answer
   case "$answer" in *$'\e[B'*) echo "folder accepted"; printf '=%.0s' $(seq 450); echo;; *) echo "folder refused, exiting"; exit 0;; esac
 fi
+# With FAKE_CLAUDE_MENU=known it shows Claude Code's own auto mode prompt before its prompt, and waits for a
+# key: 3 dismisses it (it says MENU-ANSWER[3] and draws its prompt), anything else leaves it open. With
+# =stubborn it takes no key but Esc (MENU-ANSWER[esc]), and says nothing for 3, as a menu that only moves its
+# cursor. With =stuck no key closes it. With =quoted it only prints the words of the prompt, as a Dev reading
+# this code does. With =unknown it shows a menu of its own, which no key closes but Esc (MENU-ANSWER[esc]).
+# Like a real one, it draws no echo of the keys while a menu is open.
+if [ "$FAKE_CLAUDE_MENU" = "quoted" ]; then
+  echo "The prompt says: Teach auto mode about your environment?"
+elif [ -n "$FAKE_CLAUDE_MENU" ]; then
+  stty -icanon -echo min 1 time 0 2>/dev/null
+  if [ "$FAKE_CLAUDE_MENU" = "unknown" ]; then
+    printf 'Which database should the Dev migrate first?\n\xe2\x9d\xaf 1. Orders\n  2. Customers\n  3. Both\nEnter to confirm \xc2\xb7 Esc to cancel\n'
+  else
+    printf 'Teach auto mode about your environment?\n\xe2\x9d\xaf 1. Yes\n  2. Not now\n  3. Don'"'"'t show again\n'
+  fi
+  while IFS= read -r -n 1 key; do
+    case "$FAKE_CLAUDE_MENU:$key" in known:3) echo "MENU-ANSWER[3]"; break;; unknown:$'\e'|stubborn:$'\e') echo "MENU-ANSWER[esc]"; break;; esac
+  done
+  stty echo 2>/dev/null
+fi
 # With FAKE_CLAUDE_SLOW_START=<seconds>, it takes that long to draw its prompt, as a real one can on a
 # busy computer. Keys typed before then are lost, as a real one loses them, and it says EARLY[...] so a
 # test can see that something was typed too soon.
