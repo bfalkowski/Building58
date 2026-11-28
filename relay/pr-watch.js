@@ -102,6 +102,7 @@ async function look(channel) {
   }
 }
 function forget(channel, pr) {
+  stuck.clear(channel, 'pr ' + pr);
   delete chOf(channel).prs[pr];
   delivery.drop(channel, 'pr-watch ' + pr); delivery.drop(channel, 'pr-watch-lead ' + pr);
   save();

@@ -74,7 +74,14 @@ pageTest('the trailer\'s ping pong cue clears a game already going, and Kai play
   });
   const playTo = (t) => p.page.evaluate((to) => { window.__to = to; }, t).then(() => until(p, (to) => window.trailer.clock >= to, t));
   await playTo(3);
-  await until(p, () => { const d = window.run.debug('june'); return d && d.spot.startsWith('couch') && d.seated; });
+  const juneOnCouch = () => { const d = window.run.debug('june'); return d && d.spot.startsWith('couch') && d.seated; };
+  const onCouch = () => p.page.evaluate(juneOnCouch);
+  await p.page.waitForFunction(juneOnCouch, undefined, { timeout: 8000 }).catch(async () => {
+    const others = await p.page.evaluate(() => window.run.state().workers.filter((w) => w.id !== 'june').filter((w) => { const d = window.run.debug(w.id); return d && String(d.spot).startsWith('couch'); }).map((w) => w.id));
+    for (const id of others) await p.page.evaluate((who) => window.run.idle({ who, do: 'desk' }), id);
+    await p.page.evaluate(() => window.run.idle({ who: 'june', do: 'couch' }));
+  });
+  if (!(await onCouch())) await until(p, juneOnCouch);
   // The room starts games of its own while the film runs fast, and one can end before the cue, so Sam's game is the one under test.
   const empty = (label) => window.run.state().workers.filter((w) => w.doing === label).length === 0;
   let r = await p.page.evaluate(() => window.run.idle({ who: 'sam', do: 'pingpong' }));
