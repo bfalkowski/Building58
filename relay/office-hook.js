@@ -144,6 +144,10 @@ function summarize(p) {
     const answer = p.last_assistant_message.match(/HUDDLE-([0-9a-f]{6}):[ \t]*(.+)/);
     if (answer) { out.huddle_id = answer[1]; out.huddle_answer = cut(answer[2], 300); }
   }
+  if (p.hook_event_name === 'Stop' && typeof p.last_assistant_message === 'string') {
+    const commit = require('./on-main.js').onMainCommit(p.last_assistant_message);
+    if (commit) out.on_main = commit;
+  }
   if (p.hook_event_name === 'PostToolUse') {
     delete out.tool_input;
     const ran = p.tool_name === 'Bash' && p.tool_input && String(p.tool_input.command || '');
