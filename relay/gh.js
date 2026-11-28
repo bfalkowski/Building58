@@ -43,10 +43,16 @@ function usage(minutes) {
 }
 const top = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => k + ' ' + n).join(', ');
 
+const WRITES = ['merge', 'close', 'reopen', 'comment', 'edit', 'ready', 'review'];
+function dropAfterWrite(args) {
+  if (args[0] !== 'pr' || !WRITES.includes(args[1]) || !args[2]) return;
+  views.delete(args[2]);
+  flights.delete(args[2]);
+}
 function exec(args, { cwd, timeout = 30000, maxBuffer = 16 * 1024 * 1024, input, quiet } = {}) {
   if (!quiet) count(args);
   return new Promise((resolve) => {
-    const child = execFile(GH, args, { cwd: cwd && fs.existsSync(cwd) ? cwd : undefined, timeout, maxBuffer, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => resolve({ err, stdout: String(stdout || ''), stderr: String(stderr || '') }));
+    const child = execFile(GH, args, { cwd: cwd && fs.existsSync(cwd) ? cwd : undefined, timeout, maxBuffer, env: Object.assign({}, process.env, { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }) }, (err, stdout, stderr) => { dropAfterWrite(args); resolve({ err, stdout: String(stdout || ''), stderr: String(stderr || '') }); });
     if (child.stdin) { child.stdin.on('error', () => {}); child.stdin.end(input || ''); }
   });
 }
@@ -93,7 +99,7 @@ function pr(link, cwd, opts) {
   if (flights.has(link) && !o.fresh) return flights.get(link);
   const p = run(['pr', 'view', link, '--json', FIELDS], { cwd, timeout: 30000 }).then((out) => {
     const value = JSON.parse(out);
-    views.set(link, { at: Date.now(), value });
+    if (flights.get(link) === p) views.set(link, { at: Date.now(), value });
     return value;
   }).finally(() => { if (flights.get(link) === p) flights.delete(link); });
   flights.set(link, p);
