@@ -463,6 +463,21 @@ test('a seat on the trust question shows waiting, takes the person\'s answer, th
   await until(() => !fs.existsSync(path.join(stateDir, 'seats', round.id)), 'the round\'s seat folder to go');
 });
 
+test('a seat stops asking for trust once its answer is sent, before any hook comes', async (t) => {
+  const root = gamesRepo(t, { coin: manifest() });
+  const R = await relay({ ...BOUNDARY, GAMES_REPO: root, FAKE_CLAUDE_TRUST: '1' });
+  t.after(R.stop);
+  const round = (await R.call('POST', '/rounds', { game: 'coin', seed: 's', seats: 2 })).body.round;
+  const s1 = round.seats[0];
+  const seatOf = async () => (await R.call('GET', '/rounds/current')).body.round.seats.find((x) => x.seat === 'S1');
+  await until(async () => (await seatOf()).waiting === 'trust', 'the round to show S1 waits on the trust question');
+  const input = (data) => R.call('POST', '/terminals/' + s1.terminal + '/input', { data });
+  assert.strictEqual((await input('\u001b[B')).status, 200);
+  assert.strictEqual((await input('\r')).status, 200);
+  assert.strictEqual((await seatOf()).waiting, null, 'the answer is in, so the seat no longer waits');
+  assert.strictEqual((await input('\u001b[B')).status, 403, 'a seat that has answered is read-only');
+});
+
 test('a relay that restarts mid-round brings back no seat, removes the seat folders, and has no round', async (t) => {
   const host = launch();
   t.after(() => new Promise((r) => host.stop(r)));

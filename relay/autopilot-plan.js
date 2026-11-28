@@ -40,19 +40,24 @@ function heldWhy(pr) {
   const names = failedOf(pr.statusCheckRollup).map((f) => f.name);
   return heldBy(names.length ? names : ['pipeline']) + '.';
 }
+const conflictFor = (devGone, owed) => devGone
+  ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main' + owed + ', but its Dev is not running, so Autopilot brings it back to merge main.' }
+  : { act: 'conflict', why: 'It conflicts with main' + owed + '.' };
 function forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit, noReview) {
-  if (!verdict) return { act: 'wait', why: heldWhy(pr) || WAITS_FOR_REVIEW };
+  if (!verdict) return pr.mergeStateStatus === 'DIRTY' ? conflictFor(devGone, ', so no review starts until it is merged') : { act: 'wait', why: heldWhy(pr) || WAITS_FOR_REVIEW };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
     if (rounds >= maxRounds) return { act: 'person', reason: 'rounds', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };
+    if (verdict.commit !== pr.headRefOid && pr.mergeStateStatus === 'DIRTY') return conflictFor(devGone, ', so no follow-up review starts until it is merged');
     if (noReview && (!devGone || verdict.commit !== pr.headRefOid)) return { act: 'person', reason: 'rounds', why: 'The last review asks for fixes, but ' + noReview + NEXT };
     if (devGone && verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review asked for fixes, so a follow-up review checks them.' };
     if (devGone) return { act: 'bring-back', for: 'fix', why: 'The last review asks for fixes, but its Dev is not running, so Autopilot brings it back to fix them.' };
     return { act: 'wait', why: 'The Dev is fixing what the last review found. A follow-up review checks the fixes after the push.' };
   }
+  if (verdict.commit !== pr.headRefOid && pr.mergeStateStatus === 'DIRTY') return conflictFor(devGone, ', so no follow-up review starts until it is merged');
   if (verdict.commit !== pr.headRefOid && noReview) return { act: 'person', reason: 'rounds', why: 'There are commits after the review said merge, but ' + noReview + NEXT };
   if (verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review said merge, so a follow-up review checks them first.' };
-  if (pr.mergeStateStatus === 'DIRTY') return devGone ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main, but its Dev is not running, so Autopilot brings it back to merge main.' } : { act: 'conflict', why: 'It conflicts with main.' };
+  if (pr.mergeStateStatus === 'DIRTY') return conflictFor(devGone, '');
   const ci = ciOf(pr.statusCheckRollup);
   if (ci === 'red') return { act: 'person', reason: 'ci-red', why: 'CI failed on the reviewed commit.' };
   if (ci === 'pending') return { act: 'wait', why: 'Waiting for CI.' };
@@ -60,6 +65,17 @@ function forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit, noReview)
   const held = exhibitStep(pr, exhibit);
   if (held) return held;
   return { act: 'merge', why: 'Reviewed with no blocking findings, CI is green, and GitHub can merge it' + (exhibit ? ', and Exhibit says meets_policy.' : '.') };
+}
+
+const BACK_REASONS = ['stalled', 'ci-red', 'conflict-dropped', 'dev-gone'];
+function handedStillHolds({ reason, head, pr, devRunning, review }) {
+  if (!BACK_REASONS.includes(reason) || !pr || pr.state !== 'OPEN') return null;
+  const now = String(pr.headRefOid || ''), at = now.slice(0, 7), pushed = !!head && now !== head;
+  if (reason === 'stalled' && review) return 'a review of PR ' + String(pr.url || '').split('/').pop() + ' was posted with the verdict ' + review;
+  if (reason === 'stalled') return pushed ? 'its Dev pushed ' + at : null;
+  if (reason === 'ci-red') return pushed && ciOf(pr.statusCheckRollup) === 'green' ? 'CI is green on ' + at + ', a newer commit than the one that failed' : null;
+  if (reason === 'conflict-dropped') return pr.mergeStateStatus && !['DIRTY', 'UNKNOWN'].includes(pr.mergeStateStatus) ? 'PR ' + String(pr.url || '').split('/').pop() + ' no longer conflicts with main' : null;
+  return devRunning ? 'its Dev is running again' : null;
 }
 
 function forPersonMerge(pr, locked, verdict, d) {
@@ -166,4 +182,4 @@ function reviewPostFor(comments, { login, since, commit, kind }) {
   return found;
 }
 
-module.exports = { API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, countsAsReview, PROTECTED, WORDING_TICKET };
+module.exports = { BACK_REASONS, handedStillHolds, API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, countsAsReview, PROTECTED, WORDING_TICKET };

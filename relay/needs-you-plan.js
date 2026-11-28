@@ -124,6 +124,7 @@ function taskItem(t, dev) {
     return item('waiting', 'Look at ' + nameOf(t) + ': its task is in Waiting on you.' + (note ? ' ' + note : ''), pr ? { url: pr } : dev ? { terminal: dev.terminal } : { ticket: t.ticket || t.id });
   }
   if (pr && t.prOpen !== false && t.onlyYouMerge) return item('merge', 'Merge PR ' + numberOf(pr) + onPr + ' yourself: ' + oneLine(t.onlyYouMerge, 300), { url: pr });
+  if (t.bringBackWhy && !dev && BUILDING.includes(t.state)) return item('waiting', 'Free a desk or a slot for ' + nameOf(t) + ': Autopilot waits to bring back its Dev to fix PR ' + numberOf(pr) + '. ' + oneLine(t.bringBackWhy, 300), { ticket: t.ticket || t.id });
   if (!dev && BUILDING.includes(t.state) && !pr) return item('gone', 'Bring back the worker on ' + nameOf(t) + ', or move its card: its session ended with no PR.', { ticket: t.ticket || t.id });
   return null;
 }

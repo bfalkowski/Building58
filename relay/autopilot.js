@@ -35,7 +35,7 @@
 // relay/autopilot-runs.js) is in RELAY_AUTOPILOT_FILE, so a restart keeps it.
 'use strict';
 const { execFile } = require('child_process');
-const { mergedMain } = require('./merged-main.js');
+const { mergedMain, holdsAll, withHead, headsSince } = require('./merged-main.js');
 const fs = require('fs');
 const path = require('path');
 const state = require('./state.js');
@@ -190,6 +190,10 @@ terminal.onReviewDone(async (channel, t) => {
   const again = reviews.reviewEmpty(channel, t.reviewOf);
   note(channel, 'The review of PR ' + number(t.reviewOf) + ' came back empty: it has no verdict line or no words on what was checked, so it does not count. ' + (again ? 'A new review starts.' : 'The person decides.'));
 });
+terminal.onReviewBack((channel, t) => {
+  const rec = chOf(channel).prs[t.reviewOf], v = rec && rec.verdicts.find((x) => x.sessionId === t.sessionId && x.posted);
+  if (v) terminal.reviewFound(channel, t, v.posted);
+});
 const looking = new Set();
 const CLOCK_SKEW_MS = 60 * 1000;
 terminal.onReviewTurnEnd(async (channel, t) => {
@@ -284,6 +288,26 @@ function held(channel, task) {
   note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
   return false;
 }
+async function handBackWhenClear(channel, task) {
+  const rec = task.pr && chOf(channel).prs[task.pr];
+  if (!rec || !rec.handedOver || task.state !== 'waiting_on_you') return;
+  const reason = handedReasonOf(rec);
+  if (!plan.BACK_REASONS.includes(reason)) return;
+  let pr;
+  try { pr = await ghDoor.pr(task.pr, task.repo); } catch (e) { return; }
+  if (!rec.handedOver || task.state !== 'waiting_on_you') return;
+  if (!rec.handedOverHead && pr.headRefOid) { rec.handedOverHead = pr.headRefOid; save(); }
+  const dev = terminal.find(channel, task.owner && task.owner.terminal);
+  const since = rec.verdicts.find((x) => Date.parse(x.at) > Date.parse(rec.handedOverAt) && postOf(channel, x));
+  const why = plan.handedStillHolds({ reason, head: rec.handedOverHead, pr: { ...pr, url: task.pr }, devRunning: !!dev && !dev.exited, review: since ? since.kind : null });
+  if (!why) return;
+  const c = chOf(channel), s = c.stuck && c.stuck[task.id];
+  if (s) delete c.stuck[task.id];
+  dropHandOver(rec); save(); reviews.giveReview(channel, task.pr);
+  stuckLog.clear(channel, 'pr ' + task.pr);
+  tasks.setState(channel, task, (s && s.from) || 'in_review', BY, 'Autopilot: ' + why + ', so the task is back.');
+  note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
+}
 const open = (channel, task) => mineTask(task) && task.state !== 'done' && !held(channel, task);
 let ticking = false, starting = false;
 async function tick() {
@@ -301,7 +325,9 @@ async function look(channel) {
   movedAgain(channel);
   holdPushes(channel);
   for (const task of tasks.list(channel).filter(mineTask)) track(channel, task);
-  for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done')) {
+  const owedFirst = (t) => (t.bringBack ? t.bringBack.at : Infinity);
+  for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done').sort((a, b) => (owedFirst(a) < owedFirst(b) ? -1 : owedFirst(a) > owedFirst(b) ? 1 : 0))) {
+    if (task.state === 'waiting_on_you') await handBackWhenClear(channel, task);
     if (!held(channel, task)) await lookAt(channel, task);
     else if (handedReasonOf(recOf(channel, task.pr)) === 'protected-file') await follow(channel, task);
     else await mergedYet(channel, task);
@@ -363,11 +389,14 @@ async function lookAt(channel, task) {
     if (ex !== undefined) d = mergeTest(channel, task, rec, (x, gone) => plan.forPr(pr, files, x, roundsOf(rec), MAX_ROUNDS(), gone, ex, reviews.noReview(channel, task.pr)), pr.headRefOid);
   }
   rec.why = d.why; rec.act = d.act;
+  if (task.bringBack && !(d.act === 'bring-back' && d.for === 'fix')) { delete task.bringBack; tasks.save(); }
   if (d.act === 'wait') rec.why = reviews.deskLine(channel, task.pr) || rec.why;
   if (d.act === 'done') markDone(channel, task);
   else if (d.act === 'merge') {
     const c = chOf(channel);
     const turn = chOf(channel).apiTurn && tasks.list(channel).some((x) => x.pr === c.apiTurn && x.pr !== task.pr && open(channel, x)) ? c.apiTurn : null;
+    const seq = c.apiSeq || 0;
+    if (plan.touchesApi(files) && task.worktree && rec.apiSeq !== seq && await holdsAll((args) => git(task.worktree, args), headsSince(c.apiHeads, rec.apiSeq || 0, seq), pr.headRefOid)) { rec.apiSeq = seq; save(); }
     const order = plan.apiTurn({ touches: plan.touchesApi(files), seen: rec.apiSeq, seq: c.apiSeq || 0, asked: rec.apiAsked, head: pr.headRefOid, turn: turn && number(turn), me: number(task.pr) });
     if (order.act === 'wait') { rec.why = order.why; rec.act = 'wait'; return; }
     if (order.act === 'ask-main') { askApiMain(channel, task, rec, pr); rec.why = 'Its Dev was asked to merge main before it merges.'; rec.act = 'wait'; return; }
@@ -461,14 +490,18 @@ async function bringBack(channel, task, rec, d, commit, pr) {
     note(channel, name + ': its Dev was not running, so Autopilot brought it back for ' + what + '.');
     return;
   }
-  if (WAITS_FOR_ROOM.includes(out.error)) { rec.act = 'wait'; rec.why = 'Its Dev is not running, and Autopilot brings it back for ' + what + ' once it can: ' + out.message; return; }
+  if (WAITS_FOR_ROOM.includes(out.error)) {
+    rec.act = 'wait'; rec.why = 'Its Dev is not running, and Autopilot brings it back for ' + what + ' once it can: ' + out.message;
+    if (d.for === 'fix') { task.bringBack = Object.assign(task.bringBack || { at: Date.now() }, { why: out.message }); tasks.save(); }
+    return;
+  }
   handOver(channel, task, rec, 'Its Dev is not running, and Autopilot could not bring it back for ' + what + ': ' + out.message + step, 'dev-gone', commit);
 }
 function counted(channel, task, rec, head) {
   const c = chOf(channel), run = runOf(channel, task);
   rec.mergedHead = head; c.merged++;
   if (c.apiTurn === task.pr) c.apiTurn = null;
-  if (rec.apiFiles) c.apiSeq = (c.apiSeq || 0) + 1;
+  if (rec.apiFiles) { c.apiHeads = withHead(c.apiHeads, c.apiSeq || 0, head); c.apiSeq = (c.apiSeq || 0) + 1; }
   if (run) runs.merged(run, Date.now(), BY);
   save();
 }
@@ -488,6 +521,7 @@ async function mergedYet(channel, task) {
   if (pr.state === 'MERGED') markDone(channel, task);
 }
 function handOver(channel, task, rec, why, reason, head) {
+  if (task.bringBack) { delete task.bringBack; tasks.save(); }
   rec.handedOver = why; rec.handedOverAt = new Date().toISOString(); rec.handedReason = reason; rec.handedOverHead = head || null; save();
   handRun(channel, task, reason);
   if (reason === 'main-kept-moving' || reason === 'conflict-dropped') {
@@ -513,6 +547,8 @@ async function maybeStart(channel) {
     return;
   }
   if (/^Autopilot merged \d+ PRs? today, its limit\./.test(c.idle || '')) { c.idle = null; save(); }
+  const owed = tasks.list(channel).filter((t) => t.bringBack && open(channel, t)).sort((a, b) => a.bringBack.at - b.bringBack.at)[0];
+  if (owed) { c.idle = 'Waiting to bring back the Dev of ' + (owed.ticket || 'task ' + owed.id) + ' for fixes first: ' + owed.bringBack.why; return; }
   if (tasks.list(channel).filter((t) => open(channel, t)).length >= AT_ONCE()) return;
   const held = tickets.heldWhy(channel);
   if (held) { c.idle = held; return; }
@@ -604,7 +640,7 @@ function stalled(channel) {
     const reviewing = task.pr && terminal.all(channel).some((t) => t.reviewOf === task.pr && livenessOf(t, Date.now()).state !== 'gone');
     const waitsOnCi = rec && /CI|GitHub says|PRs today/.test(rec.why || '');
     const waitsForDesk = !!task.pr && reviews.owes(channel, task.pr);
-    const stuck = !devBusy && !reviewing && !waitsOnCi && !waitsForDesk;
+    const stuck = !devBusy && !reviewing && !waitsOnCi && !waitsForDesk && !task.bringBack;
     const key = channel + ' ' + task.id;
     if (!stuck) { stuckSince.delete(key); continue; }
     if (!stuckSince.has(key)) { stuckSince.set(key, Date.now()); continue; }
@@ -829,4 +865,5 @@ function turnOff(channel, by) {
   return true;
 }
 
-module.exports = { HAND_BACK, handedReasonFor, tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };
+const bringBackLate = (task) => (task.bringBack && Date.now() - task.bringBack.at >= STALL_MS() ? task.bringBack.why : null);
+module.exports = { bringBackLate, HAND_BACK, handedReasonFor, tellRedCi, turnOff, runsKept, starting: () => starting, handle, begin, isOn, anyOn, deskOf, leadRefusal, LEAD_KEEPS, verdictOf, movesIt, endedRuns };
