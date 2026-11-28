@@ -108,6 +108,7 @@ test('a task with an open item gets no stall hand-over, and Autopilot says it wa
   const idle = { devBusy: false, reviewing: false, waitsOnCi: false, waitsForDesk: false };
   assert.strictEqual(plan.stalls(Object.assign({ waitsOnPerson: false }, idle)), true);
   assert.strictEqual(plan.stalls(Object.assign({ waitsOnPerson: true }, idle)), false);
+  assert.strictEqual(plan.stalls(Object.assign({ waitsOnPerson: false, bringBack: true }, idle)), false, 'main\'s bring-back also stops the stall');
   const r = rig();
   await wp.open('office', there(r));
   assert.strictEqual(wp.reasonFor('office', 'k1', 'The Dev is fixing what the last review found.'), 'waits on the person: push');
