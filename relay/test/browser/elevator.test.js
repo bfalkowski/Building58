@@ -84,13 +84,14 @@ test.describe('the elevator, without WebGL', () => {
     assert.strictEqual(await p.page.locator('#floor-exec').isHidden(), true);
     assert.strictEqual(await p.page.locator('#floor-main').isHidden(), true);
     await p.page.evaluate(() => window.run.ready());
-    await p.page.evaluate(() => window.run.do({ action: 'speed', value: 8 }));
+    await p.page.evaluate(() => { window.run.cast(); window.run.do({ action: 'speed', value: 8 }); });
     const doors = await p.page.evaluate(() => window.run.level().doors);
     assert.ok(doors && doors.x1 > doors.x0, 'the doors are in the back wall: ' + JSON.stringify(doors));
     const ids = await p.page.evaluate(() => window.run.roster().filter((w) => w.id !== 'manager' && w.id !== 'lead').map((w) => w.id));
     const sent = [];
-    for (const id of ids) { const r = await p.page.evaluate((who) => window.run.do({ action: 'idle', who, do: 'board' }), id); if (r.ok) sent.push(id); }
-    assert.ok(sent.length > 0, 'someone is sent to the board, along the back wall');
+    const answers = [];
+    for (const id of ids) { const r = await p.page.evaluate((who) => window.run.do({ action: 'idle', who, do: 'board' }), id); answers.push(id + ': ' + JSON.stringify(r)); if (r.ok) sent.push(id); }
+    assert.ok(sent.length > 0, 'someone is sent to the board, along the back wall: ' + answers.join('; '));
     const seen = await watch(p, ([who, d]) => {
       const bad = who.map((id) => window.run.debug(id)).filter((x) => x && x.pos[0] > d.x0 - 0.05 && x.pos[0] < d.x1 + 0.05 && x.pos[1] < d.wall + 0.05);
       if (bad.length) return { bad: 'someone is in the elevator wall: ' + JSON.stringify(bad.map((x) => x.pos)) };
