@@ -108,14 +108,3 @@ test('a PR whose merge state changes is read again, though its updatedAt and hea
   await pass.once(new Map([['o/r', undefined]]));
   assert.strictEqual((await door.pr(link(12))).mergeStateStatus, 'DIRTY', 'a conflict that came when main moved is served');
 });
-
-test('a PR read as CLEAN is read again when it turns DIRTY, though its updatedAt and head did not change', async () => {
-  say([node(13)]);
-  await pass.once(new Map([['o/r', undefined]]));
-  assert.strictEqual((await door.pr(link(13))).mergeStateStatus, 'CLEAN');
-  say([Object.assign(node(13), { mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' })]);
-  await pass.once(new Map([['o/r', undefined]]));
-  const dirty = await door.pr(link(13));
-  assert.strictEqual(dirty.mergeStateStatus, 'DIRTY');
-  assert.strictEqual(dirty.mergeable, 'CONFLICTING');
-});
