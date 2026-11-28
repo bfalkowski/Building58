@@ -143,3 +143,11 @@ test('the Lead\'s look says the person pushes the workflow file, and what the ta
   assert.match(lineOf(row), /1 unpushed \(GitHub refuses the App a workflow file, so the person pushes it\)/);
   assert.doesNotMatch(lineOf(Object.assign({}, row, { workflowPush: false })), /refuses the App/);
 });
+
+test('the hook and the relay match the same refusal text', () => {
+  for (const said of [REFUSAL, 'remote: refusing to allow a GitHub App to create or update workflow `x.yml` without `workflows` permission']) {
+    assert.strictEqual(wp.refusedIn(said), true);
+    assert.strictEqual(summarize({ hook_event_name: 'PostToolUseFailure', session_id: 's', tool_name: 'Bash', tool_input: { command: 'git push' }, error: said }).workflow_refused, true);
+  }
+  assert.strictEqual(wp.refusedIn('remote: Permission denied'), false);
+});
