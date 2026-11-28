@@ -61,6 +61,18 @@ test('github: status and priority are labels, and done and rejected close the is
   assert.deepStrictEqual([issue().state, issue().state_reason], ['closed', 'not_planned']);
   assert.ok(['office:triage', 'office:ready', 'office:started', 'office:priority-low'].every((l) => s.state().labels.includes(l)), 'labels are made when first needed');
 });
+test('github: a ticket with a kind has the label kind:<kind>, a changed kind swaps it, and no kind adds none', async () => {
+  const s = onGithub();
+  const t = await s.create('p', { title: 'A', body: 'B', status: 'triage', priority: 'low', repo: '/r', base: 'main', createdBy: 'you', blockedBy: [], kind: 'bug' });
+  const issue = () => s.state().issues[0];
+  assert.deepStrictEqual(issue().labels, ['office:triage', 'office:priority-low', 'kind:bug']);
+  await s.update('p', t.id, { kind: 'docs' });
+  assert.deepStrictEqual(issue().labels, ['office:triage', 'office:priority-low', 'kind:docs']);
+  assert.ok(s.state().labels.includes('kind:docs'), 'the label is made when first needed');
+  const plain = await s.create('p', { title: 'C', body: 'D', status: 'triage', priority: 'low', repo: '/r', base: 'main', createdBy: 'you', blockedBy: [] });
+  await s.update('p', plain.id, { status: 'ready' });
+  assert.ok(!s.state().issues[1].labels.some((l) => l.startsWith('kind:')));
+});
 test('github: blockers are issue dependencies, and the rest is hidden in the body', async () => {
   const s = onGithub();
   const f = { title: 'A', body: 'Do it.', status: 'ready', priority: 'normal', repo: '/r', base: 'main', createdBy: 'you' };
