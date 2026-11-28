@@ -1,0 +1,173 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 567,
+  "base": "3a3e3e71f518d3136cda47173c8d934017665e65",
+  "head": "49cb3a8c7e7f61a63e7dfbe888d4fa4cc9b514f5",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": true,
+    "fix_signal": "branch:fix/",
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1770,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1771,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 1
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 1616527
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "met",
+      "details": {
+        "test_files": [
+          "relay/test/autopilot-plan.test.js",
+          "relay/test/github-pass.test.js"
+        ],
+        "tests": [
+          {
+            "name": "relay/test/autopilot-plan.test.js > test > a conflicting PR with no review yet asks its Dev to merge main, since no review starts on a conflict (T-529)",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/github-pass.test.js > test > a PR whose merge state changes is read again, though its updatedAt and head did not change (T-533)",
+            "on_base": "failed"
+          }
+        ],
+        "passed_on_base": [
+          "relay/test/autopilot-plan.test.js > test > a Dev who merged main, and whose PR conflicts again because main moved, is asked again and not counted as failing (T-419)",
+          "relay/test/autopilot-plan.test.js > test > a PR only a person merges says where it is, and ready only when Autopilot would merge it",
+          "relay/test/autopilot-plan.test.js > test > a card moved back after main kept moving starts the count of merges of main over (T-419)",
+          "relay/test/autopilot-plan.test.js > test > a code-only PR merges while the grouped wording PR waits for the person",
+          "relay/test/autopilot-plan.test.js > test > a conflict brings the Dev back whatever review is owed (T-529)",
+          "relay/test/autopilot-plan.test.js > test > a fix verdict or a conflict whose Dev is not running brings the Dev back",
+          "relay/test/autopilot-plan.test.js > test > a merge verdict covers only the commit the reviewer read",
+          "relay/test/autopilot-plan.test.js > test > a merged PR is done, and a conflict goes back to the Dev",
+          "relay/test/autopilot-plan.test.js > test > a reviewed, green, clean PR merges",
+          "relay/test/autopilot-plan.test.js > test > a turn that ends with no new merge of main counts as a failed ask, and the second one goes to the person (T-419)",
+          "relay/test/autopilot-plan.test.js > test > after the cap of merges in a row that each conflicted again, the reason says main kept moving (T-419)",
+          "relay/test/autopilot-plan.test.js > test > commits after a merge verdict go to the person at once when no review can start",
+          "relay/test/autopilot-plan.test.js > test > fixes get one more round, then the person decides",
+          "relay/test/autopilot-plan.test.js > test > it skips a ticket on hold, replaced, or shaped by an open design ticket (T-204)",
+          "relay/test/autopilot-plan.test.js > test > it waits for a review, for the post, and for CI",
+          "relay/test/autopilot-plan.test.js > test > level 6: with Exhibit read, a merge also needs meets_policy at the head",
+          "relay/test/autopilot-plan.test.js > test > the checks",
+          "relay/test/autopilot-plan.test.js > test > the next ticket can come from a label in the allowed list",
+          "relay/test/autopilot-plan.test.js > test > the next ticket: Ready, approved, unblocked, in Board order, and only the allowed ones",
+          "relay/test/autopilot-plan.test.js > test > the person merges CLAUDE.md and the constitution, and a failed or closed PR",
+          "relay/test/autopilot-plan.test.js > test > two ready PRs that touch docs/openapi.json merge one at a time, each after its Dev merged main (T-419)",
+          "relay/test/autopilot-plan.test.js > test > when no review can start, a fix verdict goes to the person at once, never to a wait",
+          "relay/test/autopilot-plan.test.js > test > with an allowed list and nothing to start, the idle note names why each allowed ticket waits (T-291)",
+          "relay/test/github-pass.test.js > test > Autopilot, PR comments, the PR watch and chat ask the pass, not their own gh pr view",
+          "relay/test/github-pass.test.js > test > a PR read while its checks ran is read again when they finish, though its updatedAt did not change",
+          "relay/test/github-pass.test.js > test > a PR that left the open list is forgotten, so the next ask goes to GitHub",
+          "relay/test/github-pass.test.js > test > a PR with more checks than one page holds is not served from the pass",
+          "relay/test/github-pass.test.js > test > a changed head is read from the next pass, and a fresh ask still goes to GitHub",
+          "relay/test/github-pass.test.js > test > a pass with nothing changed costs the same one call, and keeps the same answer",
+          "relay/test/github-pass.test.js > test > owner and name go as strings, so a repo named 123 or true still reads",
+          "relay/test/github-pass.test.js > test > with ten open PRs, a pass makes one call, and reading each PR makes none"
+        ],
+        "did_not_load_on_base": []
+      },
+      "author": "builder",
+      "duration_ms": 1083598
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 943
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 147
+    }
+  ],
+  "verdict": "meets_policy",
+  "gaps": [],
+  "checks_by_author": {
+    "builder": 4,
+    "hidden": 0
+  },
+  "flaky_tests": [
+    "relay/test/ticket-key.test.js > test > a ticket written with key A is read by a relay with key B: Needs you names it, and a person's move approves it"
+  ],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-28T14:56:24.447Z"
+}
