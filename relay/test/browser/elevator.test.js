@@ -2,7 +2,7 @@
 // buttons, and pressing one takes the view to that floor: the executive floor sits above the loft, and
 // the Main floor button brings back the first view. Nobody walks through the elevator's wall, and without
 // WebGL there are no buttons. The wall test counts each person once they have been at their spot: a stay at the
-// fridge lasts half a second at that speed, so waiting for everyone at once to be at a spot could never come.
+// fridge lasts 4 seconds of room time, half a second at the speed 8 the test sets, so waiting for everyone at once to be at a spot could never come.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
