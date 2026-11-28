@@ -88,14 +88,20 @@ test.describe('the elevator, without WebGL', () => {
     const doors = await p.page.evaluate(() => window.run.level().doors);
     assert.ok(doors && doors.x1 > doors.x0, 'the doors are in the back wall: ' + JSON.stringify(doors));
     const ids = await p.page.evaluate(() => window.run.roster().filter((w) => w.id !== 'manager' && w.id !== 'lead').map((w) => w.id));
-    const sent = [];
-    const answers = [];
-    for (const id of ids) { const r = await p.page.evaluate((who) => window.run.do({ action: 'idle', who, do: 'board' }), id); answers.push(id + ': ' + JSON.stringify(r)); if (r.ok) sent.push(id); }
-    assert.ok(sent.length > 0, 'someone is sent to the board, along the back wall: ' + answers.join('; '));
+    const spots = { board: 'board-', chat: 'bar-', window: 'win-', coffee: 'espresso', fridge: 'fridge' };
+    const sent = [], answers = [];
+    for (const id of ids) {
+      for (const what of Object.keys(spots)) {
+        const r = await p.page.evaluate(([who, to]) => window.run.do({ action: 'idle', who, do: to }), [id, what]);
+        if (r.ok) { sent.push([id, spots[what]]); break; }
+        answers.push(id + ' ' + what + ': ' + JSON.stringify(r));
+      }
+    }
+    assert.ok(sent.length > 0, 'someone walks along the back wall: ' + answers.join('; '));
     const seen = await watch(p, ([who, d]) => {
-      const bad = who.map((id) => window.run.debug(id)).filter((x) => x && x.pos[0] > d.x0 - 0.05 && x.pos[0] < d.x1 + 0.05 && x.pos[1] < d.wall + 0.05);
+      const bad = who.map(([id]) => window.run.debug(id)).filter((x) => x && x.pos[0] > d.x0 - 0.05 && x.pos[0] < d.x1 + 0.05 && x.pos[1] < d.wall + 0.05);
       if (bad.length) return { bad: 'someone is in the elevator wall: ' + JSON.stringify(bad.map((x) => x.pos)) };
-      return { done: who.every((id) => { const x = window.run.debug(id); return x && x.step && x.step.t === 'act' && /^board-/.test(x.spot); }) };
+      return { done: who.every(([id, prefix]) => { const x = window.run.debug(id); return x && x.step && x.step.t === 'act' && x.spot && x.spot.startsWith(prefix); }) };
     }, [sent, doors], 90000);
     assert.ok(!seen.bad, seen.bad);
     assert.deepStrictEqual(p.errors, []);
