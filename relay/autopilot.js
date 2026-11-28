@@ -26,7 +26,7 @@
 // It merges at most MAX_MERGES_A_DAY PRs a day, and never one that changes CLAUDE.md or the
 // constitution. After a merge it pulls main into the relay's folder (relay/update.js), which
 // restarts the relay once no session is busy if relay files changed. While that update waits, Autopilot
-// goes on: it stops only once the restart begins.
+// starts no new task, so the quiet moment comes. Its other work goes on, and it stops all of it once the restart begins.
 // A task whose Dev or reviewer is stuck (stalled below) goes to Waiting on you, its session left running
 // at its desk, and comes back to Autopilot by itself once that session moves again. One that nothing
 // moved comes back once something does: a PR, a hook from its Dev, or a posted verdict (movedAgain).
@@ -540,6 +540,12 @@ async function maybeStart(channel) {
   const c = chOf(channel);
   for (const said of pmCheck.takeHeld(channel)) note(channel, said);
   if (starting || tasks.busy() || update.restarting()) return;
+  if (update.waiting()) {
+    const why = 'An update waits for a quiet moment, so Autopilot starts no new task until the relay has restarted.';
+    if (c.idle !== why) { c.idle = why; note(channel, why); }
+    return;
+  }
+  if (c.idle === 'An update waits for a quiet moment, so Autopilot starts no new task until the relay has restarted.') { c.idle = null; save(); }
   const limit = MAX_MERGES_A_DAY();
   if (c.merged >= limit) {
     const why = 'Autopilot merged ' + c.merged + ' PR' + (c.merged === 1 ? '' : 's') + ' today, its limit. It starts again tomorrow, or raise Merges a day in Settings.';

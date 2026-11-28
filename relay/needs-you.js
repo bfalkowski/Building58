@@ -64,12 +64,21 @@ function handedOf(channel, task) {
   return { handedOver: desk.handedOver, devSaysBug: !!desk.devSaysBug, outOfReviews: !!desk.outOfReviews, pushRefused: desk.pushRefused, reviewedSince: r ? { ...r, current: !head || head === r.commit } : null };
 }
 
+function menuOf(t, now) {
+  const m = terminal.menuOf(t);
+  return m && now - m.since >= terminal.MENU_WAIT ? { text: m.text, choices: m.choices, minutes: Math.floor((now - m.since) / 60000) } : null;
+}
+function screenOf(t, now) {
+  const q = terminal.questionOnScreen(t);
+  return q === 'menu' && !menuOf(t, now) ? null : q;
+}
+
 function stateOf(channel, now, lastReport) {
   const all = terminal.all(channel), list = tasks.list(channel).filter((t) => t.state !== 'done');
   const taskOf = (t) => (t.task && list.find((x) => x.id === t.task)) || list.find((x) => x.owner && x.owner.terminal === t.id) || null;
   const seats = all.map((t) => {
     const task = taskOf(t), lv = livenessOf(t, now);
-    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : terminal.questionOnScreen(t), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, stuckJobs: lv.state === 'gone' ? [] : stuckJobsOf(t).map((j) => ({ pid: j.pid, command: j.command, minutes: Math.floor((now - j.since) / 60000) })), spoke: !!t.spoke, continuing: owesContinue(channel, t), fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
+    return { terminal: t.id, who: chat.nameOf(t), role: roleOf(t, task), live: lv.state, cause: lv.cause, message: t.message || null, screen: lv.state === 'gone' ? null : screenOf(t, now), menu: lv.state === 'gone' ? null : menuOf(t, now), task: task ? task.id : null, stuckWhy: t.stuck ? t.stuck.why : null, stuckJobs: lv.state === 'gone' ? [] : stuckJobsOf(t).map((j) => ({ pid: j.pid, command: j.command, minutes: Math.floor((now - j.since) / 60000) })), spoke: !!t.spoke, continuing: owesContinue(channel, t), fresh: !t.spoke && now - (Date.parse(t.startedAt) || 0) < FRESH_MS };
   });
   const report = lastReport || huddles.reportOf(channel);
   const reviewing = (pr) => all.some((x) => !x.exited && x.reviewOf === pr && !x.posted);
@@ -90,7 +99,7 @@ function stateOf(channel, now, lastReport) {
     .filter((d) => d.target && !d.typed && d.blocked && !NOT_STUCK.has(d.blocked) && d.savedAt && now - d.savedAt > UNDELIVERED)
     .sort((a, b) => a.savedAt - b.savedAt)
     .map((d) => ({ terminal: d.target, who: chat.nameOf(terminal.find(channel, d.target)), minutes: Math.floor((now - d.savedAt) / 60000), why: delivery.whyWaits(d.blocked) }));
-  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), mains: mainCi.redOf(channel), writes: require('./tickets.js').writeErrors(channel, now), unread: require('./tickets.js').unreadNotes(channel), claude: claudeVersion.current(), skills: require('./skills.js').lacking(), leadStuck: require('./lead-stuck.js').passedOf(channel) };
+  return { seats, tasks: out, waits, relays: oldRelays.list(), desks: reviews.deadlockOf(channel), mains: mainCi.redOf(channel), writes: require('./tickets.js').writeErrors(channel, now), unread: require('./tickets.js').unreadNotes(channel), claude: claudeVersion.current(), skills: require('./skills.js').lacking(), leadStuck: require('./lead-stuck.js').passedOf(channel), flakes: require('./flake.js').waitingOf(channel) };
 }
 
 async function handle(req, res, channel, rest, ctx) {

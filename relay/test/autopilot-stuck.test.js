@@ -103,7 +103,7 @@ test('a stuck task comes back even over the WIP limit, and Autopilot starts noth
   assert.strictEqual(await taskOf(made[2]), undefined, 'the third waits for room under the limit');
 });
 
-test('an update waits on a session in a turn, and Autopilot still starts and merges other tasks', async (t) => {
+test('an update waits on a session in a turn, and Autopilot still merges a task it started before', async (t) => {
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
   const R0 = await relay({});
   const home = R0.home;
@@ -124,18 +124,18 @@ test('an update waits on a session in a turn, and Autopilot still starts and mer
   const { terminals, say, taskOf, ap } = helpers(R);
   const merged = () => { try { return fs.readFileSync(path.join(gh, 'merged.log'), 'utf8'); } catch (e) { return ''; } };
 
-  // A session of the person's is in a turn, so the update waits for it.
+  const ticket = (await R.call('POST', '/tickets', { title: 'Make a.txt say hello', repo })).body.ticket;
+  await R.call('POST', '/autopilot', { on: true, only: ticket.id });
+  const task = await until(() => taskOf(ticket), 'Autopilot to start the ticket');
+  assert.strictEqual(task.by, 'Autopilot');
+
+  // A session of the person's is in a turn, so the update waits for it. The task is already started.
   const busy = (await R.call('POST', '/terminals', { cwd: repo })).body;
   await say(busy.sessionId, 'UserPromptSubmit');
   commit(src, 'relay/x.js', '2\n', 'relay change'); sh(src, 'push', '-q', 'origin', 'main');
   const u = await R.call('POST', '/update', {});
   assert.strictEqual(u.status, 202, JSON.stringify(u.body));
-  assert.deepStrictEqual(u.body.update.waitingOn.map((w) => w.why), ['in a turn']);
-
-  const ticket = (await R.call('POST', '/tickets', { title: 'Make a.txt say hello', repo })).body.ticket;
-  await R.call('POST', '/autopilot', { on: true, only: ticket.id });
-  const task = await until(() => taskOf(ticket), 'Autopilot to start the ticket while the update waits');
-  assert.strictEqual(task.by, 'Autopilot');
+  assert.deepStrictEqual(u.body.update.waitingOn.map((w) => w.why).filter((w) => w === 'in a turn'), ['in a turn']);
 
   // The Dev pushes its PR, a review says merge, and Autopilot merges it.
   fs.writeFileSync(path.join(task.worktree, 'a.txt'), 'hello\n');
