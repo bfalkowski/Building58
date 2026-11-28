@@ -231,3 +231,18 @@ test('the floor names a merge hold for a Dev whose PR is open', async (t) => {
     assert.ok(out.includes(' · merge hold: ' + why + ' · '), out);
   });
 });
+
+test('a seat whose trust answer was lost can be answered again when the question comes back', async (t) => {
+  const R = await relay({ RELAY_WIP_LIMIT: '5', FAKE_CLAUDE_TRUST: '1' });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const repo = makeRepo(R.home);
+  const seat = (await R.call('POST', '/terminals', { cwd: repo })).body;
+  const asking = async () => (await R.call('GET', '/floor')).body.sessions.find((r) => r.terminal === seat.id).why === 'it is asking the person whether to trust its folder';
+  await until(asking, 'the trust question');
+  await R.call('POST', '/terminals/' + seat.id + '/input', { data: '\r' });
+  assert.strictEqual(await asking(), false, 'the question counts as answered once Enter went in');
+  await R.call('POST', '/terminals/' + seat.id + '/input', { data: 'x'.repeat(450) + '\r' });
+  await until(async () => (await R.screen(seat.id)).includes('GOT[xxx'), 'the question is far back');
+  await R.call('POST', '/terminals/' + seat.id + '/input', { data: 'Do you trust the files in this folder?\r' });
+  await until(asking, 'the question asked again');
+});

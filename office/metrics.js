@@ -188,6 +188,11 @@
     hit.addEventListener('pointerleave', function () { cross.setAttribute('opacity', 0); dot.setAttribute('opacity', 0); hideTip(); });
   }
 
+  function skillRoles(k) {
+    if (!k.sessions) return 'no sessions seen';
+    return Object.keys(k.roles).filter(function (r) { return k.roles[r].sessions; }).map(function (r) { return r + ' ' + k.roles[r].calls + ' in ' + k.roles[r].sessions; }).join(', ');
+  }
+
   function drawTiles(d) {
     var n = d.numbers;
     var list = [
@@ -196,7 +201,8 @@
       ['Waiting on you', hoursText(n.waitingOnYouHours), 'all waits in the range'],
       ['Stalled', hoursText(n.stalledHours), 'detected by the room'],
       ['Jams fixed by hand', String(n.jamsFixedByHand), 'in the jam log'],
-      ['Merged with no help', n.noHelpShare === null ? 'none yet' : Math.round(n.noHelpShare) + '%', 'of tickets Autopilot started']
+      ['Merged with no help', n.noHelpShare === null ? 'none yet' : Math.round(n.noHelpShare) + '%', 'of tickets Autopilot started'],
+      ['Skill calls', String(d.skills.calls), skillRoles(d.skills)]
     ];
     tiles.innerHTML = list.map(function (t) { return '<div class="tile"><div class="k">' + esc(t[0]) + '</div><div class="v">' + esc(t[1]) + '</div><div class="d">' + esc(t[2]) + '</div></div>'; }).join('');
   }

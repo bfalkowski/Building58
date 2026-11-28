@@ -92,6 +92,14 @@ test('a PR Autopilot handed over stays a decision after review news moves its ta
   assert.strictEqual(item.line, 'Decide on PR #12 (T-5): ' + held);
 });
 
+test('a handed-over PR that merged or closed on GitHub is no decision, with its card still in Changes requested', () => {
+  const held = 'Its Dev says a finding is a bug: https://github.com/o/r/pull/12#issuecomment-1';
+  assert.strictEqual(listOf({ tasks: [task({ state: 'changes_requested', pr: PR, prOpen: true, handedOver: held })] })[0].kind, 'handed-over');
+  for (const extra of [{}, { outOfReviews: true }, { reviewedSince: { kind: 'merge', commit: 'abcdef1234', url: '', current: true } }]) {
+    assert.deepStrictEqual(listOf({ tasks: [task({ state: 'changes_requested', pr: PR, prOpen: false, handedOver: held, ...extra })] }), []);
+  }
+});
+
 test('a hand-over whose Dev says a finding is a bug offers Fix it, and no other hand-over does', () => {
   const held = 'Its Dev says a finding the review marked non-blocking is a bug: https://github.com/o/r/pull/12#issuecomment-1';
   const [bug] = listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, handedOver: held, devSaysBug: true })] });

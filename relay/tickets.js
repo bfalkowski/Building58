@@ -780,4 +780,5 @@ async function noteAsRelay(channel, id, text) {
   const ticket = (await listAll(channel)).find((t) => t.id === id);
   return ticket ? addNote(channel, ticket, { text }, RELAYER) : null;
 }
-module.exports = { noteAsRelay, closeForFailure, seatPm, handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { storeName: store.name, noteAsRelay, closeForFailure, seatPm, handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+require('./kind-label.js').begin(module.exports);
