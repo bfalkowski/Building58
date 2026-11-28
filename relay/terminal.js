@@ -498,6 +498,7 @@ function onTrustQuestion(screen) {
 }
 
 function questionOnScreen(t) {
+  if (t.knownPending) return 'menu';
   if (!t.heard && !t.trustAnswered && onTrustQuestion(screenOf(t))) return 'trust';
   if (MENU.test(screenOf({ tail: t.sinceKey === null ? t.tail : t.sinceKey }).slice(-AFTER_TRUST))) return 'menu';
   return null;
@@ -517,17 +518,27 @@ function menuOf(t) {
 function closeKnown(t, known) {
   const n = t.knownTries || 0;
   t.knownTries = n + 1;
+  t.knownPending = { known, at: Date.now(), before: sinceKeyOf(t) };
   t.io.write(known.keys[n]);
   t.sinceKey = '';
   clearTimeout(t.menuLook);
   t.menuLook = setTimeout(() => lookAtMenu(t), KNOWN_RETRY);
-  if (n > 0) return;
-  console.log('Claude Code in ' + t.cwd + ' showed its own prompt "' + known.label + '". The relay chose "' + known.answer + '".');
+  if (n === 0) console.log('Claude Code in ' + t.cwd + ' showed its own prompt "' + known.label + '". The relay chose "' + known.answer + '".');
+}
+function promptClosed(t, known) {
+  t.knownTries = 0; t.menuSince = null;
   for (const fn of answeredFns) { try { fn(t.channel, t, known); } catch (e) { console.error('After a known prompt: ' + e.message); } }
 }
 function lookAtMenu(t) {
   if (!t || t.exited || t.stopped) return;
   clearTimeout(t.menuLook); t.menuLook = null;
+  const pending = t.knownPending;
+  if (pending) {
+    t.knownPending = null;
+    const gone = t.lastOutAt > pending.at && !knownPrompts.identify(screenOf({ tail: sinceKeyOf(t) }).slice(-MENU_LOOK));
+    if (gone) { promptClosed(t, pending.known); return; }
+    t.sinceKey = (pending.before + (t.sinceKey || '')).slice(-TAIL);
+  }
   const open = questionOnScreen(t) === 'menu';
   if (!open) { t.menuSince = null; t.knownTries = 0; return; }
   if (!t.menuSince) t.menuSince = Date.now();

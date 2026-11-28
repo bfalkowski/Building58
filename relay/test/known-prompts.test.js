@@ -72,3 +72,29 @@ test('a session that prints a known prompt\'s words with no menu is left alone',
   assert.strictEqual((await R.call('GET', '/jams')).body.jams.length, 0, 'no jam');
   assert.doesNotMatch(await R.screen(s.id), /MENU-ANSWER/, 'no key sent');
 });
+
+test('a prompt that ignores key 3 gets Escape, and the held news goes in once it is closed', async (t) => {
+  const R = await relay({ FAKE_CLAUDE_MENU: 'stubborn' });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = await R.start({ cwd: makeRepo(R.home) });
+  const who = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === s.id).who;
+  await until(async () => (await R.screen(s.id)).includes('Teach auto mode'), 'the prompt on screen');
+  await R.call('POST', '/chat/office', { text: '@' + who + ' have a look' });
+  await until(async () => (await R.screen(s.id)).includes('MENU-ANSWER[esc]'), 'Escape after key 3 did nothing');
+  await until(async () => POINTER.test(await R.screen(s.id)), 'the held message typed in');
+  const jams = (await R.call('GET', '/jams')).body.jams.filter((j) => j.kind === 'news-behind-menu');
+  assert.strictEqual(jams.length, 1, 'one jam, once the prompt is closed');
+});
+
+test('a prompt no key closes stays open: no jam, nothing typed, and Needs you shows it after the wait', async (t) => {
+  const R = await relay({ FAKE_CLAUDE_MENU: 'stuck', RELAY_MENU_WAIT_MS: '8000' });
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const s = await R.start({ cwd: makeRepo(R.home) });
+  const who = (await R.call('GET', '/terminals')).body.terminals.find((x) => x.id === s.id).who;
+  await until(async () => (await R.screen(s.id)).includes('Teach auto mode'), 'the prompt on screen');
+  await R.call('POST', '/chat/office', { text: '@' + who + ' have a look' });
+  const item = await until(async () => (await R.call('GET', '/needs-you')).body.items.find((i) => i.kind === 'question'), 'the prompt in Needs you', 400);
+  assert.match(item.line, /Teach auto mode about your environment\?/);
+  assert.doesNotMatch(await R.screen(s.id), /GOT\[/, 'nothing typed into the open menu');
+  assert.strictEqual((await R.call('GET', '/jams')).body.jams.filter((j) => j.kind === 'news-behind-menu').length, 0, 'no jam for a prompt that stayed open');
+});
