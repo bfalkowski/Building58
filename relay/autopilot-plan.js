@@ -34,19 +34,24 @@ function exhibitStep(pr, exhibit) {
   if (exhibit.verdict === 'meets_policy') return null;
   return { act: 'person', reason: 'exhibit', why: 'Exhibit says ' + exhibit.verdict + ' at ' + exhibit.commit.slice(0, 7) + ', so its evidence does not pass. Level 6 leaves the merge to a person.' };
 }
+const conflictFor = (devGone, owed) => devGone
+  ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main' + owed + ', but its Dev is not running, so Autopilot brings it back to merge main.' }
+  : { act: 'conflict', why: 'It conflicts with main' + owed + '.' };
 function forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit, noReview) {
   if (!verdict) return { act: 'wait', why: WAITS_FOR_REVIEW };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
     if (rounds >= maxRounds) return { act: 'person', reason: 'rounds', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };
+    if (verdict.commit !== pr.headRefOid && pr.mergeStateStatus === 'DIRTY') return conflictFor(devGone, ', so no follow-up review starts until it is merged');
     if (noReview && (!devGone || verdict.commit !== pr.headRefOid)) return { act: 'person', reason: 'rounds', why: 'The last review asks for fixes, but ' + noReview + NEXT };
     if (devGone && verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review asked for fixes, so a follow-up review checks them.' };
     if (devGone) return { act: 'bring-back', for: 'fix', why: 'The last review asks for fixes, but its Dev is not running, so Autopilot brings it back to fix them.' };
     return { act: 'wait', why: 'The Dev is fixing what the last review found. A follow-up review checks the fixes after the push.' };
   }
+  if (verdict.commit !== pr.headRefOid && pr.mergeStateStatus === 'DIRTY') return conflictFor(devGone, ', so no follow-up review starts until it is merged');
   if (verdict.commit !== pr.headRefOid && noReview) return { act: 'person', reason: 'rounds', why: 'There are commits after the review said merge, but ' + noReview + NEXT };
   if (verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review said merge, so a follow-up review checks them first.' };
-  if (pr.mergeStateStatus === 'DIRTY') return devGone ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main, but its Dev is not running, so Autopilot brings it back to merge main.' } : { act: 'conflict', why: 'It conflicts with main.' };
+  if (pr.mergeStateStatus === 'DIRTY') return conflictFor(devGone, '');
   const ci = ciOf(pr.statusCheckRollup);
   if (ci === 'red') return { act: 'person', reason: 'ci-red', why: 'CI failed on the reviewed commit.' };
   if (ci === 'pending') return { act: 'wait', why: 'Waiting for CI.' };
