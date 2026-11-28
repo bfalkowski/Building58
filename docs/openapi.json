@@ -3951,7 +3951,7 @@
           "Tickets"
         ],
         "summary": "List tickets",
-        "description": "List the tickets, in Board order: open tickets high, normal, low, in work order (rank) within each, then done and rejected ones, the latest changed first. It also has kinds (the kinds a ticket can have, see Kind), labels (the labels tickets have, A to Z, see Labels), wipLimit, leadStarts (the number you let the Lead start tickets up to, or 0) and leadStartsLeft. A ticket has approvedBy (you or Lead) once it is put in Ready. The room page gets the same list as a tickets event on its GET /stream when it opens the stream with board=1, with people, who sits on each ticket, and without the time each pipeline was checked. The stream's hello says whether it will (tickets). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer.\n\nTokens: the relay key, and the token of any session, the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "List the tickets, in Board order: open tickets high, normal, low, in work order (rank) within each, then done and rejected ones, the latest changed first. It also has kinds (the kinds a ticket can have, see Kind), labels (the labels tickets have, A to Z, see Labels), wipLimit, leadStarts (the number you let the Lead start tickets up to, or 0) and leadStartsLeft. A ticket has approvedBy (you or Lead) once it is put in Ready. The room page gets the same list as a tickets event on its GET /stream when it opens the stream with board=1, with people, who sits on each ticket, and without the time each pipeline was checked. The stream's hello says whether it will (tickets). It is sent once as the stream opens, then only when it changes, and only to the room page on this computer. A ticket filed on GitHub, in the GitHub store, can have likely: the open tickets it looks like (Likely duplicates).\n\nTokens: the relay key, and the token of any session, the COO, the security officer. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listTickets",
         "x-tokens": [
           "any session",
@@ -5005,6 +5005,37 @@
               "hold",
               "replaced"
             ]
+          },
+          "likely": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "triage",
+                    "ready",
+                    "started",
+                    "done",
+                    "rejected"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status"
+              ],
+              "additionalProperties": true,
+              "description": "An open ticket that looks like the same work. Only a ticket filed on GitHub carries it."
+            }
           },
           "task": {
             "type": [
