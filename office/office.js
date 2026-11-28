@@ -1018,12 +1018,17 @@
   }
   function bossStop(key, pose, dur, extra) { return [{ t: 'walk', key }, { t: 'face', key }, act(Object.assign({ dur, pose }, extra))]; }
   const bossLines = window.MANAGER_LINES || ['Hm.'];
-  let bossDeck = [];
+  let bossDeck = [], lastBossLine = '';
   function bossRemark() {
     if (Math.random() >= 0.75) return;
-    if (!bossDeck.length) bossDeck = bossLines.slice().sort(() => Math.random() - 0.5);
+    if (!bossDeck.length) {
+      bossDeck = bossLines.slice();
+      for (let i = bossDeck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bossDeck[i], bossDeck[j]] = [bossDeck[j], bossDeck[i]]; }
+      if (bossDeck.length > 1 && bossDeck[bossDeck.length - 1] === lastBossLine) bossDeck.unshift(bossDeck.pop());
+    }
     const line = bossDeck.pop();
-    bubble(boss, line, Math.min(6, 2 + line.length / 15));
+    lastBossLine = line;
+    bubble(boss, line);
   }
   const bossNotes = [];
   function deskOfNote(n) {
@@ -1546,7 +1551,7 @@
 
   let showTags = true;
   const proj = new THREE.Vector3();
-  function bubble(w, text, secs) { const b = tagFor[w.id].bub; b.textContent = text; b.classList.toggle('long', text.length > 28); b.hidden = false; w.bubbleUntil = performance.now() + (secs || 2.5) * 1000; }
+  function bubble(w, text, secs) { const b = tagFor[w.id].bub; b.textContent = text; b.classList.toggle('long', text.length > 30); b.hidden = false; w.bubbleUntil = performance.now() + Math.max(secs || 2.5, text.length > 30 ? 2 + text.length / 15 : 0) * 1000; }
   function tickTags() {
     const rect = canvas.getBoundingClientRect(), W = rect.width, H = rect.height, now = performance.now(), shown = [];
     for (const w of people) {
@@ -1572,7 +1577,7 @@
       }
       if (T.tag.hidden) continue;
       if (!T.w) { T.w = T.tag.offsetWidth; T.h = T.tag.offsetHeight; }
-      shown.push({ el: T.tag, bub: T.bub, x: sx, y: sy, w: T.w, h: T.h });
+      shown.push({ el: T.tag, bub: T.bub, x: sx, y: sy, w: T.bub.hidden ? T.w : Math.max(T.w, T.bub.offsetWidth), h: T.bub.hidden ? T.h : Math.max(T.h, 26 + T.bub.offsetHeight) });
     }
     stackTags(shown);
     if (boss.present && !tagFor[boss.id].bub.hidden) {
