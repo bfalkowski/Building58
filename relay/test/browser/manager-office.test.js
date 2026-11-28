@@ -49,14 +49,20 @@ pageTest('the Lead can go into the manager\'s office and sit, and nobody else wa
 
   // Everyone else wanders for a while, and none of them goes past the back wall.
   const others = await p.page.evaluate(() => window.run.roster().filter((w) => w.id !== 'lead').map((w) => w.id));
+  const spots = { board: 'board-', chat: 'bar', window: 'win', couch: 'couch' };
   const sent = [];
-  for (const id of others) { const r = await p.page.evaluate((who) => window.run.do({ action: 'idle', who, do: 'board' }), id); if (r.ok) sent.push(id); }
-  assert.ok(sent.length > 0, 'someone is sent to the board');
-  const seen = await watch(p, ([ids, wall, sentIds]) => {
+  for (const id of others) {
+    for (const what of Object.keys(spots)) {
+      const r = await p.page.evaluate(([who, to]) => window.run.do({ action: 'idle', who, do: to }), [id, what]);
+      if (r.ok) { sent.push([id, spots[what]]); break; }
+    }
+  }
+  assert.ok(sent.length > 0, 'someone is sent to a spot on the floor');
+  const seen = await watch(p, ([ids, wall, sentTo]) => {
     const ds = ids.map((id) => window.run.debug(id)).filter(Boolean);
     const bad = ds.filter((d) => d.pos[1] <= wall).map((d) => d.pos[1]);
     if (bad.length) return { bad: 'nobody but the manager and the Lead is in the office: ' + bad };
-    return { done: sentIds.every((id) => { const d = window.run.debug(id); return d && d.step && d.step.t === 'act' && /^board-/.test(d.spot); }) };
+    return { done: sentTo.every(([id, prefix]) => { const d = window.run.debug(id); return d && d.step && d.step.t === 'act' && d.spot.startsWith(prefix); }) };
   }, [others, BACK_WALL, sent], 90000);
   assert.strictEqual(seen.bad, undefined, seen.bad);
   assert.deepStrictEqual(p.errors, []);
