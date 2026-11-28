@@ -29,6 +29,7 @@ async function addWorker(p, folder, here) {
   assert.strictEqual(terms.length, before + 1, 'one new session');
   return terms[terms.length - 1];
 }
+const stopAll = (...ts) => Promise.all(ts.map((t) => o.R.call('POST', '/terminals/' + t.id + '/stop', {})));
 const runningIn = (p) => p.page.innerText('#cc-status').then((s) => s.replace(/^Running in (.*) · session \w+$/, '$1'));
 
 pageTest('Add worker starts a session in its own checkout, and the terminal shows it', get, async (p) => {
@@ -54,7 +55,7 @@ pageTest('Add worker starts a session in its own checkout, and the terminal show
 pageTest('keys typed while a send is on its way go together in the next one, so a slow relay does not cost a request a letter (T-613)', get, async (p) => {
   const repo = makeRepo(o.R.home, 'batch-repo');
   await p.open();
-  await addWorker(p, repo, false);
+  const w = await addWorker(p, repo, false);
   let sends = 0;
   await p.page.route(/\/terminals\/[0-9a-f]{12}\/input$/, async (r) => { sends++; await new Promise((d) => setTimeout(d, 300)); await r.continue(); });
   const text = 'typed fast through a slow relay';
@@ -64,12 +65,13 @@ pageTest('keys typed while a send is on its way go together in the next one, so 
   await p.page.locator('#cc-term .xterm-rows', { hasText: 'GOT[' + text + ']' }).waitFor();
   assert.ok(sends < text.length / 2, 'the keys went in ' + sends + ' sends, for ' + text.length + ' letters');
   await p.page.unroute(/\/terminals\/[0-9a-f]{12}\/input$/);
+  await stopAll(w);
 });
 
 pageTest('Enter goes in a send of its own, as the relay types it, not joined to the text before it (T-613)', get, async (p) => {
   const repo = makeRepo(o.R.home, 'enter-repo');
   await p.open();
-  await addWorker(p, repo, false);
+  const w = await addWorker(p, repo, false);
   const bodies = [];
   await p.page.route(/\/terminals\/[0-9a-f]{12}\/input$/, async (r) => { bodies.push(JSON.parse(r.request().postData()).data); await new Promise((d) => setTimeout(d, 300)); await r.continue(); });
   await p.page.click('#cc-term');
@@ -79,6 +81,7 @@ pageTest('Enter goes in a send of its own, as the relay types it, not joined to 
   assert.strictEqual(bodies[bodies.length - 1], '\r', 'the last send is Enter alone');
   assert.ok(!bodies.some((b) => b.length > 1 && /[\r\n]/.test(b)), 'no send joins text and Enter: ' + JSON.stringify(bodies));
   await p.page.unroute(/\/terminals\/[0-9a-f]{12}\/input$/);
+  await stopAll(w);
 });
 
 pageTest('keys still waiting when you switch sessions go to the session they were typed in (T-613)', get, async (p) => {
@@ -100,12 +103,13 @@ pageTest('keys still waiting when you switch sessions go to the session they wer
   assert.strictEqual(to(a.id), 'only for a', 'the keys typed for a reached a');
   assert.ok(!to(b.id).includes('for a'), 'none of a\'s keys reached b');
   await p.page.unroute(/\/terminals\/[0-9a-f]{12}\/input$/);
+  await stopAll(a, b);
 });
 
 pageTest('after a send fails, the keys typed next still reach the session (T-613)', get, async (p) => {
   const repo = makeRepo(o.R.home, 'fail-repo');
   await p.open();
-  await addWorker(p, repo, false);
+  const w = await addWorker(p, repo, false);
   let first = true;
   await p.page.route(/\/terminals\/[0-9a-f]{12}\/input$/, async (r) => { if (first) { first = false; await r.abort(); return; } await r.continue(); });
   await p.page.click('#cc-term');
@@ -117,6 +121,7 @@ pageTest('after a send fails, the keys typed next still reach the session (T-613
   await p.page.locator('#cc-term .xterm-rows', { hasText: 'GOT[kept]' }).waitFor();
   await p.page.unroute(/\/terminals\/[0-9a-f]{12}\/input$/);
   p.errors = p.errors.filter((e) => !/input|Failed to load resource|ERR_FAILED/.test(e));
+  await stopAll(w);
 });
 
 pageTest('Use this folder starts the session in the folder itself', get, async (p) => {
