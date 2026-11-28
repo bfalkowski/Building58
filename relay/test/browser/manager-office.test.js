@@ -47,16 +47,28 @@ pageTest('the Lead can go into the manager\'s office and sit, and nobody else wa
   await until(p, () => { const d = window.run.debug('lead'); return d.seated && /^boss-guest-/.test(d.spot); });
   assert.ok((await p.page.evaluate(() => window.run.debug('lead'))).pos[1] < BACK_WALL, 'the guest chair is in the office');
 
-  // Everyone else wanders for a while, and none of them goes past the back wall.
+  // Everyone comes in, then everyone else walks somewhere, and none of them goes past the back wall. The
+  // board has two spots, so first fill both, as wandering people often do: then the rest go to their desks.
+  await p.page.evaluate(() => window.run.cast());
   const others = await p.page.evaluate(() => window.run.roster().filter((w) => w.id !== 'lead').map((w) => w.id));
-  const sent = [];
-  for (const id of others) { const r = await p.page.evaluate((who) => window.run.do({ action: 'idle', who, do: 'board' }), id); if (r.ok) sent.push(id); }
-  assert.ok(sent.length > 0, 'someone is sent to the board');
+  const go = (who, what) => p.page.evaluate(([w, d]) => window.run.do({ action: 'idle', who: w, do: d }), [who, what]);
+  const held = () => p.page.evaluate((ids) => ids.filter((id) => /^board-/.test((window.run.debug(id) || {}).spot || '')).length, others);
+  const atBoard = [];
+  for (const id of others) { if ((await held()) >= 2) break; if ((await go(id, 'board')).ok) atBoard.push(id); }
+  await until(p, (ids) => ids.filter((id) => /^board-/.test((window.run.debug(id) || {}).spot || '')).length >= 2, others);
+  const sent = [...atBoard];
+  for (const id of others.filter((x) => !atBoard.includes(x))) {
+    const r = (await go(id, 'board')).ok ? { ok: true } : await go(id, 'desk');
+    if (r.ok) sent.push(id);
+  }
+  assert.strictEqual(sent.length, others.length, 'everyone is sent somewhere, to the board or to their desk');
   const seen = await watch(p, ([ids, wall, sentIds]) => {
     const ds = ids.map((id) => window.run.debug(id)).filter(Boolean);
     const bad = ds.filter((d) => d.pos[1] <= wall).map((d) => d.pos[1]);
     if (bad.length) return { bad: 'nobody but the manager and the Lead is in the office: ' + bad };
-    return { done: sentIds.every((id) => { const d = window.run.debug(id); return d && d.step && d.step.t === 'act' && /^board-/.test(d.spot); }) };
+    const got = window.arrived || (window.arrived = new Set());
+    for (const id of sentIds) { const d = window.run.debug(id); if (d && d.step && d.step.t === 'act') got.add(id); }
+    return { done: sentIds.every((id) => got.has(id)) };
   }, [others, BACK_WALL, sent], 90000);
   assert.strictEqual(seen.bad, undefined, seen.bad);
   assert.deepStrictEqual(p.errors, []);

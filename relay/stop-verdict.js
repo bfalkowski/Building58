@@ -31,7 +31,6 @@ function stopVerdict(t, task, now, question) {
   if (unanswered || now - (t.lastEnterAt || 0) < ENTER_SETTLES) return no('Enter was pressed and no hook has answered yet');
   if (t.spoke && !t.hooked) return no('no hook has said what state it is in');
   if (t.role === 'pm' && t.typedAt && now - t.typedAt < PM_TALK()) return no('the PM is talking to the person: they typed to it ' + minutes(now - t.typedAt) + ' min ago');
-  if (task && task.state === 'waiting_on_you') return no('its task is Waiting on you');
   const idle = t.hooked ? 'idle ' + minutes(now - t.lastActAt) + ' min' : 'idle';
   if (!t.spoke) return { safe: true, reason: 'it was never given a prompt' };
   if (t.role === 'reviewer') return { safe: true, reason: (t.posted ? 'its review is posted, ' : 'it has not posted a review, ') + idle };
@@ -46,6 +45,7 @@ function leadMayStop(t, task, merged) {
   if (t.task) {
     if (!task) return no('its task is not on the board');
     if (task.state === 'done') return { may: true, why: 'its task is Done, ' };
+    if (task.state === 'waiting_on_you') return { may: true, why: 'its task waits on the person, ', keeps: true };
     return merged ? { may: true, why: 'its PR merged, ' } : no('its PR has not merged and its task is not Done');
   }
   if (t.role === 'pm') return no('it is the PM');
@@ -60,7 +60,7 @@ function reviewRank(c) {
   if (t.reviewOf) return t.posted ? { rank: 1, why: '' } : null;
   if (!t.task || !task) return null;
   const kind = leadMayStop(t, task, c.merged);
-  if (kind.may) return c.unsaved ? null : { rank: 2, why: kind.why };
+  if (kind.may) return c.unsaved && !kind.keeps ? null : { rank: 2, why: kind.why };
   return task.pr && c.waits ? { rank: 3, why: 'its PR waits on a review, ' } : null;
 }
 function forReview(candidates) {
