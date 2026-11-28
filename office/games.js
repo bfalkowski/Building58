@@ -11,6 +11,7 @@
   const params = new URLSearchParams(location.search);
   const channel = params.get('channel');
   if (!channel) { section.hidden = true; return; }
+  section.hidden = true;
 
   const list = $('game-list'), form = $('game-form'), pick = $('game-pick'), seatsIn = $('game-seats-n'), seedIn = $('game-seed');
   const watchIn = $('game-watch'), settingsIn = $('game-settings'), note = $('game-note');
@@ -64,6 +65,7 @@
   pick.addEventListener('change', fitSeats);
   async function loadGames() {
     const r = await api('/games');
+    section.hidden = !r.ok || r.on === false;
     if (r.ok) { games = r.games; drawGames(); }
   }
 
