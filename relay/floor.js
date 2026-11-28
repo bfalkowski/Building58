@@ -73,6 +73,7 @@ function deskFor(channel, t, task, work, verdict, now, needs) {
     t, role, work, now, verdict,
     task: shown && Object.assign({}, shown, { pipeline: pipe }, needs ? needs.get(shown.id) || { needsYou: null, reviewRuns: false } : null),
     pipeline: pipe,
+    failed: pipe && pipe.state === 'red' ? ((require('./pipeline.js').of(pr) || {}).failed || []).map((f) => f.name) : [],
     review: pr ? require('./reviews.js').deskOf(channel, pr) : null,
     reviewing: !!reviewer,
     reviewer: reviewer ? reviewer.who || null : null,

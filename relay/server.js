@@ -43,7 +43,7 @@ const office = SESSIONS ? {
   terminal: require('./terminal.js'), tasks: require('./tasks.js'), checkouts: require('./checkouts.js'), tickets: require('./tickets.js'),
   huddles: require('./huddles.js'), chat: require('./chat.js'), floor: require('./floor.js'), prComments: require('./pr-comments.js'),
   update: require('./update.js'), sessions: require('./sessions.js'), reviews: require('./reviews.js'), autopilot: require('./autopilot.js'),
-  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), metrics: require('./metrics.js'), jams: require('./jams.js'), failures: require('./failures.js'), leadStuck: require('./lead-stuck.js'), leadCommands: require('./lead-commands.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), pmSort: require('./pm-sort.js'),
+  config: require('./config.js'), rules: require('./rules.js'), coo: require('./coo.js'), metrics: require('./metrics.js'), jams: require('./jams.js'), failures: require('./failures.js'), flake: require('./flake.js'), leadStuck: require('./lead-stuck.js'), leadCommands: require('./lead-commands.js'), security: require('./security.js'), boardPush: require('./board-push.js'), leadCheck: require('./lead-check.js'), pmSort: require('./pm-sort.js'),
   mainMoves: require('./main-moves.js'), prWatch: require('./pr-watch.js'), managerWatch: require('./manager-watch.js'), games: require('./games.js'), needsYou: require('./needs-you.js'), ready: require('./ready.js'), oldRelays: require('./old-relays.js'), awake: require('./awake.js')
 } : null;
 if (office) {
@@ -466,6 +466,7 @@ server.listen(PORT, HOST, async () => {
     office.tasks.begin({ log });
     office.ready.begin({ log });
     office.failures.begin();
+    office.flake.begin();
     office.leadStuck.begin();
     office.awake.begin({ log });
     // Replayed after reviews.begin, or reviews would ignore a queued PR or push.
