@@ -36,7 +36,7 @@ function turn(channel, k, on, lead) {
 function lowered(list, now) { return list.filter((x) => now - Date.parse(x.at) < DAY); }
 
 function lower(channel, finding, list, now) {
-  if (!config.get('managerLowersTrust') || !STALLS.has(finding.kind)) return null;
+  if (!config.get('managerLowersTrust') || !(STALLS.has(finding.kind) || finding.kind === 'judged')) return null;
   if (lowered(list, now).length >= PER_DAY) return { limit: true };
   const { switches, lead } = switchesOf(channel), step = plan.step(switches, !!lead);
   if (!step) return null;
@@ -55,4 +55,4 @@ function lower(channel, finding, list, now) {
   return { entry };
 }
 
-module.exports = { lower, lowered, STALLS, PER_DAY };
+module.exports = { lower, lowered, levelNow, STALLS, PER_DAY };

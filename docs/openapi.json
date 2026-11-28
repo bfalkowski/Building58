@@ -1406,9 +1406,11 @@
           "Jams"
         ],
         "summary": "List jams",
-        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. ?range=1d|7d|30d (7d by default, anything else is 400 bad_param) lists the jams logged in the range, oldest first, each with at (when it was logged), kind, ticket, pr, since, fix and by, and, when not the defaults, outcome and blocked, and kinds gives each kind's name. See The jam log.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer: a session's token gets 403 person_only. ?range=1d|7d|30d (7d by default, anything else is 400 bad_param) lists the jams logged in the range, oldest first, each with at (when it was logged), kind, ticket, pr, since, fix and by, and, when not the defaults, outcome and blocked, and kinds gives each kind's name. See The jam log.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "listJams",
-        "x-tokens": [],
+        "x-tokens": [
+          "the manager"
+        ],
         "responses": {
           "2XX": {
             "description": "Done.",
@@ -1648,9 +1650,11 @@
           "Manager watch"
         ],
         "summary": "Get manager",
-        "description": "Only with the relay key. What the manager's watch found: on, how often it looks (every, seconds), how many times it has looked (looks) and when (lastLook), its limits, the checks it counts (pr, name and the commits that check failed on), the problems that open now (key, since and the ticket it filed), whether lowersTrust (Let the manager lower the trust level) is on, the trust levels he has lowered in the last notes (lowered: at, key, from, to (or null for no level), saw, said, say), and its last notes: seq, at, kind (brake for a lowering), ticket, task, terminal, reason, say and the ticket it filed.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "With the relay key, or the manager session's token (the manager as a session). What the manager's watch found: on, how often it looks (every, seconds), how many times it has looked (looks) and when (lastLook), its limits, the checks it counts (pr, name and the commits that check failed on), the problems that open now (key, since and the ticket it filed), the room's trust level and its name (levelName), whether lowersTrust (Let the manager lower the trust level) is on, the trust levels he has lowered in the last notes (lowered: at, key, from, to (or null for no level), saw, said, say), and its last notes: seq, at, kind (brake for a lowering), ticket, task, terminal, reason, say and the ticket it filed.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getManager",
-        "x-tokens": [],
+        "x-tokens": [
+          "the manager"
+        ],
         "responses": {
           "2XX": {
             "description": "Done.",
@@ -1680,15 +1684,119 @@
         ]
       }
     },
+    "/channels/{channel}/manager/lower": {
+      "post": {
+        "tags": [
+          "Manager watch"
+        ],
+        "summary": "Post manager lower",
+        "description": "Only the manager session's token, and only while Let the manager lower the trust level is on. {\"why\"}: what work cannot get past. The relay lowers the trust level one step, as the watch does, and answers from, to and message. It never raises it: 403 with the switch off, 409 at level 0, 429 after two lowerings in 24 hours.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postManagerLower",
+        "x-tokens": [
+          "the manager"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/manager/note": {
+      "post": {
+        "tags": [
+          "Manager watch"
+        ],
+        "summary": "Post manager note",
+        "description": "Only the manager session's token. {\"text\", \"key\"}: a short note for Needs you, with what it saw and what the person can do. A note with the same key replaces the old one. It leaves after a day, or when the stall its key names is gone. At most 5 notes.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "postManagerNote",
+        "x-tokens": [
+          "the manager"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel}/metrics": {
       "get": {
         "tags": [
           "Metrics"
         ],
         "summary": "Get metrics",
-        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load, lead (time to act, what the Lead fixed, passed to the person and never acted on, by kind, and the shared failure channels), skills (calls and sessions in all, and for each role in roles, from the Skill calls in the sessions' logs) and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load, lead (time to act, what the Lead fixed, passed to the person and never acted on, by kind, and the shared failure channels), skills (calls and sessions in all, and for each role in roles, from the Skill calls in the sessions' logs) and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getMetrics",
-        "x-tokens": [],
+        "x-tokens": [
+          "the manager"
+        ],
         "responses": {
           "2XX": {
             "description": "Done.",
@@ -4041,9 +4149,11 @@
           "Tickets"
         ],
         "summary": "Get ticket",
-        "description": "One ticket.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "One ticket.\n\nTokens: the relay key, and the token of the manager. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getTicket",
-        "x-tokens": [],
+        "x-tokens": [
+          "the manager"
+        ],
         "responses": {
           "2XX": {
             "description": "Done.",
@@ -4873,7 +4983,7 @@
               "string",
               "null"
             ],
-            "description": "dev, reviewer, pm, lead or null for the person."
+            "description": "dev, reviewer, pm, lead, manager or null for the person."
           },
           "at": {
             "type": "string"
@@ -5686,7 +5796,7 @@
               "string",
               "null"
             ],
-            "description": "lead for the Lead, pm for the PM the room keeps running, or null."
+            "description": "lead for the Lead, pm for the PM the room keeps running, manager for the manager session, or null."
           },
           "menu": {
             "type": [
@@ -5785,6 +5895,10 @@
             },
             "required": [],
             "additionalProperties": true
+          },
+          "manager": {
+            "type": "object",
+            "description": "The manager seat: the trust level and its name, when the manager last lowered it, the cause it watches and whether the jam count fell after the fix, and the COO's last report."
           },
           "leadEnded": {
             "type": [

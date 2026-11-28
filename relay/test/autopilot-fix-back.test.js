@@ -15,9 +15,12 @@ const sh = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'us
 const PR = 'https://github.com/acme/widgets/pull/7';
 const GREEN = [{ name: 'pipeline', status: 'COMPLETED', conclusion: 'SUCCESS' }];
 
-async function office(t) {
+const STALL_MS = 2000;
+const NEVER_STALLS_MS = 600000;
+
+async function office(t, stallMs = STALL_MS) {
   const ghDir = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
-  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: '2000', RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '3600', RELAY_WIP_LIMIT: '1' }, null, { autoReview: true });
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: String(stallMs), RELAY_REVIEW_GRACE_MS: '200', RELAY_REVIEW_POLL_SECONDS: '3600', RELAY_WIP_LIMIT: '1' }, null, { autoReview: true });
   t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
@@ -61,7 +64,7 @@ async function fillDesks(o) {
 }
 
 test('a task owed a fix keeps its slot: no new ticket starts first, and the Dev comes back on the freed desk', async (t) => {
-  const o = await office(t);
+  const o = await office(t, NEVER_STALLS_MS);
   await o.R.call('POST', '/autopilot', { on: false });
   await fixVerdict(o);
   await fillDesks(o);

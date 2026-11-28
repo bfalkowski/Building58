@@ -28,9 +28,9 @@ const ENABLED = process.env.RELAY_TERMINAL === '1';
 const CLAUDE = process.env.CLAUDE_CMD || 'claude';
 const KEEP = 256 * 1024;
 const MAX_TERMINALS = 9;
-const SEAT_DESKS = 2;
+const SEAT_DESKS = 3;
 const WORKER_DESKS = MAX_TERMINALS - SEAT_DESKS;
-const seated = (t) => !!(t.lead || t.standing || t.role === 'pm');
+const seated = (t) => !!(t.lead || t.standing || t.role === 'pm' || t.role === 'manager');
 const workersOf = (channel) => all(channel).filter((t) => !t.exited && !seated(t)).length;
 const OUT_BATCH = Number(process.env.RELAY_OUT_BATCH_MS) >= 1 ? Number(process.env.RELAY_OUT_BATCH_MS) : 16;
 const config = require('./config.js');
@@ -357,9 +357,9 @@ function sse(res, event, data) { res.write('event: ' + event + '\ndata: ' + JSON
 function start(channel, body, ctx, onExit, own) {
   const kept = own && own.kept;
   const terms = termsOf(channel), running = [...terms.values()].filter((t) => !t.exited);
-  const seat = !!(own && (own.standing || own.newLead || (kept && (kept.lead || kept.standing)))) || (body.lead === true && !!body.resume) || body.role === 'pm';
+  const seat = !!(own && (own.standing || own.newLead || (kept && (kept.lead || kept.standing)))) || (body.lead === true && !!body.resume) || body.role === 'pm' || body.role === 'manager';
   if (running.length >= MAX_TERMINALS) return { status: 409, body: { ok: false, error: 'full', message: 'All ' + MAX_TERMINALS + ' desks are taken. Stop a session first.' } };
-  if (!seat && running.filter((t) => !seated(t)).length >= WORKER_DESKS) return { status: 409, body: { ok: false, error: 'full', message: 'All ' + WORKER_DESKS + ' worker desks are taken. The other ' + SEAT_DESKS + ' are kept for the Lead and the PM. Stop a session first.' } };
+  if (!seat && running.filter((t) => !seated(t)).length >= WORKER_DESKS) return { status: 409, body: { ok: false, error: 'full', message: 'All ' + WORKER_DESKS + ' worker desks are taken. The other ' + SEAT_DESKS + ' are kept for the Lead, the PM and the manager. Stop a session first.' } };
   const resume = body.resume ? String(body.resume).trim() : '';
   if (resume && !UUID.test(resume)) return { status: 400, body: { ok: false, error: 'bad_session', message: 'A session id looks like b299ee24-0c4c-4507-afb7-bb2625eeb192.' } };
   if (resume && running.some((t) => t.sessionId === resume)) return { status: 409, body: { ok: false, error: 'running', message: 'That session is already running here.' } };

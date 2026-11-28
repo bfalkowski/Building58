@@ -92,6 +92,14 @@ test('a PR Autopilot handed over stays a decision after review news moves its ta
   assert.strictEqual(item.line, 'Decide on PR #12 (T-5): ' + held);
 });
 
+test('a handed-over PR that merged or closed on GitHub is no decision, with its card still in Changes requested', () => {
+  const held = 'Its Dev says a finding is a bug: https://github.com/o/r/pull/12#issuecomment-1';
+  assert.strictEqual(listOf({ tasks: [task({ state: 'changes_requested', pr: PR, prOpen: true, handedOver: held })] })[0].kind, 'handed-over');
+  for (const extra of [{}, { outOfReviews: true }, { reviewedSince: { kind: 'merge', commit: 'abcdef1234', url: '', current: true } }]) {
+    assert.deepStrictEqual(listOf({ tasks: [task({ state: 'changes_requested', pr: PR, prOpen: false, handedOver: held, ...extra })] }), []);
+  }
+});
+
 test('a hand-over whose Dev says a finding is a bug offers Fix it, and no other hand-over does', () => {
   const held = 'Its Dev says a finding the review marked non-blocking is a bug: https://github.com/o/r/pull/12#issuecomment-1';
   const [bug] = listOf({ tasks: [task({ state: 'waiting_on_you', pr: PR, handedOver: held, devSaysBug: true })] });
@@ -199,7 +207,7 @@ test('the most urgent kind comes first, and every kind has a rule', () => {
   const dev = seat({ task: 'k1' }), asker = seat({ terminal: 'bbbbbbbbbbbb', who: 'Bo', live: 'waiting', message: 'Claude needs your permission to use Bash' });
   const items = listOf({ seats: [dev, asker], tasks: [task({ owner: dev.terminal }), task({ id: 'k2', ticket: 'T-6', state: 'in_review', pr: PR, prOpen: true, onlyYouMerge: 'only you' })] });
   assert.deepStrictEqual(kinds(items), ['permission', 'merge', 'prompt']);
-  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone']);
+  assert.deepStrictEqual(KINDS, ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'manager-note', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone']);
 });
 
 // T-374: reviews waited for a desk, and every desk was held by a session the relay may not stop.

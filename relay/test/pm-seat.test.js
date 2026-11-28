@@ -1,5 +1,5 @@
 // The PM's seat (relay/pm-seat.js): the room keeps one PM running and starts it again when it ends, and
-// workers have seven of the nine desks, because the Lead and the PM keep two (relay/terminal.js).
+// workers have six of the nine desks, because the Lead, the PM and the manager keep three (relay/terminal.js).
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -25,15 +25,15 @@ test('the room keeps a PM running, and starts it again when it ends', async (t) 
   assert.strictEqual((await pms(R)).length, 1, 'still one PM');
 });
 
-test('workers have at most 7 desks, and the Lead and the PM can still sit', async (t) => {
+test('workers have at most 6 desks, and the Lead and the PM can still sit', async (t) => {
   const R = await relay({ RELAY_PM_SEAT: '1' });
   t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
   const repo = makeRepo(R.home);
   await until(async () => (await pms(R)).length, 'a PM');
-  for (let i = 0; i < 7; i++) assert.strictEqual((await roomCall(R, 'POST', '/terminals', { cwd: repo })).status, 201, 'worker ' + (i + 1));
+  for (let i = 0; i < 6; i++) assert.strictEqual((await roomCall(R, 'POST', '/terminals', { cwd: repo })).status, 201, 'worker ' + (i + 1));
   const full = await roomCall(R, 'POST', '/terminals', { cwd: repo });
   assert.strictEqual(full.status, 409);
-  assert.match(full.body.message, /All 7 worker desks are taken\. The other 2 are kept for the Lead and the PM/);
+  assert.match(full.body.message, /All 6 worker desks are taken\. The other 3 are kept for the Lead, the PM and the manager/);
   const all = (await roomCall(R, 'GET', '/terminals')).body.terminals.filter((x) => x.running);
-  assert.strictEqual(all.length, 8, '7 workers and the PM');
+  assert.strictEqual(all.length, 7, '6 workers and the PM');
 });

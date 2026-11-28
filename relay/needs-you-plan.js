@@ -53,8 +53,9 @@
 //                unstick the board off (relay/flake.js)
 //   push-refused an open PR whose Dev's push the push hold refused after a merge verdict, with the reason and
 //                a Fix it button that lifts the hold, unless the hand-over for a Dev's bug claim has that button
-//   handed-over  a task in Waiting on you that Autopilot handed over, with Autopilot's reason, or, for a stall,
-//                with the next step a review posted after it gives
+//   handed-over  an open PR's task that Autopilot handed over, in any column until the person moves its
+//                card, with Autopilot's reason, or, for a stall, with the next step a review posted
+//                after it gives
 //   review       an open PR whose automatic review could not start, with the reason, unless a review of it runs
 //   waiting      any other task in Waiting on you, unless a review of its PR runs, its pipeline waits, or its
 //                Dev is at work
@@ -72,7 +73,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'manager-note', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -117,9 +118,9 @@ function taskItem(t, dev) {
   if (pr && t.prMerged) return item('merged', 'PR ' + numberOf(pr) + onPr + ' merged on GitHub. Move its task to Done.', { url: pr, done: t.id });
   if (pr && t.prClosed) return item('closed', 'PR ' + numberOf(pr) + onPr + ' was closed on GitHub without a merge. Look at it. This line stays until the PR is reopened, its task gets a new PR, or its task is Done.', { url: pr });
   if (pr && t.prOpen !== false && t.pushRefused && !(t.handedOver && t.devSaysBug)) return item('push-refused', 'Look at PR ' + numberOf(pr) + onPr + ': the push hold refused its Dev\'s push. ' + oneLine(t.pushRefused.why, 300) + ' Press Fix it to lift the hold, so its Dev can push and a follow-up review checks it.', { url: pr, fix: t.id });
-  if (t.handedOver && pr && t.reviewedSince) return reviewedLine(t, dev, item);
-  if (t.handedOver && pr && t.outOfReviews) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.repo ? { url: pr, review: { pr, from: t.repo } } : { url: pr });
-  if (t.handedOver && pr) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
+  if (t.handedOver && pr && t.prOpen !== false && t.reviewedSince) return reviewedLine(t, dev, item);
+  if (t.handedOver && pr && t.prOpen !== false && t.outOfReviews) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.repo ? { url: pr, review: { pr, from: t.repo } } : { url: pr });
+  if (t.handedOver && pr && t.prOpen !== false) return item('handed-over', 'Decide on PR ' + numberOf(pr) + onPr + ': ' + oneLine(t.handedOver, 300), t.devSaysBug ? { url: pr, fix: t.id } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns && /came back empty/.test(t.reviewFailed)) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': the review came back empty, twice, with no verdict or no words on what was checked.', dev ? { terminal: dev.terminal } : { url: pr });
   if (pr && t.prOpen !== false && t.reviewFailed && !t.reviewRuns) return item('review', 'Get a review of PR ' + numberOf(pr) + onPr + ': its automatic review could not start, and the relay stopped trying. ' + oneLine(t.reviewFailed, 400), dev ? { terminal: dev.terminal } : { url: pr });
   if (t.state === 'waiting_on_you') {
@@ -196,6 +197,10 @@ function listOf(input) {
   for (const x of (input && input.leadStuck) || []) {
     if (!x || !x.item) continue;
     items.push({ kind: 'lead-stuck', who: 'Lead', terminal: null, task: null, ticket: null, pr: /^https:/.test(x.item) ? x.item : null, line: 'The Lead cannot unstick ' + oneLine(x.item, 120) + ': ' + oneLine(x.why, 300).replace(/([^.!?])$/, '$1.') + ' It named it on ' + (Number(x.passes) || 3) + ' passes in a row and did not act.', link: /^https:/.test(x.item) ? { url: x.item } : {} });
+  }
+  for (const n of (input && input.managerNotes) || []) {
+    const text = n && oneLine(n.text, 600);
+    if (text) items.push({ kind: 'manager-note', who: 'Manager', terminal: null, task: null, ticket: n.ticket || null, pr: null, line: 'The manager saw a stall: ' + text.replace(/([^.!?])$/, '$1.'), link: {} });
   }
   for (const f of (input && input.flakes) || []) {
     if (!f || !PR_LINK.test(String(f.pr))) continue;

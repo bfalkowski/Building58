@@ -160,6 +160,8 @@ async function fileAsManager(channel, { title, body, repo }) {
   const base = await tasks.defaultBranch(main);
   return inTurn(channel, () => file(channel, { title: clean(title).replace(/\s+/g, ' ').slice(0, MAX_TITLE), text: clean(body).slice(0, MAX_BODY), priority: 'normal', repo: main, base, labels: ['manager'] }, { role: 'manager', cwd: main }));
 }
+const MANAGER = { role: 'manager', cwd: '' };
+const noteAsManager = (channel, id, text) => addNote(channel, { id }, { text }, MANAGER);
 async function file(channel, { title, text, priority, repo, base, blockedBy: asked, shapes: askedShapes, kind: askedKind, labels: askedLabels }, agent) {
   const all = await listAll(channel);
   const { kind, error } = kindFrom(askedKind, all, agent);
@@ -842,5 +844,5 @@ async function noteAsRelay(channel, id, text) {
   const ticket = (await listAll(channel)).find((t) => t.id === id);
   return ticket ? addNote(channel, ticket, { text }, RELAYER) : null;
 }
-module.exports = { storeName: store.name, noteAsRelay, closeForFailure, seatPm, handle, fileAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+module.exports = { storeName: store.name, noteAsRelay, closeForFailure, seatPm, handle, fileAsManager, noteAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
 require('./kind-label.js').begin(module.exports);
