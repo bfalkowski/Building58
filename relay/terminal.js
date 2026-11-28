@@ -28,6 +28,7 @@ const link = require('./host-link.js');
 
 const ENABLED = process.env.RELAY_TERMINAL === '1';
 const CLAUDE = process.env.CLAUDE_CMD || 'claude';
+const HOOK_KEY = 'sessions-use-their-token';
 const KEEP = 256 * 1024;
 const MAX_TERMINALS = 9;
 const SEAT_DESKS = 3;
@@ -450,7 +451,7 @@ function start(channel, body, ctx, onExit, own) {
     if (!resume) args.push(...skills.modelArgs(role));
     if (role) skills.notice(channel);
     const settings = { statusLine: STATUS_LINE };
-    if (!global) settings.hooks = hook.hookSettings({ key: ctx.key, url: 'http://localhost:' + ctx.port, channel });
+    if (!global) settings.hooks = hook.hookSettings({ key: HOOK_KEY, url: 'http://localhost:' + ctx.port, channel });
     args.push('--settings', JSON.stringify(settings));
     const env = sessionEnv.build(process.env, {
       ...sessionEnv.slotGate(process.env, state.dir()),
