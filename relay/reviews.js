@@ -54,7 +54,6 @@ const state = require('./state.js');
 const terminal = require('./terminal.js');
 const { livenessOf } = require('./liveness.js');
 const tasks = require('./tasks.js');
-const owedFirst = require('./owed-first.js');
 const checkouts = require('./checkouts.js');
 const delivery = require('./delivery.js');
 const { claim } = require('./lockfile.js');
@@ -94,7 +93,7 @@ function save() {
   } catch (e) { console.error('Could not save reviews to ' + FILE + ': ' + e.message); }
 }
 const chOf = (channel) => store[channel] || (store[channel] = { prs: {} });
-let autopilot = { follows: () => false, ask: () => '', since: () => null, freed: () => {}, verdictOf: () => null };
+let autopilot = { owed: () => false, follows: () => false, ask: () => '', since: () => null, freed: () => {}, verdictOf: () => null };
 const useAutopilot = (a) => { autopilot = a; checkouts.useAsk((channel) => a.ask(channel)); };
 const followsPushes = (channel) => switchesOf(channel).again || autopilot.follows(channel);
 const switchesOf = (channel) => { const c = chOf(channel); return { auto: c.auto !== false, again: c.again === true }; };
@@ -293,7 +292,7 @@ function firstReviews(channel, c) {
     if (!r.first || starting.has(channel + ' ' + pr)) continue;
     if (!switchesOf(channel).auto) { delete c.prs[pr]; delivery.drop(channel, 'pipeline ' + pr); save(); continue; }
     if (r.first.desk ? !deskFree(channel) : Date.now() < (r.first.notBefore || 0)) continue;
-    if (deskFree(channel) && owedFirst.oldest(tasks.list(channel))) continue;
+    if (deskFree(channel) && autopilot.owed(channel)) continue;
     if (!passes(channel, pr, r, r.first, null) || !r.first) continue;
     firstReview(channel, pr, r.first);
   }
@@ -621,4 +620,4 @@ function setSwitch(channel, k, on) {
   save();
 }
 
-module.exports = { setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, noReview, giveReview, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };
+module.exports = { firstReviews, chOf, setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, noReview, giveReview, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };
