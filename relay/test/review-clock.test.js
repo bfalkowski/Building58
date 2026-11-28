@@ -74,12 +74,18 @@ test('review times from GitHub against the start of the watch', async (t) => {
 
 test('the watch starts when the hook gives the task its PR, not at the first check', async (t) => {
   // The clock is the test's, so the first check comes five minutes after the hook however fast the machine is.
-  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-03T11:00:00.400Z') });
+  const RealDate = Date;
+  let at = RealDate.parse('2026-11-03T11:00:00.400Z');
+  global.Date = class extends RealDate {
+    constructor(...a) { super(...(a.length ? a : [at])); }
+    static now() { return at; }
+  };
+  t.after(() => { global.Date = RealDate; });
   const g = byId('gggggg');
   tasks.noteHook('test', { session_id: 'session-gggggg', pr_url: pr(17) });
   prComments.noteHook('test', { session_id: 'session-gggggg', pr_url: pr(17) });
   assert.strictEqual(g.reviews.watchingSince, '2026-11-03T11:00:00.400Z');
-  t.mock.timers.tick(5 * 60 * 1000);
+  at += 5 * 60 * 1000;
   await prComments.poll();
   assert.strictEqual(g.reviews.pending.before, false, 'a comment one second after the hook is new, and moves the card');
 });
