@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { replayOf, REPLAY } = require('../replay.js');
+const { replayOf, REPLAY, LINE_REACH } = require('../replay.js');
 
 const buf = (s) => Buffer.from(s);
 
@@ -32,4 +32,18 @@ test('with no clear, a replay over the cap is cut to the cap at a line start', (
 test('a cut never splits a multi-byte letter', () => {
   const got = replayOf(buf('é'.repeat(REPLAY))).toString();
   assert.ok(!got.includes('�'));
+});
+
+test('a run of clears starts at the first of the run, with the home before it', () => {
+  assert.strictEqual(replayOf(buf('old\x1b[H\x1b[2J\x1b[3J\x1b[Hnew')).toString(), '\x1b[H\x1b[2J\x1b[3J\x1b[Hnew');
+});
+
+test('the cursor move written as 1;1 before a clear is kept', () => {
+  assert.strictEqual(replayOf(buf('old\x1b[1;1H\x1b[2Jnew')).toString(), '\x1b[1;1H\x1b[2Jnew');
+});
+
+test('a cut with no line start within reach starts at a letter boundary', () => {
+  const got = replayOf(buf('first\r\n' + 'é'.repeat(REPLAY))).toString();
+  assert.ok(!got.includes('first') && !got.includes('\ufffd'));
+  assert.ok(got.length > LINE_REACH);
 });
