@@ -261,7 +261,7 @@
     block(rad, radMat, [0, 0.12, 0], [0.12, 0.05, 0.92]); block(rad, radMat, [0, 0.73, 0], [0.12, 0.04, 0.92]);
   });
 
-  const ELEV = { x0: -4.05, x1: -3.05, wall: -5.0, h: 2.2 };
+  const ELEV = { x0: -4.05, x1: -3.05, wall: -5.0, h: 2.2, openMs: 1800, slide: 0.4, speed: 1.5 };
   const elevButtons = [], elevLeaves = {}, elevLamps = {};
   const elev = { open: 0, openUntil: 0 };
   const upper = new THREE.Group(); upper.position.y = FLOORS.exec.y; scene.add(upper);
@@ -301,20 +301,20 @@
       cut(block(parent, trim, [px0, 1.2, ELEV.wall + 0.03], [0.16, 0.4, 0.06]));
       [...floorKeys].reverse().forEach((k, i) => {
         const b = cut(cyl(parent, metal(0xd8c48a, 0.3), [px0, 1.3 - i * 0.2, ELEV.wall + 0.085], 0.045, 0.03)); b.rotation.x = Math.PI / 2;
-        b.userData.floor = k; elevButtons.push(b);
+        b.userData.floor = k; b.userData.on = floor; elevButtons.push(b);
       });
     }
     for (const k of floorKeys) doors(floorGroup[k], k);
   }
   function showElevator() {
     const here = floorNow();
-    for (const k in elevLeaves) for (const l of elevLeaves[k]) l.position.x = l.userData.home + l.userData.dir * 0.4 * elev.open;
+    for (const k in elevLeaves) for (const l of elevLeaves[k]) l.position.x = l.userData.home + l.userData.dir * ELEV.slide * elev.open;
     for (const k in elevLamps) elevLamps[k].forEach((m, i) => { m.emissiveIntensity = i === floorKeys.indexOf(here) ? 3 : 0.05; });
   }
   function ride(floor) {
     const inOffice = !!officeBtn && officeBtn.getAttribute('aria-pressed') === 'true';
     if (!FLOORS[floor] || floor === floorNow() && !inOffice) return floorNow();
-    elev.openUntil = performance.now() + 1800;
+    elev.openUntil = performance.now() + ELEV.openMs;
     setView(FLOORS[floor].view);
     return floor;
   }
@@ -2409,7 +2409,7 @@
       controls.maxPolarAngle = highFor(t); }
     { const before = clockMin; drawClock(); if (clockMin !== before && before !== -1) clockMinChanged = true; }
     if (boardDirty) { drawBoard(); boardDirty = false; }
-    { const want = performance.now() < elev.openUntil ? 1 : 0; elev.open = reduce ? want : elev.open + clamp(want - elev.open, -real * 1.5, real * 1.5); showElevator(); }
+    { const want = performance.now() < elev.openUntil ? 1 : 0; elev.open = reduce ? want : elev.open + clamp(want - elev.open, -real * ELEV.speed, real * ELEV.speed); showElevator(); }
     tickScreens();
     tickTags();
     tickDecor(real, nowMs);
@@ -2436,7 +2436,7 @@
     roster: () => ACTIONS.roster.run().people,
     focus: (id) => { follow = id ? byId[id] || null : null; introCam = false; return !!follow; },
     view: (name) => setView(name),
-    level: () => ({ floor: floorNow(), camera: xyz(camera.position), target: controls ? xyz(controls.target) : null, doors: { x0: ELEV.x0, x1: ELEV.x1, wall: ELEV.wall }, open: +elev.open.toFixed(2) }),
+    level: () => ({ floor: floorNow(), camera: xyz(camera.position), target: controls ? xyz(controls.target) : null, doors: { x0: ELEV.x0, x1: ELEV.x1, wall: ELEV.wall }, buttons: elevButtons.filter((b) => b.userData.on === floorNow()).map((b) => { const r = canvas.getBoundingClientRect(), v = b.getWorldPosition(new THREE.Vector3()).project(camera); return { floor: b.userData.floor, x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; }), open: +elev.open.toFixed(2) }),
     direct,
     where,
     clock: (t) => { if (filmDrawn == null) filmDrawn = t; filmAt = t; return t; },

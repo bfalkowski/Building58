@@ -5,13 +5,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { office, pageTest, SOFTWARE, watch } = require('./page.js');
+const { office, pageTest, SOFTWARE, until, watch } = require('./page.js');
 
-const frames = (page, n) => page.evaluate((count) => new Promise((done) => {
-  let left = count;
-  const tick = () => (--left > 0 ? requestAnimationFrame(tick) : done());
-  requestAnimationFrame(tick);
-}), n);
 const LOFT_HEIGHT = 4.6;
 
 test.describe('the elevator, with WebGL, in software', () => {
@@ -34,7 +29,6 @@ test.describe('the elevator, with WebGL, in software', () => {
     await exec.click();
     assert.strictEqual(await exec.getAttribute('aria-pressed'), 'true');
     assert.strictEqual(await main.getAttribute('aria-pressed'), 'false');
-    await frames(p.page, 40);
     const up = await level();
     assert.strictEqual(up.floor, 'exec');
     assert.ok(up.camera[1] > LOFT_HEIGHT && up.target[1] > LOFT_HEIGHT, 'the view is above the loft, never inside it: ' + JSON.stringify(up));
@@ -44,14 +38,23 @@ test.describe('the elevator, with WebGL, in software', () => {
     const box = await p.page.locator('#world').boundingBox();
     await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.page.mouse.down();
     await p.page.mouse.move(box.x + box.width / 2 - 300, box.y + box.height / 2 + 200, { steps: 10 }); await p.page.mouse.up();
-    await frames(p.page, 20);
+    await until(p, (ceil) => { const l = window.run.level(); return l.target[1] > ceil && l.camera[1] > l.target[1]; }, LOFT_HEIGHT);
     const dragged = await level();
     assert.ok(dragged.target[1] > LOFT_HEIGHT && dragged.camera[1] > dragged.target[1], 'dragging stays on the floor: ' + JSON.stringify(dragged));
     assert.ok(Math.abs(dragged.target[0]) <= 6.5 && dragged.target[2] >= -4.5 && dragged.target[2] <= 4.5, 'the view stays inside the walls: ' + JSON.stringify(dragged));
 
+    // The buttons on the wall do the same: one click on each, as it shows on the screen.
     await main.click();
+    await p.page.click('.navpad button[data-dir="home"]');
+    const wall = (floor) => p.page.evaluate((f) => window.run.level().buttons.find((b) => b.floor === f), floor);
+    const upButton = await wall('exec');
+    assert.ok(upButton, 'the wall has a button for the executive floor');
+    await p.page.mouse.click(upButton.x, upButton.y);
+    await until(p, () => window.run.level().floor === 'exec');
+    const downButton = await wall('main');
+    await p.page.mouse.click(downButton.x, downButton.y);
+    await until(p, () => window.run.level().floor === 'main');
     assert.strictEqual(await main.getAttribute('aria-pressed'), 'true');
-    await frames(p.page, 40);
     assert.strictEqual((await level()).floor, 'main');
     const back = await angles();
     for (const k of ['theta', 'phi', 'radius']) assert.ok(Math.abs(back[k] - home[k]) < 0.02, 'it goes back to the first view, ' + k + ': ' + JSON.stringify([home, back]));
