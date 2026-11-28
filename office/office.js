@@ -87,6 +87,7 @@
     const v = VIEWS[name] || VIEWS.home; introCam = false; follow = null;
     floorY = FLOORS[floorOf(name)].y;
     limits(name === 'office' ? 'desk' : 'room');
+    if (controls) { controls.enableDamping = false; controls.update(); controls.enableDamping = true; }
     camera.position.copy(v[0]); if (controls) { controls.target.copy(v[1]); if (lookFrom === 'room') controls.maxPolarAngle = highFor(v[1]); controls.update(); } else camera.lookAt(v[1]);
     const shown = name in VIEWS ? name : 'home';
     if (officeBtn) { const inOffice = shown === 'office'; officeBtn.textContent = inOffice ? 'Back to the room' : "Manager's office"; officeBtn.setAttribute('aria-pressed', String(inOffice)); }
