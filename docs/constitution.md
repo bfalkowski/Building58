@@ -97,7 +97,9 @@ a person moves it, or a Lead that the person allowed with **Let the Lead move th
 Lead can move tickets and tasks, including out of Triage. While the person runs the relay with
 `RELAY_LEAD_STOPS=1`, it also stops sessions that are finished or idle (article 3). Moving the board
 does not let it start a ticket. It cannot start a session, except the worker for a ticket it starts
-under the start rung (article 5), or clean up a task. The person can take each permission back.
+under the start rung (article 5), and a reviewer of a task's pull request that it asks the relay for
+under the Lead's review (article 5). It cannot clean up a task. It never reviews code in its own
+session. The person can take each permission back.
 
 A ticket's priority and its place in the work order are not moves: they change no status. The
 person sets them, and so does a PM that the person raised to rung 3 or 4 of **PM trust**, or
@@ -110,6 +112,13 @@ Until a ticket starts, the person, the PM and the Lead may edit its title and bo
 priority under the same rule as above. No other session may. An edit is not a move either, and it
 cannot change a status. When the PM or the Lead edits the words of a ticket the person approved,
 the approval goes, so the start rung never starts words the person did not approve.
+
+The PM and the Lead may also propose to replace, merge or close a ticket in Triage or Ready, or to
+change its blockers. A proposal is not a move. It changes no status and no blockers, and it holds
+the ticket back so nothing starts it, until the person approves or declines it. Only the person
+decides a proposal. Enforced by: the relay answers every session's token with 401 on
+`/tickets/{id}/proposal` and 403 on `/tickets/{id}/propose` for any session but the PM and the Lead
+(`relay/test/ticket-proposals.test.js`).
 
 Any session may add a note to a ticket. A note is not an edit: it never changes the title, body,
 status, priority or approval. The ticket's brief includes its notes under a heading that says a
@@ -187,13 +196,21 @@ Lead that the person allowed with **Let the Lead set priority** may set it too, 
 tickets and by the same goal. The person can always change the order, and the person's change
 wins (article 5).
 
+One exception to one ticket, one pull request: a failure outside the ticket that blocks its merge (a
+flaky test, a red main) is fixed in the blocked PR, as its own commit, by every blocked Dev, and the
+first fix to merge wins. No Dev waits on another, because a Dev that waits holds a desk and does
+nothing, and the one it waits on may not solve it. The room opens one shared chat channel for the
+failure, tells each blocked Dev its name, tells the others when a fix merges, and archives the
+channel (`relay/failures.js`, `relay/test/failures.test.js`).
+
 *Today (2026-11-24):* the person sets priority and order from the Board. The PM's rung (**PM trust**
 at Order or above, T-45 and ticket 386) and the Lead's switch (T-128, off by default) are built:
 while one allows it, that PM's or Lead's token may set them for
 Triage and Ready tickets with `ticket.js priority` and `ticket.js order`. The PM's brief tells it to
 give each ticket a priority and to sort by this goal. At rung 3 or 4, it places and
 reorders Triage and Ready tickets and leaves those the person set. Below that, it only recommends
-an order (T-46). The Lead's brief does not mention it.
+an order (T-46). While the Lead's switch is on, the Lead's brief says it may set the order when the
+person asks, and must not undo an order the person set (T-180).
 
 *Enforced by:* the PM's brief and the review. For priority and order, the relay's 403 for every
 session token but a PM's or Lead's that the person allowed (`relay/server.js`, `relay/tickets.js`).
@@ -492,7 +509,7 @@ line in a brief:
 | Merge only on a merge verdict and green checks | Each review gives a verdict, merge or fix, from the reviewer's own token, and a verdict counts once posted and only for the commit the reviewer read. It says fix while any finding is blocking or fix now (article 4). The relay merges only when the latest verdict says merge for the current head, every check on that head passed, GitHub can merge it, and the PR holds all its Dev's work. It names that commit to GitHub, which refuses the merge if the PR moved since. A commit after a merge verdict needs a follow-up review that says merge. A follow-up reads only the commits since the last review, and for a merge of main only how its conflicts were resolved. | `relay/autopilot-plan.js` (`forReviewed`), `relay/merge-hold.js`, `relay/autopilot.js` | `relay/test/autopilot-plan.test.js`, `relay/test/merge-hold.test.js` |
 | Never a PR that changes CLAUDE.md, the constitution or the lint rules | A PR that lists `CLAUDE.md`, `docs/constitution.md`, `eslint.config.js` or `eslint-local.js` among its files, even by a rename, goes to the person in Waiting on you. It is never merged by the relay or the Lead. | `relay/autopilot-plan.js` (`PROTECTED`), and `relay/pr-watch-plan.js` for a PR it did not start | `relay/test/autopilot-plan.test.js`, `relay/test/pr-watch-plan.test.js` |
 | The daily merge limit | At most 10 PRs a day (`autopilotMerges` in `relay/config.js`). The PR waits, with the reason on its card, until the next day or until the person merges it. | `relay/autopilot.js` (`MAX_MERGES_A_DAY`) | `relay/test/autopilot-limit.test.js` |
-| The WIP limit | It starts a ticket only while fewer tasks are being built than `RELAY_WIP_LIMIT` (3 by default), counting every task, Autopilot's or not, and one start at a time (`RELAY_AUTOPILOT_AT_ONCE`, 1). It starts only a Ready ticket a person approved, whose blockers are done, in Board order. | `relay/autopilot.js`, `relay/tasks.js` (`wipLimit`) | `relay/test/autopilot-desks.test.js` |
+| The WIP limit | It starts a ticket only while fewer tasks are being built than `RELAY_WIP_LIMIT` (3 by default), counting every task, Autopilot's or not, and one start at a time (`RELAY_AUTOPILOT_AT_ONCE`, 1). It starts only a Ready ticket a person approved, whose blockers are done, that is not on hold or replaced, and that no open design ticket shapes, in Board order, and one at a time. | `relay/autopilot.js`, `relay/tasks.js` (`wipLimit`) | `relay/test/autopilot-desks.test.js` |
 | The review-round limit | After the **Review rounds** the person sets (2 by default, 1 to 5) that still say fix, a failed check, a closed PR or a failed merge, the task goes to Waiting on you with the reason, and the relay leaves it alone. | `relay/autopilot.js`, `relay/autopilot-plan.js` | `relay/test/autopilot-plan.test.js`, `relay/test/autopilot-stuck.test.js` |
 | The stall hand-over | When nothing moves a task for the stall time (`autopilotStallMinutes` in `relay/config.js`), the relay first nudges a Dev that stopped without a PR, and then hands the task to the person in Waiting on you, leaving the session running. It brings the task back by itself once something moves it. The merge hold (`relay/merge-hold.js`) also hands over a task whose Dev is idle or gone with uncommitted or unpushed work, work git cannot check, or review news it was never told. | `relay/autopilot.js` (`stalled`), `relay/merge-hold.js` | `relay/test/autopilot-stuck.test.js`, `relay/test/autopilot-stall-back.test.js`, `relay/test/merge-hold.test.js` |
 | Rollback | After a merge it pulls main into the relay's own folder, as **Update** does, and starts nothing while that runs. When the supervisor runs with `RELAY_ROLLBACK=1` (off by default) and the relay fails to answer on the new code, it checks out the last good commit and starts again, at most once in a row, and never over changes to tracked files. | `relay/rollback.js`, `relay/supervisor.js` | `relay/test/rollback.test.js` |
@@ -529,6 +546,63 @@ The five questions, for this level:
    start, the switch, its notes beside the switch, and every task it hands over in Waiting on you.
 5. What stops two sessions from doing the same work? A ticket has one task, the relay runs one
    loop, and a verdict is kept per reviewer and per commit.
+
+**The PR watch, as it is today.** The failure behind it: a missed hook, a closed room page or a
+relay restart left a pull request with no review, a failed check or an unanswered finding until a
+person looked (T-106). The relay now reads every open task PR on a timer, so a missed event costs
+one look, not a night.
+
+The rule: while the person's switch **Watch each open PR** is on, every **Watch PRs every**
+seconds (120) the relay reads each task's open PR, its reviews and verdicts, its Dev's session and
+the commits its Dev's checkout has that the PR lacks (`relay/pr-watch.js`, `relay/pr-watch-plan.js`).
+It asks for a review that is missing within the limit on automatic reviews, tells the Dev about
+blocking findings, a conflict, a failed check or unpushed commits, and tells the Lead about a PR
+that is reviewed, green and clean. It merges nothing. A PR that changes CLAUDE.md, the constitution
+or the lint rules waits on the person. A PR that waits on anyone but the person for **Give you a PR
+that waits after** minutes (60) waits on the person, and the chat board says so once. It is off by
+default and the person can turn it off. A task that Autopilot moves is left to Autopilot.
+
+The five questions, for this permission:
+
+1. What starts it? A timer, every **Watch PRs every** seconds, while the switch is on.
+2. What does it read and write? It reads the tasks, `gh pr view`, the review record, the verdicts
+   and the Dev's session and checkout. It writes a saved message to a Dev or the Lead, a request
+   for a review, the line on the Floor, and a record of each action by PR, head and cause.
+3. What does it start next? At most one reviewer, through the review limit. Nothing else starts.
+4. Where does the person come back in? The Floor, the Board and `ticket.js floor` show who each PR
+   waits on, and a PR that waits too long waits on the person, as does any PR that changes the
+   protected files. The switch is the way back.
+5. What stops two sessions from doing the same work? The relay keeps each action by PR, head and
+   cause, so a second look does not repeat it, and reviews are counted before they start.
+
+Its loop is limited: reviews stay within the automatic limit, and each action happens once for a
+head and a cause.
+
+**The manager lowers the trust level, as it is today.** The failure behind it: Autopilot can hand
+task after task to the person, or a check can fail on commit after commit, and the room keeps
+running at the level that let it get there. The rung is a brake. It is off by default. The person
+turns it on with **Let the manager lower the trust level** (`managerLowersTrust`, Settings > Trust).
+While it is on and the manager's watch (`relay/manager-watch.js`) finds a new stall that work cannot
+get past (the same check failing on 3 commits in a row, or Autopilot handing 3 tasks in a row to
+Waiting on you), the relay lowers the trust level by one (`relay/trust-brake.js`), for example from
+Autopilot (5) to the Lead merges (4). It only lowers, never raises. It lowers at most twice in 24
+hours, and then leaves the rest to the person. It does what Set level does: work under way stays,
+and nothing new starts. It never reverts a PR, reopens or rejects a ticket, or stops a session.
+Activity, Settings and the manager's bubble say what it saw and which level it moved to.
+
+The five questions, for this rung:
+
+1. What starts it? The manager's watch, on a new stall, while the person's switch is on and fewer
+   than 2 lowerings happened in the last 24 hours.
+2. What does it read and write? It reads what the watch reads, and the eight switches of the trust
+   levels. It writes those switches, one step down, and its own notes in `manager-watch.json`.
+3. What does it start next? Nothing. It turns Autopilot off or takes a Lead's right away. From 5 to
+   4 it gives the Lead merge and 1 start of 3, the page's first picks, which only a level the person
+   chose already allows.
+4. Where does the person come back in? Activity, the line under the trust levels in Settings, the
+   manager's bubble, `GET /manager`, and the switch itself. Raising the level is the person's.
+5. What stops two sessions from doing the same work? One relay holds one watch, it lowers one level
+   for each stall, and the stall's key is lowered once while it lasts.
 
 **PM trust, as it is today.** Two failures are behind it. On 2026-11-02 the person asked the PM
 what to work on next, and the PM could only recommend an order in chat, because it could not set
@@ -635,9 +709,9 @@ stays with the person, unless the Lead may move the board.
 The Lead, off by default, kept through a restart only once the person turns it on. It stays on when
 the person makes a different session the Lead, as **Let the Lead stop sessions** does, and only the
 Lead there is now may use it. The Board shows who last set each ticket's priority or place. The
-Lead's brief does not mention it, so the Lead sets the order when the person asks. The person's
-change wins only by the brief and the person's word: the relay does not stop the Lead from setting a
-ticket the person set.
+Lead's brief says, while it is on, that the Lead may set the order of Triage and Ready tickets when
+the person asks, and must not undo an order the person set (T-180). The person's change wins only by the
+brief: the relay does not stop the Lead from setting a ticket the person set.
 
 The five questions, for this permission:
 
@@ -657,6 +731,78 @@ The five questions, for this permission:
 
 Its loop is limited: the Lead sets the order once for each time the person asks, and never on its
 own.
+
+**The Lead's review, as it is today.** The failure behind it: on 2026-11-04 the person told the Lead
+it could start a review itself. With no way to start one, the Lead reviewed PR 42 with a subagent
+in its own session. The Floor could not see that review, and a refresh had just cleared the Lead's
+conversation.
+
+The rule: while the person's switch **Let the Lead start reviews** is on, the Lead may ask the relay
+for a review of a task's pull request with `relay/ticket.js review`. The relay starts the reviewer
+that Get a review starts, in its own checkout, and it posts and leaves. The relay refuses a pull
+request that is not a task's, one a reviewer is on, an ask with no free desk, and a pull request
+that has had 3 reviews the relay started: the Lead's count with the automatic ones. The Lead never
+reviews code in its own session, itself or with a subagent. The switch is off by default, kept off
+through a restart until the person turns it on, and the person can take it back.
+
+The five questions, for this permission:
+
+1. What starts it? The Lead runs `ticket.js review` with a pull request link while the switch is
+   on. Nothing starts on a timer.
+2. What does it read and write? It reads the tasks, the pull request's review record and the Floor.
+   It writes the pull request's review count, a checkout of its head, and one reviewer session, as
+   Get a review does, and a step in the task's and the ticket's history.
+3. What does it start next? One reviewer, which posts its findings on the pull request, gives its
+   verdict and leaves. The relay sends the findings to the Dev as for every review. Nothing else
+   starts.
+4. Where does the person come back in? The switch, the Floor, the pull request comment and the
+   task's history. A pull request past the limit waits on the person, as for automatic reviews.
+5. What stops two sessions from doing the same work? There is one Lead at a time, and only its
+   token reaches the route. The relay refuses a pull request a reviewer is on or about to be on,
+   and counts each review before it starts, so two asks cannot both pass the limit.
+
+Its loop is limited: at most 3 reviews the relay started per pull request, automatic and the Lead's
+together. The way back is the switch.
+
+*Today (2026-11-15):* built (T-98): **Let the Lead start reviews** in Settings under The Lead, off
+by default. It stays on when the person makes a different session the Lead, and only the Lead there
+is now may use it. The Lead's brief says to start reviews this way and never in its own session.
+
+**The Lead unsticks the board, as it is today.** The failure behind it: on 2026-11-25 one flaky
+browser test failed the browser check on five open PRs for hours. Each Dev saw the failure was not
+its own and filed a ticket, five tickets for one bug, and none could fix it in its own PR or start a
+ticket. The Lead wrote every five minutes that six PRs were red and took no actions. A PR green and
+mergeable for over an hour waited on a Dev's hung command. The person had to ask for the fix.
+
+The rule: while the person's switch **Let the Lead unstick the board** is on, the Lead looks for
+stuck work first on each pass, does everything its other permissions allow to unstick it, and
+reports to the person only what it cannot do. It runs the shared channel of a failure that blocks
+two or more PRs, merges the duplicate tickets linked to it, sets the ticket left high and first and
+starts it with a new Dev only while no blocked Dev runs (even with **Let the Lead set priority**
+off, and only for a ticket linked to an open failure channel), reruns the failed job of a known
+flaky check once for each commit, and fixes the stalls the person fixes by hand through the routes
+that exist. It writes each fix in the jam log, by Lead. Through this switch the Lead never merges,
+never fixes code, and never touches a ticket that is started, done or rejected. An item it names on
+three passes in a row with no action goes on Needs you with its reason.
+
+It is off by default and the person can take it back. It is apart from the Lead's other switches and
+gives none of them: starting a ticket still needs the Lead's start rung.
+
+*Today (2026-11-25):* built (ticket 465): **Let the Lead unstick the board** in Settings under The
+Lead, `relay/failures.js`, `relay/lead-stuck.js`, the Lead section of the Metrics page. The relay
+opens the shared channel by itself, whatever the switch says. Enforced by
+`relay/test/failures.test.js` and `relay/test/lead-unstick.test.js`.
+
+The five questions, for this permission:
+
+1. What starts it? The relay's regular Lead check, or a failure seen on two PRs.
+2. What does it read and write? The Board, PRs and their checks, the failure channels. It writes
+   priority and order of linked tickets, proposals the relay carries out for two linked tickets,
+   reruns, and the jam log.
+3. What does it start next? Only a linked failure ticket, through its start rung.
+4. Where does the person come back in? Needs you, the Lead section of Metrics, the switch.
+5. What stops two sessions from doing the same work? One Lead at a time, one channel per failure,
+   one rerun for each commit, and a separate fix starts only when no blocked Dev runs.
 
 Before a rung goes in, answer the factory's five questions:
 
@@ -731,7 +877,10 @@ The terminal, the Board, Tasks and checkouts answer only the room page on this c
 loopback connection, a `localhost` Host and the relay's own Origin. A tunnel, another website or
 another computer gets 403, even with the key. A session's token only lists and files tickets
 and sends the hook events of its own session, unless the session is a Lead that the person allowed
-to move the board or start tickets, or a PM that the person allowed to set the order. That PM may set only the priority and place of tickets
+to move the board or start tickets, or a PM that the person allowed to set the order. The Lead's token may also mark a pull request ready
+to merge (`POST /ready`, `relay/ready.js`, tested in `relay/test/ready.test.js`): the relay checks the
+pull request, posts the Lead's note and adds the `ready to merge` label, and takes the label off when
+a new commit lands. This merges nothing. That PM may set only the priority and place of tickets
 in Triage or Ready (article 5). Keys never go into
 commits, logs, URLs, briefs or tickets. Hooks send trimmed events, and prompts stay out unless the
 person turns them on.
@@ -860,9 +1009,13 @@ The relay's routes are an API: the room page, the hook, `ticket.js`, other world
 scripts call them. A caller needs to know when a route it uses changed. So the API is described in
 `docs/openapi.json`, an OpenAPI document the relay serves at `/docs/openapi.json`, with a version.
 `npm run openapi` builds it from the route tables in `docs/manual/relay.html`, so the manual stays
-the one place each route is described, and the version is the one that page gives.
+the one place each route is described. The version is worked out when the relay serves the
+document, and the committed file holds a placeholder.
 
-A pull request that changes the API changes the version in the same pull request:
+A pull request that changes the API adds a file to `docs/api-changes/` in the same pull request,
+whose first line is `MAJOR:`, `MINOR:` or `PATCH:` and what changed. The version is a base plus one
+for each file, in the part its first word names (`relay/api-version.js`), and is put in the document
+when the relay serves it:
 
 - MAJOR for a change that can break a caller: a route, a field or an error code taken away or
   renamed, a new required field, or a route that now does something else.
@@ -877,11 +1030,11 @@ change to the API says so, and work that changes the API in one area is filed as
 request. It fails when `docs/openapi.json` is not what `npm run openapi` builds from the manual,
 when a route in it does not answer on a real relay, when a real answer does not fit its schema in
 `relay/api-schemas.js`, when a request that breaks its schema is not refused, and when it changed since the merge base with
-main without a newer version, or the version changed with no change to the API. A new route the
+main without a new file in `docs/api-changes/`, or a file added with no change to the API. A new route the
 manual leaves out is left to review, as is whether a change is MAJOR, MINOR or PATCH, and grouping.
 
 *Check:* a pull request that touches a route also touches `docs/manual/relay.html` and
-`docs/openapi.json`, and its description names the new version and why it is MAJOR, MINOR or PATCH.
+`docs/openapi.json`, and its description names its change file and why it is MAJOR, MINOR or PATCH.
 
 ## Open questions
 
