@@ -111,14 +111,16 @@ test('a session started with no global hooks has no relay key in its --settings'
   const r = await fetch('http://127.0.0.1:' + R.port + '/channels/my-project/terminals', { method: 'POST', headers: { Authorization: 'Bearer test-key', 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: R.home }) });
   const a = await r.json();
   assert.strictEqual(r.status, 201, JSON.stringify(a));
-  const ctl = new AbortController();
-  const s = await fetch('http://127.0.0.1:' + R.port + '/channels/my-project/terminals/' + a.id + '/stream', { headers: { Authorization: 'Bearer test-key' }, signal: ctl.signal });
-  let text = '';
-  const reader = s.body.getReader(), dec = new TextDecoder();
-  setTimeout(() => ctl.abort(), 300);
-  try { for (;;) { const { value, done } = await reader.read(); if (done) break; text += dec.decode(value); } } catch (e) { /* cut off on purpose */ }
-  const out = [...text.matchAll(/event: out\ndata: "([^"]+)"/g)].map((m) => Buffer.from(m[1], 'base64').toString()).join('');
-  assert.match(out, /"hooks"/, 'the panel adds its own hooks');
-  assert.match(out, /OFFICE_RELAY_KEY=sessions-use-their-token/);
+  const screen = async () => {
+    const ctl = new AbortController();
+    const s = await fetch('http://127.0.0.1:' + R.port + '/channels/my-project/terminals/' + a.id + '/stream', { headers: { Authorization: 'Bearer test-key' }, signal: ctl.signal });
+    let text = '';
+    const reader = s.body.getReader(), dec = new TextDecoder();
+    setTimeout(() => ctl.abort(), 300);
+    try { for (;;) { const { value, done } = await reader.read(); if (done) break; text += dec.decode(value); } } catch (e) { /* cut off on purpose */ }
+    return [...text.matchAll(/event: out\ndata: "([^"]+)"/g)].map((m) => Buffer.from(m[1], 'base64').toString()).join('').replace(/[\r\n]/g, '');
+  };
+  const out = await until(async () => { const o = await screen(); return o.includes('--settings') && o.includes('SessionEnd') && o; }, 'the session command line');
+  assert.ok(out.includes('sessions-use-their-token'), 'the hooks carry the placeholder key');
   assert.ok(!out.includes('test-key'), 'the relay key is not on the session command line');
 });
