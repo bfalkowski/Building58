@@ -53,7 +53,7 @@ function fileOf(cwd, sessionId, configDir) {
 
 function read(file, opts) {
   const withSteps = !(opts && opts.steps === false);
-  const out = { found: false, steps: [], truncated: false, worked: false, tokens: { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 }, usd: 0, unpriced: [] };
+  const out = { found: false, steps: [], truncated: false, worked: false, skills: 0, tokens: { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 }, usd: 0, unpriced: [] };
   let text;
   try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return out; }
   out.found = true;
@@ -85,6 +85,7 @@ function read(file, opts) {
         if (e.type === 'assistant') add('says', s);
         else { add(briefed ? 'prompt' : 'brief', s); briefed = true; }
       } else if (p.type === 'tool_use') {
+        if (p.name === 'Skill') out.skills++;
         const input = p.input || {};
         const s = typeof input.command === 'string' ? input.command : JSON.stringify(input);
         add('runs', s, { tool: String(p.name || 'tool') });

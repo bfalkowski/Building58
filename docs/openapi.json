@@ -1686,7 +1686,7 @@
           "Metrics"
         ],
         "summary": "Get metrics",
-        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load, lead (time to act, what the Lead fixed, passed to the person and never acted on, by kind, and the shared failure channels) and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "Only with the relay key, and only from the room page on this computer. The numbers behind the Metrics page. ?range= is 1d, 7d (the default) or 30d, and anything else is 400 bad_param. ?format=csv answers the same numbers as CSV, with the columns chart, when, label, series and value, as a download. The JSON has numbers (merged, medianMinutes, waitingOnYouHours, stalledHours, noHelpShare), and one part for each chart: merged, perTicket, where, outcomes, stalls, waits, rounds, desks, load, lead (time to act, what the Lead fixed, passed to the person and never acted on, by kind, and the shared failure channels), skills (calls and sessions in all, and for each role in roles, from the Skill calls in the sessions' logs) and pm. It holds only ids, times, counts, states and reason words: no ticket title or body, no prompt and no key.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getMetrics",
         "x-tokens": [],
         "responses": {
@@ -6560,6 +6560,26 @@
             ],
             "additionalProperties": true
           },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "roles": {
+                "type": "object"
+              },
+              "calls": {
+                "type": "number"
+              },
+              "sessions": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "roles",
+              "calls",
+              "sessions"
+            ],
+            "additionalProperties": true
+          },
           "pm": {
             "type": "object",
             "properties": {
@@ -6594,6 +6614,7 @@
           "desks",
           "load",
           "lead",
+          "skills",
           "pm"
         ],
         "additionalProperties": true

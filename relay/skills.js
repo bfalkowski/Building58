@@ -6,7 +6,8 @@
 // it starts a new session for that role, never on --resume.
 //
 // A skills setting lists skills by their plugin name, such as mattpocock-skills:tdd. Each role's brief
-// gets one paragraph that names the skills on its list that are installed on this computer, and none
+// gets one paragraph that names the skills on its list that are installed on this computer, each at the
+// step it belongs to (STEPS), the rest where they fit, and none
 // if there are none (article 6 of docs/constitution.md). A skill on a list that is not installed is
 // left out of every brief, and #office says once which ones are missing and how to install them.
 //
@@ -26,6 +27,21 @@ const MODEL = /^[A-Za-z0-9][A-Za-z0-9.[\]-]{0,63}$/;
 const SKILL = /^[A-Za-z0-9][\w.-]{0,63}(:[A-Za-z0-9][\w.-]{0,63})?$/;
 const MAX_SKILLS = 12, MAX_SKILLS_TEXT = 400;
 const FOR = { tdd: 'new behavior, or a bug a test can catch', 'diagnosing-bugs': 'a bug', 'codebase-design': 'a change of structure' };
+const STEPS = {
+  dev: [
+    { skill: 'tdd', when: 'Before you write code, run', note: ' (for a code change)' },
+    { skill: 'diagnosing-bugs', when: 'When a test fails and the cause is not clear, run' },
+    { skill: 'blast-radius', when: 'Before you open the PR, run' },
+    { skill: 'pr', when: 'Before you open the PR, run', note: ' for the PR body' }
+  ],
+  reviewer: [
+    { skill: 'code-review', when: 'Start by running' },
+    { skill: 'blast-radius', when: 'Start by running', note: ' on the diff' }
+  ],
+  pm: [{ skill: 'sharpen', when: 'When you check a ticket, run', note: ' on it' }],
+  lead: [{ skill: 'recall', when: 'At the start of each look, run' }]
+};
+const LINE = { dev: 'the PR body', reviewer: 'each review comment' };
 
 const modelOk = (v) => typeof v === 'string' && (v === '' || MODEL.test(v));
 function names(v) {
@@ -86,11 +102,23 @@ function brief(role) {
   const have = installed().skills;
   const list = (names(config.get(role + 'Skills')) || []).filter((n) => have.has(n));
   if (!list.length) return '';
-  const word = (n) => { const why = role === 'dev' && FOR[n.split(':').pop()]; return why ? n + ' (for ' + why + ')' : n; };
-  const called = list.filter((n) => !have.get(n).manual).map(word);
-  const read = list.filter((n) => have.get(n).manual).map((n) => word(n) + ' at ' + have.get(n).file);
-  return (called.length ? ' Use these skills where they fit: ' + called.join(', ') + '.' : '') +
+  const short = (n) => n.split(':').pop();
+  const label = (n) => (have.get(n).manual ? n + ' (it cannot be called, so read ' + have.get(n).file + ' and follow it)' : n);
+  const steps = (STEPS[role] || []).map((st) => ({ st, name: list.find((n) => short(n) === st.skill) })).filter((x) => x.name);
+  const stepped = new Set(steps.map((x) => x.name));
+  const groups = [];
+  for (const { st, name } of steps) {
+    const g = groups.find((x) => x.when === st.when) || groups[groups.push({ when: st.when, items: [] }) - 1];
+    g.items.push(label(name) + (st.note || ''));
+  }
+  const fits = list.filter((n) => !stepped.has(n));
+  const word = (n) => { const why = role === 'dev' && FOR[short(n)]; return why ? n + ' (for ' + why + ')' : n; };
+  const called = fits.filter((n) => !have.get(n).manual).map(word);
+  const read = fits.filter((n) => have.get(n).manual).map((n) => word(n) + ' at ' + have.get(n).file);
+  return (groups.length ? ' ' + groups.map((g) => g.when + ' ' + g.items.join(', then ') + '.').join(' ') : '') +
+    (called.length ? ' Use these skills where they fit: ' + called.join(', ') + '.' : '') +
     (read.length ? ' These skills cannot be called, so read the file of each and follow it where it fits: ' + read.join('; ') + '.' : '') +
+    (LINE[role] ? ' Put a line in ' + LINE[role] + ' that starts "Skills run: " and lists the skills you ran, or says "Skills run: none".' : '') +
     ' If one is not installed or cannot be called or read, carry on without it. Where a skill and CLAUDE.md or the constitution differ, the repo\'s rules win. ';
 }
 
@@ -146,4 +174,4 @@ function modelArgs(role) {
   return m && MODEL.test(m) ? ['--model', m] : [];
 }
 
-module.exports = { ROLES, MODEL, modelOk, skillsOk, names, installed, about, brief, missingText, lacking, notice, roleOf, modelArgs };
+module.exports = { STEPS, ROLES, MODEL, modelOk, skillsOk, names, installed, about, brief, missingText, lacking, notice, roleOf, modelArgs };
