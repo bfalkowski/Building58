@@ -63,12 +63,14 @@ function leadVerdict(channel, t, task, now) {
   return { safe: true, canStop: true, reason: kind.why + v.reason };
 }
 
+const reviewerOf = (sessions, t, pr) => (pr ? sessions.find((x) => x !== t && !x.exited && samePr(x.reviewOf, pr) && !x.posted) || null : null);
+
 function deskFor(channel, t, task, work, verdict, now, needs) {
   const role = roleOf(t), pr = work.pr || (task && task.pr) || t.pr || t.reviewOf || null;
   const shown = role === 'reviewer' ? (pr && tasks.list(channel).find((x) => x.pr === pr)) || null : task;
   const lead = terminal.leadOf(channel);
   const pipe = shown && shown.pr === pr ? tasks.pipelineOf(shown) : null;
-  const reviewer = pr ? terminal.all(channel).find((x) => x !== t && !x.exited && samePr(x.reviewOf, pr) && !x.posted) || null : null;
+  const reviewer = reviewerOf(terminal.all(channel), t, pr);
   return deskOf({
     t, role, work, now, verdict,
     task: shown && Object.assign({}, shown, { pipeline: pipe }, needs ? needs.get(shown.id) || { needsYou: null, reviewRuns: false } : null),
@@ -76,7 +78,6 @@ function deskFor(channel, t, task, work, verdict, now, needs) {
     failed: pipe && pipe.state === 'red' ? ((require('./pipeline.js').of(pr) || {}).failed || []).map((f) => f.name) : [],
     review: pr ? require('./reviews.js').deskOf(channel, pr) : null,
     reviewing: !!reviewer,
-    reviewer: reviewer ? reviewer.who || null : null,
     autopilot: shown ? require('./autopilot.js').deskOf(channel, shown) : null,
     leadMerges: !!(lead && lead.merge),
     merged: !!pr && merged(channel, pr),
@@ -255,4 +256,4 @@ async function handle(req, res, channel, rest, ctx) {
   return true;
 }
 
-module.exports = { handle, floorOf, seatsOf, personStop, freeDesks, freeForReview, merged, LEAD_STOPS, pick, nameOf, endJob };
+module.exports = { reviewerOf, handle, floorOf, seatsOf, personStop, freeDesks, freeForReview, merged, LEAD_STOPS, pick, nameOf, endJob };

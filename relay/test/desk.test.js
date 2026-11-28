@@ -177,7 +177,7 @@ test('a Dev\'s status icon says where its PR stands, with a label to read it by 
     assert.deepStrictEqual(label({ pipeline: { state: 'pending', head: HEAD } }), ['ci_running', 'CI running']);
     assert.deepStrictEqual(label({ pipeline: { state: 'red', head: HEAD } }), ['ci_failed', 'CI failed']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, review: { count: 0, held: false } }), ['review_waits', 'waiting for a review']);
-    assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, reviewing: true, reviewer: 'Ada' }), ['reviewing', 'being reviewed']);
+    assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, reviewing: true }), ['reviewing', 'being reviewed']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, reviewing: true }), ['reviewing', 'being reviewed']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD } }, { state: 'changes_requested' }), ['fix', 'fix requested']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, autopilot: { verdict: 'fix', verdictAt: HEAD } }), ['fix', 'fix requested']);
@@ -192,7 +192,7 @@ test('a Dev\'s status icon says where its PR stands, with a label to read it by 
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, autopilot: { verdict: 'fix', verdictAt: OLD } }, { state: 'changes_requested' }), ['review_waits', 'waiting for a review'], 'a fix pushed while the card is still in Changes requested');
   });
   await t.test('a review running wins over CI, and a failed CI over an old verdict', () => {
-    assert.strictEqual(status({ pipeline: { state: 'pending' }, reviewing: true, reviewer: 'Ada' }).key, 'reviewing');
+    assert.strictEqual(status({ pipeline: { state: 'pending' }, reviewing: true }).key, 'reviewing');
     assert.strictEqual(status({ pipeline: { state: 'red' }, autopilot: { verdict: 'merge', verdictAt: HEAD } }).key, 'ci_failed');
   });
   await t.test('Done and Waiting on you come from the task', () => {
@@ -256,7 +256,15 @@ test('the desk shows its ticket in the same Board column as the Board, from Need
   assert.strictEqual(column(task({ state: 'waiting_on_you' })), 'waiting_on_you', 'without Needs you, its state decides');
 });
 
-// The Floor's "being reviewed" lookup in floor.js deskFor uses samePr, so it matches the same forms as the pairing.
+test('the Floor finds a Dev\'s live reviewer when the reviewer\'s URL has another form', () => {
+  const { reviewerOf } = require('../floor.js');
+  const dev = { id: 'd1' }, live = { id: 'r1', reviewOf: PR + '/' };
+  assert.strictEqual(reviewerOf([dev, live], dev, PR), live);
+  assert.strictEqual(reviewerOf([dev, { ...live, posted: { kind: 'comment' } }], dev, PR), null, 'a posted review is not running');
+  assert.strictEqual(reviewerOf([dev, { ...live, exited: true }], dev, PR), null);
+  assert.strictEqual(reviewerOf([dev, live], dev, null), null);
+});
+
 test('samePr matches PR URLs by owner, repo and number', () => {
   const { samePr } = require('../desk.js');
   assert.ok(samePr(PR, PR + '/'));
