@@ -15,6 +15,9 @@ test('stalled clears after a push, not before', () => {
   assert.match(check('stalled', pr({ headRefOid: NEW })), /^its Dev pushed bbbbbbb$/);
   assert.strictEqual(check('stalled', pr()), null);
 });
+test('stalled clears when a review was posted since, with no push', () => {
+  assert.match(check('stalled', pr(), { review: 'merge' }), /^a review of PR 7 was posted with the verdict merge$/);
+});
 test('ci-red clears when CI is green on a newer head, not on the same head or a red one', () => {
   assert.match(check('ci-red', pr({ headRefOid: NEW })), /^CI is green on bbbbbbb/);
   assert.strictEqual(check('ci-red', pr()), null);

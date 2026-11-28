@@ -62,9 +62,10 @@ function forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit, noReview)
 }
 
 const BACK_REASONS = ['stalled', 'ci-red', 'conflict-dropped', 'dev-gone'];
-function handedStillHolds({ reason, head, pr, devRunning }) {
+function handedStillHolds({ reason, head, pr, devRunning, review }) {
   if (!BACK_REASONS.includes(reason) || !pr || pr.state !== 'OPEN') return null;
   const now = String(pr.headRefOid || ''), at = now.slice(0, 7), pushed = !!head && now !== head;
+  if (reason === 'stalled' && review) return 'a review of PR ' + String(pr.url || '').split('/').pop() + ' was posted with the verdict ' + review;
   if (reason === 'stalled') return pushed ? 'its Dev pushed ' + at : null;
   if (reason === 'ci-red') return pushed && ciOf(pr.statusCheckRollup) === 'green' ? 'CI is green on ' + at + ', a newer commit than the one that failed' : null;
   if (reason === 'conflict-dropped') return pr.mergeStateStatus && !['DIRTY', 'UNKNOWN'].includes(pr.mergeStateStatus) ? 'PR ' + String(pr.url || '').split('/').pop() + ' no longer conflicts with main' : null;
@@ -175,4 +176,4 @@ function reviewPostFor(comments, { login, since, commit, kind }) {
   return found;
 }
 
-module.exports = { handedStillHolds, API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, countsAsReview, PROTECTED, WORDING_TICKET };
+module.exports = { BACK_REASONS, handedStillHolds, API_FILES, touchesApi, conflictStep, clearConflictCount, apiTurn, CONFLICT_ASKS, WAITS_FOR_REVIEW, forPr, forReviewed, forPersonMerge, lockedOf, ciOf, nextTicket, whyNoneAllowed, heldBack, proposalWords, MARKS, reviewPostFor, countsAsReview, PROTECTED, WORDING_TICKET };

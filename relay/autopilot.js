@@ -292,15 +292,14 @@ async function handBackWhenClear(channel, task) {
   const rec = task.pr && chOf(channel).prs[task.pr];
   if (!rec || !rec.handedOver || task.state !== 'waiting_on_you') return;
   const reason = handedReasonOf(rec);
-  if (!['stalled', 'ci-red', 'conflict-dropped', 'dev-gone'].includes(reason)) return;
+  if (!plan.BACK_REASONS.includes(reason)) return;
   let pr;
   try { pr = await ghDoor.pr(task.pr, task.repo); } catch (e) { return; }
   if (!rec.handedOver || task.state !== 'waiting_on_you') return;
   if (!rec.handedOverHead && pr.headRefOid) { rec.handedOverHead = pr.headRefOid; save(); }
   const dev = terminal.find(channel, task.owner && task.owner.terminal);
   const since = rec.verdicts.find((x) => Date.parse(x.at) > Date.parse(rec.handedOverAt) && postOf(channel, x));
-  const why = (reason === 'stalled' && since && 'a review of PR ' + number(task.pr) + ' was posted with the verdict ' + since.kind)
-    || plan.handedStillHolds({ reason, head: rec.handedOverHead, pr: { ...pr, url: task.pr }, devRunning: !!dev && !dev.exited });
+  const why = plan.handedStillHolds({ reason, head: rec.handedOverHead, pr: { ...pr, url: task.pr }, devRunning: !!dev && !dev.exited, review: since ? since.kind : null });
   if (!why) return;
   const c = chOf(channel), s = c.stuck && c.stuck[task.id];
   if (s) delete c.stuck[task.id];

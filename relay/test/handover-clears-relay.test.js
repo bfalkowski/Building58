@@ -1,7 +1,4 @@
 'use strict';
-// A PR handed over for red CI comes back by itself once CI is green on a newer head (569). On 2026-11-27
-// PR 515 sat in Needs you after its Dev fixed CI, until a person moved the card.
-// Through a real relay, with a fake claude and a fake gh.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -37,7 +34,6 @@ async function rig(t) {
   const dev = task.owner.sessionId, wt = task.worktree;
   await until(async () => (await R.screen(task.owner.terminal)).includes('GOT['), 'the brief');
   await say(dev, 'UserPromptSubmit');
-  // The Dev's commit, pushed as the PR's head, so nothing in its checkout is unpushed (relay/merge-hold.js).
   const openPr = async () => {
     fs.writeFileSync(path.join(wt, 'a.txt'), 'hello\n');
     sh(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'hello');
@@ -48,7 +44,6 @@ async function rig(t) {
     await say(dev, 'PostToolUse', { tool_name: 'Bash', pr_url: PR, cwd: wt });
     return head;
   };
-  // What the page's Get a review sends. Its reviewer gives a verdict and posts.
   const reviewSays = async (kind) => {
     const r = await R.call('POST', '/checkouts', { from: wt, pr: PR, prompt: prBrief(PR) });
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
