@@ -36,12 +36,11 @@ test('firstReviews holds a first review for an owed Dev while a desk is free, an
   const record = () => ({ prs: { [pr]: { count: 0, head: null, pending: null, waits: false, first: { at: 1, desk: true } } } });
   let owed = true;
   reviews.useAutopilot({ owed: () => owed, follows: () => false, ask: () => '', since: () => null, freed: () => {}, verdictOf: () => null });
-  let free;
   const held = record();
   reviews.firstReviews('c', held);
   assert.ok(held.prs[pr].first && !reviews.chOf('c').prs[pr], 'held for the owed Dev');
   owed = false;
-  reviews.firstReviews('c', free = record());
+  reviews.firstReviews('c', record());
   assert.strictEqual(reviews.chOf('c').prs[pr].count, 1, 'started once no Dev is owed');
   fs.rmSync(dir, { recursive: true, force: true });
 });
