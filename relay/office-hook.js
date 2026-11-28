@@ -109,7 +109,7 @@ async function send(text) {
   }
 }
 
-const HASH = /\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/i;
+const HASH = /(?<![\w-])(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}(?![\w-])/i;
 const MAIN = /\b(?:origin\/)?main\b/i;
 function onMainCommit(text) {
   const said = String(text == null ? '' : text);

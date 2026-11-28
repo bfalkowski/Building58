@@ -32,6 +32,7 @@ test('a Dev that gives no commit, or does not say main, is not found', () => {
   assert.strictEqual(onMainCommit('Nothing to open, it is already on main.'), null);
   assert.strictEqual(onMainCommit('I fixed it in 7db2737 and will open the PR.'), null);
   assert.strictEqual(onMainCommit('Plain numbers like 12345678 on main do not count.'), null);
+  assert.strictEqual(onMainCommit('Session 7db2737a-1b2c-4d3e-8f90-123456789abc ran on main.'), null);
   assert.strictEqual(onMainCommit(undefined), null);
 });
 
