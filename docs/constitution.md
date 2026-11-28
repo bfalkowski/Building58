@@ -205,7 +205,9 @@ is filed as tickets.
 
 A desk is for work. A reviewer ends its own session once its review is posted. When a session is
 finished or idle and nobody needs it, the Lead stops it. The Lead does not stop a session that is
-waiting on the person.
+waiting on the person for an answer, a question or a menu. A task that waits on the person (Waiting
+on you) does not hold its Dev's desk: an idle Dev on such a task may be stopped, and Bring back
+returns it to the same checkout.
 
 Stopping loses nothing, because the work lives in the ticket, the branch and the pull request,
 not in the session. A stopped task worker comes back with **Bring back**, in the same
@@ -228,16 +230,23 @@ session stays the person's to stop, even when nobody is waiting on it: one the p
 plain session, a reviewer that has not posted, the PM and the COO. The person decided this on
 2026-11-04, from the review of PR 43 (T-55, T-92).
 
+*Today (2026-11-28):* the relay also lets the Lead, the review desk and Autopilot stop an idle Dev
+whose task is in Waiting on you, even with uncommitted or unpushed work, since its checkout stays
+(ticket 570). On 2026-11-27 and 28, twice, every Dev's task waited on the person, each idle Dev was
+"not safe to stop", all 9 desks were held, and no review or start could begin.
+
 *Enforced by:* the relay's stop route for the Lead (`relay/floor.js`). It asks the same verdict as
-the Floor (`relay/stop-verdict.js`), and refuses a session that is working, waiting on the person,
+the Floor (`relay/stop-verdict.js`), and refuses a session that is working, waiting on the person at a question or menu,
 the Lead, or the PM while the person talks to it. Then it refuses any session that is not one of the
-two kinds (`leadMayStop` in `relay/stop-verdict.js`), or a Dev with work that is not pushed or a
+three kinds (`leadMayStop` in `relay/stop-verdict.js`), or a Dev with work that is not pushed or a
 checkout git cannot read, and the Floor tells the Lead so. `relay/test/lead-stop.test.js` checks at
-the route: both kinds allowed, and refused a plain session, the PM, a reviewer that has not posted,
+the route: all three kinds allowed (a Dev in Waiting on you even with uncommitted work, which keeps its
+checkout), and refused a plain session, the PM, a reviewer that has not posted,
 a Dev whose pull request is open, and a Dev with uncommitted or unpushed work. It also checks the
 switch, the token, the limit, and that a stopped task worker keeps its checkout and comes back.
 `relay/test/floor.test.js` checks `leadMayStop` for every kind, the COO and a reviewer the relay did
-not start included.
+not start included. `relay/test/review-desk.test.js` checks that a review that needs a desk stops the
+oldest idle Dev whose task is in Waiting on you.
 
 *Check:* a change that starts sessions also says how they end.
 
