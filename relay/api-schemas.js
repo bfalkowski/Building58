@@ -161,8 +161,9 @@ const SCHEMAS = {
       neverActed: obj({ total: N(), kinds: list(obj({ kind: S(), label: S(), count: N() }, ['kind', 'count'])) }, ['total', 'kinds']),
       failures: obj({ channels: N(), prsBlocked: N(), medianHours: orNull(N()) }, ['channels', 'prsBlocked'])
     }, ['available', 'timeToAct', 'fixed', 'passed', 'neverActed', 'failures']),
+    skills: obj({ roles: { type: 'object' }, calls: N(), sessions: N() }, ['roles', 'calls', 'sessions']),
     pm: obj({ available: B, days: list({ type: 'object' }) }, ['available', 'days'])
-  }, ['range', 'numbers', 'merged', 'perTicket', 'where', 'outcomes', 'stalls', 'waits', 'rounds', 'desks', 'load', 'lead', 'pm']),
+  }, ['range', 'numbers', 'merged', 'perTicket', 'where', 'outcomes', 'stalls', 'waits', 'rounds', 'desks', 'load', 'lead', 'skills', 'pm']),
   Command: obj({
     action: S({ minLength: 1, description: 'A command of the world, such as say or idle. GET /channels/{channel} lists them as unknown_action does.' }),
     wait: { type: ['boolean', 'string'], description: 'false sends it and answers at once with its id.' },

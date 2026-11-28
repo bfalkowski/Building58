@@ -70,7 +70,8 @@ test('a brief names its installed skills, #office says once what is missing, and
     'pstack:blast-radius false', 'pstack:principle-prove-it-works false', 'mattpocock-skills:pr true']);
 
   const first = await brief('First');
-  assert.ok(first.includes('Use these skills where they fit: mattpocock-skills:tdd (for new behavior, or a bug a test can catch), mattpocock-skills:diagnosing-bugs (for a bug), mattpocock-skills:codebase-design (for a change of structure), mattpocock-skills:pr.'), first);
+  assert.ok(first.includes('Before you write code, run mattpocock-skills:tdd (for a code change). When a test fails and the cause is not clear, run mattpocock-skills:diagnosing-bugs. Before you open the PR, run mattpocock-skills:pr for the PR body. Use these skills where they fit: mattpocock-skills:codebase-design (for a change of structure).'), first);
+  assert.ok(first.includes('End the PR body with one line, "Skills run: " and the skills you ran, or "Skills run: none".'), first);
   assert.ok(first.includes('Where a skill and CLAUDE.md or the constitution differ, the repo\'s rules win.'));
   assert.ok(!first.includes('pstack:'), 'a skill that is not installed stays out of the brief');
   assert.ok(first.includes('Do not merge it.'), 'the brief still says the role\'s limits (article 6)');
@@ -84,7 +85,7 @@ test('a brief names its installed skills, #office says once what is missing, and
   const bad = await R.call('POST', '/settings', { values: { devSkills: 'tdd; rm -rf /' } });
   assert.deepStrictEqual([bad.status, bad.body.error], [400, 'bad_value']);
   assert.strictEqual((await R.call('POST', '/settings', { values: { devSkills: '' } })).status, 200);
-  assert.ok(!(await brief('Third')).includes('Use these skills'), 'an empty list names no skills');
+  assert.ok(!/run mattpocock|Use these skills/.test(await brief('Third')), 'an empty list names no skills');
 });
 
 test('a skill only a person can run is named with its SKILL.md to read, and a callable one is not', async (t) => {
@@ -96,8 +97,7 @@ test('a skill only a person can run is named with its SKILL.md to read, and a ca
   const task = (await R.call('POST', '/tasks', { title: 'Build it', repo })).body.task;
   const screen = await until(async () => { const s = await R.screen(task.owner.terminal); return /GOT\[Your task is to build[^\]\r\n]*\]/.test(s) && s; }, 'the whole brief');
   const brief = screen.match(/GOT\[(Your task is to build[^\]\r\n]*)\]/)[1];
-  assert.ok(brief.includes('Use these skills where they fit: mattpocock-skills:tdd (for new behavior, or a bug a test can catch), mattpocock-skills:diagnosing-bugs (for a bug), mattpocock-skills:codebase-design (for a change of structure), mattpocock-skills:pr.'), brief);
-  assert.ok(brief.includes('These skills cannot be called, so read the file of each and follow it where it fits: pstack:blast-radius at ' + file + '.'), brief);
+  assert.ok(brief.includes('Before you open the PR, run pstack:blast-radius (it cannot be called, so read ' + file + ' and follow it), then mattpocock-skills:pr for the PR body.'), brief);
   assert.strictEqual(brief.split('SKILL.md').length, 2, 'only the person-only skill gets a path');
   // The path is local: it stays out of Settings and #office.
   const settings = JSON.stringify((await R.call('GET', '/settings')).body.settings);
