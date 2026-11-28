@@ -62,7 +62,7 @@ pageTest('the Lead can go into the manager\'s office and sit, and nobody else wa
     const ds = ids.map((id) => window.run.debug(id)).filter(Boolean);
     const bad = ds.filter((d) => d.pos[1] <= wall).map((d) => d.pos[1]);
     if (bad.length) return { bad: 'nobody but the manager and the Lead is in the office: ' + bad };
-    return { done: sentTo.every(([id, prefix]) => { const d = window.run.debug(id); return d && d.step && d.step.t === 'act' && d.spot.startsWith(prefix); }) };
+    return { done: sentTo.every(([id, prefix]) => { const d = window.run.debug(id); return d && d.spot && d.spot.startsWith(prefix) && (d.seated || (d.step && d.step.t === 'act')); }) };
   }, [others, BACK_WALL, sent], 90000);
   assert.strictEqual(seen.bad, undefined, seen.bad);
   assert.deepStrictEqual(p.errors, []);
