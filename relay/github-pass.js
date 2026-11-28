@@ -69,7 +69,7 @@ async function once(repos) {
     for (const node of nodes) {
       if (!node || !node.url) continue;
       if (truncated(node)) { gh.forget(node.url); last.delete(node.url); continue; }
-      const key = node.updatedAt + ' ' + node.headRefOid + ' ' + checksKey(node), have = last.get(node.url);
+      const key = [node.updatedAt, node.headRefOid, node.state, node.mergeable, node.mergeStateStatus, checksKey(node)].join(' '), have = last.get(node.url);
       const value = have && have.key === key ? have.value : valueOf(node);
       last.set(node.url, { key, value });
       gh.seed(node.url, value, ttl);

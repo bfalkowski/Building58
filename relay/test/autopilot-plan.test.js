@@ -265,3 +265,13 @@ test('commits after a merge verdict go to the person at once when no review can 
   assert.deepStrictEqual([d.act, d.reason], ['person', 'rounds']);
   assert.strictEqual(forPr(pr({ headRefOid: 'b'.repeat(40) }), FILES, merge, 1, 5, false, undefined, '').act, 'wait');
 });
+
+test('a conflicting PR with no review yet asks its Dev to merge main, since no review starts on a conflict (T-529)', () => {
+  const dirty = pr({ mergeStateStatus: 'DIRTY' });
+  const gone = forPr(dirty, FILES, null, 0, 3, true);
+  assert.strictEqual(gone.act, 'bring-back');
+  assert.strictEqual(gone.for, 'conflict');
+  assert.match(gone.why, /no review starts until it is merged/);
+  assert.strictEqual(forPr(dirty, FILES, null, 0, 3, false).act, 'conflict');
+  assert.strictEqual(forPr(pr(), FILES, null, 0, 3, true).why, 'Waiting for the review.', 'with no conflict the first review is awaited');
+});
