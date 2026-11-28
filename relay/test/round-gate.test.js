@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const { execFileSync, execFile } = require('child_process');
 const { gateOf, GATE_MINUTES } = require('../round-gate.js');
-const { sameOwnChanges, roundsOf, noteMerge, roundsLine } = require('../main-merge.js');
+const { sameOwnChanges, noteMerge, roundsLine } = require('../main-merge.js');
 
 const F = [{ id: 'a', tag: 'technical' }, { id: 'b', tag: 'functional' }];
 const base = { findings: F, answers: {}, askedAt: 0, now: 1000 };
@@ -37,7 +37,7 @@ test('after 10 minutes with no answer, a finding that is not blocking becomes a 
 test('a merge of main adds no round and is counted apart', () => {
   const rec = { count: 3, mainMerges: 0 };
   noteMerge(rec, 'abc');
-  assert.deepStrictEqual([rec.mainMerges, rec.head, roundsOf(rec)], [1, 'abc', 2]);
+  assert.deepStrictEqual([rec.mainMerges, rec.head, rec.count], [1, 'abc', 3]);
   assert.strictEqual(roundsLine(2, 3), '2 rounds, plus 3 merges of main');
   assert.strictEqual(roundsLine(1, 0), '1 round');
 });

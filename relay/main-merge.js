@@ -14,8 +14,7 @@ async function sameOwnChanges(git, reviewed, head, base) {
   } catch (e) { return false; }
 }
 
-const roundsOf = (rec) => Math.max(0, (rec.count || 0) - (rec.mainMerges || 0));
 const noteMerge = (rec, head) => { rec.mainMerges = (rec.mainMerges || 0) + 1; rec.head = head; return rec; };
 const roundsLine = (rounds, merges) => rounds + (rounds === 1 ? ' round' : ' rounds') + (merges ? ', plus ' + merges + (merges === 1 ? ' merge' : ' merges') + ' of main' : '');
 
-module.exports = { sameOwnChanges, roundsOf, noteMerge, roundsLine };
+module.exports = { sameOwnChanges, noteMerge, roundsLine };

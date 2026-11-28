@@ -370,8 +370,7 @@ function tellStarts(now) {
 
 const checkingMain = new Set(), ownChanged = new Map();
 const gitIn = (cwd) => (args) => new Promise((resolve, reject) => execFile('git', args, { cwd, timeout: 15000 }, (e, out) => (e ? reject(e) : resolve(out))));
-async function checkMainMerge(channel, pr, rec, from, head) {
-  const git = gitIn(from);
+async function checkMainMerge(channel, pr, rec, from, head, git = gitIn(from)) {
   try { await git(['fetch', '-q', 'origin', 'main']); } catch (e) { ownChanged.set(pr, head); return; }
   const same = await mainMerge.sameOwnChanges(git, rec.head, head, 'origin/main');
   if (!same || rec.head === head || !recOf(channel, pr)) { ownChanged.set(pr, head); return; }
@@ -642,4 +641,4 @@ function setSwitch(channel, k, on) {
   save();
 }
 
-module.exports = { firstReviews, chOf, setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, noReview, giveReview, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };
+module.exports = { firstReviews, chOf, setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, noReview, giveReview, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty, checkMainMerge, ownChangedAt: (pr) => ownChanged.get(pr) };
