@@ -1,4 +1,4 @@
-// The gate from round 3 on: who decides each finding, and what a PR owes once they have. See docs/manual/roles.html#auto-review.
+// The gate from round 3 on: who decides each finding, and what a PR owes once they have. Nothing calls it yet (ticket 615).
 'use strict';
 
 const GATE_FROM = 3, GATE_MINUTES = 10;
