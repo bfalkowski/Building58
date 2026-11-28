@@ -73,7 +73,7 @@
 'use strict';
 const { oneLine } = require('./clean.js');
 
-const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
+const KINDS = ['relay', 'permission', 'question', 'desks', 'main', 'claude', 'skills', 'ticket-write', 'ticket-key', 'merged', 'closed', 'merge', 'lead-stuck', 'manager-note', 'push-refused', 'handed-over', 'review', 'waiting', 'stuck', 'stuck-job', 'undelivered', 'prompt', 'gone'];
 const BUILDING = ['building', 'changes_requested'];
 const BUSY = ['working', 'quiet', 'job'];
 const PERMISSION = /permission/i;
@@ -197,6 +197,10 @@ function listOf(input) {
   for (const x of (input && input.leadStuck) || []) {
     if (!x || !x.item) continue;
     items.push({ kind: 'lead-stuck', who: 'Lead', terminal: null, task: null, ticket: null, pr: /^https:/.test(x.item) ? x.item : null, line: 'The Lead cannot unstick ' + oneLine(x.item, 120) + ': ' + oneLine(x.why, 300).replace(/([^.!?])$/, '$1.') + ' It named it on ' + (Number(x.passes) || 3) + ' passes in a row and did not act.', link: /^https:/.test(x.item) ? { url: x.item } : {} });
+  }
+  for (const n of (input && input.managerNotes) || []) {
+    const text = n && oneLine(n.text, 600);
+    if (text) items.push({ kind: 'manager-note', who: 'Manager', terminal: null, task: null, ticket: n.ticket || null, pr: null, line: 'The manager saw a stall: ' + text.replace(/([^.!?])$/, '$1.'), link: {} });
   }
   for (const f of (input && input.flakes) || []) {
     if (!f || !PR_LINK.test(String(f.pr))) continue;

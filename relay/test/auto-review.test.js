@@ -125,11 +125,11 @@ test('the relay starts the first review and the follow-ups, with no page open', 
 
   await t.test('a first review with no desk free starts once a desk is free', async () => {
     const d = await dev(), pr = PR(10), others = [];
-    while ((await terminals()).length < 7) others.push(await dev());
+    while ((await terminals()).length < 6) others.push(await dev());
     commit(pr);
     await opens(d, pr);
     await until(() => /No desk is free for the review of PR #10/.test(R.output()), 'the relay to find no desk free', 300);
-    assert.deepStrictEqual((await reviewersOf(pr)).filter((x) => !seen.has(x.id)), [], 'all 7 worker desks are taken');
+    assert.deepStrictEqual((await reviewersOf(pr)).filter((x) => !seen.has(x.id)), [], 'all 6 worker desks are taken');
     const p = (await reviews()).prs.find((x) => x.pr === pr);
     assert.deepStrictEqual([p.count, p.desk], [0, true], 'it waits for a desk, and is not counted yet');
     await stop(others.pop());

@@ -144,9 +144,10 @@ test('the Lead stops only a posted automatic reviewer, or a Dev whose PR merged 
 
   const plain = await o.start(), pm = await o.start({ role: 'pm', title: 'PM: an idea' });
   const posted = await o.reviewer(true), unposted = await o.reviewer(false);
-  const done = await o.dev('done'), building = await o.dev(), merged = await o.dev(), unsaved = await o.dev('done');
+  const done = await o.dev('done'), building = await o.dev(), merged = await o.dev();
+  let unsaved;
   const name = {};
-  for (const [k, s] of Object.entries({ posted, unposted, done, merged, unsaved })) name[k] = await o.nameOf(s);
+  for (const [k, s] of Object.entries({ posted, unposted, done, merged })) name[k] = await o.nameOf(s);
   // The merged Dev's PR merged, and the relay heard it from gh. Its task is still Building.
   const MAX_PR = 'https://github.com/acme/widgets/pull/9';
   o.answers({ prs: { [MAX_PR]: { state: 'MERGED', statusCheckRollup: [] } } });
@@ -169,6 +170,10 @@ test('the Lead stops only a posted automatic reviewer, or a Dev whose PR merged 
     await refuses('a session the person just added', plain, 'it is not a reviewer or a Dev');
     await o.finish(plain);
     await refuses('an idle plain session', plain, 'it is not a reviewer or a Dev');
+    await R.call('POST', '/terminals/' + plain.id + '/stop', {});  // workers have 6 desks, so this one frees the desk of the last Dev
+    await until(async () => !(await o.running(plain)), 'the plain session to stop');
+    unsaved = await o.dev('done');
+    name.unsaved = await o.nameOf(unsaved);
   });
 
   await t.test('it refuses the PM the person is not talking to', async () => {

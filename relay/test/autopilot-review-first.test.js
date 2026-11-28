@@ -9,7 +9,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { relay, makeRepo, until, sleep } = require('./helpers.js');
 
-const DESKS = 7;
+const DESKS = 6;
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 const PR = (n) => 'https://github.com/acme/widgets/pull/' + n;
 

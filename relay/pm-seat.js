@@ -1,5 +1,5 @@
 // The PM's seat: the room keeps one PM running, as it does the Lead, and starts it again when it ends.
-// It takes one of the two desks kept for the Lead and the PM (relay/terminal.js), so workers keep seven.
+// It takes one of the three desks kept for the Lead, the PM and the manager (relay/terminal.js), so workers keep six.
 // A start that fails is tried again after RETRY_MS, with a longer wait each time, up to MAX_WAIT_MS.
 // A seat that ends within STABLE_MS of starting counts as a failed try. The count clears only after one ran that long.
 // Nothing starts while the relay closes or an update is under way. RELAY_PM_SEAT=0 turns it off.

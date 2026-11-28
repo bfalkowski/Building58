@@ -11,7 +11,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { relay, makeRepo, removeDir, sleep, until } = require('./helpers.js');
 
-const DESKS = 7;
+const DESKS = 6;
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t'].concat(args), { cwd, encoding: 'utf8' }).trim();
 
 async function office(t, env) {
@@ -88,7 +88,7 @@ test('every desk is taken and nothing is Autopilot\'s to stop: it waits, then st
   assert.ok(await o.canStop(theirs));
   const next = await o.ticket('Next one');
   await o.R.call('POST', '/autopilot', { on: true, only: next.id });
-  await until(async () => /^Waiting for a free desk: 7 of 7 taken, none safe to stop/.test((await o.ap()).idle || ''), 'Autopilot to say it waits for a desk');
+  await until(async () => /^Waiting for a free desk: 6 of 6 taken, none safe to stop/.test((await o.ap()).idle || ''), 'Autopilot to say it waits for a desk');
   await sleep(1500);  // a few more looks
   let a = await o.ap();
   assert.strictEqual(a.on, true, 'Autopilot stayed on: ' + JSON.stringify(a.notes));

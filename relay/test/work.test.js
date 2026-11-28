@@ -61,6 +61,8 @@ test('what each session is working on', async (t) => {
     assert.strictEqual(now.work, null);
   });
   await t.test('a task with no ticket has no number', async () => {
+    const spare = (await sessions()).find((x) => x.id !== dev);
+    if ((await sessions()).length >= 6) { await call('POST', '/terminals/' + spare.id + '/stop', {}); await until(async () => (await sessions()).length < 6, 'a desk to free up'); }  // workers have 6 desks
     const task = (await call('POST', '/tasks', { title: 'No ticket here', repo })).body.task;
     const s = await session(task.worker.terminal);
     assert.strictEqual(s.title, 'No ticket here');
