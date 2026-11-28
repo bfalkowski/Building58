@@ -778,4 +778,8 @@ async function handle(req, res, channel, rest, ctx) {
 const startingNow = (channel) => leadStarting.has(channel) || [...starting].some((k) => k.startsWith(channel + '/'));
 const startBy = (channel, ticket, by, ctx) => startTicket(channel, ticket, {}, ctx, null, by);
 
-module.exports = { closeForFailure, seatPm, handle, fileAsManager, noteAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };
+async function noteAsRelay(channel, id, text) {
+  const ticket = (await listAll(channel)).find((t) => t.id === id);
+  return ticket ? addNote(channel, ticket, { text }, RELAYER) : null;
+}
+module.exports = { noteAsRelay, closeForFailure, seatPm, handle, fileAsManager, noteAsManager, listAll, writeErrors, unreadNotes, board, onChange, onFiled, startBy, startingNow, holdStarts, heldWhy, CLI, KINDS, MAX_LABELS };

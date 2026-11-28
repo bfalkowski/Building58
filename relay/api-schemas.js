@@ -123,6 +123,7 @@ const SCHEMAS = {
     canStop: B,
     why: S(),
     seat: orNull(S({ description: 'lead for the Lead, pm for the PM the room keeps running, manager for the manager session, or null.' })),
+    menu: orNull(obj({ text: S(), choices: list(S()), since: S() }, ['text', 'choices', 'since'])),
     stuckJobs: list(obj({ pid: N(), command: S(), minutes: N() }, ['pid', 'command', 'minutes'])),
     desk: { type: 'object' }
   }, ['terminal', 'name', 'role', 'state', 'safe', 'canStop', 'why']),

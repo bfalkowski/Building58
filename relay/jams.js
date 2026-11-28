@@ -76,6 +76,9 @@ function record(channel, body) {
   save();
   return made.jam;
 }
+terminal.onPromptAnswered((channel, t, known) => {
+  record(channel, { kind: 'news-behind-menu', fix: oneLine('Closed Claude Code\'s own prompt "' + known.label + '" with "' + known.answer + '", so the news held behind its menu can go in.', 200), by: 'the relay' });
+});
 const listOf = (channel) => prune(store[channel] || [], Date.now());
 const sinceRange = (range, now) => now - RANGES[range].days * DAY;
 

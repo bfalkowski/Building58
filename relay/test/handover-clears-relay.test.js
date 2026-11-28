@@ -16,7 +16,8 @@ const STALL = 2000;
 
 async function rig(t) {
   const gh = fs.mkdtempSync(path.join(os.tmpdir(), 'office-gh-'));
-  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: String(STALL), RELAY_REVIEW_GRACE_MS: '200' });
+  const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: gh, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_AUTOPILOT_STALL_MS: String(STALL), RELAY_REVIEW_GRACE_MS: '200' }, undefined, { autoReview: true });
+  await R.call('POST', '/reviews', { auto: true });
   t.after(async () => { await R.stop(); removeDir(gh); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);

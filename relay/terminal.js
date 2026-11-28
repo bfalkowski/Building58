@@ -412,9 +412,12 @@ function start(channel, body, ctx, onExit, own) {
     while (t.outSize > KEEP && t.out.length > 1) t.outSize -= t.out.shift().length;
     t.pendingOut.push(buf);
     if (!t.flush) t.flush = setTimeout(() => flushOut(t), OUT_BATCH);
+    clearTimeout(t.menuLook);
+    t.menuLook = setTimeout(() => lookAtMenu(t), SETTLED + 100);
   };
   const ended = (code) => {
     t.exited = true; t.exitCode = t.stopped ? null : code;
+    clearTimeout(t.menuLook);
     reseat(channel);
     keepReviewer(t);
     if (t.refresh) endRefresh(t, 'The Lead\'s session ended before the refresh finished.', false);
@@ -495,9 +498,53 @@ function onTrustQuestion(screen) {
 }
 
 function questionOnScreen(t) {
+  if (t.knownPending) return 'menu';
   if (!t.heard && !t.trustAnswered && onTrustQuestion(screenOf(t))) return 'trust';
   if (MENU.test(screenOf({ tail: t.sinceKey === null ? t.tail : t.sinceKey }).slice(-AFTER_TRUST))) return 'menu';
   return null;
+}
+
+const knownPrompts = require('./known-prompts.js');
+const MENU_LOOK = 1500, MENU_TEXT = 4000, KNOWN_RETRY = 2000;
+const MENU_WAIT = Number(process.env.RELAY_MENU_WAIT_MS) > 0 ? Number(process.env.RELAY_MENU_WAIT_MS) : 5 * 60 * 1000;
+const answeredFns = [];
+const onPromptAnswered = (fn) => { answeredFns.push(fn); };
+const sinceKeyOf = (t) => (t.sinceKey === null ? t.tail : t.sinceKey);
+function menuOf(t) {
+  if (!t || t.exited || t.stopped || questionOnScreen(t) !== 'menu') return null;
+  if (!t.menuSince) t.menuSince = Date.now();
+  return Object.assign({ since: t.menuSince }, knownPrompts.menuText(Buffer.from(sinceKeyOf(t).slice(-MENU_TEXT), 'latin1').toString('utf8').replace(ANSI, '')));
+}
+function closeKnown(t, known) {
+  const n = t.knownTries || 0;
+  t.knownTries = n + 1;
+  t.knownPending = { known, at: Date.now(), before: sinceKeyOf(t) };
+  t.io.write(known.keys[n]);
+  t.sinceKey = '';
+  clearTimeout(t.menuLook);
+  t.menuLook = setTimeout(() => lookAtMenu(t), KNOWN_RETRY);
+  if (n === 0) console.log('Claude Code in ' + t.cwd + ' showed its own prompt "' + known.label + '". The relay chose "' + known.answer + '".');
+}
+function promptClosed(t, known) {
+  t.knownTries = 0; t.menuSince = null;
+  for (const fn of answeredFns) { try { fn(t.channel, t, known); } catch (e) { console.error('After a known prompt: ' + e.message); } }
+}
+function lookAtMenu(t) {
+  if (!t || t.exited || t.stopped) return;
+  clearTimeout(t.menuLook); t.menuLook = null;
+  const pending = t.knownPending;
+  if (pending) {
+    t.knownPending = null;
+    const gone = t.lastOutAt > pending.at && !knownPrompts.identify(screenOf({ tail: sinceKeyOf(t) }).slice(-MENU_LOOK));
+    if (gone) { promptClosed(t, pending.known); return; }
+    t.sinceKey = (pending.before + (t.sinceKey || '')).slice(-TAIL);
+  }
+  const open = questionOnScreen(t) === 'menu';
+  if (!open) { t.menuSince = null; t.knownTries = 0; return; }
+  if (!t.menuSince) t.menuSince = Date.now();
+  const known = knownPrompts.identify(screenOf({ tail: sinceKeyOf(t) }).slice(-MENU_LOOK));
+  if (known && (t.knownTries || 0) < known.keys.length) { closeKnown(t, known); return; }
+  if (!known) t.knownTries = 0;
 }
 
 function notSafeToType(t, brief) {
@@ -894,4 +941,4 @@ function agentFor(req) {
 const all = (channel) => [...termsOf(channel).values()].filter((t) => !t.exited);
 const everyone = () => [...channels.values()].flatMap((terms) => [...terms.values()].filter((t) => !t.exited));
 
-module.exports = { setLead, screenOf, isClosing: () => closing, isUpdating: () => updating(), DESKS: MAX_TERMINALS, WORKER_DESKS, workersOf, seated, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onReviewBack, reviewFound, onWork, workOfTerm, questionOnScreen, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeSettle, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };
+module.exports = { setLead, screenOf, isClosing: () => closing, isUpdating: () => updating(), DESKS: MAX_TERMINALS, WORKER_DESKS, workersOf, seated, guard, setRoster, rebriefLead, startLead, holdSeats, handle, noteHook, onEnd, onNamed, onSessionMoved, onReviewDone, onReviewPosted, onReviewTurnEnd, onReviewBack, reviewFound, onWork, workOfTerm, questionOnScreen, menuOf, MENU_WAIT, onPromptAnswered, stop, holdWhileUpdating, owePrompt, failedIn, close, connectHost, stillRunning, dropUnclaimed, takeLastRun, bringingBack, markFailed, start, find, all, everyone, leadOf, notSafeToType, typeSettle, typeIfSafe, nudge, noteShown, redraw, expand, localOnly, agentFor, runningIn, leadIn, leadEndedOf, useStart, ENABLED, wipLimit, MAX_PROMPT };
