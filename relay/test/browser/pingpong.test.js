@@ -14,7 +14,7 @@ test.after(() => o && o.stop());
 const get = () => o;
 
 const PLAYING = 'Playing ping pong';
-const CLEAR_AT = 8, CLEAR_STEP = 2;
+const CLEAR_AT = 8, CLEAR_STEP = 2, COUCH_BY = 7;
 // Who is in a game: at a table spot with their paddle up, or with the table in their plan. A label can still say
 // Playing ping pong for a moment after the game ends, until the person picks what to do next.
 const playing = (p) => p.page.evaluate((label) => window.run.state().workers.filter((w) => {
@@ -79,7 +79,7 @@ pageTest('the trailer\'s ping pong cue clears a game already going, and Kai play
   // The room moves only as the film clock moves, so a wait in real time never seats June: play the film on a second at a time.
   // If the couch cue was refused because the couch was full, clear it and send June again.
   let sent = false;
-  for (let at = 4; !(await onCouch()) && at <= 7; at++) {
+  for (let at = 4; !(await onCouch()) && at <= COUCH_BY; at++) {
     await playTo(at);
     if (await onCouch() || sent) continue;
     sent = true;

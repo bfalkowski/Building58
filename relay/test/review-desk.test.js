@@ -133,6 +133,7 @@ test('which session a review may stop, and in what order', () => {
   const reviewed = row('v', { task: 'e', lastActAt: 3 }, { task: { id: 'e', state: 'in_review', pr: PR(4) } });
   const busy = row('b', { task: 'f', lastActAt: 4 }, { task: { id: 'f', state: 'in_review', pr: PR(5) }, waits: true, verdict: no });
   const lead = row('l', { lead: true, lastActAt: 5 });
+  const waitingDirty = row('y', { task: 'y', lastActAt: 6 }, { task: { id: 'y', state: 'waiting_on_you', pr: PR(6) }, unsaved: 'its checkout has 1 uncommitted file' });
   const all = [newer, older, doneDev, dirty, notPosted, reviewed, busy, lead, reviewer];
   assert.strictEqual(forReview(all).t.id, 'r', 'a posted reviewer first');
   assert.strictEqual(forReview(all).why, 'its review is posted, idle 9 min');
@@ -141,6 +142,8 @@ test('which session a review may stop, and in what order', () => {
   assert.strictEqual(forReview([newer, older]).t.id, 'o', 'then the longest idle Dev whose PR waits on a review');
   assert.strictEqual(forReview([newer]).why, 'its PR waits on a review, idle 9 min');
   assert.strictEqual(forReview([notPosted, dirty, reviewed, busy, lead]), null, 'nothing else');
+  assert.strictEqual(forReview([newer, waitingDirty, dirty]).t.id, 'y', 'a Dev whose task waits on the person goes before one whose PR waits on a review, though its checkout is dirty: the checkout stays');
+  assert.strictEqual(forReview([waitingDirty]).why, 'its task waits on the person, idle 9 min');
 });
 
 test('every desk is held by an idle Dev whose task waits on the person: the oldest is stopped and the review starts', async (t) => {

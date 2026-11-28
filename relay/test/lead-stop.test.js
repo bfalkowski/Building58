@@ -138,7 +138,7 @@ test('the Lead never stops a session the verdict calls not safe', async (t) => {
 });
 
 test('the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done', async (t) => {
-  const o = await office({ RELAY_LEAD_STOPS: '1', RELAY_LEAD_STOP_LIMIT: '3' });
+  const o = await office({ RELAY_LEAD_STOPS: '1', RELAY_LEAD_STOP_LIMIT: '4' });
   const { R } = o;
   t.after(o.done);
 
@@ -227,11 +227,24 @@ test('the Lead stops only a posted automatic reviewer, or a Dev whose PR merged 
     await until(async () => !(await o.running(merged)), 'the Dev to stop');
   });
 
+  await t.test('it stops an idle Dev whose task waits on the person, even with uncommitted work, and the checkout stays with it', async () => {
+    const { task } = building;
+    assert.strictEqual((await R.call('POST', '/tasks/' + task.id + '/move', { to: 'waiting_on_you' })).status, 200);
+    const dir = task.worktree;
+    fs.writeFileSync(path.join(dir, 'c.txt'), 'c\n');
+    await until(async () => (await o.rowOf(building)).canStop === true, 'the Floor to call it safe for the Lead to stop');
+    const r = await o.stop(task.id);
+    assert.strictEqual(r.status, 200, r.body.message);
+    assert.match(r.body.stopped.why, /^its task waits on the person, idle \d+ min, and Bring back returns it to the same checkout$/);
+    await until(async () => !(await o.running(building)), 'the Dev to stop');
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'c.txt'), 'utf8'), 'c\n', 'its uncommitted work stays in the checkout');
+  });
+
   await t.test('it stops at most RELAY_LEAD_STOP_LIMIT sessions an hour', async () => {
     git(unsaved.task.worktree, 'push', '-q', 'origin', 'HEAD:refs/heads/' + unsaved.task.branch);  // now all of its work is pushed
     assert.strictEqual((await o.rowOf(unsaved)).canStop, true, (await o.rowOf(unsaved)).why);
     const r = await o.stop(name.unsaved);
-    assert.deepStrictEqual([r.status, r.body.error], [429, 'limit'], 'three stopped this hour');
+    assert.deepStrictEqual([r.status, r.body.error], [429, 'limit'], 'four stopped this hour');
     assert.ok(await o.running(unsaved));
   });
 });
