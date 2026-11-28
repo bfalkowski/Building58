@@ -5,8 +5,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { nudgeText, noPrWhy, claimsMain } = require('../nudge.js');
-const { onMainCommit, heldCommit } = require('../on-main.js');
-const { summarize } = require('../office-hook.js');
+const { heldCommit } = require('../on-main.js');
+const { summarize, onMainCommit } = require('../office-hook.js');
 
 const now = Date.parse('2026-11-25T12:00:00Z');
 const task = { id: 'task-1', ticket: 'T-225' };

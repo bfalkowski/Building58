@@ -59,7 +59,6 @@ function installChannel(argv) {
   if (e.OFFICE_PANEL_CHANNEL !== undefined ? mine === e.OFFICE_PANEL_CHANNEL : !!e.OFFICE_TERMINAL_ID) return 'office';
   return mine;
 }
-const { onMainCommit } = require('./on-main.js');
 const INSTALL_CHANNEL = installChannel(process.argv.slice(2));
 const OWN_URL = process.env.OFFICE_HOOK_URL && process.env.OFFICE_TICKET_TOKEN ? process.env.OFFICE_HOOK_URL : '';
 const FULL = process.env.OFFICE_DETAIL === 'full';
@@ -72,7 +71,7 @@ const MARK = 'office-hook.js';
 const SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
 
 if (require.main === module) main();
-else module.exports = { hookSettings, hooksInstalled, hookCheckout, projectOf, summarize, pushedIn, prMade };
+else module.exports = { onMainCommit, hookSettings, hooksInstalled, hookCheckout, projectOf, summarize, pushedIn, prMade };
 
 function main() {
   const arg = process.argv.slice(2).find((a) => ['--settings', '--install', '--uninstall', '--help', '-h'].includes(a)) || '';
@@ -110,6 +109,13 @@ async function send(text) {
   }
 }
 
+const HASH = /\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/i;
+const MAIN = /\b(?:origin\/)?main\b/i;
+function onMainCommit(text) {
+  const said = String(text == null ? '' : text);
+  const hash = said.match(HASH);
+  return hash && MAIN.test(said) ? hash[0].toLowerCase() : null;
+}
 const cut = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
 const CREATES_PR = /(?:^|[;&|(\n]\s*)(?:[A-Za-z_]\w*=\S*\s+)*gh\s+pr\s+create\b/;
 const PR_LINE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/gm;
