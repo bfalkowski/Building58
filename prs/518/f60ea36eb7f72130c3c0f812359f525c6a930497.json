@@ -1,0 +1,247 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 518,
+  "base": "3ec9fc6ebf806ada5eee936614e2fe46d794969c",
+  "head": "f60ea36eb7f72130c3c0f812359f525c6a930497",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "needs-you",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code",
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1774,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "head": {
+          "passed": 1782,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 1085171
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 1047
+    },
+    {
+      "type": "failing-before",
+      "params": {},
+      "kinds": [
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "test_files": [
+          "relay/test/container-setup.test.js",
+          "relay/test/fake-claude.sh",
+          "relay/test/known-prompts.test.js",
+          "relay/test/needs-you-plan.test.js"
+        ],
+        "tests": [
+          {
+            "name": "relay/test/comment-paths.test.js > test > each repo file a code comment names exists",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/container-setup.test.js > test > the auto mode environment prompt is marked dismissed, and a dismissal already there is kept",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/known-prompts.test.js > test > Claude Code's own prompt is answered, a jam is logged, and the held news goes in",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/known-prompts.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/known-prompts.test.js > test > a known prompt is found by its text, and the last one on screen wins",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/known-prompts.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/known-prompts.test.js > test > a menu the room does not know is not answered, and shows in Needs you with its words after the wait",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/known-prompts.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/known-prompts.test.js > test > a prompt no key closes stays open: no jam, nothing typed, and Needs you shows it after the wait",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/known-prompts.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/known-prompts.test.js > test > a prompt that ignores key 3 gets Escape, and the held news goes in once it is closed",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/known-prompts.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/known-prompts.test.js > test > a session that prints a known prompt's words with no menu is left alone",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/known-prompts.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/known-prompts.test.js > test > the words and choices of a menu are read from the text of a screen",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/known-prompts.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/needs-you-plan.test.js > test > a session that waits on an answer, or shows a question on its screen: answer it",
+            "on_base": "failed"
+          }
+        ],
+        "passed_on_base": [
+          "relay/test/container-setup.test.js > test > ROOM_PLUGINS installs each listed plugin once, skips the ones installed, and prints the Skills line",
+          "relay/test/container-setup.test.js > test > ROOM_REPOS is a list of owner/name, by spaces or commas, and anything else is left out",
+          "relay/test/container-setup.test.js > test > a failed install is named and does not stop the others or the start",
+          "relay/test/container-setup.test.js > test > a file that is not JSON is set aside and kept, not a reason to stop",
+          "relay/test/container-setup.test.js > test > a new Claude Code folder gets its first run marked done and a text style",
+          "relay/test/container-setup.test.js > test > an installed version other than the list's is said, with both",
+          "relay/test/container-setup.test.js > test > no ROOM_PLUGINS, or none, installs nothing and says so; a bad item is left out",
+          "relay/test/container-setup.test.js > test > the folders the room works in are trusted, so a new checkout under one asks no trust question",
+          "relay/test/container-setup.test.js > test > what the person set is kept, and the key from .env is approved once",
+          "relay/test/needs-you-plan.test.js > test > a Dev that stopped with no PR: prompt it",
+          "relay/test/needs-you-plan.test.js > test > a GitHub write that failed: one line for the issue, with GitHub's message and the next try, after the desks",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over stays a decision after review news moves its task out of Waiting on you",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over: decide on it, with its reason",
+          "relay/test/needs-you-plan.test.js > test > a PR handed over because no review can start offers Get a review",
+          "relay/test/needs-you-plan.test.js > test > a PR merged on GitHub gives a Done line, and one closed with no merge gives a line with no Done",
+          "relay/test/needs-you-plan.test.js > test > a PR only the person may merge: merge it",
+          "relay/test/needs-you-plan.test.js > test > a PR whose automatic review could not start: get a review, with the reason (T-350)",
+          "relay/test/needs-you-plan.test.js > test > a hand-over whose Dev says a finding is a bug offers Fix it, and no other hand-over does",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev running: move the card, the Dev fixes it",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev stopped: bring the Dev back to fix it",
+          "relay/test/needs-you-plan.test.js > test > a posted merge verdict after the hand-over: merge the PR, unless newer commits need a review",
+          "relay/test/needs-you-plan.test.js > test > a push the push hold refused: look at the PR, with a Fix it that lifts the hold, ahead of the hand-over",
+          "relay/test/needs-you-plan.test.js > test > a saved message that has waited long for a running session: open that session, with why",
+          "relay/test/needs-you-plan.test.js > test > a session that asks for permission: approve it, at its seat",
+          "relay/test/needs-you-plan.test.js > test > a session the relay told something that did not start: open it",
+          "relay/test/needs-you-plan.test.js > test > a task in Waiting on you: look at it, with the note that put it there",
+          "relay/test/needs-you-plan.test.js > test > a task whose session ended before a PR: bring it back",
+          "relay/test/needs-you-plan.test.js > test > another relay on the room's state folder: stop it, with its Stop button, before anything else",
+          "relay/test/needs-you-plan.test.js > test > no item twice for the same cause",
+          "relay/test/needs-you-plan.test.js > test > notes signed with another key give one line that names the fix",
+          "relay/test/needs-you-plan.test.js > test > nothing needs the person: the list is empty",
+          "relay/test/needs-you-plan.test.js > test > reviews wait for a desk and the relay may stop no session: one line names the wait, after the questions",
+          "relay/test/needs-you-plan.test.js > test > text from a session is cleaned to one line",
+          "relay/test/needs-you-plan.test.js > test > the most urgent kind comes first, and every kind has a rule",
+          "relay/test/needs-you-plan.test.js > test > with no review after the hand-over, the line keeps Autopilot's reason"
+        ],
+        "did_not_load_on_base": [
+          "relay/test/known-prompts.test.js"
+        ]
+      },
+      "author": "builder",
+      "duration_ms": 1082998
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 140
+    }
+  ],
+  "verdict": "meets_policy",
+  "gaps": [],
+  "checks_by_author": {
+    "builder": 4,
+    "hidden": 0
+  },
+  "flaky_tests": [],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-28T13:52:45.397Z"
+}
