@@ -741,7 +741,8 @@ The rule: while the person's switch **Let the Lead start reviews** is on, the Le
 for a review of a task's pull request with `relay/ticket.js review`. The relay starts the reviewer
 that Get a review starts, in its own checkout, and it posts and leaves. The relay refuses a pull
 request that is not a task's, one a reviewer is on, an ask with no free desk, and a pull request
-that has had 3 reviews the relay started: the Lead's count with the automatic ones. The Lead never
+that has had as many reviews as the limit on automatic reviews (`maxAutoReviews`, 3 by default) from
+the relay: the Lead's count with the automatic ones. The Lead never
 reviews code in its own session, itself or with a subagent. The switch is off by default, kept off
 through a restart until the person turns it on, and the person can take it back.
 
@@ -761,8 +762,8 @@ The five questions, for this permission:
    token reaches the route. The relay refuses a pull request a reviewer is on or about to be on,
    and counts each review before it starts, so two asks cannot both pass the limit.
 
-Its loop is limited: at most 3 reviews the relay started per pull request, automatic and the Lead's
-together. The way back is the switch.
+Its loop is limited: at most the limit on automatic reviews (`maxAutoReviews`, 3 by default) from the
+relay per pull request, automatic and the Lead's together. The way back is the switch.
 
 *Today (2026-11-15):* built (T-98): **Let the Lead start reviews** in Settings under The Lead, off
 by default. It stays on when the person makes a different session the Lead, and only the Lead there
@@ -779,11 +780,12 @@ stuck work first on each pass, does everything its other permissions allow to un
 reports to the person only what it cannot do. It runs the shared channel of a failure that blocks
 two or more PRs, merges the duplicate tickets linked to it, sets the ticket left high and first and
 starts it with a new Dev only while no blocked Dev runs (even with **Let the Lead set priority**
-off, and only for a ticket linked to an open failure channel), reruns the failed job of a known
-flaky check once for each commit, and fixes the stalls the person fixes by hand through the routes
+off, and only for a ticket linked to an open failure channel), reruns the failed job of a check that an
+open failure channel names, once for each commit (`rerun` in `relay/failures.js`), and fixes the stalls the person fixes by hand through the routes
 that exist. It writes each fix in the jam log, by Lead. Through this switch the Lead never merges,
 never fixes code, and never touches a ticket that is started, done or rejected. An item it names on
-three passes in a row with no action goes on Needs you with its reason.
+three passes in a row with no action goes on Needs you with its reason (`PASSES` in
+`relay/lead-stuck.js`).
 
 It is off by default and the person can take it back. It is apart from the Lead's other switches and
 gives none of them: starting a ticket still needs the Lead's start rung.
