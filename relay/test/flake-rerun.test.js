@@ -68,7 +68,7 @@ test('a PR red only on a known flake is rerun once, noted, logged, and a second 
   git(repo, 'push', '-q', 'origin', 'main');
   await R.call('POST', '/reviews', { auto: false });
   const logs = {}, files = {};
-  const answers = (prs) => fs.writeFileSync(path.join(gh, 'answers.json'), JSON.stringify({ prs, logs, api: files }));
+  const answers = (prs) => fs.writeFileSync(path.join(gh, 'answers.json'), JSON.stringify({ prs, logs, api: files, failRerun: { 4: 'HTTP 403: Resource not accessible by integration' } }));
   const pr = (n, checks, head) => ({ [url(n)]: { state: 'OPEN', headRefOid: head || String(n).repeat(40).slice(0, 40), statusCheckRollup: checks } });
   const started = async (title, link) => {
     const ticket = (await R.call('POST', '/tickets', { title, body: 'Do it.', repo })).body.ticket;
@@ -136,6 +136,24 @@ test('a PR red only on a known flake is rerun once, noted, logged, and a second 
     await until(async () => (await R.call('GET', '/chat')).body.rooms.some((r) => r.name === 'failure-browser'), 'the failure channel');
     assert.strictEqual(reruns().length, 2, 'no third rerun');
     assert.deepStrictEqual(await needs(), [], 'it is in the channel, not on Needs you');
+  });
+
+  await t.test('a log with no test file name is not rerun, and a refused rerun is tried once', async () => {
+    await started('No file in the log', url(3));
+    files['repos/acme/widgets/pulls/3/files'] = [{ filename: 'relay/flake.js' }];
+    logs['3'] = '✖ ' + TEST + ' (30001.2ms)\n';
+    answers(Object.assign(pr(1, [RUNNING], 'c'.repeat(40)), pr(3, [failed('browser', 3)])));
+    await sleep(3500);
+    assert.strictEqual(reruns().length, 2, 'the guard cannot be checked, so no rerun');
+    await started('A rerun gh refuses', url(4));
+    files['repos/acme/widgets/pulls/4/files'] = [{ filename: 'docs/manual/relay.html' }];
+    logs['4'] = LOG('relay/test/browser/pingpong.test.js');
+    answers(Object.assign(pr(1, [RUNNING], 'c'.repeat(40)), pr(4, [failed('browser', 4)])));
+    await until(() => fs.existsSync(path.join(gh, 'calls.log')) && /run rerun 4 /.test(fs.readFileSync(path.join(gh, 'calls.log'), 'utf8')), 'the attempt');
+    const tries = () => fs.readFileSync(path.join(gh, 'calls.log'), 'utf8').split('\n').filter((l) => /^run rerun 4 /.test(l)).length;
+    assert.strictEqual(tries(), 1);
+    await sleep(3500);
+    assert.strictEqual(tries(), 1, 'not tried again on the next looks');
   });
 
   await t.test('a PR that changes the flaky test\'s file is not rerun: the failure is its own', async () => {

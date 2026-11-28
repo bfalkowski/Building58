@@ -11,7 +11,7 @@
 //   { "lists": { "<branch>": [...] } }  what `gh pr list --head <branch>` prints. Anything else is [].
 // `gh pr comment <link> --body-file -` appends its link and body to posted.log, and prints a comment link.
 //   { "logs": { "<run id>": "text" } }  what `gh run view <id> --log-failed` prints. Anything else is empty.
-// `gh run rerun <id> ...` appends its arguments to rerun.log.
+// `gh run rerun <id> ...` appends its arguments to rerun.log, or fails with answers.failRerun[<id>].
 // `gh pr merge <link> --merge` appends `<link> --merge` to merged.log.
 // `gh pr edit <link> ...` appends its arguments to edited.log, and adds or removes the label on that PR in answers.json. With "labels": [...] in answers.json, adding a
 // label not in the list fails as gh does, and `gh label create <name>` adds it to the list, or fails with "failLabel".
@@ -36,6 +36,7 @@ if (verb === 'api') {
   process.exit(0);
 }
 if (verb === 'run' && sub === 'rerun') {  // appends its arguments to rerun.log
+  if ((answers.failRerun || {})[process.argv[4]]) { console.error(answers.failRerun[process.argv[4]]); process.exit(1); }
   fs.appendFileSync(path.join(dir, 'rerun.log'), process.argv.slice(4).join(' ') + '\n');
   process.exit(0);
 }

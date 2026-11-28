@@ -4,7 +4,8 @@
 // the relay reruns the failed job once (gh run rerun --failed), notes it on the flaky ticket with the PR, tells the
 // room, and logs a flake-blocks jam by the relay. It never reruns a head twice. When that head fails again after a
 // run that was not red, the PR goes to the shared failure channel (relay/failures.js) while Let the Lead unstick the
-// board is on, and to Needs you otherwise. A new head starts over. The records are kept in RELAY_FLAKE_FILE
+// board is on, and to Needs you otherwise. A new head starts over. A rerun that gh refuses is kept for that head and not
+// tried again, and a log that names no test file gets no rerun, since the PR's own changes could not be checked. The records are kept in RELAY_FLAKE_FILE
 // (flake-reruns.json in the state folder), so a restart does not rerun a head again. See
 // docs/manual/roles.html#flake-rerun.
 'use strict';
@@ -42,6 +43,7 @@ async function knownTicket(channel, pr, p) {
       tests.names.push(...got.names); tests.files.push(...got.files);
     }
     tests.files = [...new Set(tests.files)];
+    if (!tests.files.length) return null;
     const task = tasks.list(channel).find((t) => t.pr === pr);
     const changed = (await gh.files(pr, p.head, task && task.repo)).map((f) => f.split('/').pop());
     if (tests.files.some((f) => changed.includes(f))) return null;
@@ -58,7 +60,8 @@ async function rerun(channel, pr, p, found) {
   recs[pr] = { head: p.head, ticket: found.id, at: new Date().toISOString(), checks: p.failed.map((f) => f.name), seenNotRed: false, second: false };
   save();
   const got = await failures.rerunFailed(pr, p, p.failed);
-  if (got.error || !got.done.length) { if (got.error) delete recs[pr]; save(); return; }
+  if (got.error) { recs[pr].refused = true; save(); console.error('Flake rerun of ' + pr + ' refused: ' + got.error[1].message); return; }
+  if (!got.done.length) return;
   pipeline.soon(pr);
   const checks = got.done.join(', '), test = found.tests.length ? ' (' + found.tests.map((t) => oneLine(t, 100)).join('; ') + ')' : '';
   const tickets = require('./tickets.js');
@@ -81,6 +84,7 @@ async function look(channel, task) {
   const pr = task.pr, p = pipeline.of(pr), rec = recs[pr];
   if (!p || p.open === false || !p.head) { if (rec) { delete recs[pr]; save(); } return; }
   if (rec && rec.head !== p.head) { delete recs[pr]; save(); return; }
+  if (rec && rec.refused) return;
   if (rec && p.state !== 'red' && !rec.seenNotRed) { rec.seenNotRed = true; save(); return; }
   if (p.state !== 'red' || !p.failed || !p.failed.length) return;
   if (rec) { if (rec.seenNotRed) await second(channel, pr, p, rec); return; }
