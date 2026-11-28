@@ -23,4 +23,7 @@ async function holdsAll(git, commits, head) {
   return true;
 }
 
-module.exports = { mergedMain, holdsAll };
+const withHead = (heads, seq, head) => Array.from({ length: seq }, (_, i) => (heads || [])[i] || null).concat(head);
+const headsSince = (heads, from, seq) => Array.from({ length: Math.max(0, seq - from) }, (_, i) => (heads || [])[from + i] || null);
+
+module.exports = { mergedMain, holdsAll, withHead, headsSince };

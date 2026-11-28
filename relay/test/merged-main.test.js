@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync, execFile } = require('child_process');
-const { mergedMain, holdsAll } = require('../merged-main.js');
+const { mergedMain, holdsAll, withHead, headsSince } = require('../merged-main.js');
 
 test('a merge of origin/main counts, a merge of another branch or a missing commit does not (T-419)', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merged-main-'));
@@ -55,4 +55,14 @@ test('a head holds every listed API merge only when each is an ancestor of it', 
     assert.strictEqual(await holdsAll(git, [api, null], after), false, 'an unknown merge is not held');
     assert.strictEqual(await holdsAll(git, [], after), false, 'nothing listed');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('recorded API merge heads line up with the count, and a room saved before them reads as unknown', () => {
+  assert.deepStrictEqual(withHead(undefined, 0, 'a'), ['a']);
+  assert.deepStrictEqual(withHead(['a'], 1, 'b'), ['a', 'b']);
+  const legacy = withHead(undefined, 3, 'd');
+  assert.deepStrictEqual(legacy, [null, null, null, 'd'], 'the new head sits at index 3, the count it was made at');
+  assert.deepStrictEqual(headsSince(legacy, 3, 4), ['d'], 'merges after the legacy ones are known');
+  assert.deepStrictEqual(headsSince(legacy, 1, 4), [null, null, 'd'], 'a range with an older merge holds an unknown');
+  assert.deepStrictEqual(headsSince(undefined, 0, 2), [null, null]);
 });
