@@ -1,7 +1,8 @@
 // The elevator (office/office.js) on the room page. Doors in the back wall of the loft have two floor
 // buttons, and pressing one takes the view to that floor: the executive floor sits above the loft, and
 // the Main floor button brings back the first view. Nobody walks through the elevator's wall, and without
-// WebGL there are no buttons.
+// WebGL there are no buttons. The wall test counts each person once they have been at their spot: a stay at the
+// fridge lasts 4 seconds of room time, half a second at the speed 8 the test sets, so waiting for everyone at once to be at a spot could never come.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
@@ -98,10 +99,12 @@ test.describe('the elevator, without WebGL', () => {
       }
     }
     assert.ok(sent.length > 0, 'someone walks along the back wall: ' + answers.join('; '));
+    await p.page.evaluate(() => { window.reached = {}; });
     const seen = await watch(p, ([who, d]) => {
       const bad = who.map(([id]) => window.run.debug(id)).filter((x) => x && x.pos[0] > d.x0 - 0.05 && x.pos[0] < d.x1 + 0.05 && x.pos[1] < d.wall + 0.05);
       if (bad.length) return { bad: 'someone is in the elevator wall: ' + JSON.stringify(bad.map((x) => x.pos)) };
-      return { done: who.every(([id, prefix]) => { const x = window.run.debug(id); return x && x.step && x.step.t === 'act' && x.spot && x.spot.startsWith(prefix); }) };
+      for (const [id, prefix] of who) { const x = window.run.debug(id); if (x && x.step && x.step.t === 'act' && x.spot && x.spot.startsWith(prefix)) window.reached[id] = true; }
+      return { done: who.every(([id]) => window.reached[id]) };
     }, [sent, doors], 90000);
     assert.ok(!seen.bad, seen.bad);
     assert.deepStrictEqual(p.errors, []);
