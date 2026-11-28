@@ -28,6 +28,12 @@ test('the PM brief asks the PM to mark tickets that change the same code as bloc
   assert.match(brief, /later one as blocked by the earlier/);
 });
 
+test('the PM brief asks for a kind on every ticket it files', () => {
+  const brief = forEval();
+  assert.match(brief, /--kind docs, tests, bug or feature \(or another that ticket\.js kinds lists\) on every ticket/);
+  assert.ok(!brief.includes('when you know it'), 'does not make the kind optional');
+});
+
 test('the judged brief holds nothing from this computer', () => {
   const brief = forEval();
   assert.ok(!brief.includes(os.homedir()) && !brief.includes(__dirname), 'no path of this checkout');
