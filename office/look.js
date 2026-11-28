@@ -143,6 +143,7 @@
       room.traverse((o) => { if (o.isMesh) { o.material.lightMap = map; o.material.lightMapIntensity = k; } });
       lights(time);
     }
+    if (on) topUp(time);
     parts.forEach((m) => { m.visible = !on; });
     room.visible = on;
     haze(on && fxWanted ? time : null);
@@ -230,39 +231,59 @@
     if (fxWanted && fxScripts) await fxScripts.then(async () => { buildFx(); tune(t); await nextFrame(); }).catch(() => {});
     await precompile(t);
   }
-  async function precompile(t) {
+  const compiled = new Set();
+  function pending(t, asSwap) {
+    const fx = !!(composer && fxWanted), inRoom = new Set([room]), todo = [], seen = new Set();
+    asSwap(() => ctx.scene.traverse((o) => {
+      if (!o.material || !shown(o) || (fx ? o.type === 'GridHelper' : !under(o, inRoom))) return;
+      if (mats(o).some((m) => m && !compiled.has(m) && !seen.has(m))) { mats(o).forEach((m) => seen.add(m)); todo.push(o); }
+    }));
+    return { todo, seen };
+  }
+  function swapView(t) {
     const r = ctx.renderer, scene = ctx.scene, fx = !!(composer && fxWanted);
-    const fog = fx ? hazeFog(t) : scene.fog, target = fx ? composer.renderTarget1 : null, inRoom = new Set([room]);
-    function asSwap(fn) {
+    const fog = fx ? hazeFog(t) : scene.fog, target = fx ? composer.renderTarget1 : null;
+    return function asSwap(fn) {
       const was = { fog: scene.fog, target: r.getRenderTarget(), parts: parts.map((m) => m.visible), room: room.visible };
       parts.forEach((m) => { m.visible = false; }); room.visible = true; scene.fog = fog; r.setRenderTarget(target);
       try { return fn(); } finally {
         r.setRenderTarget(was.target); scene.fog = was.fog; room.visible = was.room;
         parts.forEach((m, i) => { m.visible = was.parts[i]; });
       }
+    };
+  }
+  function compileBatch(asSwap, todo, from, budget) {
+    let i = from;
+    asSwap(() => {
+      const out = [];
+      ctx.scene.traverse((o) => { if (o.material) { out.push([o, o.material]); o.material = null; } });
+      const own = new Map(out), start = performance.now();
+      try {
+        while (i < todo.length && performance.now() - start < budget) {
+          const next = todo.slice(i, i + 8).filter((o) => own.has(o));
+          i += 8;
+          next.forEach((o) => { o.material = own.get(o); });
+          ctx.renderer.compile(ctx.scene, ctx.camera);
+          next.forEach((o) => { mats(o).forEach((m) => compiled.add(m)); o.material = null; });
+        }
+      } finally { out.forEach(([o, m]) => { o.material = m; }); }
+    });
+    return i;
+  }
+  async function precompile(t) {
+    const asSwap = swapView(t);
+    for (;;) {
+      const { todo } = pending(t, asSwap);
+      if (!todo.length) return;
+      for (let i = 0; i < todo.length;) {
+        i = compileBatch(asSwap, todo, i, 8);
+        await nextFrame();
+      }
     }
-    const todo = [], seen = new Set();
-    asSwap(() => scene.traverse((o) => {
-      if (!o.material || !shown(o) || (fx ? o.type === 'GridHelper' : !under(o, inRoom))) return;
-      if (mats(o).some((m) => m && !seen.has(m))) { mats(o).forEach((m) => seen.add(m)); todo.push(o); }
-    }));
-    for (let i = 0; i < todo.length;) {
-      asSwap(() => {
-        const out = [];
-        scene.traverse((o) => { if (o.material) { out.push([o, o.material]); o.material = null; } });
-        const own = new Map(out), start = performance.now();
-        try {
-          while (i < todo.length && performance.now() - start < 8) {
-            const next = todo.slice(i, i + 8).filter((o) => own.has(o));
-            i += 8;
-            next.forEach((o) => { o.material = own.get(o); });
-            r.compile(scene, ctx.camera);
-            next.forEach((o) => { o.material = null; });
-          }
-        } finally { out.forEach(([o, m]) => { o.material = m; }); }
-      });
-      await nextFrame();
-    }
+  }
+  function topUp(t) {
+    const asSwap = swapView(t), { todo } = pending(t, asSwap);
+    compileBatch(asSwap, todo, 0, Infinity);
   }
   function tune(time) {
     if (!bloomPass || !time || !FX[time]) return;
