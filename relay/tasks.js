@@ -162,7 +162,7 @@ function baseProblem(base) {
 const creating = new Map();
 const BUILDING = ['building', 'changes_requested'];
 const counts = (t) => BUILDING.includes(t.state) && !t.movedBackByRelay;
-const building = (channel) => tasksOf(channel).filter((t) => counts(t) && terminal.find(channel, t.owner && t.owner.terminal)).length + (creating.get(channel) || 0);
+const building = (channel, except) => tasksOf(channel).filter((t) => t !== except && counts(t) && (t.bringBack || terminal.find(channel, t.owner && t.owner.terminal))).length + (creating.get(channel) || 0);
 const atLimit = () => [409, { ok: false, error: 'wip_limit', message: wipLimit() + ' tasks are already being built. Finish one first, or raise the WIP limit in Settings.' }];
 const leadRefusal = (channel, lead) => (!lead.lead || lead.exited || !(lead.starts > 0)
   ? [403, { ok: false, error: 'not_allowed', message: 'The person has not let you start tickets, or has taken it back.' }]
@@ -257,10 +257,11 @@ function resume(channel, task, body, ctx, by, restart) {
   if (terminal.find(channel, task.owner && task.owner.terminal)) return [409, { ok: false, error: 'running', message: 'This task already has a worker.' }];
   if (!task.owner || !task.owner.sessionId) return [409, { ok: false, error: 'no_session', message: 'This task has no session to resume.' }];
   if (!fs.existsSync(task.worktree)) return [409, { ok: false, error: 'no_worktree', message: 'Its checkout is gone: ' + task.worktree }];
-  if (!restart && counts(task) && building(channel) >= wipLimit()) return atLimit();
+  if (!restart && counts(task) && building(channel, task) >= wipLimit()) return atLimit();
   const fresh = task.briefed === false;
   const r = startWorker(channel, task, ctx, body, fresh ? undefined : task.owner.sessionId);
   if (r.status >= 400) return [r.status, r.body];
+  delete task.bringBack;
   record(task, { type: fresh ? 'restarted' : 'resumed', by: by || 'relay' }); save();
   noteDev(channel, task);
   if (fresh) deliver(channel, task, r.body.id);

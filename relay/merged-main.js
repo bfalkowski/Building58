@@ -15,4 +15,15 @@ async function mergedMain(git, from, head) {
   return false;
 }
 
-module.exports = { mergedMain };
+async function holdsAll(git, commits, head) {
+  if (!commits.length) return false;
+  for (const c of commits) {
+    if (!c || !(await git(['merge-base', '--is-ancestor', c, head]).then(() => true, () => false))) return false;
+  }
+  return true;
+}
+
+const withHead = (heads, seq, head) => Array.from({ length: seq }, (_, i) => (heads || [])[i] || null).concat(head);
+const headsSince = (heads, from, seq) => Array.from({ length: Math.max(0, seq - from) }, (_, i) => (heads || [])[from + i] || null);
+
+module.exports = { mergedMain, holdsAll, withHead, headsSince };
