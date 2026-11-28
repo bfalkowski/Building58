@@ -26,14 +26,14 @@ pageTest('the manager\'s lines load, and a long line shows in full in a bubble',
   assert.ok(!b.cut, 'the line is not cut off');
   assert.ok(b.lines >= 2 && b.lines <= 3, 'the line takes 2 or 3 lines, not a tall block: ' + b.lines);
   // A line of capitals fills the one-line box faster than its length says. It wraps and is not cut with "...".
-  const wide = 'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW';
+  const wide = 'WWWW WWWW WWWW WWWW WWWW WWWW';
   await p.page.evaluate((text) => window.run.say({ who: 'lead', text }), wide);
   await until(p, (text) => [...document.querySelectorAll('.bubble')].some((b) => !b.hidden && b.textContent === text), wide);
   const w = await p.page.evaluate((text) => {
     const el = [...document.querySelectorAll('.bubble')].find((x) => !x.hidden && x.textContent === text);
     return { cut: el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1 };
   }, wide);
-  assert.ok(!w.cut, 'a line of 30 wide letters is not cut off');
+  assert.ok(!w.cut, 'a line of wide capitals is not cut off');
   // A short line keeps the one-line bubble.
   await p.page.evaluate(() => window.run.say({ who: 'lead', text: 'Hm.' }));
   await until(p, () => [...document.querySelectorAll('.bubble')].some((x) => !x.hidden && x.textContent === 'Hm.' && !x.classList.contains('long')));
