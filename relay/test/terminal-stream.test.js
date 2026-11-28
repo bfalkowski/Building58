@@ -4,6 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { relay, sleep, until } = require('./helpers.js');
+const { REPLAY } = require('../replay.js');
 
 test('output that is waiting for its batch when a page opens the stream is shown once', async (t) => {
   const R = await relay({ RELAY_OUT_BATCH_MS: '600' });  // the batch is about 16 ms, too short to open a stream inside it on purpose
@@ -47,4 +48,15 @@ test('a page watching when a session ends gets its last output before the end', 
   const end = events.indexOf('exit');
   assert.ok(end >= 0, 'the page is told the session ended');
   assert.ok(events.slice(0, end).join('').includes('GOT[/exit]'), 'the last output comes first: ' + JSON.stringify(events.slice(1)).slice(-300));
+});
+
+test('a page that opens a session gets at most the replay cap, from the last clear', async (t) => {
+  const R = await relay();
+  t.after(async () => { await R.kill().catch(() => {}); await R.remove(); });
+  const a = (await R.call('POST', '/terminals', { cwd: R.home })).body;
+  await until(async () => (await R.screen(a.id)).includes('❯'), 'the prompt');
+  await R.call('POST', '/terminals/' + a.id + '/input', { data: '/spew\r' });
+  await until(async () => (await R.screen(a.id)).includes('SPEW-END'), 'the spew');
+  const seen = await R.screen(a.id, 500);
+  assert.ok(seen.length <= REPLAY + 4096, 'replay is ' + seen.length);
 });
