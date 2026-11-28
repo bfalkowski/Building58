@@ -69,6 +69,23 @@ pageTest('a ticket goes in, out to Rejected, back to Triage, is approved and sta
   assert.deepStrictEqual(p.errors, []);
 });
 
+pageTest('a ticket that has likely twins says what it looks like on its card, in Triage and Ready only', get, async (p) => {
+  const repo = makeRepo(o.R.home, 'twin-repo');
+  const a = (await o.R.call('POST', '/tickets', { title: 'Show who is on each desk', repo })).body.ticket.id;
+  await p.page.route(/\/tickets(\?.*)?$/, async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    for (const t of body.tickets) if (t.id === a) t.likely = [{ id: 'T-900', title: 'Name each desk', status: 'ready' }];
+    await route.fulfill({ response: res, json: body });
+  });
+  await p.open(); await unfold(p, 'board');
+  const card = p.page.locator('#board-cols [data-col="ready"] li', { hasText: 'Show who is on each desk' });
+  await card.waitFor();
+  assert.match(await card.locator('small').innerText(), /looks like T-900 \(Name each desk\), reject one if it is the same work/);
+  await o.R.call('POST', '/tickets/' + a + '/move', { to: 'rejected' });
+  assert.deepStrictEqual(p.errors, []);
+});
+
 pageTest('a long Ready column folds by priority, closed until you open a group, and stays as you left it', get, async (p) => {
   const repo = makeRepo(o.R.home, 'groups-repo');
   const mine = [];

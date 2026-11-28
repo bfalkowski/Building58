@@ -42,6 +42,11 @@
 // cached list at once while a new one is fetched, so a change made on GitHub shows a poll later.
 // What the relay writes through this store shows at once.
 //
+// The first time a refresh reads an issue it has not seen, and not on the first read after the relay starts, the
+// store checks it against the open tickets with likelyTwins (relay/ticket-twins.js). A ticket with twins
+// carries them as likely on every read after that, and the check is never run for it again. A ticket the relay
+// filed through this store is never checked here: the relay checks it when it files it.
+//
 // A ticket's blockers cost one request each, so the store keeps what it read for each issue and reads
 // them again only when the issue's updated time or GitHub's blocker counts in the list have changed.
 // An update reads them fresh before it writes, so it never changes blockers from an old copy.
@@ -60,6 +65,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const state = require('../state.js');
+const { likelyTwins } = require('../ticket-twins.js');
 
 const STATUS_LABELS = { triage: 'office:triage', ready: 'office:ready', started: 'office:started' };
 const PRIORITIES = ['high', 'normal', 'low'];
@@ -269,10 +275,11 @@ function open(options) {
   }
 
   const caches = new Map();
-  const cacheOf = (project) => { if (!caches.has(project)) caches.set(project, { tickets: new Map(), listedAt: 0, writes: 0, wrote: new Map(), wroteAt: new Map(), refreshing: null, unread: new Set(), told: false }); return caches.get(project); };
+  const cacheOf = (project) => { if (!caches.has(project)) caches.set(project, { tickets: new Map(), listedAt: 0, writes: 0, wrote: new Map(), wroteAt: new Map(), refreshing: null, unread: new Set(), told: false, seen: new Set(), twins: new Map() }); return caches.get(project); };
   const copy = (t) => (t ? JSON.parse(JSON.stringify(t)) : null);
-  const keep = (project, t) => { const c = cacheOf(project); c.tickets.set(t.id, t); c.wrote.set(t.id, ++c.writes); c.wroteAt.set(t.id, Date.now()); return copy(t); };
-  const sorted = (c) => [...c.tickets.values()].sort((a, b) => Number(a.id) - Number(b.id)).map(copy);
+  const shown = (c, t) => (c.twins.has(t.id) ? Object.assign(copy(t), { likely: copy(c.twins.get(t.id)) }) : copy(t));
+  const keep = (project, t) => { const c = cacheOf(project); c.seen.add(t.id); c.tickets.set(t.id, t); c.wrote.set(t.id, ++c.writes); c.wroteAt.set(t.id, Date.now()); return shown(c, t); };
+  const sorted = (c) => [...c.tickets.values()].sort((a, b) => Number(a.id) - Number(b.id)).map((t) => shown(c, t));
 
   function refresh(project, repo) {
     const c = cacheOf(project);
@@ -288,6 +295,7 @@ function open(options) {
         fresh.set(String(issue.number), ticketOf(issue, await blockersOf(repo, issue), await notesOf(repo, issue)));
       }
       for (const [id, n] of c.wrote) if (n > seen && c.tickets.has(id)) fresh.set(id, c.tickets.get(id));
+      warnOfTwins(c, fresh, !c.listedAt);
       c.tickets = fresh; c.listedAt = began; c.unread = unread;
       if (unread.size && !c.told) {
         c.told = true;
@@ -296,6 +304,16 @@ function open(options) {
       settleAll(project, fresh);
     })().finally(() => { c.refreshing = null; });
     return c.refreshing;
+  }
+
+  function warnOfTwins(c, fresh, first) {
+    for (const t of fresh.values()) {
+      if (c.seen.has(t.id)) continue;
+      c.seen.add(t.id);
+      if (first) continue;
+      const twins = likelyTwins(t, [...fresh.values()]);
+      if (twins.length) c.twins.set(t.id, twins);
+    }
   }
 
   const unreadLine = (n) => n + (n === 1 ? ' ticket has a note' : ' tickets have notes') + ' signed with another key: approvals and order are not read. Give this room the key the notes were signed with (copy github-store.key from the old state folder, or set RELAY_TICKET_KEY in .env to the same value on every machine), or approve each ticket again.';
@@ -385,7 +403,7 @@ function open(options) {
       const repo = repoOf(project);
       if (!repo || !isNumber(id)) return null;
       const c = cacheOf(project);
-      if (c.tickets.has(String(id)) && (Date.now() - c.listedAt <= TTL || Date.now() - (c.wroteAt.get(String(id)) || 0) <= TTL)) return copy(c.tickets.get(String(id)));
+      if (c.tickets.has(String(id)) && (Date.now() - c.listedAt <= TTL || Date.now() - (c.wroteAt.get(String(id)) || 0) <= TTL)) return shown(c, c.tickets.get(String(id)));
       const t = await fetchOne(repo, id);
       if (t) { settle(project, t); return keep(project, t); }
       c.tickets.delete(String(id));

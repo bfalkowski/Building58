@@ -45,6 +45,7 @@ const SCHEMAS = {
     createdBy: orNull(S()),
     heldBack: orNull(S({ description: 'Why nothing starts it by itself: a hold, a replacement, a design ticket or a proposal.' })),
     mark: orNull(S({ enum: ['hold', 'replaced'] })),
+    likely: list(obj({ id: S(), title: S(), status: S({ enum: STATUSES }) }, ['id', 'title', 'status'], { description: 'An open ticket that looks like the same work. Only a ticket filed on GitHub carries it.' })),
     task: { type: ['object', 'null'], description: 'Its task once started.' },
     history: list(ref('TicketStep')),
     notes: list(ref('TicketNote')),

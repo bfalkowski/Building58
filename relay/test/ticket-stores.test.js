@@ -164,6 +164,40 @@ test('github: an issue filed on GitHub is a ticket once it has a room label, and
   assert.strictEqual(await s.get('p', '4'), null);
   assert.deepStrictEqual(await s.list('q'), [], 'another channel has none');
 });
+test('github: an issue filed on GitHub that looks like an open ticket shows its twin on its card, once', async () => {
+  process.env.FAKE_GITHUB_DIR = fs.mkdtempSync(path.join(dir, 'github-'));
+  const s = github.open({ repo: 'p=o/r', gh: fakeGh, cacheMs: 0, folder: '/home/repo', keyFile: path.join(process.env.FAKE_GITHUB_DIR, 'key') });
+  const file = path.join(process.env.FAKE_GITHUB_DIR, 'state.json');
+  const filed = (number, title) => {
+    const state = JSON.parse(fs.readFileSync(file, 'utf8'));
+    state['o/r'].issues.push({ number, id: 9000 + number, title, body: '', state: 'open', labels: ['office:triage'], blockedBy: [], created_at: 'x', updated_at: 'x' });
+    fs.writeFileSync(file, JSON.stringify(state));
+  };
+  const read = async (count) => until(async () => { const l = await s.list('p'); return l.length === count && l; }, 'the list of ' + count);
+  const twin = await s.create('p', { title: 'Show who is on each desk', body: '', repo: '/home/repo', status: 'ready', priority: 'normal', blockedBy: [] });
+  await s.list('p');
+  filed(2, 'Show who sits at each desk');
+  filed(3, 'Rename the radio channel');
+  let list = await read(3);
+  assert.deepStrictEqual(list[1].likely, [{ id: twin.id, title: twin.title, status: 'ready' }], 'the new issue shows its twin');
+  assert.strictEqual(list[0].likely, undefined, 'a ticket the relay filed is not warned about');
+  assert.strictEqual(list[2].likely, undefined, 'an issue that matches nothing has no warning');
+  filed(4, 'Show who is on each desk now');
+  list = await read(4);
+  assert.deepStrictEqual(list[1].likely.map((x) => x.id), [twin.id], 'a later issue does not change the warning on an earlier card');
+  assert.deepStrictEqual(list[3].likely.map((x) => x.id).sort(), [twin.id, '2'].sort(), 'a new issue can name an earlier GitHub-filed ticket');
+  assert.deepStrictEqual((await s.get('p', '2')).likely.map((x) => x.id), [twin.id]);
+});
+
+test('github: tickets already on GitHub when the relay starts are not warned about', async () => {
+  process.env.FAKE_GITHUB_DIR = fs.mkdtempSync(path.join(dir, 'github-'));
+  const file = path.join(process.env.FAKE_GITHUB_DIR, 'state.json');
+  const issue = (number) => ({ number, id: 9000 + number, title: 'Show who is on each desk', body: '', state: 'open', labels: ['office:triage'], blockedBy: [], created_at: 'x', updated_at: 'x' });
+  fs.writeFileSync(file, JSON.stringify({ 'o/r': { next: 3, issues: [issue(1), issue(2)], labels: ['office:triage'] } }));
+  const s = github.open({ repo: 'p=o/r', gh: fakeGh, cacheMs: 0, folder: '/home/repo', keyFile: path.join(process.env.FAKE_GITHUB_DIR, 'key') });
+  assert.deepStrictEqual((await s.list('p')).map((t) => t.likely), [undefined, undefined]);
+});
+
 test('github: a channel with no repo has no tickets and cannot file one', async () => {
   const s = github.open({ repo: 'office=o/r', gh: fakeGh });
   assert.deepStrictEqual(await s.list('demo'), []);
