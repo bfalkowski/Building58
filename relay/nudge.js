@@ -14,20 +14,23 @@
 const delivery = require('./delivery.js');
 const { livenessOf } = require('./liveness.js');
 
-const TEXT = 'Your task has no PR yet. If a test run was lost, run it again in the foreground and open the PR. If you are blocked, say why.';
+const BASE = 'Your task has no PR yet. If a test run was lost, run it again in the foreground and open the PR. If you are blocked, say why.';
+const nudgeText = (task) => BASE + (task && task.ticket ? ' If the work is already on main, do not open a PR: run ticket.js not-needed ' + task.ticket + ' --commit <sha> --why \'one line\' with the commit that did it.' : '');
 const keyOf = (task) => 'autopilot-nudge ' + task.id;
 const minutes = (ms) => Math.max(0, Math.round(ms / 60000));
 
 function send(channel, c, id, n, save) {
-  delivery.save(channel, { key: keyOf({ id }), terminal: n.terminal, sessionId: n.sessionId, text: TEXT, expiresAt: n.expiresAt, on: (what) => {
+  delivery.save(channel, { key: keyOf({ id }), terminal: n.terminal, sessionId: n.sessionId, text: n.text || BASE, expiresAt: n.expiresAt, on: (what) => {
     if (what === 'delivered' && c.nudged && c.nudged[id] === n) { n.typedAt = Date.now(); save(); }
   } });
 }
 
+const claimsMain = (task, dev) => !task.pr && !!dev && !!dev.onMain;
+
 function first(channel, c, task, dev, stallMs, save) {
   if (task.pr || !dev || (c.nudged && c.nudged[task.id])) return false;
   if (livenessOf(dev, Date.now()).state !== 'idle') return false;
-  const n = { at: Date.now(), terminal: dev.id, sessionId: dev.sessionId, expiresAt: Date.now() + stallMs, typedAt: null };
+  const n = { at: Date.now(), terminal: dev.id, sessionId: dev.sessionId, expiresAt: Date.now() + stallMs, typedAt: null, text: nudgeText(task) };
   (c.nudged || (c.nudged = {}))[task.id] = n;
   save();
   send(channel, c, task.id, n, save);
@@ -49,6 +52,7 @@ function noPrWhy(channel, c, task, dev, now) {
   const n = c.nudged && c.nudged[task.id];
   const lv = livenessOf(dev, now);
   if (lv.state === 'gone') return 'its Dev\'s session ended, and there is no PR';
+  if (dev.onMain) return 'its Dev says the work is already on main in commit ' + dev.onMain + ', so this is not a stall' + (task.ticket ? ': it can close the ticket with ticket.js not-needed ' + task.ticket + ' --commit ' + dev.onMain + ' --why' : '');
   const idle = 'its Dev has been idle for ' + minutes(now - (lv.since || Date.parse(dev.startedAt) || now)) + ' minutes with no PR';
   if (!n) return idle;
   const typedAt = n.typedAt === undefined ? n.at : n.typedAt;
@@ -58,4 +62,4 @@ function noPrWhy(channel, c, task, dev, now) {
     : ', and did not start a turn after Autopilot nudged it ' + ago + ' minutes ago');
 }
 
-module.exports = { first, watch, forget, noPrWhy, TEXT };
+module.exports = { claimsMain, first, watch, forget, noPrWhy, nudgeText };

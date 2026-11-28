@@ -653,11 +653,12 @@ function stalled(channel) {
     if (!stuck) { stuckSince.delete(key); continue; }
     if (!stuckSince.has(key)) { stuckSince.set(key, Date.now()); continue; }
     if (Date.now() - stuckSince.get(key) < STALL_MS()) continue;
-    if (nudge.first(channel, chOf(channel), task, dev, STALL_MS(), save)) { stuckSince.set(key, Date.now()); note(channel, (task.ticket || 'Task ' + task.id) + ': Autopilot nudged its Dev, which stopped without a PR.'); continue; }
+    const onMain = nudge.claimsMain(task, dev);
+    if (!onMain && nudge.first(channel, chOf(channel), task, dev, STALL_MS(), save)) { stuckSince.set(key, Date.now()); note(channel, (task.ticket || 'Task ' + task.id) + ': Autopilot nudged its Dev, which stopped without a PR.'); continue; }
     stuckSince.delete(key);
-    const why = 'Nothing moved it for ' + Math.round(STALL_MS() / 60000) + ' minutes' + (rec && rec.why ? ' (' + rec.why + ')' : task.pr ? '' : ': ' + nudge.noPrWhy(channel, chOf(channel), task, dev, Date.now())) + '.';
+    const why = onMain ? nudge.noPrWhy(channel, chOf(channel), task, dev, Date.now()).replace(/^./, (x) => x.toUpperCase()) + '.' : 'Nothing moved it for ' + Math.round(STALL_MS() / 60000) + ' minutes' + (rec && rec.why ? ' (' + rec.why + ')' : task.pr ? '' : ': ' + nudge.noPrWhy(channel, chOf(channel), task, dev, Date.now())) + '.';
     const c = chOf(channel);
-    (c.stuck || (c.stuck = {}))[task.id] = { stall: true, forReview: !!task.pr && why.includes('(' + plan.WAITS_FOR_REVIEW + ')'), sessionId: dev ? dev.sessionId : null, from: task.state, pr: task.pr || null, at: new Date().toISOString() };
+    (c.stuck || (c.stuck = {}))[task.id] = { stall: !onMain, forReview: !!task.pr && why.includes('(' + plan.WAITS_FOR_REVIEW + ')'), sessionId: dev ? dev.sessionId : null, from: task.state, pr: task.pr || null, at: new Date().toISOString() };
     if (rec) handOver(channel, task, rec, why, 'stalled');
     else { handRun(channel, task, 'stalled'); tasks.setState(channel, task, 'waiting_on_you', BY, 'Autopilot: ' + why); save(); note(channel, (task.ticket || 'Task ' + task.id) + ' waits on you: ' + why); }
   }

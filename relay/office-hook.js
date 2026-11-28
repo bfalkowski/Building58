@@ -71,7 +71,7 @@ const MARK = 'office-hook.js';
 const SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
 
 if (require.main === module) main();
-else module.exports = { hookSettings, hooksInstalled, hookCheckout, projectOf, summarize, pushedIn, prMade };
+else module.exports = { onMainCommit, hookSettings, hooksInstalled, hookCheckout, projectOf, summarize, pushedIn, prMade };
 
 function main() {
   const arg = process.argv.slice(2).find((a) => ['--settings', '--install', '--uninstall', '--help', '-h'].includes(a)) || '';
@@ -109,6 +109,13 @@ async function send(text) {
   }
 }
 
+const HASH = /(?<![\w-])(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}(?![\w-])/i;
+const MAIN = /\b(?:origin\/)?main\b/i;
+function onMainCommit(text) {
+  const said = String(text == null ? '' : text);
+  const hash = said.match(HASH);
+  return hash && MAIN.test(said) ? hash[0].toLowerCase() : null;
+}
 const cut = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
 const CREATES_PR = /(?:^|[;&|(\n]\s*)(?:[A-Za-z_]\w*=\S*\s+)*gh\s+pr\s+create\b/;
 const PR_LINE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/gm;
@@ -143,6 +150,8 @@ function summarize(p) {
   if (p.hook_event_name === 'Stop' && typeof p.last_assistant_message === 'string') {
     const answer = p.last_assistant_message.match(/HUDDLE-([0-9a-f]{6}):[ \t]*(.+)/);
     if (answer) { out.huddle_id = answer[1]; out.huddle_answer = cut(answer[2], 300); }
+    const commit = onMainCommit(p.last_assistant_message);
+    if (commit) out.on_main = commit;
   }
   if (p.hook_event_name === 'PostToolUse') {
     delete out.tool_input;

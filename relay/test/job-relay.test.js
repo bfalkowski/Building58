@@ -20,7 +20,7 @@ const SCAN = '200';  // RELAY_JOB_SCAN_MS: how often the session host looks for 
 // the test to see a nudge, and both must happen within this time (T-154).
 const STALL = 6000;
 // What the fake claude says it got, once per message, apart from the echo of the typing itself.
-const NUDGE = /GOT\[Your task has no PR yet\. If a test run was lost, run it again in the foreground and open the PR\. If you are blocked, say why\.\]/g;
+const NUDGE = /GOT\[Your task has no PR yet\. If a test run was lost, run it again in the foreground and open the PR\. If you are blocked, say why\. If the work is already on main, do not open a PR: run ticket\.js not-needed \S+ --commit <sha> --why .one line. with the commit that did it\.\]/g;
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const commit = (cwd, file, text, message) => {
   fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });

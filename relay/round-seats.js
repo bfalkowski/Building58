@@ -6,7 +6,7 @@ const path = require('path');
 
 const dir = () => path.join(require('./state.js').dir(), 'seats');
 
-const WORDS = ['prompt', 'title', 'customTitle', 'message', 'tool_input', 'huddle_id', 'huddle_answer', 'pr_url', 'cwd'];
+const WORDS = ['prompt', 'title', 'customTitle', 'message', 'tool_input', 'huddle_id', 'huddle_answer', 'pr_url', 'on_main', 'cwd'];
 const IDLE = /waiting for your input|idle/i;
 
 function quiet(event) {
