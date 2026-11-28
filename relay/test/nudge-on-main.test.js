@@ -53,11 +53,10 @@ test('a task with no ticket gets the reason without a command that cannot work',
   assert.strictEqual(noPrWhy('office', {}, { id: 'task-2' }, idleDev('7db2737'), now), 'its Dev says the work is already on main in commit 7db2737, so this is not a stall');
 });
 
-test('the commit is held from a Stop only, and a bad value is ignored', () => {
-  assert.strictEqual(heldCommit('Stop', { on_main: '7db2737' }), '7db2737');
-  assert.strictEqual(heldCommit('UserPromptSubmit', { on_main: '7db2737' }), null);
-  assert.strictEqual(heldCommit('Stop', { on_main: 'rm -rf /' }), null);
-  assert.strictEqual(heldCommit('Stop', {}), null);
+test('the commit is held when it is a hash, and a bad value is ignored', () => {
+  assert.strictEqual(heldCommit({ on_main: '7db2737' }), '7db2737');
+  assert.strictEqual(heldCommit({ on_main: 'rm -rf /' }), null);
+  assert.strictEqual(heldCommit({}), null);
 });
 
 test('only a Dev with a claim and no PR skips the nudge', () => {
