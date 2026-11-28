@@ -20,7 +20,7 @@ const pipeline = require('./pipeline.js');
 const mainCi = require('./main-ci.js');
 const { redMain } = require('./needs-you-plan.js');
 const { stopVerdict, leadMayStop, forReview } = require('./stop-verdict.js');
-const { deskOf, pairReviewers } = require('./desk.js');
+const { deskOf, pairReviewers, samePr } = require('./desk.js');
 const { livenessOf, jobWords, stuckJobsOf, stuckJobWords } = require('./liveness.js');
 const { tiredOf } = require('./lead-tired.js');
 const { holdOf, unsavedWork } = require('./merge-hold.js');
@@ -68,7 +68,7 @@ function deskFor(channel, t, task, work, verdict, now, needs) {
   const shown = role === 'reviewer' ? (pr && tasks.list(channel).find((x) => x.pr === pr)) || null : task;
   const lead = terminal.leadOf(channel);
   const pipe = shown && shown.pr === pr ? tasks.pipelineOf(shown) : null;
-  const reviewer = pr ? terminal.all(channel).find((x) => x !== t && !x.exited && x.reviewOf === pr && !x.posted) || null : null;
+  const reviewer = pr ? terminal.all(channel).find((x) => x !== t && !x.exited && samePr(x.reviewOf, pr) && !x.posted) || null : null;
   return deskOf({
     t, role, work, now, verdict,
     task: shown && Object.assign({}, shown, { pipeline: pipe }, needs ? needs.get(shown.id) || { needsYou: null, reviewRuns: false } : null),

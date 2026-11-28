@@ -177,7 +177,7 @@ test('a Dev\'s status icon says where its PR stands, with a label to read it by 
     assert.deepStrictEqual(label({ pipeline: { state: 'pending', head: HEAD } }), ['ci_running', 'CI running']);
     assert.deepStrictEqual(label({ pipeline: { state: 'red', head: HEAD } }), ['ci_failed', 'CI failed']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, review: { count: 0, held: false } }), ['review_waits', 'waiting for a review']);
-    assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, reviewing: true, reviewer: 'Ada' }), ['reviewing', 'being reviewed by Ada']);
+    assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, reviewing: true, reviewer: 'Ada' }), ['reviewing', 'being reviewed']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, reviewing: true }), ['reviewing', 'being reviewed']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD } }, { state: 'changes_requested' }), ['fix', 'fix requested']);
     assert.deepStrictEqual(label({ pipeline: { state: 'green', head: HEAD }, autopilot: { verdict: 'fix', verdictAt: HEAD } }), ['fix', 'fix requested']);
@@ -226,6 +226,16 @@ test('a reviewer is paired with the Dev whose PR it reviews', async (t) => {
     assert.deepStrictEqual(rows[3].desk.reviewedBy, []);
     assert.strictEqual(rows[0].desk.reviewing, undefined, 'a Dev reviews nothing');
   });
+  await t.test('a reviewer pairs with a Dev when the URLs differ only in form', () => {
+    for (const form of [PR + '/', PR.replace('https://', 'http://'), PR + '/files', PR.toUpperCase().replace('PULL', 'pull'), PR + '?x=1']) {
+      const rows = [row('d1', 'Ada', 'Dev', PR), row('r1', 'Theo', 'reviewer', form)];
+      pairReviewers(rows);
+      assert.deepStrictEqual(rows[0].desk.reviewedBy, [{ terminal: 'r1', name: 'Theo' }], form);
+    }
+    const rows = [row('d1', 'Ada', 'Dev', PR), row('r1', 'Theo', 'reviewer', PR + '1')];
+    pairReviewers(rows);
+    assert.deepStrictEqual(rows[0].desk.reviewedBy, [], 'PR 311 is not PR 31');
+  });
   await t.test('a reviewer whose PR has no Dev on the Floor names only the PR', () => {
     const rows = [row('r1', 'Theo', 'reviewer', OTHER), row('d1', 'Ada', 'Dev', PR)];
     pairReviewers(rows);
@@ -244,4 +254,14 @@ test('the desk shows its ticket in the same Board column as the Board, from Need
   assert.strictEqual(column(task({ state: 'waiting_on_you', needsYou: null, reviewRuns: true })), 'in_review', 'a review of its PR runs');
   assert.strictEqual(column(task({ state: 'waiting_on_you', needsYou: null })), 'building');
   assert.strictEqual(column(task({ state: 'waiting_on_you' })), 'waiting_on_you', 'without Needs you, its state decides');
+});
+
+// The Floor's "being reviewed" lookup in floor.js deskFor uses samePr, so it matches the same forms as the pairing.
+test('samePr matches PR URLs by owner, repo and number', () => {
+  const { samePr } = require('../desk.js');
+  assert.ok(samePr(PR, PR + '/'));
+  assert.ok(samePr(PR, 'http://github.com/O/R/pull/31/files'));
+  assert.ok(!samePr(PR, PR + '1'));
+  assert.ok(!samePr(PR, 'https://github.com/o/other/pull/31'));
+  assert.ok(!samePr(null, null));
 });
