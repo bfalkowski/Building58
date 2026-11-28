@@ -1,0 +1,238 @@
+{
+  "exhibit_version": "0.1.0",
+  "policy": {
+    "path": "evidence.yml",
+    "sha256": "7f227245d6b0cb6d26980d350a93853fd5cfcb8f9ed44f6b2a0d0df1963b0545"
+  },
+  "repo": "bfalkowski/Building58",
+  "pr": 540,
+  "base": "874de4999f4a1bee456d88e0bcbd7838bf3abd9c",
+  "head": "2a3b42e4269ca67abd6b2faaa8bc5eb6a47e9dea",
+  "classification": {
+    "kinds": [
+      "code",
+      "docs",
+      "needs-you",
+      "relay-tests"
+    ],
+    "risk": "medium",
+    "fix": false,
+    "fix_signal": null,
+    "feature": false,
+    "merge_without_reading": "never",
+    "used_default": false,
+    "policy_changed": false,
+    "signals_from": "pr"
+  },
+  "requirements": [
+    {
+      "type": "tests-before-after",
+      "params": {},
+      "kinds": [
+        "code",
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "base": {
+          "passed": 1783,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 2
+        },
+        "head": {
+          "passed": 1793,
+          "failed": 0,
+          "skipped": 3,
+          "flaky": 0
+        },
+        "failed_on_head": []
+      },
+      "author": "builder",
+      "duration_ms": 1639810
+    },
+    {
+      "type": "failing-before",
+      "params": {
+        "when": [
+          "fix"
+        ]
+      },
+      "kinds": [
+        "code"
+      ],
+      "status": "skipped",
+      "details": {
+        "reason": "The policy asks for it only on a fix, and this change is not classified as one, so it is not needed. This does not stop meets_policy."
+      },
+      "author": "builder",
+      "duration_ms": 0
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "manual",
+        "run": "npm ci --ignore-scripts --no-audit --no-fund && node relay/test/run.js relay/test/manual.test.js"
+      },
+      "kinds": [
+        "docs"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/manual/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 976
+    },
+    {
+      "type": "failing-before",
+      "params": {},
+      "kinds": [
+        "needs-you"
+      ],
+      "status": "met",
+      "details": {
+        "test_files": [
+          "relay/test/needs-you-plan.test.js",
+          "relay/test/workflow-push.test.js"
+        ],
+        "tests": [
+          {
+            "name": "relay/test/needs-you-plan.test.js > test > the most urgent kind comes first, and every kind has a rule",
+            "on_base": "failed"
+          },
+          {
+            "name": "relay/test/workflow-push.test.js > test > a commit the Dev amends after the refusal refreshes the item, and the item clears once the new commit is on GitHub",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/workflow-push.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/workflow-push.test.js > test > a failed Dev command with the refusal text makes a Push this as you item, and the task waits on the person",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/workflow-push.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/workflow-push.test.js > test > a task with an open item gets no stall hand-over, and Autopilot says it waits on the person",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/workflow-push.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/workflow-push.test.js > test > an open item is kept across a relay restart",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/workflow-push.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/workflow-push.test.js > test > the Lead's look says the person pushes the workflow file, and what the task waits on",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/workflow-push.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/workflow-push.test.js > test > the hook and the relay match the same refusal text",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/workflow-push.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/workflow-push.test.js > test > the hook marks a refused push, in a failed command or a push that printed the refusal",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/workflow-push.test.js"
+            ]
+          },
+          {
+            "name": "relay/test/workflow-push.test.js > test > the item clears and a workflows-push jam is logged when the branch on GitHub reaches the commit",
+            "on_base": "did_not_load",
+            "files": [
+              "relay/test/workflow-push.test.js"
+            ]
+          }
+        ],
+        "passed_on_base": [
+          "relay/test/needs-you-plan.test.js > test > a Dev that stopped with no PR: prompt it",
+          "relay/test/needs-you-plan.test.js > test > a GitHub write that failed: one line for the issue, with GitHub's message and the next try, after the desks",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over stays a decision after review news moves its task out of Waiting on you",
+          "relay/test/needs-you-plan.test.js > test > a PR Autopilot handed over: decide on it, with its reason",
+          "relay/test/needs-you-plan.test.js > test > a PR handed over because no review can start offers Get a review",
+          "relay/test/needs-you-plan.test.js > test > a PR merged on GitHub gives a Done line, and one closed with no merge gives a line with no Done",
+          "relay/test/needs-you-plan.test.js > test > a PR only the person may merge: merge it",
+          "relay/test/needs-you-plan.test.js > test > a PR whose automatic review could not start: get a review, with the reason (T-350)",
+          "relay/test/needs-you-plan.test.js > test > a hand-over whose Dev says a finding is a bug offers Fix it, and no other hand-over does",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev running: move the card, the Dev fixes it",
+          "relay/test/needs-you-plan.test.js > test > a posted fix verdict after the hand-over, with its Dev stopped: bring the Dev back to fix it",
+          "relay/test/needs-you-plan.test.js > test > a posted merge verdict after the hand-over: merge the PR, unless newer commits need a review",
+          "relay/test/needs-you-plan.test.js > test > a push the push hold refused: look at the PR, with a Fix it that lifts the hold, ahead of the hand-over",
+          "relay/test/needs-you-plan.test.js > test > a saved message that has waited long for a running session: open that session, with why",
+          "relay/test/needs-you-plan.test.js > test > a session that asks for permission: approve it, at its seat",
+          "relay/test/needs-you-plan.test.js > test > a session that waits on an answer, or shows a question on its screen: answer it",
+          "relay/test/needs-you-plan.test.js > test > a session the relay told something that did not start: open it",
+          "relay/test/needs-you-plan.test.js > test > a task in Waiting on you: look at it, with the note that put it there",
+          "relay/test/needs-you-plan.test.js > test > a task whose session ended before a PR: bring it back",
+          "relay/test/needs-you-plan.test.js > test > another relay on the room's state folder: stop it, with its Stop button, before anything else",
+          "relay/test/needs-you-plan.test.js > test > no item twice for the same cause",
+          "relay/test/needs-you-plan.test.js > test > notes signed with another key give one line that names the fix",
+          "relay/test/needs-you-plan.test.js > test > nothing needs the person: the list is empty",
+          "relay/test/needs-you-plan.test.js > test > reviews wait for a desk and the relay may stop no session: one line names the wait, after the questions",
+          "relay/test/needs-you-plan.test.js > test > text from a session is cleaned to one line",
+          "relay/test/needs-you-plan.test.js > test > with no review after the hand-over, the line keeps Autopilot's reason"
+        ],
+        "did_not_load_on_base": [
+          "relay/test/workflow-push.test.js"
+        ]
+      },
+      "author": "builder",
+      "duration_ms": 1094386
+    },
+    {
+      "type": "probe",
+      "params": {
+        "name": "load",
+        "run": "set -e; base=\"$(git merge-base HEAD origin/main)\"; files=\"$(git diff --name-only --diff-filter=AM \"$base\" HEAD | grep -E '^relay/test/[^/]+[.]test[.]js$' || true)\"; if [ -z \"$files\" ]; then echo \"No relay test file was added or changed.\"; exit 0; fi; npm ci --ignore-scripts --no-audit --no-fund > /dev/null; pids=\"\"; for i in 1 2 3; do TEST_SLOTS=0 node relay/test/run.js $files > \"load-$i.log\" 2>&1 & pids=\"$pids $!\"; done; code=0; for p in $pids; do wait \"$p\" || code=1; done; tail -n 20 load-1.log load-2.log load-3.log; exit $code"
+      },
+      "kinds": [
+        "relay-tests"
+      ],
+      "status": "met",
+      "details": {
+        "exit_code": 0,
+        "timed_out": false,
+        "timeout_seconds": 1200,
+        "output": ".exhibit/probes/load/output.log",
+        "artifacts": [],
+        "missing_artifacts": []
+      },
+      "author": "builder",
+      "duration_ms": 1693
+    }
+  ],
+  "verdict": "meets_policy",
+  "gaps": [],
+  "checks_by_author": {
+    "builder": 4,
+    "hidden": 0
+  },
+  "flaky_tests": [
+    "relay/test/autopilot-fix-back.test.js > test > a task owed a fix keeps its slot: no new ticket starts first, and the Dev comes back on the freed desk",
+    "relay/test/handover-clears-relay.test.js > test > a PR handed over for red CI comes back when CI is green on a newer head"
+  ],
+  "environment": {
+    "node": "26.x",
+    "os": "linux"
+  },
+  "created_at": "2026-11-28T13:48:14.017Z"
+}
