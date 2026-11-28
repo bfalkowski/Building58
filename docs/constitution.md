@@ -810,15 +810,15 @@ The five questions, for this permission:
 **The manager, as it is today.** The room keeps one manager session running, in a third front-office
 seat beside the Lead and the PM, and starts it again when it ends. It watches the room and reads the
 jam log. It may do four things: lower the trust level by one step, never raise it; put a note on
-Needs you that explains a stall; file tickets, and add notes to them;
-and post on the chat board. It cannot start, move, merge or close work, change a setting, set a
-priority, or touch a session. Lowering is off until the person turns on **Let the manager lower the
-trust level**, and it is at most 2 a day, shared with the watch's own brake. Work under way stays
-where it is. Raising the level again is the person's. The reason: on a stall the room cannot fix,
-less trust is the safe move, and a session that can only lower it, say why, and file a ticket cannot
-make the stall worse. It gets 3 desks for itself, the Lead and the PM, so workers have 6 of 9. It
-starts in the room's own folder, and "do not change code" is its brief only. The COO is a separate
-role that runs only when the person presses **Ask the COO**.
+Needs you that explains a stall; file tickets, and add notes to them; and post on the chat board. It
+cannot start, move, merge or close work, change a setting, set a priority, or touch a session.
+Lowering is off until the person turns on **Let the manager lower the trust level**, and it is at
+most 2 a day, shared with the watch's own brake. Work under way stays where it is. Raising the level
+again is the person's. The reason: on a stall the room cannot fix, less trust is the safe move, and
+a session that can only lower it, say why, and file a ticket cannot make the stall worse. It gets 3
+desks for itself, the Lead and the PM, so workers have 6 of 9. It starts in the room's own folder,
+and "do not change code" is its brief only. The COO is a separate role that runs only when the
+person presses **Ask the COO**.
 
 *Enforced by:* its own token, which reaches only the routes in `relay/token-routes.js`
 (`MANAGER_READS`, `MANAGER_WRITES`) and gets 403 for every other route (`relay/server.js`). It also
