@@ -99,3 +99,14 @@ test('a PR read while its checks ran is read again when they finish, though its 
   await pass.once(new Map([['o/r', undefined]]));
   assert.strictEqual((await door.pr(link(11))).statusCheckRollup[0].conclusion, 'SUCCESS', 'the finished check is served, not the copy from before');
 });
+
+test('a PR read as CLEAN is read again when it turns DIRTY, though its updatedAt and head did not change', async () => {
+  say([node(12)]);
+  await pass.once(new Map([['o/r', undefined]]));
+  assert.strictEqual((await door.pr(link(12))).mergeStateStatus, 'CLEAN');
+  say([Object.assign(node(12), { mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' })]);
+  await pass.once(new Map([['o/r', undefined]]));
+  const dirty = await door.pr(link(12));
+  assert.strictEqual(dirty.mergeStateStatus, 'DIRTY');
+  assert.strictEqual(dirty.mergeable, 'CONFLICTING');
+});
