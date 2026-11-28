@@ -65,7 +65,7 @@ pageTest('with data, each of the 11 charts draws, with a legend where it has mor
   }
   for (const id of ['merged', 'per-ticket', 'waits', 'desks', 'pm']) assert.ok(await p.page.locator('#chart-' + id + ' .legend span').count() >= 2, id + ' has a legend');
   const tiles = await p.page.locator('#tiles .tile .k').allTextContents();
-  assert.deepStrictEqual(tiles, ['Merged', 'Median time per ticket', 'Waiting on you', 'Stalled', 'Jams fixed by hand', 'Merged with no help']);
+  assert.deepStrictEqual(tiles, ['Merged', 'Median time per ticket', 'Waiting on you', 'Stalled', 'Jams fixed by hand', 'Merged with no help', 'Skill calls']);
   assert.strictEqual(await p.page.locator('#tiles .tile .v').first().innerText(), '2');
   assert.deepStrictEqual(p.errors, []);
 });
