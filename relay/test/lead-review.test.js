@@ -54,6 +54,7 @@ async function office(R) {
 
 test('the Lead starts a review through the relay, within its switch and the limits', async (t) => {
   const R = await H.relay({ RELAY_WIP_LIMIT: '5' });
+  assert.strictEqual((await R.call('POST', '/settings', { values: { maxAutoReviews: 3 } })).status, 200);
   t.after(R.stop);
   const { repo, head, task, leadT, devT, terminals, reviewersOf, stop, tokenOf, count, ask, lights, cli } = await office(R);
 

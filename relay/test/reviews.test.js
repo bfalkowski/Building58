@@ -110,7 +110,7 @@ test('a PR gets at most a few automatic reviews, then it waits on the person', (
   const r = followUps(pending, idle, { [PR]: MAX_AUTO_REVIEWS });
   assert.deepStrictEqual(r.start, []);
   assert.deepStrictEqual(r.full, [PR]);
-  assert.strictEqual(MAX_AUTO_REVIEWS, 3);
+  assert.strictEqual(MAX_AUTO_REVIEWS, 6);
 });
 test('a follow-up review posts, and checks the earlier findings', () => {
   const b = followBrief(PR);

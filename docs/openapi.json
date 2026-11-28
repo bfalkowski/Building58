@@ -2489,7 +2489,7 @@
           "Reviews"
         ],
         "summary": "Get reviews",
-        "description": "The automatic reviews (see Automatic review): the two switches, auto and again, and max, each PR with its count, head, pending and waits, and news, what the relay said about the reviews it started, which the page shows once.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "The automatic reviews (see Automatic review): the two switches, auto and again, and max, each PR with its count, mainMerges (merges of main that left the PR's own changes the same, not counted as rounds), head, pending and waits, and news, what the relay said about the reviews it started, which the page shows once.\n\nTokens: the relay key only.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "getReviews",
         "x-tokens": [],
         "responses": {

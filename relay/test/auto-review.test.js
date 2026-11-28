@@ -15,6 +15,7 @@ const QUIET = 2500;  // long enough for the relay's one-second check to have run
 
 test('the relay starts the first review and the follow-ups, with no page open', async (t) => {
   const R = await relay({ RELAY_REVIEW_RETRY_MS: '500' }, null, { autoReview: true }), repo = makeRepo(R.home);
+  assert.strictEqual((await R.call('POST', '/settings', { values: { maxAutoReviews: 3 } })).status, 200);
   t.after(R.stop);
   const origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);

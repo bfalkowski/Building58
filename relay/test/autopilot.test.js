@@ -64,7 +64,7 @@ test('Autopilot runs a ticket from Ready to merged', async (t) => {
   await t.test('it is off until the person turns it on, and sessions cannot turn it on', async () => {
     const a = await ap();
     assert.strictEqual(a.on, false);
-    assert.deepStrictEqual([a.atOnce, a.maxRounds, a.maxMerges], [1, 2, 10]);
+    assert.deepStrictEqual([a.atOnce, a.maxRounds, a.maxMerges], [1, 6, 10]);
     await sleep(800);
     assert.strictEqual((await R.call('GET', '/tasks')).body.tasks.length, 0, 'nothing starts while it is off');
   });
@@ -823,6 +823,7 @@ test('a PR only a person merges follows its review, CI and GitHub, and says once
 test('two rounds that say fix hand the task to the person, and a later merge verdict does not merge it', async (t) => {
   const ghDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'office-gh-'));
   const R = await relay({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: ghDir, RELAY_AUTOPILOT_TICK_MS: '300', RELAY_REVIEW_GRACE_MS: '200' }, null, { autoReview: true });
+  assert.strictEqual((await R.call('POST', '/settings', { values: { maxAutoReviews: 2 } })).status, 200);
   t.after(async () => { await R.stop(); removeDir(ghDir); });
   const repo = makeRepo(R.home), origin = path.join(R.home, 'origin.git');
   sh(R.home, 'init', '-q', '--bare', origin);
@@ -864,6 +865,7 @@ test('two rounds that say fix hand the task to the person, and a later merge ver
   await until(async () => (await task()).state === 'waiting_on_you', 'Waiting on you after 2 rounds');
   // The hand-off note, wherever it is: on node 18 CI once saw another entry land after it (PR 60).
   assert.ok((await task()).history.some((h) => /Review 2 still asks for fixes/.test(h.note || '')), 'the hand-off says why');
+  assert.strictEqual((await R.call('POST', '/settings', { values: { maxAutoReviews: 3 } })).status, 200);
   await push(false);
   await review(await reviewer(), 'merge');  // the follow-up still runs, as with Review again after each push
   await sleep(1500);
