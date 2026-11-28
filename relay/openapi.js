@@ -103,7 +103,7 @@ function paramOf(name, full) {
 const ROLES = [
   ['any session', { role: null }], ['a PM', { role: 'pm' }], ['a reviewer', { role: 'reviewer', reviewOf: 'pr' }],
   ['the Lead', { lead: true }], ['a Lead you let move the board', { lead: true, board: true }], ['a Lead you let start tickets', { lead: true, starts: 1 }],
-  ['the COO', { role: 'coo' }], ['the security officer', { role: 'security' }]
+  ['the COO', { role: 'coo' }], ['the security officer', { role: 'security' }], ['the manager', { role: 'manager' }]
 ];
 const SAMPLE = { channel: 'c', page: '1', name: 'general', seat: 'S1', pid: '1' };
 const sample = (p) => p.replace(/\{(\w+)\}/g, (_, k) => (k === 'id' && /terminals\/\{id\}/.test(p) ? '000000000000' : k === 'id' && /tasks\/\{id\}|checkouts\/\{id\}/.test(p) ? '000000' : k === 'id' && /rounds\/\{id\}/.test(p) ? '00000000' : k === 'id' && /commands\/\{id\}/.test(p) ? '00000000-0000-0000-0000-000000000000' : k === 'id' ? 'T-1' : k === 'role' ? (p.includes('measures') || p.includes('report') ? null : 'coo') : SAMPLE[k]));
@@ -116,7 +116,8 @@ function tokensOf(r) {
   }
   if (tokenReaches({ role: null }, r.method, sample(rest), true)) out.push('a seat in a game round');
   const covered = (who) => (out.includes('any session') && ['a PM', 'a reviewer', 'the Lead', 'a Lead you let move the board', 'a Lead you let start tickets'].includes(who))
-    || (out.includes('the Lead') && who.startsWith('a Lead you let'));
+    || (out.includes('the Lead') && who.startsWith('a Lead you let'))
+    || (out.includes('any session') && who === 'the manager');
   return out.filter((who) => !covered(who));
 }
 const words = (name) => name.replace(/([A-Z])/g, ' $1').toLowerCase().replace(/^./, (c) => c.toUpperCase()).replace(/\bpm\b/i, 'PM');

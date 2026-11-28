@@ -390,6 +390,7 @@ if (terminal.onSessionMoved) terminal.onSessionMoved(followDev);
 function workOf(channel, t) {
   const work = (role, task, pr, label) => ({ role, ticket: task ? task.ticket : null, ticketAt: task ? task.ticketAt : null, pr, label });
   if (t.role === 'pm') return work('pm', null, null, t.title);
+  if (t.role === 'manager') return work('manager', null, null, 'Manager · watches the room');
   if (t.role === 'coo') return work('coo', null, null, 'COO · report on the room');
   if (t.role === 'security') return work('security', null, null, 'Security · report on access');
   if (t.lead) return work('lead', null, null, t.title ? 'The Lead · ' + t.title : 'The Lead');

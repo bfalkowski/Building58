@@ -56,7 +56,7 @@ function of(channel) {
 }
 const cap = (list, n) => { if (list.length > n) list.splice(0, list.length - n); };
 const clean = (v, n) => keepLines(noHidden(v), n);
-const nameOf = (t) => clean(t.who || (t.role === 'coo' ? 'COO' : t.role === 'pm' ? 'PM' : t.lead ? 'Lead' : t.title) || 'Session ' + String(t.sessionId).slice(0, 8), 80);
+const nameOf = (t) => clean(t.who || (t.role === 'coo' ? 'COO' : t.role === 'pm' ? 'PM' : t.role === 'manager' ? 'Manager' : t.lead ? 'Lead' : t.title) || 'Session ' + String(t.sessionId).slice(0, 8), 80);
 
 const sid = (ev) => String((ev && ev.session_id) || '');
 function noteHook(channel, ev) {
@@ -385,4 +385,4 @@ async function handle(req, res, channel, rest, ctx) {
 
 const storeOf = (channel) => { const s = store[channel]; return { hands: (s && s.hands) || [], events: (s && s.events) || [] }; };
 
-module.exports = { storeOf, handle, noteHook, noteEvent, measure, kindOf, cooBrief };
+module.exports = { lastReport, running, storeOf, handle, noteHook, noteEvent, measure, kindOf, cooBrief };
