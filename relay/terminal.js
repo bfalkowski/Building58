@@ -407,6 +407,7 @@ function start(channel, body, ctx, onExit, own) {
   const emitOut = (buf) => {
     t.out.push(buf); t.outSize += buf.length;
     t.lastOutAt = Date.now(); t.tail = (t.tail + buf.toString('latin1')).slice(-TAIL);
+    if (t.trustAnswered && !onTrustQuestion(screenOf(t))) t.trustAnswered = false;
     if (t.redrawing) widthBack(t);
     if (t.sinceKey !== null) t.sinceKey = (t.sinceKey + buf.toString('latin1')).slice(-TAIL);
     while (t.outSize > KEEP && t.out.length > 1) t.outSize -= t.out.shift().length;
