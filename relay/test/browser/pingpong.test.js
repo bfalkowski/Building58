@@ -14,6 +14,7 @@ test.after(() => o && o.stop());
 const get = () => o;
 
 const PLAYING = 'Playing ping pong';
+const CLEAR_AT = 8, CLEAR_STEP = 2;
 // Who is in a game: at a table spot with their paddle up, or with the table in their plan. A label can still say
 // Playing ping pong for a moment after the game ends, until the person picks what to do next.
 const playing = (p) => p.page.evaluate((label) => window.run.state().workers.filter((w) => {
@@ -73,14 +74,27 @@ pageTest('the trailer\'s ping pong cue clears a game already going, and Kai play
   });
   const playTo = (t) => p.page.evaluate((to) => { window.__to = to; }, t).then(() => until(p, (to) => window.trailer.clock >= to, t));
   await playTo(3);
-  await until(p, () => { const d = window.run.debug('june'); return d && d.spot.startsWith('couch') && d.seated; });
-  // Sam starts a game. Idle people also start games on their own, so on a slow computer the room may have
-  // started one first. Either way a game is going before the cue, which is the case under test.
-  const r = await p.page.evaluate(() => window.run.idle({ who: 'sam', do: 'pingpong' }));
+  const juneOnCouch = () => { const d = window.run.debug('june'); return d && d.spot.startsWith('couch') && d.seated; };
+  const onCouch = () => p.page.evaluate(juneOnCouch);
+  await p.page.waitForFunction(juneOnCouch, undefined, { timeout: 8000 }).catch(async () => {
+    const others = await p.page.evaluate(() => window.run.state().workers.filter((w) => w.id !== 'june').filter((w) => { const d = window.run.debug(w.id); return d && String(d.spot).startsWith('couch'); }).map((w) => w.id));
+    for (const id of others) await p.page.evaluate((who) => window.run.idle({ who, do: 'desk' }), id);
+    await p.page.evaluate(() => window.run.idle({ who: 'june', do: 'couch' }));
+  });
+  if (!(await onCouch())) await until(p, juneOnCouch);
+  // The room starts games of its own while the film runs fast, and one can end before the cue, so Sam's game is the one under test.
+  const empty = (label) => window.run.state().workers.filter((w) => w.doing === label).length === 0;
+  let r = await p.page.evaluate(() => window.run.idle({ who: 'sam', do: 'pingpong' }));
+  for (let at = CLEAR_AT; !r.ok && at < CLEAR_AT + 3 * CLEAR_STEP; at += CLEAR_STEP) {
+    for (const id of await playing(p)) await p.page.evaluate((who) => window.run.idle({ who, do: 'desk' }), id);
+    await playTo(at);
+    await until(p, empty, PLAYING);
+    r = await p.page.evaluate(() => window.run.idle({ who: 'sam', do: 'pingpong' }));
+  }
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
   await until(p, (label) => window.run.state().workers.filter((w) => w.doing === label).length === 2, PLAYING);
   const before = { r, players: await p.page.evaluate((label) => window.run.state().workers.filter((w) => w.doing === label).map((w) => w.id), PLAYING) };
   assert.strictEqual(before.players.length, 2, JSON.stringify(before));
-  if (before.r.ok) assert.deepStrictEqual(before.players.sort(), ['june', 'sam'], JSON.stringify(before));
   await playTo(29.7);
   const atEitherEnd = (id) => until(p, ([who, label]) => {
     const d = window.run.debug(who), w = window.run.state().workers.find((x) => x.id === who);

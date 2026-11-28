@@ -35,7 +35,7 @@
 // relay/autopilot-runs.js) is in RELAY_AUTOPILOT_FILE, so a restart keeps it.
 'use strict';
 const { execFile } = require('child_process');
-const { mergedMain } = require('./merged-main.js');
+const { mergedMain, holdsAll, withHead, headsSince } = require('./merged-main.js');
 const fs = require('fs');
 const path = require('path');
 const state = require('./state.js');
@@ -288,6 +288,26 @@ function held(channel, task) {
   note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
   return false;
 }
+async function handBackWhenClear(channel, task) {
+  const rec = task.pr && chOf(channel).prs[task.pr];
+  if (!rec || !rec.handedOver || task.state !== 'waiting_on_you') return;
+  const reason = handedReasonOf(rec);
+  if (!plan.BACK_REASONS.includes(reason)) return;
+  let pr;
+  try { pr = await ghDoor.pr(task.pr, task.repo); } catch (e) { return; }
+  if (!rec.handedOver || task.state !== 'waiting_on_you') return;
+  if (!rec.handedOverHead && pr.headRefOid) { rec.handedOverHead = pr.headRefOid; save(); }
+  const dev = terminal.find(channel, task.owner && task.owner.terminal);
+  const since = rec.verdicts.find((x) => Date.parse(x.at) > Date.parse(rec.handedOverAt) && postOf(channel, x));
+  const why = plan.handedStillHolds({ reason, head: rec.handedOverHead, pr: { ...pr, url: task.pr }, devRunning: !!dev && !dev.exited, review: since ? since.kind : null });
+  if (!why) return;
+  const c = chOf(channel), s = c.stuck && c.stuck[task.id];
+  if (s) delete c.stuck[task.id];
+  dropHandOver(rec); save(); reviews.giveReview(channel, task.pr);
+  stuckLog.clear(channel, 'pr ' + task.pr);
+  tasks.setState(channel, task, (s && s.from) || 'in_review', BY, 'Autopilot: ' + why + ', so the task is back.');
+  note(channel, (task.ticket || 'Task ' + task.id) + ' is back from Waiting on you: ' + why + '.');
+}
 const open = (channel, task) => mineTask(task) && task.state !== 'done' && !held(channel, task);
 let ticking = false, starting = false;
 async function tick() {
@@ -307,6 +327,7 @@ async function look(channel) {
   for (const task of tasks.list(channel).filter(mineTask)) track(channel, task);
   const owedFirst = (t) => (t.bringBack ? t.bringBack.at : Infinity);
   for (const task of tasks.list(channel).filter((t) => t.pr && mineTask(t) && t.state !== 'done').sort((a, b) => (owedFirst(a) < owedFirst(b) ? -1 : owedFirst(a) > owedFirst(b) ? 1 : 0))) {
+    if (task.state === 'waiting_on_you') await handBackWhenClear(channel, task);
     if (!held(channel, task)) await lookAt(channel, task);
     else if (handedReasonOf(recOf(channel, task.pr)) === 'protected-file') await follow(channel, task);
     else await mergedYet(channel, task);
@@ -374,6 +395,8 @@ async function lookAt(channel, task) {
   else if (d.act === 'merge') {
     const c = chOf(channel);
     const turn = chOf(channel).apiTurn && tasks.list(channel).some((x) => x.pr === c.apiTurn && x.pr !== task.pr && open(channel, x)) ? c.apiTurn : null;
+    const seq = c.apiSeq || 0;
+    if (plan.touchesApi(files) && task.worktree && rec.apiSeq !== seq && await holdsAll((args) => git(task.worktree, args), headsSince(c.apiHeads, rec.apiSeq || 0, seq), pr.headRefOid)) { rec.apiSeq = seq; save(); }
     const order = plan.apiTurn({ touches: plan.touchesApi(files), seen: rec.apiSeq, seq: c.apiSeq || 0, asked: rec.apiAsked, head: pr.headRefOid, turn: turn && number(turn), me: number(task.pr) });
     if (order.act === 'wait') { rec.why = order.why; rec.act = 'wait'; return; }
     if (order.act === 'ask-main') { askApiMain(channel, task, rec, pr); rec.why = 'Its Dev was asked to merge main before it merges.'; rec.act = 'wait'; return; }
@@ -478,7 +501,7 @@ function counted(channel, task, rec, head) {
   const c = chOf(channel), run = runOf(channel, task);
   rec.mergedHead = head; c.merged++;
   if (c.apiTurn === task.pr) c.apiTurn = null;
-  if (rec.apiFiles) c.apiSeq = (c.apiSeq || 0) + 1;
+  if (rec.apiFiles) { c.apiHeads = withHead(c.apiHeads, c.apiSeq || 0, head); c.apiSeq = (c.apiSeq || 0) + 1; }
   if (run) runs.merged(run, Date.now(), BY);
   save();
 }

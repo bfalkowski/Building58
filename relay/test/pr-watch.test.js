@@ -208,6 +208,23 @@ test('a PR that waits past the set time goes to the person', async (t) => {
   assert.strictEqual((await posts()).filter((x) => /waits on you: CI has owed/.test(x)).length, 1, 'said once');
 });
 
+test('a stuck item for a late PR is kept through a relay restart, and cleared once the PR is closed', async (t) => {
+  const o = await office(t, { RELAY_PR_WATCH_WAIT_MS: '3000' });
+  let R = o.R;
+  const file = path.join(R.home, '.office-world', 'stuck.json');
+  const items = () => { try { return Object.values(JSON.parse(fs.readFileSync(file, 'utf8'))).flat(); } catch (e) { return []; } };
+  const h = o.commit(true);
+  o.answer({ headRefOid: h, statusCheckRollup: RUNNING });
+  await o.say(o.dev, 'PostToolUse', { pr_url: PR, cwd: o.wt });
+  assert.strictEqual((await R.call('POST', '/settings', { values: { prWatch: true } })).status, 200);
+  await until(() => items().some((i) => i.id === 'pr ' + PR), 'the late PR to be kept as a stuck item');
+  await R.kill();
+  o.R = R = await relay(Object.assign({ GH_CMD: path.join(__dirname, 'fake-gh.js'), FAKE_GH_DIR: o.ghDir }, ENV, { RELAY_PR_WATCH_WAIT_MS: '3000' }), R.home, { autoReview: true });
+  assert.ok(items().some((i) => i.id === 'pr ' + PR), 'the item is still in the file after the restart');
+  o.answer({ headRefOid: h, state: 'CLOSED' });
+  await until(() => !items().some((i) => i.id === 'pr ' + PR), 'the closed PR to clear its item');
+});
+
 test('a task with no PR finds the open PR whose head is its branch, and no other. It asks no more once it has one, with the setting at 0, or with its folder gone', async (t) => {
   const o = await office(t, { RELAY_REVIEW_POLL_SECONDS: '1' });
   const R = o.R, branch = o.task.branch;
