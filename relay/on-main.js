@@ -14,4 +14,7 @@ function onMainCommit(text) {
   return hash && MAIN.test(said) ? hash[0].toLowerCase() : null;
 }
 
-module.exports = { onMainCommit };
+const COMMIT = /^[0-9a-f]{7,40}$/;
+const heldCommit = (name, ev) => (name === 'Stop' && COMMIT.test(String(ev.on_main)) ? ev.on_main : null);
+
+module.exports = { onMainCommit, heldCommit };

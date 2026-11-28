@@ -657,7 +657,7 @@ function noteHook(channel, ev) {
   if (['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'].includes(name)) t.movedAt = Date.now();
   if (name === 'UserPromptSubmit' || (name === 'PreToolUse' && !ev.agent_id)) { t.state = 'working'; t.message = null; t.turnAt = Date.now(); t.stuck = null; t.onMain = null; }
   else if (name === 'PreToolUse') { if (t.state === 'waiting') { t.state = 'working'; t.message = null; } }
-  else if (name === 'Stop' || name === 'StopFailure' || name === 'SessionEnd') { t.state = 'idle'; t.message = null; if (name === 'Stop') t.onMain = /^[0-9a-f]{7,40}$/.test(String(ev.on_main)) ? ev.on_main : null; }
+  else if (name === 'Stop' || name === 'StopFailure' || name === 'SessionEnd') { t.state = 'idle'; t.message = null; if (name === 'Stop') t.onMain = require('./on-main.js').heldCommit(name, ev); }
   else if (name === 'Notification' && asksQuestion(ev)) { if (t.state !== 'waiting') t.waitingAt = Date.now(); t.answeredAt = null; t.state = 'waiting'; t.message = ev.message || null; }
   if (name === 'PreToolUse' && !ev.agent_id) t.toolAt = Date.now();
   else if (['PostToolUse', 'PostToolUseFailure', 'UserPromptSubmit', 'Stop', 'StopFailure', 'SessionEnd'].includes(name) && !(name === 'PostToolUse' && ev.agent_id)) t.toolAt = null;

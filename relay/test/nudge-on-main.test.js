@@ -4,8 +4,8 @@
 // Dev that says the work is on main with a commit is not counted as stalled.
 const test = require('node:test');
 const assert = require('node:assert');
-const { nudgeText, noPrWhy } = require('../nudge.js');
-const { onMainCommit } = require('../on-main.js');
+const { nudgeText, noPrWhy, claimsMain } = require('../nudge.js');
+const { onMainCommit, heldCommit } = require('../on-main.js');
 const { summarize } = require('../office-hook.js');
 
 const now = Date.parse('2026-11-25T12:00:00Z');
@@ -46,4 +46,22 @@ test('the hook sends only the commit of such a claim, never the words', () => {
   assert.strictEqual(out.on_main, '7db2737');
   assert.ok(!JSON.stringify(out).includes('secret'));
   assert.strictEqual(stop('Done, PR opened.').on_main, undefined);
+});
+
+test('a task with no ticket gets the reason without a command that cannot work', () => {
+  assert.strictEqual(noPrWhy('office', {}, { id: 'task-2' }, idleDev('7db2737'), now), 'its Dev says the work is already on main in commit 7db2737, so this is not a stall');
+});
+
+test('the commit is held from a Stop only, and a bad value is ignored', () => {
+  assert.strictEqual(heldCommit('Stop', { on_main: '7db2737' }), '7db2737');
+  assert.strictEqual(heldCommit('UserPromptSubmit', { on_main: '7db2737' }), null);
+  assert.strictEqual(heldCommit('Stop', { on_main: 'rm -rf /' }), null);
+  assert.strictEqual(heldCommit('Stop', {}), null);
+});
+
+test('only a Dev with a claim and no PR skips the nudge', () => {
+  assert.strictEqual(claimsMain(task, idleDev('7db2737')), true);
+  assert.strictEqual(claimsMain({ id: 'task-1', pr: 'https://github.com/a/b/pull/1' }, idleDev('7db2737')), false);
+  assert.strictEqual(claimsMain(task, idleDev(null)), false);
+  assert.strictEqual(claimsMain(task, null), false);
 });

@@ -59,6 +59,7 @@ function installChannel(argv) {
   if (e.OFFICE_PANEL_CHANNEL !== undefined ? mine === e.OFFICE_PANEL_CHANNEL : !!e.OFFICE_TERMINAL_ID) return 'office';
   return mine;
 }
+const { onMainCommit } = require('./on-main.js');
 const INSTALL_CHANNEL = installChannel(process.argv.slice(2));
 const OWN_URL = process.env.OFFICE_HOOK_URL && process.env.OFFICE_TICKET_TOKEN ? process.env.OFFICE_HOOK_URL : '';
 const FULL = process.env.OFFICE_DETAIL === 'full';
@@ -143,9 +144,7 @@ function summarize(p) {
   if (p.hook_event_name === 'Stop' && typeof p.last_assistant_message === 'string') {
     const answer = p.last_assistant_message.match(/HUDDLE-([0-9a-f]{6}):[ \t]*(.+)/);
     if (answer) { out.huddle_id = answer[1]; out.huddle_answer = cut(answer[2], 300); }
-  }
-  if (p.hook_event_name === 'Stop' && typeof p.last_assistant_message === 'string') {
-    const commit = require('./on-main.js').onMainCommit(p.last_assistant_message);
+    const commit = onMainCommit(p.last_assistant_message);
     if (commit) out.on_main = commit;
   }
   if (p.hook_event_name === 'PostToolUse') {

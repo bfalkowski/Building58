@@ -205,3 +205,14 @@ test('working out the reason does not forget the nudge: only a park or a hand-ov
   noPrWhy('office', c, task, idleDev(), now);
   assert.ok(c.nudged['task-1']);
 });
+
+// Ticket 520: a Dev that says its work is on main with a commit is not nudged and not counted as stalled.
+test('a Dev that says its work is on main with a commit is handed over with that reason, and the task comes back when it moves', async (t) => {
+  const { dev, taskOf, say, parked, lastMove } = await rig(t);
+  await say(dev, 'Stop', { on_main: '7db2737' });
+  const p = await parked();
+  assert.match(lastMove(p).note, /^Autopilot: Its Dev says the work is already on main in commit 7db2737, so this is not a stall: it can close the ticket with ticket\.js not-needed T-\d+ --commit 7db2737 --why\.$/);
+  await say(dev, 'UserPromptSubmit');
+  const back = await until(async () => { const x = await taskOf(); return x.state === 'building' && x; }, 'the task to go back to Building');
+  assert.match(lastMove(back).note, /^Autopilot: \S+ moved again, so the task is back\.$/);
+});
