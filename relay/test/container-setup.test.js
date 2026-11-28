@@ -126,3 +126,12 @@ test('no ROOM_PLUGINS, or none, installs nothing and says so; a bad item is left
   assert.deepStrictEqual(log, []);
   fs.rmSync(d, { recursive: true });
 });
+
+test('the auto mode environment prompt is marked dismissed, and a dismissal already there is kept', () => {
+  const d = dir();
+  const fresh = read(claudeConfig({ CLAUDE_CONFIG_DIR: d }));
+  assert.strictEqual(fresh.autoModeEnvSetup.dismissed, true);
+  fs.writeFileSync(path.join(d, '.claude.json'), JSON.stringify({ autoModeEnvSetup: { denials: 7, dismissed: true, dismissedAt: 5 } }));
+  assert.deepStrictEqual(read(claudeConfig({ CLAUDE_CONFIG_DIR: d })).autoModeEnvSetup, { denials: 7, dismissed: true, dismissedAt: 5 });
+  fs.rmSync(d, { recursive: true });
+});
