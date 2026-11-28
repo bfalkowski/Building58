@@ -65,11 +65,13 @@ function openStore() {
 }
 const store = openStore();
 
+const notNeededOf = (t) => !!(t && t.proposal && t.proposal.commit);
+
 tasks.events.on('state', async (channel, task) => {
   if (!task.ticket) return;
   try {
     const t = await store.get(channel, task.ticket);
-    if (t && t.createdAt === task.ticketAt) await store.update(channel, t.id, { status: task.state === 'done' ? 'done' : 'started' });
+    if (t && t.createdAt === task.ticketAt && !(task.state === 'done' && notNeededOf(t))) await store.update(channel, t.id, { status: task.state === 'done' ? 'done' : 'started' });
   } catch (e) { if (!e.waits) console.error('Ticket store (' + store.name + '): ' + e.message); }
 });
 
@@ -77,7 +79,7 @@ tasks.onClean(async (channel, task) => {
   if (!task.ticket) return;
   const t = await store.get(channel, task.ticket);
   const prs = [...new Set((task.history || []).filter((h) => h.type === 'pr' && h.pr).map((h) => h.pr).concat(task.pr ? [task.pr] : []))];
-  if (!t || t.createdAt !== task.ticketAt) return;
+  if (!t || t.createdAt !== task.ticketAt || notNeededOf(t)) return;
   await store.update(channel, t.id, { status: 'done' });
   if (!prs.length) return;
   try { await store.update(channel, t.id, { taskPrs: prs }); } catch (e) { console.error('Ticket store (' + store.name + ') could not keep the PRs of its task on ' + t.id + ', so Merged elsewhere will not refuse them: ' + e.message); }
@@ -120,7 +122,7 @@ async function followTasks(channel, list) {
   for (const t of list) {
     if (t.status !== 'started' && t.status !== 'done') continue;
     const task = tasks.ofTicket(channel, t);
-    const should = task && (task.state === 'done' ? 'done' : 'started');
+    const should = task && (task.state === 'done' && !notNeededOf(t) ? 'done' : 'started');
     if (!should || should === t.status) continue;
     try { Object.assign(t, await store.update(channel, t.id, { status: should })); } catch (e) { if (!e.waits) console.error('Ticket store (' + store.name + ') could not move ' + t.id + ' to ' + should + ': ' + e.message); }
   }
@@ -323,7 +325,61 @@ function proposalProblem(now, p, all) {
   const loop = p.ids.find((id) => waitsOn(id, now.id, all, new Set()));
   return loop ? loop + ' already waits for ' + now.id + ', so ' + now.id + ' cannot wait for it.' : null;
 }
-function propose(channel, ticket, body, agent) {
+const hasPr = (task) => !!task.pr || (task.history || []).some((h) => h.type === 'pr');
+const SHA = /^[0-9a-f]{7,40}$/i;
+const endAfter = new Set();
+const ownTaskOf = (channel, ticket, agent) => (agent && !agent.lead && !['pm', 'coo', 'security', 'manager', 'reviewer'].includes(agent.role) && !agent.reviewOf && tasks.list(channel).find((x) => x.ticket === ticket.id && x.ticketAt === ticket.createdAt && x.owner && x.owner.terminal === agent.id)) || null;
+async function proposeNotNeeded(channel, ticket, body, agent, task) {
+  const no = (code, error, message) => [code, { ok: false, error, message }];
+  if (String(body.action || 'close') !== 'close') return no(403, 'forbidden', 'The Dev of a task proposes only to close its ticket as not needed. The PM and the Lead propose the rest.');
+  if (task.state === 'done') return no(409, 'bad_move', 'This task is already done.');
+  if (hasPr(task)) return no(409, 'has_pr', 'This task has a PR, so it is done when the PR merges.');
+  const commit = clean(body.commit);
+  const why = oneLine(body.why || '');
+  if (!SHA.test(commit)) return no(400, 'bad_commit', 'Give the commit that did the work, with --commit and its hash (7 to 40 hex digits).');
+  if (!why) return no(400, 'bad_why', 'Give the reason in one line, with --why.');
+  if (why.length > MAX_WHY) return no(400, 'bad_why', 'Keep the reason to ' + MAX_WHY + ' characters.');
+  let full;
+  try {
+    full = await tasks.git(task.repo, ['rev-parse', '--verify', '--quiet', commit + '^{commit}']);
+    await tasks.git(task.repo, ['merge-base', '--is-ancestor', full, task.base]);
+  } catch (e) { return no(409, 'not_on_main', 'The commit ' + commit + ' is not on ' + task.base + ', so the relay cannot take it as the work. Open a PR for the work instead.'); }
+  const made = await inTurn(channel, async () => {
+    if (task.state === 'done' || !tasks.list(channel).includes(task)) return no(409, 'bad_move', 'This task is already done.');
+    if (hasPr(task)) return no(409, 'has_pr', 'This task has a PR, so it is done when the PR merges.');
+    const now = (await listAll(channel)).find((t) => t.id === ticket.id) || ticket;
+    if (now.status !== 'started') return no(409, 'not_started', now.id + ' is ' + now.status + ', so there is no task of it to end.');
+    const proposal = { action: 'close', ids: [], why, commit: full, by: 'Dev', at: new Date().toISOString() };
+    await store.update(channel, now.id, { proposal });
+    try {
+      tasks.setState(channel, task, 'done', 'Dev', 'Not needed: the work is on ' + task.base + ' in commit ' + full.slice(0, 10) + '. ' + why);
+    } catch (e) {
+      await store.update(channel, now.id, { proposal: null }).catch(() => {});
+      throw e;
+    }
+    history.add(channel, now, { stage: 'proposal', by: 'Dev', action: 'close', ids: [], why: oneLine('Not needed, commit ' + full.slice(0, 10) + '. ' + why, MAX_WHY) }, agent);
+    require('./jams.js').record(channel, { kind: 'not-needed', ticket: now.id, fix: oneLine('The Dev proposed to close it as not needed: commit ' + full.slice(0, 10) + ' on ' + task.base + '. ' + why, 200), by: 'the relay' });
+    return [200, { now }];
+  });
+  if (made[0] !== 200) return made;
+  const { now } = made[1];
+  endAfter.add(agent);
+  try {
+    await addNote(channel, now, { text: 'The Dev proposes to close this as not needed. The work is on ' + task.base + ' in commit ' + full.slice(0, 10) + ': ' + why }, agent);
+  } catch (e) { console.error('Ticket store (' + store.name + ') could not note the proposal on ' + now.id + ': ' + e.message); }
+  let did = 'proposed';
+  if (trust.level() >= trust.MERGE) {
+    const decided = await decide(channel, now, { decision: 'approve' }, 'PM');
+    if (decided[1].ok) did = 'carried out';
+  }
+  const fresh = await listAll(channel);
+  const words = did === 'proposed' ? 'The proposal to close ' + now.id + ' as not needed waits for the person. Your task is done and your session ends.' : 'PM trust is Close and merge, so the relay approved it: ' + now.id + ' is closed as not needed. Your session ends.';
+  return [200, { ok: true, did, message: words, ticket: await view(channel, fresh.find((t) => t.id === now.id) || now, fresh) }];
+}
+async function propose(channel, ticket, body, agent) {
+  const own = ownTaskOf(channel, ticket, agent);
+  if (own) return proposeNotNeeded(channel, ticket, body, agent, own);
+  if (agent && !agent.lead && agent.role !== 'pm') return [403, { ok: false, error: 'forbidden', message: 'Only the PM and the Lead propose to replace, merge or close a ticket, or to change its blockers. File a ticket instead. The Dev of a ticket\'s own task can propose its close as not needed.' }];
   const { proposal, error } = proposalFrom(body);
   if (error) return error;
   return inTurn(channel, async () => {
@@ -352,18 +408,22 @@ function decide(channel, ticket, body, by = 'you') {
     const step = { by, action: p.action, ids: p.ids, from: p.by };
     if (decision === 'decline') {
       const changed = await store.update(channel, now.id, { proposal: null });
+      const idle = p.commit && tasks.list(channel).find((x) => x.ticket === now.id && x.ticketAt === now.createdAt && x.state === 'done');
+      if (idle) tasks.setState(channel, idle, 'building', by, 'The proposal to close it as not needed was declined, so the work goes on. Bring the Dev back.');
       history.add(channel, now, Object.assign({ stage: 'proposal-declined' }, step));
       return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
     }
     const state = starting.has(channel + '/' + now.id) ? 'starting' : now.status;
-    if (!ORDERABLE.includes(state)) return [409, { ok: false, error: 'not_ready', message: now.id + ' is ' + state + ' now, so the proposal no longer fits. Decline it.' }];
-    const problem = proposalProblem(now, p, all);
+    if (!ORDERABLE.includes(state) && !(p.commit && state === 'started')) return [409, { ok: false, error: 'not_ready', message: now.id + ' is ' + state + ' now, so the proposal no longer fits. Decline it.' }];
+    const problem = p.commit ? null : proposalProblem(now, p, all);
     if (problem) return [409, { ok: false, error: 'stale', message: problem + ' Decline the proposal, or change the Board first.' }];
-    const changes = p.action === 'blockers' ? { blockedBy: p.ids, proposal: null }
+    const changes = p.commit ? { status: 'done', closedAs: 'not-needed', closedFor: [], notNeeded: { commit: p.commit, why: p.why, by: p.by }, proposal: null }
+      : p.action === 'blockers' ? { blockedBy: p.ids, proposal: null }
       : Object.assign({ status: 'rejected', closedAs: CLOSED_AS[p.action], closedFor: p.ids, proposal: null }, now.status === 'ready' ? { approvedBy: 'none' } : {});
     const changed = await store.update(channel, now.id, changes);
     history.add(channel, now, Object.assign({ stage: 'proposal-approved' }, step));
     if (changes.status === 'rejected') chat.archiveTicketRoom(channel, now.id, now.createdAt, 'the ticket was ' + CLOSED_AS[p.action]);
+    else if (p.commit) chat.archiveTicketRoom(channel, now.id, now.createdAt, 'the ticket was closed as not needed');
     return [200, { ok: true, ticket: await view(channel, changed, all.map((t) => (t.id === now.id ? changed : t))) }];
   });
 }
@@ -447,47 +507,6 @@ function advise(channel, ticket, body, agent) {
     const fresh = await listAll(channel);
     const words = did === 'advised' ? 'Advice saved on ' + now.id + '.' : did === 'proposed' ? 'Advice saved on ' + now.id + ', and a proposal waits for the person, so it does not start.' : 'Advice saved on ' + now.id + ', and the relay carried it out.';
     return [200, { ok: true, did, answer: advice.answer, message: words, ticket: await view(channel, fresh.find((t) => t.id === now.id) || now, fresh) }];
-  });
-}
-
-const hasPr = (task) => !!task.pr || (task.history || []).some((h) => h.type === 'pr');
-const SHA = /^[0-9a-f]{7,40}$/i;
-async function notNeeded(channel, ticket, body, agent) {
-  const no = (code, error, message) => [code, { ok: false, error, message }];
-  const own = agent && tasks.list(channel).find((x) => x.ticket === ticket.id && x.ticketAt === ticket.createdAt && x.owner && x.owner.terminal === agent.id);
-  if (!own) return no(403, 'forbidden', 'Only the Dev of the task of ' + ticket.id + ' closes it as not needed.');
-  const task = own;
-  if (task.state === 'done') return no(409, 'bad_move', 'This task is already done.');
-  if (hasPr(task)) return no(409, 'has_pr', 'This task has a PR, so it is done when the PR merges.');
-  const commit = clean(body.commit);
-  const why = oneLine(body.why || '');
-  if (!SHA.test(commit)) return no(400, 'bad_commit', 'Give the commit that did the work, with --commit and its hash (7 to 40 hex digits).');
-  if (!why) return no(400, 'bad_why', 'Give the reason in one line, with --why.');
-  if (why.length > MAX_WHY) return no(400, 'bad_why', 'Keep the reason to ' + MAX_WHY + ' characters.');
-  let full;
-  try {
-    full = await tasks.git(task.repo, ['rev-parse', '--verify', '--quiet', commit + '^{commit}']);
-    await tasks.git(task.repo, ['merge-base', '--is-ancestor', full, task.base]);
-  } catch (e) { return no(409, 'not_on_main', 'The commit ' + commit + ' is not on ' + task.base + ', so the relay cannot take it as the work. Open a PR for the work instead.'); }
-  return inTurn(channel, async () => {
-    const live = task.state !== 'done' && tasks.list(channel).includes(task);
-    if (!live) return no(409, 'bad_move', 'This task is already done.');
-    if (hasPr(task)) return no(409, 'has_pr', 'This task has a PR, so it is done when the PR merges.');
-    await store.update(channel, ticket.id, { status: 'done', closedAs: 'not-needed', closedFor: [], notNeeded: { commit: full, why, by: agentName(agent) }, proposal: null });
-    tasks.setState(channel, task, 'done', 'Dev', 'Not needed: the work is on ' + task.base + ' in commit ' + full.slice(0, 10) + '. ' + why);
-    chat.archiveTicketRoom(channel, ticket.id, ticket.createdAt, 'the ticket was closed as not needed');
-    history.add(channel, ticket, { stage: 'not-needed', by: 'Dev', commit: full }, agent);
-    require('./jams.js').record(channel, { kind: 'not-needed', ticket: ticket.id, fix: oneLine('The Dev closed it as not needed: commit ' + full.slice(0, 10) + ' on ' + task.base + '. ' + why, 200), by: 'the relay' });
-    return [200, {}];
-  }).then(async (done) => {
-    if (done[0] !== 200) return done;
-    const closed = [200, { ok: true, message: ticket.id + ' is closed as not needed, and this session ends.' }];
-    try {
-      await addNote(channel, ticket, { text: 'Closed as not needed by its Dev. The work is on ' + task.base + ' in commit ' + full.slice(0, 10) + ': ' + why }, agent);
-      const fresh = await listAll(channel);
-      closed[1].ticket = await view(channel, fresh.find((t) => t.id === ticket.id) || ticket, fresh);
-    } catch (e) { console.error('Ticket store (' + store.name + ') could not note the close of ' + ticket.id + ': ' + e.message); }
-    return closed;
   });
 }
 
@@ -744,7 +763,7 @@ async function edit(channel, ticket, body, agent) {
 }
 
 async function handle(req, res, channel, rest, ctx) {
-  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|order|edit|propose|proposal|note|advice|not-needed)|\/([\w-]{1,64}))?$/);
+  const route = rest.match(/^\/tickets(?:\/(ask|approve-ready)|\/([\w-]{1,64})\/(move|start|order|edit|propose|proposal|note|advice)|\/([\w-]{1,64}))?$/);
   if (!route) { if (!/^\/tickets(\/|$)/.test(rest)) return false; ctx.problem(res, 404, 'not_found', 'Unknown ticket route.'); return true; }
   const deny = terminal.localOnly(req, ctx.port);
   if (deny) { ctx.problem(res, 403, 'local_only', deny); return true; }
@@ -786,15 +805,12 @@ async function handle(req, res, channel, rest, ctx) {
       else if (req.method === 'POST' && verb === 'propose') {
         out = await propose(channel, ticket, body || {}, ctx.agent);
         if (ctx.agent && out[1].ok) ctx.log(out[1].message);
+        if (ctx.agent && endAfter.delete(ctx.agent) && out[1].ok) closing = ctx.agent;
         if (ctx.agent && ctx.agent.lead && out[1].ok && await leadMergesTwin(channel, ticket, body || {})) out = await carryOut(channel, ticket);
       }
       else if (req.method === 'POST' && verb === 'advice') {
         out = await advise(channel, ticket, body || {}, ctx.agent);
         if (ctx.agent && out[1].ok) ctx.log('The PM advised ' + ticket.id + ': ' + out[1].answer + '. ' + out[1].message);
-      }
-      else if (req.method === 'POST' && verb === 'not-needed') {
-        out = await notNeeded(channel, ticket, body || {}, ctx.agent);
-        if (out[1].ok) { ctx.log('The Dev of ' + ticket.id + ' closed it as not needed.'); closing = ctx.agent; }
       }
       else if (req.method === 'POST' && verb === 'proposal') {
         if (ctx.agent) { ctx.problem(res, 401, 'unauthorized', 'Only the person approves or declines a proposal.'); return true; }

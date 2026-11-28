@@ -211,6 +211,24 @@ function waitOnPerson(channel, pr) {
     text: 'PR ' + pr + ' has had ' + MAX_AUTO_REVIEWS() + ' automatic reviews and has new commits since the last one, so its next review waits on the person. Tell them it is theirs to review or to start a review with Get a review.' });
 }
 
+const OUT_OF_REVIEWS = 'it is out of automatic reviews';
+function noReview(channel, pr) {
+  const rec = recOf(channel, pr);
+  if (!rec || rec.first || rec.pending || reviewing(channel, pr)) return '';
+  if (!switchesOf(channel).auto) return 'Review PRs automatically is off';
+  if (rec.failed) return 'its automatic review could not start';
+  if (rec.waits || (rec.count || 0) >= MAX_AUTO_REVIEWS()) return OUT_OF_REVIEWS;
+  return '';
+}
+function giveReview(channel, pr) {
+  const rec = recOf(channel, pr), max = MAX_AUTO_REVIEWS();
+  if (!rec) return;
+  if ((rec.count || 0) >= max) rec.count = max - 1;
+  rec.waits = false;
+  delete rec.failed;
+  save();
+}
+
 function passes(channel, pr, rec, held, lastHead) {
   if (!pipeline.on()) { rec.why = null; return true; }
   const p = pipeline.of(pr);
@@ -601,4 +619,4 @@ function setSwitch(channel, k, on) {
   save();
 }
 
-module.exports = { setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };
+module.exports = { setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, noReview, giveReview, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };

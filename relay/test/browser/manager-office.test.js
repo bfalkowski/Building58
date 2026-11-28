@@ -5,7 +5,7 @@
 'use strict';
 const assert = require('node:assert');
 const test = require('node:test');
-const { office, pageTest, until } = require('./page.js');
+const { office, pageTest, until, watch } = require('./page.js');
 
 let o;
 test.before(async () => { o = await office(); });
@@ -49,11 +49,15 @@ pageTest('the Lead can go into the manager\'s office and sit, and nobody else wa
 
   // Everyone else wanders for a while, and none of them goes past the back wall.
   const others = await p.page.evaluate(() => window.run.roster().filter((w) => w.id !== 'lead').map((w) => w.id));
-  for (const id of others) await p.page.evaluate((who) => window.run.do({ action: 'idle', who, do: 'board' }), id);
-  for (let i = 0; i < 20; i++) {
-    const zs = await p.page.evaluate((ids) => ids.map((id) => window.run.debug(id)).filter(Boolean).map((d) => d.pos[1]), others);
-    assert.ok(zs.every((z) => z > BACK_WALL), 'nobody but the manager and the Lead is in the office: ' + zs);
-    await p.page.waitForTimeout(250);
-  }
+  const sent = [];
+  for (const id of others) { const r = await p.page.evaluate((who) => window.run.do({ action: 'idle', who, do: 'board' }), id); if (r.ok) sent.push(id); }
+  assert.ok(sent.length > 0, 'someone is sent to the board');
+  const seen = await watch(p, ([ids, wall, sentIds]) => {
+    const ds = ids.map((id) => window.run.debug(id)).filter(Boolean);
+    const bad = ds.filter((d) => d.pos[1] <= wall).map((d) => d.pos[1]);
+    if (bad.length) return { bad: 'nobody but the manager and the Lead is in the office: ' + bad };
+    return { done: sentIds.every((id) => { const d = window.run.debug(id); return d && d.step && d.step.t === 'act' && /^board-/.test(d.spot); }) };
+  }, [others, BACK_WALL, sent], 90000);
+  assert.strictEqual(seen.bad, undefined, seen.bad);
   assert.deepStrictEqual(p.errors, []);
 });

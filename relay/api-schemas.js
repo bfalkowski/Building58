@@ -24,7 +24,7 @@ const WORD = '^[a-z][a-z0-9-]{0,23}$';
 const SCHEMAS = {
   Ok: okWith({}),
   Problem: obj({ ok: { const: false }, error: S({ description: 'A short code, such as bad_param, forbidden or not_found.' }), message: S({ description: 'What went wrong, in plain words.' }) }, ['ok', 'error', 'message']),
-  TicketStep: obj({ at: S(), stage: S(), by: orNull(S()) }, ['at', 'stage', 'by'], { description: 'One step in a ticket\'s history.' }),
+  TicketStep: obj({ at: S(), stage: S(), by: S() }, ['at', 'stage', 'by'], { description: 'One step in a ticket\'s history.' }),
   TicketNote: obj({ by: S({ description: 'Who wrote it, as the relay named them.' }), role: orNull(S({ description: 'dev, reviewer, pm, lead or null for the person.' })), at: S(), text: S({ maxLength: 2000 }) }, ['by', 'at', 'text'], { description: 'A note a session added to a ticket. It is not part of the ticket\'s body.' }),
   Ticket: obj({
     id: S({ description: 'Such as T-5, or the issue number in the GitHub store.' }),
@@ -63,7 +63,6 @@ const SCHEMAS = {
     blockedBy: list(S()),
     shapes: list({ type: ['string', 'number'] })
   }, ['title'], { examples: [{ title: 'Flaky test in tasks.test.js', body: 'It fails about one run in ten on CI.', priority: 'normal', kind: 'bug', labels: ['flaky'] }] }),
-  NewNotNeeded: obj({ commit: S({ pattern: '^[0-9a-fA-F]{7,40}$' }), why: S({ minLength: 1, maxLength: 500 }) }, ['commit', 'why'], { examples: [{ commit: '7db2737', why: 'T-154 fixed it on main' }] }),
   NewTicketNote: obj({ text: S({ minLength: 1, maxLength: 2000 }) }, ['text'], { examples: [{ text: 'The cause is in relay/tickets.js, not relay/tasks.js. Run npm test first.' }] }),
   TicketEdit: obj({
     title: S({ minLength: 1, maxLength: 80 }),
@@ -179,7 +178,6 @@ const REQUESTS = {
   'POST /tickets': 'NewTicket',
   'POST /tickets/{id}/edit': 'TicketEdit',
   'POST /tickets/{id}/note': 'NewTicketNote',
-  'POST /tickets/{id}/not-needed': 'NewNotNeeded',
   'POST /tasks': 'NewTask',
   'POST /tasks/{id}/move': 'TaskMove',
   'POST /commands': 'Command',
@@ -192,7 +190,6 @@ const RESPONSES = {
   'GET /tickets/{id}': 'TicketOne',
   'POST /tickets/{id}/edit': 'TicketOne',
   'POST /tickets/{id}/note': 'TicketOne',
-  'POST /tickets/{id}/not-needed': 'TicketOne',
   'GET /tasks': 'TaskList',
   'POST /tasks': 'TaskOne',
   'GET /tasks/{id}': 'TaskOne',

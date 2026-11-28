@@ -26,6 +26,7 @@ test('what the checks on a commit say', () => {
   assert.strictEqual(stateOf([PASSED, FAILED]), 'red');
   assert.strictEqual(stateOf([RUNNING, FAILED]), 'red', 'one failed check is enough, even with others still running');
   assert.strictEqual(stateOf([PASSED, RUNNING]), 'pending');
+  assert.strictEqual(stateOf([PASSED, { __typename: 'CheckRun', name: 'What changed', status: 'IN_PROGRESS', conclusion: 'SUCCESS' }]), 'green', 'a check with a conclusion is finished, even when GitHub left its status in progress');
   assert.strictEqual(stateOf([{ __typename: 'StatusContext', state: 'PENDING' }]), 'pending', 'a commit status has only a state');
   assert.strictEqual(stateOf([{ __typename: 'StatusContext', state: 'ERROR' }]), 'red');
   assert.strictEqual(stateOf([]), 'none', 'no checks is not the same as checks still running');

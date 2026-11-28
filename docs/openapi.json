@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Building58 relay",
-    "version": "2.17.0",
+    "version": "worked-out-when-served",
     "description": "The relay passes commands to a world's page and runs the room: tickets, tasks, sessions and reviews. It answers this computer only. Each route's description is the manual's, from docs/manual/relay.html, where the fields, the tokens and the errors are.",
     "license": {
       "name": "PolyForm Noncommercial 1.0.0",
@@ -1436,6 +1436,210 @@
             }
           }
         ]
+      }
+    },
+    "/channels/{channel}/lead/bring-back": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Lead bring back",
+        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"task\"}: brings the Dev of a task back, as Bring back does. 404 no_task, and the refusals of Bring back. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "leadBringBack",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/lead/hand-back": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Lead hand back",
+        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"task\"}: moves a task Autopilot handed over for a mechanical reason from Waiting on you to In review, and Autopilot takes it from its next pass and gives its PR a review. 409 not_handed for a task Autopilot did not hand over, autopilot_off while Autopilot is off, 403 persons_decision for a hand-over that is the person's decision. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "leadHandBack",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/lead/stop-command": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Lead stop command",
+        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"who\", \"pid\"}: ends one stuck command of a session, as POST /floor/end-job does, never the session, with no need for Let the Lead stop sessions. 409 not_stuck when the session has none. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "leadStopCommand",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel}/lead/tell": {
+      "post": {
+        "tags": [
+          "Failures"
+        ],
+        "summary": "Lead tell",
+        "description": "The Lead only, while Let the Lead unstick the board is on, also while Autopilot is on (403 forbidden with the reason while it is off). {\"who\", \"text\"}: saves one line of up to 500 characters for the session called who (a Floor name, a session id or a task id), typed when it is idle, with From the Lead: in front. 404 no_session, 409 is_lead for the Lead itself, 400 bad_param for no text. Writes a jam by Lead. See The Lead unsticks the board.\n\nTokens: the relay key, and the token of the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "operationId": "leadTell",
+        "x-tokens": [
+          "the Lead"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "JSON. The fields are in the description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
       }
     },
     "/channels/{channel}/manager": {
@@ -4062,66 +4266,6 @@
         }
       }
     },
-    "/channels/{channel}/tickets/{id}/not-needed": {
-      "post": {
-        "tags": [
-          "Tickets"
-        ],
-        "summary": "Close ticket not needed",
-        "description": "{\"commit\", \"why\"}: the Dev of the ticket's own task closes it when the work is already on the task's base. commit is a hash of 7 to 40 hex digits that must be on the base (git merge-base --is-ancestor in the task's repo), and why is one line of up to 500 characters. The relay adds a note, moves the task and the ticket to Done with closedAs not-needed and notNeeded (the full commit, the reason and who), frees the slot, ends the Dev's session once it has answered, and writes a not-needed jam by the relay. 403 for any token that is not the Dev of this ticket's task, the person's key included. 409 not_on_main for a commit that is not on the base, has_pr for a task with a PR (it is done when the PR merges) and bad_move for a task that is done. 400 for a missing or malformed commit or reason. See When the work is already on main.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
-        "operationId": "closeTicketNotNeeded",
-        "x-tokens": [
-          "any session"
-        ],
-        "responses": {
-          "2XX": {
-            "description": "Done.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TicketOne"
-                }
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/Problem"
-          }
-        },
-        "parameters": [
-          {
-            "name": "channel",
-            "in": "path",
-            "required": true,
-            "description": "The channel, such as office: 1 to 64 letters, numbers, dashes or underscores.",
-            "schema": {
-              "type": "string",
-              "pattern": "^[\\w-]{1,64}$"
-            }
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The ticket's id, such as T-5.",
-            "schema": {
-              "type": "string",
-              "pattern": "^[\\w-]{1,64}$"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewNotNeeded"
-              }
-            }
-          }
-        }
-      }
-    },
     "/channels/{channel}/tickets/{id}/note": {
       "post": {
         "tags": [
@@ -4309,11 +4453,10 @@
           "Tickets"
         ],
         "summary": "Propose ticket change",
-        "description": "{\"action\", \"ids\", \"why\"}: proposes to change a Triage or Ready ticket. action is replace (with one or more ids), merge (with one), close (with none) or blockers (the whole new list, which can be empty). why is up to 500 characters. Nothing changes but the ticket's proposal, which holds it back. The PM's and the Lead's tokens propose, and so does the person's key, when the proposal then says You propose. Refused with 400 when an id is not on the Board, is the ticket itself, or was rejected, for every kind, and when a new blocker already waits for the ticket. A ticket that is starting, started, done or rejected gets 409, or 403 for a session's token. See Proposals.\n\nTokens: the relay key, and the token of a PM, the Lead. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
+        "description": "{\"action\", \"ids\", \"why\", \"commit\"}: proposes to change a Triage or Ready ticket, or, from the Dev of a started ticket's own task, to close it as not needed. action is replace (with one or more ids), merge (with one), close (with none) or blockers (the whole new list, which can be empty). why is up to 500 characters. Nothing changes but the ticket's proposal, which holds it back. The PM's and the Lead's tokens propose, and so does the person's key, when the proposal then says You propose. Refused with 400 when an id is not on the Board, is the ticket itself, or was rejected, for every kind, and when a new blocker already waits for the ticket. A ticket that is starting, started, done or rejected gets 409, or 403 for a session's token, with one exception: the Dev of a started ticket's own task. That Dev sends action close with commit, a hash of 7 to 40 hex digits that must be on the task's base (git merge-base --is-ancestor in the task's repo), and why, one line of 1 to 500 characters. The task goes to done at once, which frees its slot and desk, the Dev's session ends once it has answered, a not-needed jam is written by the relay, and the ticket stays started with a close proposal that holds the full commit. The answer is did: proposed, or carried out when PM trust is Close and merge and the relay approved it as the PM. Approving it sets the ticket Done with closedAs not-needed and notNeeded (commit, reason, who). Declining it puts the task back to building. That Dev gets 403 for any other action or ticket, 409 not_on_main for a commit that is not on the base, has_pr for a task with a PR and bad_move for a task that is done, and 400 for a missing or malformed commit or reason. See When the work is already on main and Proposals.\n\nTokens: the relay key, and the token of any session. A route a token reaches can still refuse it, as the description says.\n\nFrom docs/manual/relay.html#routes.",
         "operationId": "proposeTicketChange",
         "x-tokens": [
-          "a PM",
-          "the Lead"
+          "any session"
         ],
         "responses": {
           "2XX": {
@@ -4707,10 +4850,7 @@
             "type": "string"
           },
           "by": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           }
         },
         "required": [
@@ -5047,31 +5187,6 @@
             "labels": [
               "flaky"
             ]
-          }
-        ]
-      },
-      "NewNotNeeded": {
-        "type": "object",
-        "properties": {
-          "commit": {
-            "type": "string",
-            "pattern": "^[0-9a-fA-F]{7,40}$"
-          },
-          "why": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 500
-          }
-        },
-        "required": [
-          "commit",
-          "why"
-        ],
-        "additionalProperties": true,
-        "examples": [
-          {
-            "commit": "7db2737",
-            "why": "T-154 fixed it on main"
           }
         ]
       },

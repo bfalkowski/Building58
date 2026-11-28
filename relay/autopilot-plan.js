@@ -12,38 +12,46 @@ function ciOf(rollup) {
   return state === 'none' ? 'pending' : state;
 }
 
-function forPr(pr, files, verdict, rounds, maxRounds, devGone, exhibit) {
+function forPr(pr, files, verdict, rounds, maxRounds, devGone, exhibit, noReview) {
   if (!pr) return { act: 'wait', why: 'GitHub has not answered about the PR yet.' };
   if (pr.state === 'MERGED') return { act: 'done', why: 'The PR merged.' };
   if (pr.state === 'CLOSED') return { act: 'person', reason: 'pr-closed', why: 'The PR was closed without merging.' };
   if (!files) return { act: 'wait', why: 'Waiting for the list of files the PR changes.' };
   const locked = lockedOf(files);
   if (locked.length) return { act: 'person', reason: 'protected-file', why: onlyAPerson(locked) };
-  return forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit);
+  return forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit, noReview);
 }
 const lockedOf = (files) => [...new Set((files || []).filter((f) => PROTECTED.includes(f)))];
 const onlyAPerson = (locked) => 'It changes ' + locked.join(' and ') + ', which only a person merges.';
+const NEXT = ': start one with Get a review, or merge or close it.';
 const WAITS_FOR_REVIEW = 'Waiting for the review.';
 function exhibitStep(pr, exhibit) {
   if (exhibit === undefined) return null;
   if (exhibit && exhibit.failed) return { act: 'wait', why: 'Level 6 needs Exhibit\'s verdict, and ' + exhibit.failed + '.' };
-  if (!exhibit) return { act: 'wait', why: 'Level 6 waits for Exhibit\'s summary comment on the PR.' };
+  if (!exhibit) return { act: 'wait', why: 'Level 6 waits for the nightly Exhibit run to store a verdict for this head.' };
   const head = String(pr.headRefOid || '');
-  if (!head.startsWith(exhibit.commit)) return { act: 'wait', why: 'Exhibit\'s summary is for ' + exhibit.commit.slice(0, 7) + ', not the head ' + head.slice(0, 7) + ', so Autopilot waits for its next run.' };
+  if (!head.startsWith(exhibit.commit)) return { act: 'wait', why: 'Exhibit\'s verdict is for ' + exhibit.commit.slice(0, 7) + ', not the head ' + head.slice(0, 7) + ', so Autopilot waits for its next run.' };
   if (exhibit.verdict === 'meets_policy') return null;
   return { act: 'person', reason: 'exhibit', why: 'Exhibit says ' + exhibit.verdict + ' at ' + exhibit.commit.slice(0, 7) + ', so its evidence does not pass. Level 6 leaves the merge to a person.' };
 }
-function forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit) {
-  if (!verdict) return { act: 'wait', why: WAITS_FOR_REVIEW };
+const conflictFor = (devGone, owed) => devGone
+  ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main' + owed + ', but its Dev is not running, so Autopilot brings it back to merge main.' }
+  : { act: 'conflict', why: 'It conflicts with main' + owed + '.' };
+function forReviewed(pr, verdict, rounds, maxRounds, devGone, exhibit, noReview) {
+  if (!verdict) return pr.mergeStateStatus === 'DIRTY' ? conflictFor(devGone, ', so no review starts until it is merged') : { act: 'wait', why: WAITS_FOR_REVIEW };
   if (!verdict.posted) return { act: 'wait', why: 'Waiting for the reviewer to post the review.' };
   if (verdict.kind === 'fix') {
     if (rounds >= maxRounds) return { act: 'person', reason: 'rounds', why: 'Review ' + rounds + ' still asks for fixes, and Autopilot stops at ' + maxRounds + ' rounds.' };
+    if (verdict.commit !== pr.headRefOid && pr.mergeStateStatus === 'DIRTY') return conflictFor(devGone, ', so no follow-up review starts until it is merged');
+    if (noReview && (!devGone || verdict.commit !== pr.headRefOid)) return { act: 'person', reason: 'rounds', why: 'The last review asks for fixes, but ' + noReview + NEXT };
     if (devGone && verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review asked for fixes, so a follow-up review checks them.' };
     if (devGone) return { act: 'bring-back', for: 'fix', why: 'The last review asks for fixes, but its Dev is not running, so Autopilot brings it back to fix them.' };
     return { act: 'wait', why: 'The Dev is fixing what the last review found. A follow-up review checks the fixes after the push.' };
   }
+  if (verdict.commit !== pr.headRefOid && pr.mergeStateStatus === 'DIRTY') return conflictFor(devGone, ', so no follow-up review starts until it is merged');
+  if (verdict.commit !== pr.headRefOid && noReview) return { act: 'person', reason: 'rounds', why: 'There are commits after the review said merge, but ' + noReview + NEXT };
   if (verdict.commit !== pr.headRefOid) return { act: 'wait', why: 'There are commits after the review said merge, so a follow-up review checks them first.' };
-  if (pr.mergeStateStatus === 'DIRTY') return devGone ? { act: 'bring-back', for: 'conflict', why: 'It conflicts with main, but its Dev is not running, so Autopilot brings it back to merge main.' } : { act: 'conflict', why: 'It conflicts with main.' };
+  if (pr.mergeStateStatus === 'DIRTY') return conflictFor(devGone, '');
   const ci = ciOf(pr.statusCheckRollup);
   if (ci === 'red') return { act: 'person', reason: 'ci-red', why: 'CI failed on the reviewed commit.' };
   if (ci === 'pending') return { act: 'wait', why: 'Waiting for CI.' };
@@ -94,7 +102,7 @@ function proposalWords(p, id) {
   const ids = (p.ids || []).join(', ');
   if (p.action === 'replace') return 'replace ' + id + ' with ' + ids;
   if (p.action === 'merge') return 'merge ' + id + ' into ' + ids;
-  if (p.action === 'close') return 'close ' + id;
+  if (p.action === 'close') return 'close ' + id + (p.commit ? ' as not needed (commit ' + String(p.commit).slice(0, 10) + ')' : '');
   return 'set the blockers of ' + id + ' to ' + (ids || 'none');
 }
 function heldBack(t, all) {
