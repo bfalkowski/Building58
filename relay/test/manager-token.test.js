@@ -74,6 +74,20 @@ test('the manager\'s token reaches the watch and the brake, and gets 403 for the
     assert.strictEqual((await R.call(GET, '/tasks')).body.tasks.length, 0, 'no ticket or task was touched');
   });
 
+  await t.test('the manager\'s lowering shares the limit of two a day with the watch\'s brake, and the third is refused', async () => {
+    const lowered = async () => (await as(GET, '/manager')).body.lowered.length;
+    assert.strictEqual(await lowered(), 1);
+    await R.call(POST, '/reviews', { auto: true, again: true });
+    assert.strictEqual((await as(POST, '/manager/lower', { why: 'A second stall.' })).status, 200);
+    assert.strictEqual(await lowered(), 2);
+    await R.call(POST, '/reviews', { auto: true, again: true });
+    const third = await as(POST, '/manager/lower', { why: 'A third stall.' });
+    assert.strictEqual(third.status, 429);
+    assert.strictEqual(third.body.error, 'limit');
+    assert.deepStrictEqual((await R.call(GET, '/reviews')).body.again, true, 'the person\'s level is left alone');
+    assert.strictEqual(await lowered(), 2);
+  });
+
   await t.test('a note goes on Needs you and is replaced by one with the same key', async () => {
     const put = (text) => as(POST, '/manager/note', { text, key: 'stall-1' });
     assert.strictEqual((await put('Autopilot gave 3 tasks in a row to you. Look at Waiting on you.')).status, 200);

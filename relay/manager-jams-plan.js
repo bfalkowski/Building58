@@ -39,7 +39,7 @@ function ticketOf(burst, label, earlier) {
 function decide(burst, cause, status) {
   const seen = new Set((cause && cause.seen) || []);
   const fresh = burst.jams.filter((j) => !seen.has(j.at));
-  if (!cause || status === 'done' || status === undefined) {
+  if (!cause || status === 'done') {
     if (cause && status === 'done' && fresh.length < BURST) return { act: 'none' };
     return { act: 'file', earlier: cause && status === 'done' ? cause.ticket : null };
   }
