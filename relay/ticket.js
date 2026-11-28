@@ -6,7 +6,7 @@
 //   node relay/ticket.js create "Decide the layout" --shapes T-7,T-9 --body - <<'EOF'
 //   (a design ticket: while it is open, Autopilot and the Lead start none of the tickets it shapes, which must be in Triage)
 //   node relay/ticket.js create "Title" --kind docs --body - <<'EOF'
-//   (kind is docs, tests, bug, feature, or one the person added; ticket.js kinds lists them. Leave it out if unsure)
+//   (kind is docs, tests, bug, feature, or one the person added; ticket.js kinds lists them. A PM gives one on every ticket it files; other callers may leave it out)
 //   (kind jam is for stuck work: a jam, a stall, a flaky test, a red main, anything that holds other PRs. The relay files it at
 //   high priority, first in High, whoever files it, and refuses a lower priority for it)
 //   --label flaky,follow-up adds labels that tickets have already; ticket.js labels lists them
