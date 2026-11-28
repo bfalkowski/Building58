@@ -534,6 +534,10 @@ test('a ticket filed from a linked worktree starts from that branch, not the mai
   assert.strictEqual(gitIn(task.worktree, 'rev-parse', 'HEAD'), gitIn(wt, 'rev-parse', 'HEAD'));
   assert.ok(fs.existsSync(path.join(task.worktree, 'only-here.txt')));
   assert.match(await briefOf(R, task), /pull request against feature\/x\./);
+  const wording = (await briefOf(R, task)).replace(/\s+/g, ' ');
+  assert.match(wording, /A conflict with feature\/x are still yours: fix the check, or merge feature\/x, and push only that\./i);
+  assert.match(wording, /Catch up by merging feature\/x into the branch, never by rebasing it, so no force push is needed\./);
+  assert.doesNotMatch(wording, /conflict with main|merge main/);
   assert.strictEqual(gitIn(R.repo, 'symbolic-ref', '--short', 'HEAD'), 'main', 'the main folder is left alone');
 });
 test('the recorded base wins over a branch the ticket text names (T-52)', async (t) => {
@@ -544,7 +548,7 @@ test('the recorded base wins over a branch the ticket text names (T-52)', async 
   assert.strictEqual(task.base, 'main');
   const brief = (await briefOf(R, task)).replace(/\s+/g, ' ');
   assert.match(brief, /Work from office-worker-sessions/, 'the ticket text is still in the brief');
-  assert.match(brief, /This branch belongs to main, the base this task records\. That base wins over any other branch the ticket text names, unless the person tells you otherwise in this session\. Do not reset, rebase or switch this branch onto a different branch\. Catching up with main is fine\./);
+  assert.match(brief, /This branch belongs to main, the base this task records\. That base wins over any other branch the ticket text names, unless the person tells you otherwise in this session\. Do not reset, rebase or switch this branch onto a different branch\. Catch up by merging main into the branch, never by rebasing it, so no force push is needed\. Catching up with main is fine\./);
   assert.match(brief, /open a pull request against main\./);
 });
 test('a session files against the repo\'s default branch, not its task\'s base or its own branch', async (t) => {
