@@ -12,10 +12,10 @@ away from the person. Here, skills carry the engineering practice, and the perso
 
 ## What the room is
 
-The room is a visual orchestrator for Claude Code sessions. It runs like a squad: a small team
-on one stream of work, with a Lead, Devs, reviewers and a PM, and a person as the manager. Its
-job is to keep tickets moving, and to show at a glance who is working, who is waiting on the
-person, and what is done.
+The room is a visual orchestrator for Claude Code sessions. It runs like a squad: a small team on
+one stream of work, with a Lead, Devs, reviewers, a PM and a manager session, and a person as the
+boss. The COO is not a seat: it runs only when the person asks. Its job is to keep tickets moving,
+and to show at a glance who is working, who is waiting on the person, and what is done.
 
 Addy Osmani names four ways a person takes part in a software factory: shape, steer, hand off and approve. The
 room gives the person all four on one floor. They shape work with the PM and Triage, steer a
@@ -224,7 +224,9 @@ is filed as tickets.
 
 A desk is for work. A reviewer ends its own session once its review is posted. When a session is
 finished or idle and nobody needs it, the Lead stops it. The Lead does not stop a session that is
-waiting on the person.
+waiting on the person for an answer, a question or a menu. A task that waits on the person (Waiting
+on you) does not hold its Dev's desk: an idle Dev on such a task may be stopped, and Bring back
+returns it to the same checkout.
 
 Stopping loses nothing, because the work lives in the ticket, the branch and the pull request,
 not in the session. A stopped task worker comes back with **Bring back**, in the same
@@ -247,16 +249,24 @@ session stays the person's to stop, even when nobody is waiting on it: one the p
 plain session, a reviewer that has not posted, the PM and the COO. The person decided this on
 2026-11-04, from the review of PR 43 (T-55, T-92).
 
+*Today (2026-11-28):* the relay also lets the Lead, the review desk and Autopilot stop an idle Dev
+whose task is in Waiting on you, even with uncommitted or unpushed work, since its checkout stays
+(ticket 570). On 2026-11-27 and 28, twice, every Dev's task waited on the person, each idle Dev was
+"not safe to stop", all 9 desks were held, and no review or start could begin.
+
 *Enforced by:* the relay's stop route for the Lead (`relay/floor.js`). It asks the same verdict as
-the Floor (`relay/stop-verdict.js`), and refuses a session that is working, waiting on the person,
-the Lead, or the PM while the person talks to it. Then it refuses any session that is not one of the
-two kinds (`leadMayStop` in `relay/stop-verdict.js`), or a Dev with work that is not pushed or a
-checkout git cannot read, and the Floor tells the Lead so. `relay/test/lead-stop.test.js` checks at
-the route: both kinds allowed, and refused a plain session, the PM, a reviewer that has not posted,
-a Dev whose pull request is open, and a Dev with uncommitted or unpushed work. It also checks the
-switch, the token, the limit, and that a stopped task worker keeps its checkout and comes back.
-`relay/test/floor.test.js` checks `leadMayStop` for every kind, the COO and a reviewer the relay did
-not start included.
+the Floor (`relay/stop-verdict.js`), and refuses a session that is working, waiting on the person at
+a question or menu, the Lead, or the PM while the person talks to it. Then it refuses any session
+that is not one of the three kinds (`leadMayStop` in `relay/stop-verdict.js`), or a Dev (other than
+one in Waiting on you) with work that is not pushed or a checkout git cannot read, and the Floor
+tells the Lead so. `relay/test/lead-stop.test.js` checks at the route: all three kinds allowed (a
+Dev in Waiting on you even with uncommitted work, which keeps its checkout), and refused a plain
+session, the PM, a reviewer that has not posted, a Dev whose pull request is open, and a Done Dev
+with uncommitted or unpushed work. It also checks the switch, the token, the limit, and that a
+stopped task worker keeps its checkout and comes back. `relay/test/floor.test.js` checks
+`leadMayStop` for every kind, the COO and a reviewer the relay did not start included.
+`relay/test/review-desk.test.js` checks that a review that needs a desk stops the oldest idle Dev
+whose task is in Waiting on you.
 
 *Check:* a change that starts sessions also says how they end.
 
@@ -806,6 +816,29 @@ The five questions, for this permission:
 4. Where does the person come back in? Needs you, the Lead section of Metrics, the switch.
 5. What stops two sessions from doing the same work? One Lead at a time, one channel per failure,
    one rerun for each commit, and a separate fix starts only when no blocked Dev runs.
+
+**The manager, as it is today.** The room keeps one manager session running, in a third front-office
+seat beside the Lead and the PM, and starts it again when it ends. It watches the room and reads the
+jam log. It may do four things: lower the trust level by one step, never raise it; put a note on
+Needs you that explains a stall; file tickets, and add notes to them; and post on the chat board. It
+cannot start, move, merge or close work, change a setting, set a priority, or touch a session.
+Lowering is off until the person turns on **Let the manager lower the trust level**, and it is at
+most 2 a day, shared with the watch's own brake. Work under way stays where it is. Raising the level
+again is the person's. The reason: on a stall the room cannot fix, less trust is the safe move, and
+a session that can only lower it, say why, and file a ticket cannot make the stall worse. It gets 3
+desks for itself, the Lead and the PM, so workers have 6 of 9. It starts in the room's own folder,
+and "do not change code" is its brief only. The COO is a separate role that runs only when the
+person presses **Ask the COO**.
+
+*Enforced by:* its own token, which reaches only the routes in `relay/token-routes.js`
+(`MANAGER_READS`, `MANAGER_WRITES`) and gets 403 for every other route (`relay/server.js`). It also
+sends the hooks of its own session. That it files tickets only for a cause of jams is the brief only.
+The tests: `relay/test/manager-token.test.js` (the 403 for the rest, no raise, the limit of 2 a day, and
+the switch off by default), `relay/test/manager-jams.test.js` (one ticket for each cause) and
+`relay/test/manager-seat.test.js` (the seat and its restart).
+
+*Check:* a change to the manager adds no route to its token that starts, moves, merges or closes
+work, or that raises the trust level, and keeps the lowering off by default and limited.
 
 Before a rung goes in, answer the factory's five questions:
 

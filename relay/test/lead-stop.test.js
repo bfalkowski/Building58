@@ -138,15 +138,16 @@ test('the Lead never stops a session the verdict calls not safe', async (t) => {
 });
 
 test('the Lead stops only a posted automatic reviewer, or a Dev whose PR merged or whose task is Done', async (t) => {
-  const o = await office({ RELAY_LEAD_STOPS: '1', RELAY_LEAD_STOP_LIMIT: '3' });
+  const o = await office({ RELAY_LEAD_STOPS: '1', RELAY_LEAD_STOP_LIMIT: '4' });
   const { R } = o;
   t.after(o.done);
 
   const plain = await o.start(), pm = await o.start({ role: 'pm', title: 'PM: an idea' });
   const posted = await o.reviewer(true), unposted = await o.reviewer(false);
-  const done = await o.dev('done'), building = await o.dev(), merged = await o.dev(), unsaved = await o.dev('done');
+  const done = await o.dev('done'), building = await o.dev(), merged = await o.dev();
+  let unsaved;
   const name = {};
-  for (const [k, s] of Object.entries({ posted, unposted, done, merged, unsaved })) name[k] = await o.nameOf(s);
+  for (const [k, s] of Object.entries({ posted, unposted, done, merged })) name[k] = await o.nameOf(s);
   // The merged Dev's PR merged, and the relay heard it from gh. Its task is still Building.
   const MAX_PR = 'https://github.com/acme/widgets/pull/9';
   o.answers({ prs: { [MAX_PR]: { state: 'MERGED', statusCheckRollup: [] } } });
@@ -169,6 +170,10 @@ test('the Lead stops only a posted automatic reviewer, or a Dev whose PR merged 
     await refuses('a session the person just added', plain, 'it is not a reviewer or a Dev');
     await o.finish(plain);
     await refuses('an idle plain session', plain, 'it is not a reviewer or a Dev');
+    await R.call('POST', '/terminals/' + plain.id + '/stop', {});  // workers have 6 desks, so this one frees the desk of the last Dev
+    await until(async () => !(await o.running(plain)), 'the plain session to stop');
+    unsaved = await o.dev('done');
+    name.unsaved = await o.nameOf(unsaved);
   });
 
   await t.test('it refuses the PM the person is not talking to', async () => {
@@ -227,11 +232,24 @@ test('the Lead stops only a posted automatic reviewer, or a Dev whose PR merged 
     await until(async () => !(await o.running(merged)), 'the Dev to stop');
   });
 
+  await t.test('it stops an idle Dev whose task waits on the person, even with uncommitted work, and the checkout stays with it', async () => {
+    const { task } = building;
+    assert.strictEqual((await R.call('POST', '/tasks/' + task.id + '/move', { to: 'waiting_on_you' })).status, 200);
+    const dir = task.worktree;
+    fs.writeFileSync(path.join(dir, 'c.txt'), 'c\n');
+    await until(async () => (await o.rowOf(building)).canStop === true, 'the Floor to call it safe for the Lead to stop');
+    const r = await o.stop(task.id);
+    assert.strictEqual(r.status, 200, r.body.message);
+    assert.match(r.body.stopped.why, /^its task waits on the person, idle \d+ min, and Bring back returns it to the same checkout$/);
+    await until(async () => !(await o.running(building)), 'the Dev to stop');
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'c.txt'), 'utf8'), 'c\n', 'its uncommitted work stays in the checkout');
+  });
+
   await t.test('it stops at most RELAY_LEAD_STOP_LIMIT sessions an hour', async () => {
     git(unsaved.task.worktree, 'push', '-q', 'origin', 'HEAD:refs/heads/' + unsaved.task.branch);  // now all of its work is pushed
     assert.strictEqual((await o.rowOf(unsaved)).canStop, true, (await o.rowOf(unsaved)).why);
     const r = await o.stop(name.unsaved);
-    assert.deepStrictEqual([r.status, r.body.error], [429, 'limit'], 'three stopped this hour');
+    assert.deepStrictEqual([r.status, r.body.error], [429, 'limit'], 'four stopped this hour');
     assert.ok(await o.running(unsaved));
   });
 });
@@ -242,7 +260,7 @@ test('each desk says its ticket, column and next step, and the person stops the 
   t.after(o.done);
   const posted = await o.reviewer(true), unposted = await o.reviewer(false);
   const done = await o.dev('done'), review = await o.dev('in_review'), waiting = await o.dev();
-  // Waiting on you is never safe, so dev() could not wait for it to settle in that state.
+  // dev() waits for the Dev to settle, so it is moved to Waiting on you afterwards.
   assert.strictEqual((await R.call('POST', '/tasks/' + waiting.task.id + '/move', { to: 'waiting_on_you', note: 'constitution change' })).status, 200);
   const desk = async (s) => (await o.rowOf(s)).desk;
   const key = { Authorization: 'Bearer test-key' };
@@ -256,7 +274,7 @@ test('each desk says its ticket, column and next step, and the person stops the 
     const r = await desk(review);
     assert.deepStrictEqual([r.column.label, r.next, r.stop.safe], ['In review', { text: 'Waiting on you: read what the Dev wrote, it has no PR yet', owner: 'you' }, false]);
     const w = await desk(waiting);
-    assert.deepStrictEqual([w.column.label, w.next.owner, w.stop.safe], ['Waiting on you', 'you', false]);
+    assert.deepStrictEqual([w.column.label, w.next.owner, w.stop.safe], ['Waiting on you', 'you', true]);
     assert.strictEqual(w.next.text, 'Waiting on you: constitution change');
     const p = await desk(posted);
     assert.deepStrictEqual([p.prNumber, p.review, p.next, p.stop.safe], ['#7', 'review posted', { text: 'Done, safe to stop', owner: 'you' }, true]);
@@ -277,9 +295,9 @@ test('each desk says its ticket, column and next step, and the person stops the 
   await t.test('Stop all safe stops only the safe desks, with the Lead\'s switch off', async () => {
     const all = await press({ all: true });
     assert.strictEqual(all.status, 200, JSON.stringify(all.body));
-    assert.deepStrictEqual(all.body.stopped.map((x) => x.terminal), [done.id]);
-    await until(async () => !(await o.running(done)), 'the Done Dev to stop');
-    for (const s of [unposted, review, waiting, o.lead]) assert.ok(await o.running(s), 'still running');
+    assert.deepStrictEqual(all.body.stopped.map((x) => x.terminal).sort(), [done.id, waiting.id].sort());
+    await until(async () => !(await o.running(done)) && !(await o.running(waiting)), 'the Done Dev and the Dev waiting on you to stop');
+    for (const s of [unposted, review, o.lead]) assert.ok(await o.running(s), 'still running');
     const history = (await R.call('GET', '/tasks')).body.tasks.find((x) => x.id === done.task.id).history;
     assert.ok(history.some((h) => h.type === 'note' && /^You stopped its worker from the Floor: its task is Done/.test(h.note)), 'its history says who stopped it');
   });

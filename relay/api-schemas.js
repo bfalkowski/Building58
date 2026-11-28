@@ -25,7 +25,7 @@ const SCHEMAS = {
   Ok: okWith({}),
   Problem: obj({ ok: { const: false }, error: S({ description: 'A short code, such as bad_param, forbidden or not_found.' }), message: S({ description: 'What went wrong, in plain words.' }) }, ['ok', 'error', 'message']),
   TicketStep: obj({ at: S(), stage: S(), by: S() }, ['at', 'stage', 'by'], { description: 'One step in a ticket\'s history.' }),
-  TicketNote: obj({ by: S({ description: 'Who wrote it, as the relay named them.' }), role: orNull(S({ description: 'dev, reviewer, pm, lead or null for the person.' })), at: S(), text: S({ maxLength: 2000 }) }, ['by', 'at', 'text'], { description: 'A note a session added to a ticket. It is not part of the ticket\'s body.' }),
+  TicketNote: obj({ by: S({ description: 'Who wrote it, as the relay named them.' }), role: orNull(S({ description: 'dev, reviewer, pm, lead, manager or null for the person.' })), at: S(), text: S({ maxLength: 2000 }) }, ['by', 'at', 'text'], { description: 'A note a session added to a ticket. It is not part of the ticket\'s body.' }),
   Ticket: obj({
     id: S({ description: 'Such as T-5, or the issue number in the GitHub store.' }),
     title: S({ maxLength: 80 }),
@@ -123,12 +123,12 @@ const SCHEMAS = {
     safe: B,
     canStop: B,
     why: S(),
-    seat: orNull(S({ description: 'lead for the Lead, pm for the PM the room keeps running, or null.' })),
+    seat: orNull(S({ description: 'lead for the Lead, pm for the PM the room keeps running, manager for the manager session, or null.' })),
     menu: orNull(obj({ text: S(), choices: list(S()), since: S() }, ['text', 'choices', 'since'])),
     stuckJobs: list(obj({ pid: N(), command: S(), minutes: N() }, ['pid', 'command', 'minutes'])),
     desk: { type: 'object' }
   }, ['terminal', 'name', 'role', 'state', 'safe', 'canStop', 'why']),
-  Floor: okWith({ sessions: list(ref('FloorRow')), pm: obj({ trust: N(), trustName: S(), sortHours: N(), nextSortAt: orNull(S()) }), leadEnded: { type: ['object', 'null'] }, mainRed: list(obj({ branch: S(), repo: S(), says: S() })) }, ['sessions']),
+  Floor: okWith({ sessions: list(ref('FloorRow')), pm: obj({ trust: N(), trustName: S(), sortHours: N(), nextSortAt: orNull(S()) }), manager: { type: 'object', description: 'The manager seat: the trust level and its name, when the manager last lowered it, the cause it watches and whether the jam count fell after the fix, and the COO\'s last report.' }, leadEnded: { type: ['object', 'null'] }, mainRed: list(obj({ branch: S(), repo: S(), says: S() })) }, ['sessions']),
   NewJam: obj({
     kind: S({ enum: Object.keys(require('./metrics-plan.js').JAM_KINDS) }),
     ticket: S({ maxLength: 300, description: 'Optional: the ticket, such as T-5.' }),

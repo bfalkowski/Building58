@@ -45,8 +45,16 @@
     controls.screenSpacePanning = false;
   } else camera.lookAt(TARGET);
   let introCam = !reduce && !!controls, follow = null;
+  const EXEC_Y = 14;
+  const FLOORS = {
+    main: { y: 0, view: 'home', label: 'Main floor' },
+    exec: { y: EXEC_Y, view: 'exec', label: 'Executive floor' }
+  };
+  const floorKeys = Object.keys(FLOORS);
+  const viewOf = (floor) => new THREE.Vector3(0, FLOORS[floor].y, 0);
   const VIEWS = {
     home: [HOME, TARGET],
+    exec: [HOME.clone().add(viewOf('exec')), TARGET.clone().add(viewOf('exec'))],
     desks: [new THREE.Vector3(1.6, 3.2, 4.6), new THREE.Vector3(-0.9, 0.9, -1.0)],
     lead: [new THREE.Vector3(-2.6, 2.2, 1.6), new THREE.Vector3(-5.9, 0.95, -0.7)],
     coffee: [new THREE.Vector3(5.6, 2.4, 0.6), new THREE.Vector3(5.0, 1.0, -3.6)],
@@ -65,19 +73,31 @@
     if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
   }
   limits('room');
-  function highFor(t) { return t.z < MO.z0 ? 0.9 : 1.4; }
-  const officeBtn = $('view-office');
+  function highFor(t) { return t.z < MO.z0 && t.y < EXEC_Y / 2 ? 0.9 : 1.4; }
+  const officeBtn = $('view-office'), floorBox = $('floor-btns'), floorBtns = {};
+  let floorY = 0;
+  const floorOf = (view) => floorKeys.find((k) => FLOORS[k].view === view) || 'main';
+  const floorNow = () => floorKeys.find((k) => FLOORS[k].y === floorY) || 'main';
+  if (floorBox) for (const k of [...floorKeys].reverse()) {
+    const b = document.createElement('button');
+    b.className = 'view-btn'; b.id = 'floor-' + k; b.type = 'button'; b.textContent = FLOORS[k].label; b.hidden = true; b.setAttribute('aria-pressed', String(k === 'main'));
+    floorBox.append(b); floorBtns[k] = b;
+  }
   function setView(name) {
     const v = VIEWS[name] || VIEWS.home; introCam = false; follow = null;
+    floorY = FLOORS[floorOf(name)].y;
     limits(name === 'office' ? 'desk' : 'room');
+    if (controls) { controls.enableDamping = false; controls.update(); controls.enableDamping = true; }
     camera.position.copy(v[0]); if (controls) { controls.target.copy(v[1]); if (lookFrom === 'room') controls.maxPolarAngle = highFor(v[1]); controls.update(); } else camera.lookAt(v[1]);
     const shown = name in VIEWS ? name : 'home';
     if (officeBtn) { const inOffice = shown === 'office'; officeBtn.textContent = inOffice ? 'Back to the room' : "Manager's office"; officeBtn.setAttribute('aria-pressed', String(inOffice)); }
+    for (const k in floorBtns) floorBtns[k].setAttribute('aria-pressed', String(k === floorOf(shown)));
     return shown;
   }
   if (controls && officeBtn) { officeBtn.hidden = false; officeBtn.addEventListener('click', () => setView(officeBtn.getAttribute('aria-pressed') === 'true' ? 'home' : 'office')); }
+  if (controls) for (const k in floorBtns) { floorBtns[k].hidden = false; floorBtns[k].addEventListener('click', () => ride(k)); }
   if (controls) controls.addEventListener('start', () => { introCam = false; follow = null; });
-  if (controls && window.NavPad) window.NavPad.attach({ stage, canvas, controls, camera, home: () => setView('home') });
+  if (controls && window.NavPad) window.NavPad.attach({ stage, canvas, controls, camera, home: () => setView(FLOORS[floorNow()].view) });
 
   const C = (hex) => new THREE.Color(hex).convertSRGBToLinear();
   const std = (hex, o) => new THREE.MeshStandardMaterial(Object.assign({ color: C(hex), roughness: 0.7, metalness: 0 }, o || {}));
@@ -204,9 +224,9 @@
   const floor = mesh(new THREE.PlaneGeometry(14, 10), new THREE.MeshStandardMaterial({ map: floorTex(), roughness: 0.62 }), scene, false);
   floor.rotation.x = -Math.PI / 2;
   const capMat = std(0x2a2522, { roughness: 0.9 });
-  function wallBox(x0, x1, y0, y1, z0, z1, faceW, faceH) {
+  function wallBox(x0, x1, y0, y1, z0, z1, faceW, faceH, parent) {
     const m = brickMat(faceW, faceH);
-    const b = mesh(G.box, [m, m, capMat, capMat, m, m], scene);
+    const b = mesh(G.box, [m, m, capMat, capMat, m, m], parent || scene);
     b.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); b.scale.set(x1 - x0, y1 - y0, z1 - z0); return b;
   }
   const BOARD_EDGE = -0.95 + 3.3 / 2, COUNTER_EDGE = 3.38;
@@ -240,6 +260,64 @@
     for (let i = 0; i < 14; i++) block(rad, radMat, [0, 0.42, -0.42 + i * 0.065], [0.14, 0.62, 0.045]);
     block(rad, radMat, [0, 0.12, 0], [0.12, 0.05, 0.92]); block(rad, radMat, [0, 0.73, 0], [0.12, 0.04, 0.92]);
   });
+
+  const ELEV = { x0: -4.05, x1: -3.05, wall: -5.0, h: 2.2, openMs: 1800, slide: 0.4, speed: 1.5 };
+  const elevButtons = [], elevLeaves = {}, elevLamps = {};
+  const elev = { open: 0, openUntil: 0 };
+  const upper = new THREE.Group(); upper.position.y = FLOORS.exec.y; scene.add(upper);
+  const floorGroup = { main: scene, exec: upper };
+  {
+    const carpet = std(0x2f3441, { roughness: 0.95 }), trim = std(0x1d2026, { roughness: 0.5, metalness: 0.5 }), brushed = metal(0xb9bec4, 0.38);
+    const cut = (m) => { m.castShadow = false; return m; };
+    cut(block(scene, std(0x1d1a18, { roughness: 0.95 }), [0, EXEC_Y - 0.165, 0], [14.6, 0.3, 10.6]));
+    const f = mesh(new THREE.PlaneGeometry(14, 10), carpet, upper, false); f.rotation.x = -Math.PI / 2; f.position.y = 0.002;
+    for (const m of [
+      wallBox(-7.3, 7.0, 0, ROOM.h, -5.3, -5.0, 14.3, ROOM.h, upper),
+      wallBox(-7.3, -7.0, 0, WY0, -5.3, 5.0, 10.3, WY0, upper),
+      wallBox(-7.3, -7.0, WY1, ROOM.h, -5.3, 5.0, 10.3, ROOM.h - WY1, upper),
+      ...[[-5.3, -4.1], [-1.9, -1.1], [1.1, 1.9], [4.1, 5.0]].map(([a, b]) => wallBox(-7.3, -7.0, WY0, WY1, a, b, b - a, WY1 - WY0, upper))
+    ]) cut(m);
+    WIN.forEach(([z0, z1]) => { const g = mesh(new THREE.PlaneGeometry(z1 - z0, WY1 - WY0), glass, upper, false); g.position.set(-7.15, (WY0 + WY1) / 2, (z0 + z1) / 2); g.rotation.y = Math.PI / 2; g.receiveShadow = false; });
+    const plate = makeCanvas(512, 96), px = plate.getContext('2d');
+    px.fillStyle = '#15181b'; px.fillRect(0, 0, 512, 96); px.fillStyle = '#e9d9b0'; px.font = '600 40px Helvetica, Arial, sans-serif'; px.textAlign = 'center'; px.textBaseline = 'middle'; px.fillText('EXECUTIVE FLOOR', 256, 50);
+    const sign = mesh(new THREE.PlaneGeometry(2.4, 0.45), new THREE.MeshBasicMaterial({ map: tex(plate) }), upper, false); sign.position.set(-1.6, 3.0, -4.97);
+
+    function doors(parent, floor) {
+      elevLeaves[floor] = []; elevLamps[floor] = [];
+      const w = ELEV.x1 - ELEV.x0, cxm = (ELEV.x0 + ELEV.x1) / 2, z = ELEV.wall + 0.03;
+      cut(block(parent, trim, [cxm, ELEV.h + 0.15, z], [w + 0.3, 0.3, 0.1]));
+      for (const sx of [ELEV.x0 - 0.075, ELEV.x1 + 0.075]) cut(block(parent, trim, [sx, (ELEV.h + 0.3) / 2, z], [0.15, ELEV.h + 0.3, 0.1]));
+      cut(block(parent, std(0x0b0c0e), [cxm, ELEV.h / 2, ELEV.wall + 0.005], [w, ELEV.h, 0.02]));
+      for (const sx of [-1, 1]) {
+        const leaf = cut(block(parent, brushed, [cxm + sx * w / 4, ELEV.h / 2, ELEV.wall + 0.045], [w / 2 - 0.01, ELEV.h - 0.02, 0.04]));
+        leaf.userData.home = leaf.position.x; leaf.userData.dir = sx; elevLeaves[floor].push(leaf);
+      }
+      floorKeys.forEach((k, i, all) => {
+        const lamp = new THREE.MeshStandardMaterial({ color: C(0x3a2e14), emissive: C(0xffc86a), emissiveIntensity: 0, roughness: 0.4 });
+        cut(block(parent, lamp, [cxm + (i - (all.length - 1) / 2) * 0.28, ELEV.h + 0.15, z + 0.06], [0.1, 0.1, 0.02]));
+        elevLamps[floor].push(lamp);
+      });
+      const px0 = ELEV.x1 + 0.34;
+      cut(block(parent, trim, [px0, 1.2, ELEV.wall + 0.03], [0.16, 0.4, 0.06]));
+      [...floorKeys].reverse().forEach((k, i) => {
+        const b = cut(cyl(parent, metal(0xd8c48a, 0.3), [px0, 1.3 - i * 0.2, ELEV.wall + 0.085], 0.045, 0.03)); b.rotation.x = Math.PI / 2;
+        b.userData.floor = k; b.userData.on = floor; elevButtons.push(b);
+      });
+    }
+    for (const k of floorKeys) doors(floorGroup[k], k);
+  }
+  function showElevator() {
+    const here = floorNow();
+    for (const k in elevLeaves) for (const l of elevLeaves[k]) l.position.x = l.userData.home + l.userData.dir * ELEV.slide * elev.open;
+    for (const k in elevLamps) elevLamps[k].forEach((m, i) => { m.emissiveIntensity = i === floorKeys.indexOf(here) ? 3 : 0.05; });
+  }
+  function ride(floor) {
+    const inOffice = !!officeBtn && officeBtn.getAttribute('aria-pressed') === 'true';
+    if (!FLOORS[floor] || floor === floorNow() && !inOffice) return floorNow();
+    elev.openUntil = performance.now() + ELEV.openMs;
+    setView(FLOORS[floor].view);
+    return floor;
+  }
 
   const sky = makeCanvas(2048, 680), skyTex = tex(sky);
   function drawSkyline() {
@@ -1847,6 +1925,7 @@
     idle: { desc: 'Sends someone who is not working to do something: coffee, couch, window, chat, board, desk, fridge or pingpong.', params: { who: 'a person', do: Object.keys(IDLE_SPOTS).join(', ') },
       run: (c) => {
         const w = findWorker(c); if (!w) return fail('bad_param', 'Name "who".');
+        if (!w.present) return fail('away', w.name + ' is not in the room.');
         if (w.task) return fail('busy', w.name + ' is working.');
         if (w.waiting) return fail('busy', w.name + ' is waiting for your OK.');
         const what = c.do || 'coffee';
@@ -1931,6 +2010,8 @@
       const r = canvas.getBoundingClientRect();
       at.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(at, camera);
+      const press = ray.intersectObjects(elevButtons, false)[0];
+      if (press) { ride(press.object.userData.floor); return; }
       const hit = ray.intersectObjects(people.filter((p) => p.present).map((p) => p.fig.root), true)[0];
       for (let o = hit && hit.object; o; o = o.parent) { const w = people.find((p) => p.fig.root === o); if (w) { pickWorker(w); return; } }
     });
@@ -2322,13 +2403,14 @@
     if (!built && !renderer) { built = true; emit('office.live', {}); readyWaiters.splice(0).forEach((r) => r(snapshot())); }
     if (!renderer) return;
     if (introCam) { introT += real / 3.2; const k = 1 - Math.pow(1 - Math.min(1, introT), 3); camera.position.lerpVectors(START, HOME, k); if (introT >= 1) introCam = false; }
-    if (follow && lookFrom === 'desk') { const who = follow; setView('home'); follow = who; }
+    if (follow && (lookFrom === 'desk' || floorY)) { const who = follow; setView('home'); follow = who; }
     if (follow && controls && !directed) { follow.fig.root.getWorldPosition(camGoal); camGoal.y = 0.9; controls.target.lerp(camGoal, Math.min(1, real * 3)); }
     if (controls && !directed && lookFrom === 'desk') controls.update();
-    else if (controls && !directed) { controls.update(); const t = controls.target; t.x = clamp(t.x, -6.5, 6.5); t.z = clamp(t.z, t.x > MO.x0 + 0.3 && t.x < MO.x1 - 0.3 ? MO.z1 + 0.3 : -4.5, 4.5); t.y = clamp(t.y, 0, 2.5);
+    else if (controls && !directed) { controls.update(); const t = controls.target; t.x = clamp(t.x, -6.5, 6.5); t.z = clamp(t.z, !floorY && t.x > MO.x0 + 0.3 && t.x < MO.x1 - 0.3 ? MO.z1 + 0.3 : -4.5, 4.5); t.y = clamp(t.y, floorY, floorY + 2.5);
       controls.maxPolarAngle = highFor(t); }
     { const before = clockMin; drawClock(); if (clockMin !== before && before !== -1) clockMinChanged = true; }
     if (boardDirty) { drawBoard(); boardDirty = false; }
+    { const want = performance.now() < elev.openUntil ? 1 : 0; elev.open = reduce ? want : elev.open + clamp(want - elev.open, -real * ELEV.speed, real * ELEV.speed); showElevator(); }
     tickScreens();
     tickTags();
     tickDecor(real, nowMs);
@@ -2355,6 +2437,7 @@
     roster: () => ACTIONS.roster.run().people,
     focus: (id) => { follow = id ? byId[id] || null : null; introCam = false; return !!follow; },
     view: (name) => setView(name),
+    level: () => ({ floor: floorNow(), camera: xyz(camera.position), target: controls ? xyz(controls.target) : null, doors: { x0: ELEV.x0, x1: ELEV.x1, wall: ELEV.wall }, buttons: elevButtons.filter((b) => b.userData.on === floorNow()).map((b) => { const r = canvas.getBoundingClientRect(), v = b.getWorldPosition(new THREE.Vector3()).project(camera); return { floor: b.userData.floor, x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; }), open: +elev.open.toFixed(2) }),
     direct,
     where,
     clock: (t) => { if (filmDrawn == null) filmDrawn = t; filmAt = t; return t; },

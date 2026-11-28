@@ -13,7 +13,7 @@ const assert = require('node:assert');
 const { relay, makeRepo, until, sleep } = require('./helpers.js');
 const { forReview } = require('../stop-verdict.js');
 
-const DESKS = 7;
+const DESKS = 6;
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 const PR = (n) => 'https://github.com/acme/widgets/pull/' + n;
 
@@ -86,7 +86,7 @@ test('reviews wait and no session may be stopped: nobody is stopped, Needs you n
   assert.ok(now.some((x) => x.id === typed.id), 'a session with text typed in its prompt is never stopped');
   const item = (await o.needsYou()).find((x) => x.kind === 'desks');
   assert.strictEqual(item.pr, PR(2), 'the review that waited longest');
-  assert.match(item.line, /^Stop a session to free a desk: the reviews of PR #2 and #1 wait for one\. All 7 desks are taken, and the relay may stop none of them\./);
+  assert.match(item.line, /^Stop a session to free a desk: the reviews of PR #2 and #1 wait for one\. All 6 desks are taken, and the relay may stop none of them\./);
   assert.ok((await o.reviews()).news.some((x) => /^No desk is free for the review of PR #2, and the relay may stop no session for it\./.test(x.text)));
 
   await o.say(busy, 'Stop');
@@ -133,6 +133,7 @@ test('which session a review may stop, and in what order', () => {
   const reviewed = row('v', { task: 'e', lastActAt: 3 }, { task: { id: 'e', state: 'in_review', pr: PR(4) } });
   const busy = row('b', { task: 'f', lastActAt: 4 }, { task: { id: 'f', state: 'in_review', pr: PR(5) }, waits: true, verdict: no });
   const lead = row('l', { lead: true, lastActAt: 5 });
+  const waitingDirty = row('y', { task: 'y', lastActAt: 6 }, { task: { id: 'y', state: 'waiting_on_you', pr: PR(6) }, unsaved: 'its checkout has 1 uncommitted file' });
   const all = [newer, older, doneDev, dirty, notPosted, reviewed, busy, lead, reviewer];
   assert.strictEqual(forReview(all).t.id, 'r', 'a posted reviewer first');
   assert.strictEqual(forReview(all).why, 'its review is posted, idle 9 min');
@@ -141,4 +142,24 @@ test('which session a review may stop, and in what order', () => {
   assert.strictEqual(forReview([newer, older]).t.id, 'o', 'then the longest idle Dev whose PR waits on a review');
   assert.strictEqual(forReview([newer]).why, 'its PR waits on a review, idle 9 min');
   assert.strictEqual(forReview([notPosted, dirty, reviewed, busy, lead]), null, 'nothing else');
+  assert.strictEqual(forReview([newer, waitingDirty, dirty]).t.id, 'y', 'a Dev whose task waits on the person goes before one whose PR waits on a review, though its checkout is dirty: the checkout stays');
+  assert.strictEqual(forReview([waitingDirty]).why, 'its task waits on the person, idle 9 min');
+});
+
+test('every desk is held by an idle Dev whose task waits on the person: the oldest is stopped and the review starts', async (t) => {
+  const o = await office(t);
+  const older = await o.dev(), newer = await o.dev();
+  while ((await o.terminals()).length < DESKS) await o.plain();
+  for (const s of [older, newer]) assert.strictEqual((await o.R.call('POST', '/tasks/' + s.task.id + '/move', { to: 'waiting_on_you' })).status, 200);
+  const floor = async () => (await o.R.call('GET', '/floor')).body.sessions.find((r) => r.terminal === older.id);
+  await until(async () => (await floor()).canStop === true, 'the Floor to call the idle Dev safe to stop');
+  await o.opens(older, PR(1), true);
+  await o.R.call('POST', '/tasks/' + older.task.id + '/move', { to: 'waiting_on_you' });
+  const reviewer = await o.reviewerOf(PR(1));
+  const now = await o.terminals();
+  assert.ok(!now.some((x) => x.id === older.id), 'the idle Dev whose task waits on the person was stopped');
+  assert.ok(now.some((x) => x.id === newer.id), 'only one desk was freed');
+  assert.ok(now.some((x) => x.id === reviewer.id));
+  const news = (await o.reviews()).news.map((x) => x.text);
+  assert.ok(news.some((x) => /to free a desk for the review of PR #1: its task waits on the person, idle/.test(x)), JSON.stringify(news));
 });

@@ -88,9 +88,9 @@ test('Up next lists the next 5 Ready tickets in Autopilot\'s order with the PM\'
   assert.strictEqual(up.more, 5, 'the rest of Ready, held back ones too');
 });
 
-test('Today uses the numbers the COO counts, and free desks are 7 minus the workers', () => {
-  const rows = [{ seat: 'lead' }, { seat: 'pm' }, { seat: null }, { seat: null }, { seat: null, role: 'PM' }];
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(F.todayOf({ numbers: { merged: 5, medianMinutes: 290 } }, 2, rows))), { merged: 5, median: '4 h 50 min', waiting: 2, free: 5, desks: 7 });
+test('Today uses the numbers the COO counts, and free desks are 6 minus the workers', () => {
+  const rows = [{ seat: 'lead' }, { seat: 'pm' }, { seat: 'manager', role: 'Manager' }, { seat: null }, { seat: null }, { seat: null, role: 'PM' }];
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(F.todayOf({ numbers: { merged: 5, medianMinutes: 290 } }, 2, rows))), { merged: 5, median: '4 h 50 min', waiting: 2, free: 4, desks: 6 });
   assert.strictEqual(F.todayOf(null, 0, []).merged, null);
 });
 

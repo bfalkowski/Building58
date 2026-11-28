@@ -51,7 +51,7 @@ function of(channel) {
   return s;
 }
 const clean = keepLines;
-const roleOf = (t) => (t.lead ? 'Lead' : t.role === 'pm' ? 'PM' : t.role === 'coo' ? 'COO' : t.role === 'security' ? 'Security' : t.role === 'reviewer' ? 'reviewer' : t.task ? 'Dev' : 'session');
+const roleOf = (t) => (t.lead ? 'Lead' : t.role === 'pm' ? 'PM' : t.role === 'manager' ? 'Manager' : t.role === 'coo' ? 'COO' : t.role === 'security' ? 'Security' : t.role === 'reviewer' ? 'reviewer' : t.task ? 'Dev' : 'session');
 const nameOf = (t) => clean(t.who || 'Session ' + String(t.sessionId).slice(0, 8), 80);
 
 function hookOn() {

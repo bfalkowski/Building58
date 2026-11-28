@@ -129,6 +129,7 @@ function deskOf(d) {
   if (lv.state === 'stuck' && /^first-prompt /.test(t.stuck.key || '')) return step('Waiting on you: it did not start on its first prompt, ' + t.stuck.why + '. Open its session and press Enter if the prompt is still in its box, or answer what is on its screen. Stopping it drops the prompt', 'you');
   if (lv.state === 'stuck') return step('Waiting on you: it did not start on what it was told, ' + t.stuck.why + '. Open its session, or stop it and Bring it back', 'you');
   if (role === 'Lead') return step('The Lead keeps tickets moving', 'Lead');
+  if (role === 'Manager') return step('The manager watches the room and files tickets for what keeps jamming it', 'Manager');
   if (role === 'PM') return step('Waiting on you: talk tickets through with the PM', 'you');
   if (role === 'COO') return t.state === 'working' ? step('The COO writes its report on the room', 'COO') : step('Waiting on you: read the COO report', 'you');
   if (role === 'Security') return t.state === 'working' ? step('The security officer writes its report on access', 'Security') : step('Waiting on you: read the Security report', 'you');

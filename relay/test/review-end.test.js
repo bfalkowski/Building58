@@ -54,7 +54,7 @@ test('a reviewer that has posted ends by itself', async (t) => {
     assert.deepStrictEqual([done.id, done.title, done.pr, done.kind, done.url], [s.id, 'Review PR #7', PR, 'comment', COMMENTED.stdout.trim()]);
     // The desk is free: nine more sessions fit.
     const more = [];
-    for (let i = 0; i < 7; i++) { const r = await R.call('POST', '/terminals', { cwd: R.home }); assert.strictEqual(r.status, 201, JSON.stringify(r.body)); more.push(r.body); }
+    for (let i = 0; i < 6; i++) { const r = await R.call('POST', '/terminals', { cwd: R.home }); assert.strictEqual(r.status, 201, JSON.stringify(r.body)); more.push(r.body); }
     for (const m of more) await stop(m);
   });
   await t.test('gh pr review counts too, and links the PR', async () => {

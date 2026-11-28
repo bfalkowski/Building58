@@ -119,7 +119,7 @@ function proposalWords(p, id) {
   const ids = (p.ids || []).join(', ');
   if (p.action === 'replace') return 'replace ' + id + ' with ' + ids;
   if (p.action === 'merge') return 'merge ' + id + ' into ' + ids;
-  if (p.action === 'close') return 'close ' + id;
+  if (p.action === 'close') return 'close ' + id + (p.commit ? ' as not needed (commit ' + String(p.commit).slice(0, 10) + ')' : '');
   return 'set the blockers of ' + id + ' to ' + (ids || 'none');
 }
 function heldBack(t, all) {
