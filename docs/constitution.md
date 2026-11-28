@@ -255,17 +255,18 @@ whose task is in Waiting on you, even with uncommitted or unpushed work, since i
 "not safe to stop", all 9 desks were held, and no review or start could begin.
 
 *Enforced by:* the relay's stop route for the Lead (`relay/floor.js`). It asks the same verdict as
-the Floor (`relay/stop-verdict.js`), and refuses a session that is working, waiting on the person at a question or menu,
-the Lead, or the PM while the person talks to it. Then it refuses any session that is not one of the
-three kinds (`leadMayStop` in `relay/stop-verdict.js`), or a Dev with work that is not pushed or a
-checkout git cannot read, and the Floor tells the Lead so. `relay/test/lead-stop.test.js` checks at
-the route: all three kinds allowed (a Dev in Waiting on you even with uncommitted work, which keeps its
-checkout), and refused a plain session, the PM, a reviewer that has not posted,
-a Dev whose pull request is open, and a Dev with uncommitted or unpushed work. It also checks the
-switch, the token, the limit, and that a stopped task worker keeps its checkout and comes back.
-`relay/test/floor.test.js` checks `leadMayStop` for every kind, the COO and a reviewer the relay did
-not start included. `relay/test/review-desk.test.js` checks that a review that needs a desk stops the
-oldest idle Dev whose task is in Waiting on you.
+the Floor (`relay/stop-verdict.js`), and refuses a session that is working, waiting on the person at
+a question or menu, the Lead, or the PM while the person talks to it. Then it refuses any session
+that is not one of the three kinds (`leadMayStop` in `relay/stop-verdict.js`), or a Dev (other than
+one in Waiting on you) with work that is not pushed or a checkout git cannot read, and the Floor
+tells the Lead so. `relay/test/lead-stop.test.js` checks at the route: all three kinds allowed (a
+Dev in Waiting on you even with uncommitted work, which keeps its checkout), and refused a plain
+session, the PM, a reviewer that has not posted, a Dev whose pull request is open, and a Done Dev
+with uncommitted or unpushed work. It also checks the switch, the token, the limit, and that a
+stopped task worker keeps its checkout and comes back. `relay/test/floor.test.js` checks
+`leadMayStop` for every kind, the COO and a reviewer the relay did not start included.
+`relay/test/review-desk.test.js` checks that a review that needs a desk stops the oldest idle Dev
+whose task is in Waiting on you.
 
 *Check:* a change that starts sessions also says how they end.
 
