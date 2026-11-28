@@ -38,9 +38,9 @@ test('with the default lists each role\'s brief names each skill at its step, a 
   const of = (role) => skills.brief(role);
   assert.ok(of('dev').includes('Before you write code, run mattpocock-skills:tdd (for a code change). When a test fails and the cause is not clear, run mattpocock-skills:diagnosing-bugs. Before you open the PR, run pstack:blast-radius, then mattpocock-skills:pr for the PR body.'), of('dev'));
   assert.ok(of('dev').includes('Use these skills where they fit: mattpocock-skills:codebase-design (for a change of structure), pstack:principle-prove-it-works.'), 'a skill with no step keeps where it fits');
-  assert.ok(of('dev').includes('End the PR body with one line, "Skills run: "'));
+  assert.ok(of('dev').includes('Put a line in the PR body that starts "Skills run: "'));
   assert.ok(of('reviewer').includes('Start by running mattpocock-skills:code-review, then pstack:blast-radius on the diff.'), of('reviewer'));
-  assert.ok(of('reviewer').includes('End each review comment with one line, "Skills run: "'));
+  assert.ok(of('reviewer').includes('Put a line in each review comment that starts "Skills run: "'));
   assert.ok(of('pm').includes('When you check a ticket, run pstack:sharpen on it.'), of('pm'));
   assert.ok(of('pm').includes('Use these skills where they fit: mattpocock-skills:writing-for-agents.'));
   assert.ok(of('lead').includes('At the start of each look, run pstack:recall.'), of('lead'));
@@ -54,4 +54,27 @@ test('with the default lists each role\'s brief names each skill at its step, a 
   assert.ok(of('dev').includes('When a test fails and the cause is not clear, run mattpocock-skills:diagnosing-bugs. Before you open the PR, run mattpocock-skills:pr for the PR body.'), of('dev'));
   config.set({ values: { reviewerSkills: 'pstack:recall' } });
   assert.ok(!of('reviewer').includes('code-review'), 'the reviewer list decides, not the dev list');
+});
+
+test('the sampler counts a running session\'s Skill calls by its role, and skips a log that did not grow', () => {
+  const claude = fs.mkdtempSync(path.join(os.tmpdir(), 'office-claude-'));
+  process.env.CLAUDE_CONFIG_DIR = claude;
+  const terminal = require('../terminal.js'), metrics = require('../metrics.js'), seatBoundary = require('../seat-boundary.js');
+  const cwd = path.join(scratch, 'checkout'), sessionId = '0123abcd-0123-4abc-8abc-0123456789ab';
+  fs.mkdirSync(cwd, { recursive: true });
+  const folder = path.join(claude, 'projects', seatBoundary.projectFolder(cwd));
+  fs.mkdirSync(folder, { recursive: true });
+  const file = path.join(folder, sessionId + '.jsonl');
+  const call = (n) => JSON.stringify({ type: 'assistant', uuid: 'u' + n, message: { id: 'm' + n, role: 'assistant', content: [{ type: 'tool_use', id: 't' + n, name: 'Skill', input: { skill: 'a:b' } }] } }) + '\n';
+  const stored = () => JSON.parse(fs.readFileSync(metrics.FILE, 'utf8')).skills;
+  const was = terminal.everyone;
+  terminal.everyone = () => [{ task: 'T', role: null, cwd, sessionId, startedAt: new Date().toISOString(), lead: false }];
+  try {
+    fs.writeFileSync(file, call(1) + call(2));
+    metrics.watchSkills();
+    assert.deepStrictEqual(stored().map((x) => [x.id, x.role, x.calls]), [[sessionId, 'dev', 2]]);
+    fs.writeFileSync(file, call(1) + call(2) + call(3));
+    metrics.watchSkills();
+    assert.strictEqual(stored()[0].calls, 3, 'a log that grew is read again');
+  } finally { terminal.everyone = was; delete process.env.CLAUDE_CONFIG_DIR; fs.rmSync(claude, { recursive: true, force: true }); }
 });

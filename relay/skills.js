@@ -118,7 +118,7 @@ function brief(role) {
   return (groups.length ? ' ' + groups.map((g) => g.when + ' ' + g.items.join(', then ') + '.').join(' ') : '') +
     (called.length ? ' Use these skills where they fit: ' + called.join(', ') + '.' : '') +
     (read.length ? ' These skills cannot be called, so read the file of each and follow it where it fits: ' + read.join('; ') + '.' : '') +
-    (LINE[role] ? ' End ' + LINE[role] + ' with one line, "Skills run: " and the skills you ran, or "Skills run: none".' : '') +
+    (LINE[role] ? ' Put a line in ' + LINE[role] + ' that starts "Skills run: " and lists the skills you ran, or says "Skills run: none".' : '') +
     ' If one is not installed or cannot be called or read, carry on without it. Where a skill and CLAUDE.md or the constitution differ, the repo\'s rules win. ';
 }
 

@@ -71,7 +71,7 @@ test('a brief names its installed skills, #office says once what is missing, and
 
   const first = await brief('First');
   assert.ok(first.includes('Before you write code, run mattpocock-skills:tdd (for a code change). When a test fails and the cause is not clear, run mattpocock-skills:diagnosing-bugs. Before you open the PR, run mattpocock-skills:pr for the PR body. Use these skills where they fit: mattpocock-skills:codebase-design (for a change of structure).'), first);
-  assert.ok(first.includes('End the PR body with one line, "Skills run: " and the skills you ran, or "Skills run: none".'), first);
+  assert.ok(first.includes('Put a line in the PR body that starts "Skills run: " and lists the skills you ran, or says "Skills run: none".'), first);
   assert.ok(first.includes('Where a skill and CLAUDE.md or the constitution differ, the repo\'s rules win.'));
   assert.ok(!first.includes('pstack:'), 'a skill that is not installed stays out of the brief');
   assert.ok(first.includes('Do not merge it.'), 'the brief still says the role\'s limits (article 6)');
