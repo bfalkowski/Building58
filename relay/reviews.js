@@ -28,6 +28,9 @@
 // the PR, the commit the reviewer reads, and the reviewer's name. The relay names each session as it
 // starts it (relay/seats.js). With no roster there is no name, and the message says A reviewer.
 //
+// A push that is only a merge of main, with the PR's own changes the same as at the last review, starts no review and
+// is no round: relay/main-merge.js checks it, and the PR's record counts it in mainMerges.
+//
 // Each PR gets at most MAX_AUTO_REVIEWS automatic reviews, the first one included. A push after that
 // waits on the person: the Floor says so, and the Lead gets a saved message. Get a review is the
 // person's own and is not counted, though it asks for a verdict like an automatic review. Which
@@ -65,6 +68,8 @@ const conflictText = require('./conflict-text.js');
 const { PR_URL, prBrief, followBrief, followUps, followUpOwed } = require('../office/reviews.js');
 const config = require('./config.js');
 const pipeline = require('./pipeline.js');
+const mainMerge = require('./main-merge.js');
+const { execFile } = require('child_process');
 const MAX_AUTO_REVIEWS = () => config.get('maxAutoReviews');
 
 const FILE = state.file('reviews.json', 'RELAY_REVIEWS_FILE');
@@ -363,6 +368,18 @@ function tellStarts(now) {
   }
 }
 
+const checkingMain = new Set(), ownChanged = new Map();
+const gitIn = (cwd) => (args) => new Promise((resolve, reject) => execFile('git', args, { cwd, timeout: 15000 }, (e, out) => (e ? reject(e) : resolve(out))));
+async function checkMainMerge(channel, pr, rec, from, head) {
+  const git = gitIn(from);
+  try { await git(['fetch', '-q', 'origin', 'main']); } catch (e) { ownChanged.set(pr, head); return; }
+  const same = await mainMerge.sameOwnChanges(git, rec.head, head, 'origin/main');
+  if (!same || rec.head === head || !recOf(channel, pr)) { ownChanged.set(pr, head); return; }
+  mainMerge.noteMerge(rec, head);
+  rec.queued = head; rec.reviewedAt = Date.now();
+  save();
+  say(channel, 'PR ' + number(pr) + ' got a merge of main and its own changes are the same, so no review started: ' + mainMerge.roundsLine(rec.count || 0, rec.mainMerges) + '.');
+}
 const reviewing = (channel, pr) => starting.has(channel + ' ' + pr) || terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr);
 function owedFollowUps(channel, c) {
   if (!pipeline.on()) return;
@@ -376,6 +393,11 @@ function owedFollowUps(channel, c) {
     const dev = devOf(channel, pr), task = tasks.list(channel).find((x) => x.pr === pr);
     const from = (dev && dev.cwd) || rec.from || (task && task.repo);
     if (!from) continue;
+    if (ownChanged.get(pr) !== seen.head) {
+      const key = channel + ' ' + pr + ' ' + seen.head;
+      if (!checkingMain.has(key)) { checkingMain.add(key); checkMainMerge(channel, pr, rec, from, seen.head).finally(() => checkingMain.delete(key)); }
+      continue;
+    }
     rec.pending = { from, dev: dev ? dev.id : null, session: dev ? dev.sessionId : null, at: Date.now(), tries: 0 };
     rec.queued = seen.head; rec.why = null;
     save();
@@ -511,7 +533,7 @@ async function leadReview(channel, body, agent) {
 
 function view(channel) {
   const c = chOf(channel), s = switchesOf(channel);
-  const prs = Object.entries(c.prs).map(([pr, r]) => ({ pr, count: r.count, head: r.head, pending: !!r.pending, waits: !!r.waits, held: !!r.first, desk: !!(r.first && r.first.desk), failed: r.failed || null, pipeline: (r.first || r.pending) && pipeline.on() ? pipeline.summary(pr) : null, why: r.why || null }));
+  const prs = Object.entries(c.prs).map(([pr, r]) => ({ pr, count: r.count, mainMerges: r.mainMerges || 0, head: r.head, pending: !!r.pending, waits: !!r.waits, held: !!r.first, desk: !!(r.first && r.first.desk), failed: r.failed || null, pipeline: (r.first || r.pending) && pipeline.on() ? pipeline.summary(pr) : null, why: r.why || null }));
   return { ok: true, auto: s.auto, again: s.again, max: MAX_AUTO_REVIEWS(), prs, news: news.get(channel) || [] };
 }
 async function handle(req, res, channel, rest, rctx) {

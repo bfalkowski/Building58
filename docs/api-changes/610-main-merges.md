@@ -1,0 +1,1 @@
+MINOR: GET /reviews gives each PR a mainMerges count, the merges of main that left its own changes the same and so were no round. The cap on rounds is one setting, maxAutoReviews (6 by default); autopilotRounds is gone.

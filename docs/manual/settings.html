@@ -65,7 +65,6 @@
     <tbody>
       <tr><td><span class="ui">WIP limit</span></td><td class="plain">3 tasks</td><td><code>RELAY_WIP_LIMIT</code></td><td>The most tasks that can be building at the same time.</td></tr>
       <tr><td><span class="ui">Merge only when Exhibit passes</span></td><td class="plain">off</td><td>none</td><td>Level 6.</td></tr>
-      <tr><td><span class="ui">Review rounds</span></td><td class="plain">2 rounds</td><td>none</td><td>If this many reviews in a row still ask for fixes, Autopilot stops and puts the task in Waiting on you.</td></tr>
       <tr><td><span class="ui">Merges a day</span></td><td class="plain">10 merges</td><td>none</td><td>The most PRs that Autopilot merges in one day.</td></tr>
       <tr><td><span class="ui">Merges of main in a row</span></td><td class="plain">4 merges</td><td>none</td><td>A Dev that merges main as asked is not failing when main moves again and the PR conflicts again.</td></tr>
       <tr><td><span class="ui">Tickets at once</span></td><td class="plain">1 tickets</td><td><code>RELAY_AUTOPILOT_AT_ONCE</code></td><td>How many tasks Autopilot works on at the same time.</td></tr>
@@ -78,7 +77,7 @@
   <table>
     <thead><tr><th>Setting</th><th>Default</th><th>Variable</th><th>Meaning</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Automatic reviews per PR</span></td><td class="plain">3 reviews</td><td>none</td><td>The most reviews the relay starts for one PR: the automatic ones, the first one included, and those the Lead asks for.</td></tr>
+      <tr><td><span class="ui">Automatic reviews per PR</span></td><td class="plain">6 reviews</td><td>none</td><td>The most reviews the relay starts for one PR: the automatic ones, the first one included, and those the Lead asks for. Autopilot hands a PR to you after this many reviews in a row that still ask for fixes. A merge of main that leaves the PR's own changes the same is not counted.</td></tr>
       <tr><td><span class="ui">Review a PR with no checks after</span></td><td class="plain">120 seconds</td><td><code>RELAY_PIPELINE_NO_CHECKS_MS</code></td><td>GitHub can take a moment to start a PR's checks.</td></tr>
       <tr><td><span class="ui">Try a review again after</span></td><td class="plain">60 seconds</td><td><code>RELAY_REVIEW_RETRY_MS</code></td><td>If a follow-up review cannot start, for example because all desks are full, the relay waits this long and tries again.</td></tr>
       <tr><td><span class="ui">A reviewer leaves after</span></td><td class="plain">30 seconds</td><td><code>RELAY_REVIEW_GRACE_MS</code></td><td>After an automatic reviewer posts and its turn ends, the relay waits this long, then ends the session and frees its desk.</td></tr>

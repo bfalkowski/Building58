@@ -59,7 +59,7 @@ pageTest('the search box finds a setting on another tab and opens that tab', get
 });
 
 pageTest('a setting changed from its default shows the mark, and its tab shows the count', get, async (p) => {
-  await o.R.call('POST', '/settings', { values: { wipLimit: 4, autopilotRounds: 3, chatKeep: 300 } });
+  await o.R.call('POST', '/settings', { values: { wipLimit: 4, autopilotMerges: 5, chatKeep: 300 } });
   await p.open();
   await openSettings(p);
   const page = p.page;
@@ -79,7 +79,7 @@ pageTest('a setting changed from its default shows the mark, and its tab shows t
   await page.click('#set-tab-trust');
   await page.locator('#set-panel-trust .set-row', { hasText: 'Let the Lead stop sessions' }).locator('input[type="checkbox"]').check();
   await page.waitForFunction(() => document.querySelector('#set-tab-trust .set-count').textContent === '1');
-  await o.R.call('POST', '/settings', { reset: ['autopilotRounds', 'chatKeep', 'leadStops'] });
+  await o.R.call('POST', '/settings', { reset: ['autopilotMerges', 'chatKeep', 'leadStops'] });
   assert.deepStrictEqual(p.errors, []);
 });
 

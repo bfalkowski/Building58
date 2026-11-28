@@ -15,19 +15,19 @@ test('a value set on the page applies at once, wins over the variable, and stays
 
   let r = await R.call('GET', '/settings');
   assert.strictEqual(r.status, 200);
-  assert.deepStrictEqual([value(r.body, 'maxAutoReviews').value, value(r.body, 'maxAutoReviews').from], [3, 'default']);
+  assert.deepStrictEqual([value(r.body, 'maxAutoReviews').value, value(r.body, 'maxAutoReviews').from], [6, 'default']);
   assert.deepStrictEqual([value(r.body, 'autopilotAtOnce').value, value(r.body, 'autopilotAtOnce').from], [2, 'env']);
-  assert.strictEqual((await R.call('GET', '/reviews')).body.max, 3);
+  assert.strictEqual((await R.call('GET', '/reviews')).body.max, 6);
   assert.strictEqual((await R.call('GET', '/tickets')).body.wipLimit, 3);
 
-  r = await R.call('POST', '/settings', { values: { maxAutoReviews: 5, wipLimit: 4, autopilotAtOnce: 1, autopilotRounds: 3 } });
+  r = await R.call('POST', '/settings', { values: { maxAutoReviews: 5, wipLimit: 4, autopilotAtOnce: 1 } });
   assert.strictEqual(r.status, 200);
-  assert.deepStrictEqual(r.body.changed.sort(), ['autopilotAtOnce', 'autopilotRounds', 'maxAutoReviews', 'wipLimit']);
+  assert.deepStrictEqual(r.body.changed.sort(), ['autopilotAtOnce', 'maxAutoReviews', 'wipLimit']);
   // The routes read the new values with no restart.
   assert.strictEqual((await R.call('GET', '/reviews')).body.max, 5);
   assert.strictEqual((await R.call('GET', '/tickets')).body.wipLimit, 4);
   const ap = (await R.call('GET', '/autopilot')).body;
-  assert.deepStrictEqual([ap.atOnce, ap.maxRounds], [1, 3], 'the page wins over RELAY_AUTOPILOT_AT_ONCE');
+  assert.deepStrictEqual([ap.atOnce, ap.maxRounds], [1, 5], 'the page wins over RELAY_AUTOPILOT_AT_ONCE');
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(home, '.office-world', 'settings.json'), 'utf8')).wipLimit, 4);
 
   await R.kill();
@@ -53,7 +53,7 @@ test('a bad value changes nothing, and no session can read or change the setting
   assert.strictEqual(r.status, 400);
   r = await R.call('POST', '/settings', { values: { RELAY_KEY: 'x' } });
   assert.strictEqual(r.body.error, 'unknown_setting');
-  assert.strictEqual(value((await R.call('GET', '/settings')).body, 'maxAutoReviews').value, 3, 'all or nothing');
+  assert.strictEqual(value((await R.call('GET', '/settings')).body, 'maxAutoReviews').value, 6, 'all or nothing');
 
   // A session's token, even the Lead's, gets nothing.
   const repo = makeRepo(R.home);

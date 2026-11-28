@@ -69,7 +69,7 @@ const exhibit = require('./exhibit.js');
 const pmCheck = require('./pm-check.js');
 const jams = require('./jams.js');
 const AT_ONCE = () => config.get('autopilotAtOnce');
-const MAX_ROUNDS = () => config.get('autopilotRounds'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges'), MAIN_MERGES = () => config.get('autopilotMainMerges');
+const MAX_ROUNDS = () => config.get('maxAutoReviews'), MAX_MERGES_A_DAY = () => config.get('autopilotMerges'), MAIN_MERGES = () => config.get('autopilotMainMerges');
 const NOTES_KEPT = 30;
 const BY = 'Autopilot';
 
