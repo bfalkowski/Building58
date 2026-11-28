@@ -450,7 +450,7 @@ function start(channel, body, ctx, onExit, own) {
     if (!resume) args.push(...skills.modelArgs(role));
     if (role) skills.notice(channel);
     const settings = { statusLine: STATUS_LINE };
-    if (!global) settings.hooks = hook.hookSettings({ key: ctx.key, url: 'http://localhost:' + ctx.port, channel });
+    if (!global) settings.hooks = hook.hookSettings({ key: 'sessions-use-their-token', url: 'http://localhost:' + ctx.port, channel });
     args.push('--settings', JSON.stringify(settings));
     const env = sessionEnv.build(process.env, {
       ...sessionEnv.slotGate(process.env, state.dir()),
