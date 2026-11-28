@@ -51,6 +51,21 @@ pageTest('Add worker starts a session in its own checkout, and the terminal show
   assert.deepStrictEqual(p.errors, []);
 });
 
+pageTest('keys typed while a send is on its way go together in the next one, so a slow relay does not cost a request a letter (T-613)', get, async (p) => {
+  const repo = makeRepo(o.R.home, 'batch-repo');
+  await p.open();
+  await addWorker(p, repo, false);
+  let sends = 0;
+  await p.page.route(/\/terminals\/[0-9a-f]{12}\/input$/, async (r) => { sends++; await new Promise((d) => setTimeout(d, 300)); await r.continue(); });
+  const text = 'typed fast through a slow relay';
+  await p.page.click('#cc-term');
+  await p.page.keyboard.type(text, { delay: 20 });
+  await p.page.keyboard.press('Enter');
+  await p.page.locator('#cc-term .xterm-rows', { hasText: 'GOT[' + text + ']' }).waitFor();
+  assert.ok(sends < text.length / 2, 'the keys went in ' + sends + ' sends, for ' + text.length + ' letters');
+  await p.page.unroute(/\/terminals\/[0-9a-f]{12}\/input$/);
+});
+
 pageTest('Use this folder starts the session in the folder itself', get, async (p) => {
   const repo = makeRepo(o.R.home, 'here-repo');
   await p.open();

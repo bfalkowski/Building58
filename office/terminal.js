@@ -38,16 +38,19 @@
   const fitWhenLaidOut = () => { try { fit.fit(); return true; } catch (e) { return false; } };
   fitWhenLaidOut();
 
-  let current = null, es = null, queue = Promise.resolve(), buf = '', timer = null, replaying = false;
+  let current = null, es = null, queue = Promise.resolve(), buf = '', bufFor = null, timer = null, replaying = false, sending = false;
   function flushKeys() {
     clearTimeout(timer); timer = null;
-    if (!buf || !current) { buf = ''; return; }
-    const data = buf, id = current.id; buf = '';
-    queue = queue.then(() => api('/' + id + '/input', { data }));
+    if (!buf || !current || bufFor !== current.id) { buf = ''; bufFor = null; return; }
+    if (sending) return;
+    const data = buf, id = current.id; buf = ''; bufFor = null;
+    sending = true;
+    queue = queue.then(() => api('/' + id + '/input', { data })).finally(() => { sending = false; if (buf) flushKeys(); });
   }
   // While old output replays, xterm answers the questions in it, such as the cursor position. Those answers must not reach the session.
   term.onData((d) => {
     if (!current || !current.running || current.round || replaying) return;
+    if (bufFor !== current.id) { buf = ''; bufFor = current.id; }
     buf += d;
     if (!timer) timer = setTimeout(flushKeys, 8);
   });
