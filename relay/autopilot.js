@@ -572,7 +572,7 @@ async function maybeStart(channel) {
     const waitWip = (message) => { c.idle = 'Waiting for room under the WIP limit: ' + message; };
     const building = tasks.building(channel);
     if (building >= tasks.wipLimit()) { waitWip(building + (building === 1 ? ' task is' : ' tasks are') + ' being built, and the limit is ' + tasks.wipLimit() + '.'); return; }
-    const queued = reviews.waiting(channel);
+    const queued = reviews.waiting(channel).concat(reviews.startingOf(channel));
     if (queued.length) { c.idle = 'Waiting for the review of PR ' + number(queued[0]) + ' to start: it goes first.'; return; }
     const check = pmCheck.consult(channel, next, all);
     if (check.wait) { c.idle = check.wait; return; }

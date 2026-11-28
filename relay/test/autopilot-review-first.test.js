@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
-const { relay, makeRepo, until, sleep } = require('./helpers.js');
+const { relay, makeRepo, until } = require('./helpers.js');
 
 const DESKS = 6;
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -28,9 +28,11 @@ async function office(t) {
     const task = (await R.call('POST', '/tasks', { title: 'Some work', repo })).body.task;
     const s = { id: task.owner.terminal, sessionId: task.owner.sessionId, task };
     await until(async () => (await R.screen(s.id)).includes('GOT['), 'the task brief');
+    const is = (state) => async () => (await terminals()).some((x) => x.id === s.id && x.state === state);
     await say(s, 'UserPromptSubmit');
+    await until(is('working'), 'the Dev to start its turn');
     await say(s, 'Stop');
-    await sleep(150);
+    await until(is('idle'), 'the Dev to end its turn');
     return s;
   };
   const ticket = async () => (await R.call('POST', '/tickets', { title: 'Next one', repo })).body.ticket;

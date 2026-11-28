@@ -312,6 +312,7 @@ function waiting(channel) {
   return Object.entries(c.prs).filter(([pr, r]) => (r.first || r.pending) && !r.why && !r.failed && !r.waits && !starting.has(channel + ' ' + pr))
     .sort(([, a], [, b]) => at(a) - at(b)).map(([pr]) => pr);
 }
+const startingOf = (channel) => [...starting].filter((k) => k.startsWith(channel + ' ')).map((k) => k.slice(channel.length + 1));
 const unposted = (channel, pr) => terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr && !t.posted);
 const owesReview = (channel, pr) => { const r = recOf(channel, pr); return !!(r && (r.first || r.pending)) || starting.has(channel + ' ' + pr) || unposted(channel, pr); };
 const unpostedLive = (channel, pr) => terminal.all(channel).some((t) => !t.exited && isReviewer(t) && (t.reviewOf || t.pr) === pr && !t.posted && livenessOf(t, Date.now()).state !== 'gone');
@@ -620,4 +621,4 @@ function setSwitch(channel, k, on) {
   save();
 }
 
-module.exports = { firstReviews, chOf, setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, noReview, giveReview, waiting, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };
+module.exports = { firstReviews, chOf, setSwitch, switchesOf, handle, noteHook, begin, useAutopilot, deskOf, stateOf, owe, owesFirst, owesFollowUp, owes, noReview, giveReview, waiting, startingOf, deskQueue, deskLine, deadlockOf, failedOf, reviewCounted, reviewEmpty };
