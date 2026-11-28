@@ -45,6 +45,7 @@ const tickets = require('./tickets.js');
 const mainCi = require('./main-ci.js');
 const { redMain } = require('./needs-you-plan.js');
 const reviews = require('./reviews.js');
+const owedFirst = require('./owed-first.js');
 const prComments = require('./pr-comments.js');
 const update = require('./update.js');
 const delivery = require('./delivery.js');
@@ -553,7 +554,7 @@ async function maybeStart(channel) {
     return;
   }
   if (/^Autopilot merged \d+ PRs? today, its limit\./.test(c.idle || '')) { c.idle = null; save(); }
-  const owed = tasks.list(channel).filter((t) => t.bringBack && open(channel, t)).sort((a, b) => a.bringBack.at - b.bringBack.at)[0];
+  const owed = owedFirst.oldest(tasks.list(channel).filter((t) => open(channel, t)));
   if (owed) { c.idle = 'Waiting to bring back the Dev of ' + (owed.ticket || 'task ' + owed.id) + ' for fixes first: ' + owed.bringBack.why; return; }
   if (tasks.list(channel).filter((t) => open(channel, t)).length >= AT_ONCE()) return;
   const held = tickets.heldWhy(channel);

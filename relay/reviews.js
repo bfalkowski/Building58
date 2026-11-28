@@ -54,6 +54,7 @@ const state = require('./state.js');
 const terminal = require('./terminal.js');
 const { livenessOf } = require('./liveness.js');
 const tasks = require('./tasks.js');
+const owedFirst = require('./owed-first.js');
 const checkouts = require('./checkouts.js');
 const delivery = require('./delivery.js');
 const { claim } = require('./lockfile.js');
@@ -292,6 +293,7 @@ function firstReviews(channel, c) {
     if (!r.first || starting.has(channel + ' ' + pr)) continue;
     if (!switchesOf(channel).auto) { delete c.prs[pr]; delivery.drop(channel, 'pipeline ' + pr); save(); continue; }
     if (r.first.desk ? !deskFree(channel) : Date.now() < (r.first.notBefore || 0)) continue;
+    if (deskFree(channel) && owedFirst.oldest(tasks.list(channel))) continue;
     if (!passes(channel, pr, r, r.first, null) || !r.first) continue;
     firstReview(channel, pr, r.first);
   }
